@@ -66,3 +66,35 @@ the existing v1 `encoding/json` package.
 4. We propose a v2 `encoding/json` design and it is accepted, resulting in
 its addition to the standard library.
 5. Some other unforeseen outcome (among the infinite number of possibilities).
+
+## Design overview
+
+This package aims to provide a clean separation between syntax and semantics.
+Syntax deals with the structural represention of JSON (as specified in
+[RFC 7159](https://tools.ietf.org/html/rfc7159),
+[RFC 7493](https://tools.ietf.org/html/rfc7493),
+[RFC 8259](https://tools.ietf.org/html/rfc8259), and
+[RFC 8785](https://tools.ietf.org/html/rfc8785)).
+Semantics deals with the meaning of syntactic data as usable application data.
+
+The `Encoder` and `Decoder` types are streaming tokenizers concerned with
+the packing or parsing of JSON data. They operate on `Token` and `Value` types
+which represent the common data structures that are representable in JSON.
+`Encoder` and `Decoder` do not aim to provide any interpretation of the data.
+
+Top-level functions like `Marshal`, `MarshalWriter`, `MarshalNext`, `Unmarshal`,
+`UnmarshalReader`, and `UnmarshalNext` provide semantic meaning by correlating
+any arbitrary Go type with some JSON representation of that type (as stored in
+data types like `[]byte`, `io.Writer`, `io.Reader`, `Encoder`, or `Decoder`).
+
+![API overview](api.png)
+
+This diagram provides a high-level overview of the v2 `json` package.
+Purple blocks represent types, while blue blocks represent functions or methods.
+The arrows and their direction represent the approximate flow of data.
+The bottom half of the diagram contains functionality that is only concerned
+with syntax, while the upper half contains functionality that assigns
+semantic meaning to syntactic data handled by the bottom half.
+
+In contrast to v1 `encoding/json`, options are represented as separate types
+rather than being setter methods on the `Encoder` or `Decoder` types.
