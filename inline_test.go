@@ -26,6 +26,12 @@ func TestInline(t *testing.T) {
 	fncs := func() map[string]bool {
 		m := make(map[string]bool)
 		for _, s := range []string{
+			"consumeWhitespace",
+			"consumeNull",
+			"consumeFalse",
+			"consumeTrue",
+			"consumeSimpleString",
+			"consumeSimpleNumber",
 			"stateMachine.appendLiteral",
 			"stateMachine.appendNumber",
 			"stateMachine.appendString",
