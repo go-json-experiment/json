@@ -18,12 +18,12 @@ import (
 // ReadToken and ReadValue calls may be interleaved.
 // For example, the following JSON value:
 //
-//	{"key":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
+//	{"name":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
 //
 // can be parsed with the following calls (ignoring errors for brevity):
 //
 //	d.ReadToken() // {
-//	d.ReadToken() // "key"
+//	d.ReadToken() // "name"
 //	d.ReadToken() // "value"
 //	d.ReadValue() // "array"
 //	d.ReadToken() // [

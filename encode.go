@@ -19,12 +19,12 @@ import (
 // WriteToken and WriteValue calls may be interleaved.
 // For example, the following JSON value:
 //
-//	{"key":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
+//	{"name":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
 //
 // can be composed with the following calls (ignoring errors for brevity):
 //
 //	e.WriteToken(StartObject)        // {
-//	e.WriteToken(String("key"))      // "key"
+//	e.WriteToken(String("name"))     // "name"
 //	e.WriteToken(String("value"))    // "value"
 //	e.WriteValue(Value(`"array"`))   // "array"
 //	e.WriteToken(StartArray)         // [
