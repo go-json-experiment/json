@@ -4,14 +4,12 @@
 
 package json
 
-import "errors"
-
 var (
-	errMissingName   = errors.New("missing string for object name")
-	errMissingColon  = errors.New("missing character ':' after object name")
-	errMissingValue  = errors.New("missing value after object name")
-	errMissingComma  = errors.New("missing character ',' after object or array value")
-	errMismatchDelim = errors.New("mismatching structural token for object or array")
+	errMissingName   = &SyntaxError{str: "missing string for object name"}
+	errMissingColon  = &SyntaxError{str: "missing character ':' after object name"}
+	errMissingValue  = &SyntaxError{str: "missing value after object name"}
+	errMissingComma  = &SyntaxError{str: "missing character ',' after object or array value"}
+	errMismatchDelim = &SyntaxError{str: "mismatching structural token for object or array"}
 )
 
 // stateMachine is a push-down automaton that validates whether
@@ -149,7 +147,7 @@ func (m stateMachine) checkDelim(delim byte, next Kind) error {
 	case needDelim == ',':
 		return errMissingComma
 	default:
-		return errors.New("invalid character '" + string([]byte{delim}) + " before next token")
+		return newInvalidCharacterError(delim, "before next token")
 	}
 }
 
