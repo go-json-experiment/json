@@ -13,8 +13,8 @@ package json
 //	• a start or end delimiter for a JSON object (i.e., { or } )
 //	• a start or end delimiter for a JSON array (i.e., [ or ] )
 //
-// A Token cannot represent whitespace or entire array or object values,
-// while a Value can. There is no Token to represent commas and colons since
+// A Token cannot represent entire array or object values, while a RawValue can.
+// There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
 type Token struct {
 	// NOTE: This is an opaque type that functionally represents a union type.

@@ -67,7 +67,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 // The returned value is only valid until the next Peek or Read call and
 // may not be mutated while the Decoder remains in use.
 // It returns io.EOF if there are no more values.
-func (d *Decoder) ReadValue() (Value, error) {
+func (d *Decoder) ReadValue() (RawValue, error) {
 	panic("not implemented")
 }
 

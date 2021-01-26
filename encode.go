@@ -23,19 +23,19 @@ import (
 //
 // can be composed with the following calls (ignoring errors for brevity):
 //
-//	e.WriteToken(StartObject)        // {
-//	e.WriteToken(String("name"))     // "name"
-//	e.WriteToken(String("value"))    // "value"
-//	e.WriteValue(Value(`"array"`))   // "array"
-//	e.WriteToken(StartArray)         // [
-//	e.WriteToken(Null)               // null
-//	e.WriteToken(False)              // false
-//	e.WriteValue(Value("true"))      // true
-//	e.WriteToken(Number(3.14159))    // 3.14159
-//	e.WriteToken(EndArray)           // ]
-//	e.WriteValue(Value(`"object"`))  // "object"
-//	e.WriteValue(Value(`{"k":"v"}`)) // {"k":"v"}
-//	e.WriteToken(EndObject)          // }
+//	e.WriteToken(StartObject)           // {
+//	e.WriteToken(String("name"))        // "name"
+//	e.WriteToken(String("value"))       // "value"
+//	e.WriteValue(RawValue(`"array"`))   // "array"
+//	e.WriteToken(StartArray)            // [
+//	e.WriteToken(Null)                  // null
+//	e.WriteToken(False)                 // false
+//	e.WriteValue(RawValue("true"))      // true
+//	e.WriteToken(Number(3.14159))       // 3.14159
+//	e.WriteToken(EndArray)              // ]
+//	e.WriteValue(RawValue(`"object"`))  // "object"
+//	e.WriteValue(RawValue(`{"k":"v"}`)) // {"k":"v"}
+//	e.WriteToken(EndObject)             // }
 //
 // The above is one of many possible sequence of calls and
 // may not represent the most sensible method to call for any given token/value.
@@ -56,9 +56,9 @@ func (e *Encoder) WriteToken(t Token) error {
 	panic("not implemented")
 }
 
-// WriteValue writes the next Value and advances the internal write offset.
-func (e *Encoder) WriteValue(v Value) error {
-	// TODO: May the Encoder alias the provided Value?
+// WriteValue writes the next RawValue and advances the internal write offset.
+func (e *Encoder) WriteValue(v RawValue) error {
+	// TODO: May the Encoder alias the provided RawValue?
 	panic("not implemented")
 }
 
