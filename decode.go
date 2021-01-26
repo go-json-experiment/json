@@ -42,6 +42,32 @@ import (
 // string token for object names.
 type Decoder struct{}
 
+// decodeBuffer is a buffer split into 4 segments:
+//
+//	• buf[0:currPos]         // already read portion of the buffer
+//	• buf[prevPos:currPos]   // previously read value
+//	• buf[currPos:len(buf)]  // unread portion of the buffer
+//	• buf[len(buf):cap(buf)] // unused portion of the buffer
+//
+// Invariants:
+//	0 ≤ prevPos ≤ currPos ≤ len(buf) ≤ cap(buf)
+type decodeBuffer struct {
+	buf     []byte
+	prevPos int
+	currPos int
+
+	// baseOffset can be added to prevPos and currPos to obtain
+	// the absolute offset relative to the start of io.Reader stream.
+	baseOffset int64
+
+	rd io.Reader
+}
+
+func (d *decodeBuffer) previousOffset() int64  { return d.baseOffset + int64(d.prevPos) }
+func (d *decodeBuffer) currentOffset() int64   { return d.baseOffset + int64(d.currPos) }
+func (d *decodeBuffer) previousBuffer() []byte { return d.buf[d.prevPos:d.currPos] }
+func (d *decodeBuffer) unreadBuffer() []byte   { return d.buf[d.currPos:len(d.buf)] }
+
 // NewDecoder constructs a new streaming decoder reading from r.
 func NewDecoder(r io.Reader) *Decoder {
 	panic("not implemented")

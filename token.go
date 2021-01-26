@@ -4,7 +4,21 @@
 
 package json
 
+import (
+	"math"
+	"strconv"
+)
+
 // NOTE: Token is analogous to v1 json.Token.
+
+const (
+	maxInt64  = math.MaxInt64
+	minInt64  = math.MinInt64
+	maxUint64 = math.MaxUint64
+	minUint64 = 0 // for consistency and readability purposes
+
+	invalidTokenPanic = "invalid json.Token; it has been voided by a subsequent json.Decoder call"
+)
 
 // Token represents a lexical JSON token, which may be one of the following:
 //	• a JSON literal (i.e., null, true, or false)
@@ -17,108 +31,390 @@ package json
 // There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
 type Token struct {
-	// NOTE: This is an opaque type that functionally represents a union type.
-	// We use a concrete struct type instead of an interface type to have
-	// fine granularity control over allocations and mutations.
+	// Tokens can exist in either a "raw" or an "exact" form.
+	// Tokens produced by the Decoder are in the "raw" form.
+	// Tokens returned by constructors are usually in the "exact" form.
+	// The Encoder accepts Tokens in either the "raw" or "exact" form.
 	//
-	// If unsafe were used, the size of this could be reduced to 24B.
-	// See "google.golang.org/protobuf/reflect/protoreflect".Value for example.
+	// The following chart shows the possible values for each Token type:
+	//	╔═════════════════╦════════════╤════════════╤════════════╗
+	//	║ Token type      ║ raw field  │ str field  │ num field  ║
+	//	╠═════════════════╬════════════╪════════════╪════════════╣
+	//	║ null   (raw)    ║ "null"     │ ""         │ offset     ║
+	//	║ false  (raw)    ║ "false"    │ ""         │ offset     ║
+	//	║ true   (raw)    ║ "true      │ ""         │ offset     ║
+	//	║ string (raw)    ║ non-empty  │ ""         │ offset     ║
+	//	║ string (string) ║ nil        │ non-empty  │ 0          ║
+	//	║ number (raw)    ║ non-empty  │ ""         │ offset     ║
+	//	║ number (float)  ║ nil        │ "f"        │ non-zero   ║
+	//	║ number (int64)  ║ nil        │ "i"        │ non-zero   ║
+	//	║ number (uint64) ║ nil        │ "u"        │ non-zero   ║
+	//	║ object (delim)  ║ "{" or "}" │ ""         │ 0          ║
+	//	║ array  (delim)  ║ "[" or "]" │ ""         │ 0          ║
+	//	╚═════════════════╩════════════╧════════════╧════════════╝
 	//
-	// Using an opaque, concrete type resolves:
-	//	https://golang.org/issue/40127
-	//	https://golang.org/issue/40128
+	// Notes:
+	//	• For tokens stored in "raw" form, the num field contains the
+	//	  absolute offset determined by raw.previousOffset().
+	//	  The buffer itself is stored in raw.previousBuffer().
+	//	• JSON literals and structural characters are always in the "raw" form.
+	//	• JSON strings and numbers can be in either "raw" or "exact" forms.
+	//	• The exact zero value of JSON strings and numbers in the "exact" forms
+	//	  have ambiguous representation. Thus, they are always represented
+	//	  in the "raw" form.
+
+	// raw contains a reference to the raw decode buffer.
+	// If non-nil, then its value takes precedence over str and num.
+	// It is only valid if num == raw.previousOffset().
+	raw *decodeBuffer
+
+	// str is the unescaped JSON string if num is zero.
+	// Otherwise, it is "f", "i", or "u" if num should be interpreted
+	// as a float64, int64, or uint64, respectively.
+	str string
+
+	// num is a float64, int64, or uint64 stored as a uint64 value.
+	// It is non-zero for any JSON number in the "exact" form.
+	num uint64
 }
 
-var (
-	Null  Token // TODO: Make this the zero value of Token
-	True  Token
-	False Token
+// TODO: Does representing 1-byte delimiters as *decodeBuffer cause performance issues?
 
-	ObjectStart Token
-	ObjectEnd   Token
-	ArrayStart  Token
-	ArrayEnd    Token
+var (
+	Null  Token = rawToken("null")
+	False Token = rawToken("false")
+	True  Token = rawToken("true")
+
+	ObjectStart Token = rawToken("{")
+	ObjectEnd   Token = rawToken("}")
+	ArrayStart  Token = rawToken("[")
+	ArrayEnd    Token = rawToken("]")
+
+	zeroString Token = rawToken(`""`)
+	zeroNumber Token = rawToken(`0`)
+
+	nanString  Token = String("NaN")
+	pinfString Token = String("Infinity")
+	ninfString Token = String("-Infinity")
 )
+
+func rawToken(s string) Token {
+	return Token{raw: &decodeBuffer{buf: []byte(s), prevPos: 0, currPos: len(s)}}
+}
 
 // Bool constructs a Token representing a JSON boolean.
 func Bool(b bool) Token {
-	panic("not implemented")
+	if b {
+		return True
+	}
+	return False
 }
 
 // String construct a Token representing a JSON string.
 // The provided string should contain valid UTF-8, otherwise invalid characters
 // may be mangled as the Unicode replacement character.
 func String(s string) Token {
-	panic("not implemented")
+	if len(s) == 0 {
+		return zeroString
+	}
+	return Token{str: s}
 }
 
 // Float constructs a Token representing a JSON number.
 // The values NaN, +Inf, and -Inf will be represented
 // as a JSON string with the values "NaN", "Infinity", and "-Infinity".
 func Float(n float64) Token {
-	panic("not implemented")
+	switch {
+	case math.Float64bits(n) == 0:
+		return zeroNumber
+	case math.IsNaN(n):
+		return nanString
+	case math.IsInf(n, +1):
+		return pinfString
+	case math.IsInf(n, -1):
+		return ninfString
+	}
+	return Token{str: "f", num: math.Float64bits(n)}
 }
 
 // Int constructs a Token representing a JSON number from an int64.
 func Int(n int64) Token {
-	panic("not implemented")
+	if n == 0 {
+		return zeroNumber
+	}
+	return Token{str: "i", num: uint64(n)}
 }
 
 // Uint constructs a Token representing a JSON number from a uint64.
 func Uint(n uint64) Token {
-	panic("not implemented")
+	if n == 0 {
+		return zeroNumber
+	}
+	return Token{str: "u", num: uint64(n)}
+}
+
+// Clone makes a copy of the Token such that its value remains valid
+// even after a subsequent Decoder.Read call.
+func (t Token) Clone() Token {
+	// TODO: Allow caller to avoid any allocations?
+	if raw := t.raw; raw != nil {
+		// Avoid copying globals.
+		if t.raw.prevPos == 0 {
+			switch t.raw {
+			case Null.raw:
+				return Null
+			case False.raw:
+				return False
+			case True.raw:
+				return True
+			case ObjectStart.raw:
+				return ObjectStart
+			case ObjectEnd.raw:
+				return ObjectEnd
+			case ArrayStart.raw:
+				return ArrayStart
+			case ArrayEnd.raw:
+				return ArrayEnd
+			}
+		}
+
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		buf := append([]byte(nil), raw.previousBuffer()...)
+		return Token{raw: &decodeBuffer{buf: buf, prevPos: 0, currPos: len(buf)}}
+	}
+	return t
 }
 
 // Bool returns the value for a JSON boolean.
-// For other JSON kinds, this returns false.
+// It panics if the token kind is not a JSON boolean.
 func (t Token) Bool() bool {
-	panic("not implemented")
+	switch t.raw {
+	case True.raw:
+		return true
+	case False.raw:
+		return false
+	default:
+		panic("invalid JSON token kind: " + t.Kind().String())
+	}
 }
 
 // String returns the unescaped string value for a JSON string.
 // For other JSON kinds, this returns the raw JSON represention.
 func (t Token) String() string {
-	panic("not implemented")
+	if raw := t.raw; raw != nil {
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		buf := raw.previousBuffer()
+		if buf[0] == '"' {
+			v, _ := unescapeString(make([]byte, 0, len(buf)), buf)
+			return string(v)
+		}
+		// Handle tokens that are not JSON strings for fmt.Stringer.
+		return string(buf)
+	}
+	if len(t.str) != 0 && t.num == 0 {
+		return t.str
+	}
+	// Handle tokens that are not JSON strings for fmt.Stringer.
+	if t.num > 0 {
+		switch t.str[0] {
+		case 'f':
+			return string(appendNumber(nil, math.Float64frombits(t.num), 64))
+		case 'i':
+			return strconv.FormatInt(int64(t.num), 10)
+		case 'u':
+			return strconv.FormatUint(uint64(t.num), 10)
+		}
+	}
+	return "<invalid json.Token>"
 }
 
 // Float returns the floating-point value for a JSON number.
 // It returns a NaN, +Inf, or -Inf value for any JSON string
 // with the values "NaN", "Infinity", or "-Infinity".
-// It returns 0 for all other cases.
+// It panics for all other cases.
 func (t Token) Float() float64 {
-	panic("not implemented")
+	if raw := t.raw; raw != nil {
+		// Handle raw number value.
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		buf := raw.previousBuffer()
+		if Kind(buf[0]).normalize() == '0' {
+			// The JSON number grammar is a strict subset of the Go number grammar.
+			// The only way ParseFloat fails is if the number exceeds MaxFloat64.
+			// Since MaxFloat64 is infinitely more accurate than infinity
+			// for representing any finite value, we use that in overflow cases.
+			//
+			// Note that the []byte->string conversion unfortunately allocates.
+			// See https://golang.org/issue/42429 for more information.
+			switch fv, _ := strconv.ParseFloat(string(buf), 64); {
+			case math.IsInf(fv, +1):
+				return +math.MaxFloat64
+			case math.IsInf(fv, -1):
+				return -math.MaxFloat64
+			default:
+				return fv
+			}
+		}
+	} else if t.num != 0 {
+		// Handle exact number value.
+		switch t.str[0] {
+		case 'f':
+			return math.Float64frombits(t.num)
+		case 'i':
+			return float64(int64(t.num))
+		case 'u':
+			return float64(uint64(t.num))
+		}
+	}
+
+	// Handle string values with "NaN", "Infinity", or "-Infinity".
+	if t.Kind() == '"' {
+		// TODO: Optimize for when t is in raw form.
+		switch t.String() {
+		case "NaN":
+			return math.NaN()
+		case "Infinity":
+			return math.Inf(+1)
+		case "-Infinity":
+			return math.Inf(-1)
+		}
+	}
+
+	panic("invalid JSON token kind: " + t.Kind().String())
 }
 
 // Int returns the signed integer value for a JSON number.
 // The fractional component of any number is ignored (truncation toward zero).
 // Any number beyond the representation of an int64 will be saturated
 // to the closest representable value.
-// It returns math.MaxInt64 or math.MinInt64 for any JSON string
-// with the values "Infinity" or "-Infinity".
-// It returns 0 for all other cases.
+// It panics if the token kind is not a JSON number.
 func (t Token) Int() int64 {
-	panic("not implemented")
+	if raw := t.raw; raw != nil {
+		// Handle raw integer value.
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		neg := false
+		buf := raw.previousBuffer()
+		if len(buf) > 0 && buf[0] == '-' {
+			neg, buf = true, buf[1:]
+		}
+		if numAbs, ok := parseDecUint(buf); ok {
+			if neg {
+				if numAbs > -minInt64 {
+					return minInt64
+				}
+				return -1 * int64(numAbs)
+			} else {
+				if numAbs > +maxInt64 {
+					return maxInt64
+				}
+				return +1 * int64(numAbs)
+			}
+		}
+	} else if t.num != 0 {
+		// Handle exact integer value.
+		switch t.str[0] {
+		case 'i':
+			return int64(t.num)
+		case 'u':
+			if uint64(t.num) > maxInt64 {
+				return maxInt64
+			}
+			return int64(uint64(t.num))
+		}
+	}
+
+	// Handle JSON number that is a floating-point value.
+	if t.Kind() == '0' {
+		switch fv := t.Float(); {
+		case fv >= maxInt64:
+			return maxInt64
+		case fv <= minInt64:
+			return minInt64
+		default:
+			return int64(fv) // truncation toward zero
+		}
+	}
+
+	panic("invalid JSON token kind: " + t.Kind().String())
 }
 
 // Uint returns the unsigned integer value for a JSON number.
 // The fractional component of any number is ignored (truncation toward zero).
-// Any number beyond the representation of an int64 will be saturated
+// Any number beyond the representation of an uint64 will be saturated
 // to the closest representable value.
-// It returns math.MaxUint64 for a JSON string with the value "Infinity".
-// It returns 0 for all other cases.
+// It panics if the token kind is not a JSON number.
 func (t Token) Uint() uint64 {
-	panic("not implemented")
+	// NOTE: This accessor returns 0 for any negative JSON number,
+	// which might be surprising, but is at least consistent with the behavior
+	// of saturating out-of-bounds numbers to the closest representable number.
+
+	if raw := t.raw; raw != nil {
+		// Handle raw integer value.
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		neg := false
+		buf := raw.previousBuffer()
+		if len(buf) > 0 && buf[0] == '-' {
+			neg, buf = true, buf[1:]
+		}
+		if num, ok := parseDecUint(buf); ok {
+			if neg {
+				return minUint64
+			}
+			return num
+		}
+	} else if t.num != 0 {
+		// Handle exact integer value.
+		switch t.str[0] {
+		case 'u':
+			return uint64(t.num)
+		case 'i':
+			if int64(t.num) < minUint64 {
+				return minUint64
+			}
+			return uint64(int64(t.num))
+		}
+	}
+
+	// Handle JSON number that is a floating-point value.
+	if t.Kind() == '0' {
+		switch fv := t.Float(); {
+		case fv >= maxUint64:
+			return maxUint64
+		case fv <= minUint64:
+			return minUint64
+		default:
+			return uint64(fv) // truncation toward zero
+		}
+	}
+
+	panic("invalid JSON token kind: " + t.Kind().String())
 }
 
 // Kind returns the token kind.
 func (t Token) Kind() Kind {
-	panic("not implemented")
-}
-
-// Clone makes a copy of the Token such that its value remains valid
-// even after a subsequent Decoder.Read call.
-func (t Token) Clone() Token {
-	panic("not implemented")
+	switch {
+	case t.raw != nil:
+		raw := t.raw
+		if uint64(raw.previousOffset()) != t.num {
+			panic(invalidTokenPanic)
+		}
+		return Kind(t.raw.buf[raw.prevPos]).normalize()
+	case t.num != 0:
+		return '0'
+	case len(t.str) != 0:
+		return '"'
+	default:
+		return invalidKind
+	}
 }
 
 // Kind represents each possible JSON token kind with a single byte,
@@ -139,7 +435,38 @@ func (t Token) Clone() Token {
 // but may be non-zero due to invalid JSON data.
 type Kind byte
 
+const invalidKind Kind = 0
+
 // String prints the kind in a humanly readable fashion.
 func (k Kind) String() string {
-	panic("not implemented")
+	switch k {
+	case 'n':
+		return "null"
+	case 'f':
+		return "false"
+	case 't':
+		return "true"
+	case '"':
+		return "string"
+	case '0':
+		return "number"
+	case '{':
+		return "{"
+	case '}':
+		return "}"
+	case '[':
+		return "["
+	case ']':
+		return "]"
+	default:
+		return "<invalid json.Kind: " + escapeCharacter(byte(k)) + ">"
+	}
+}
+
+// normalize coalesces all possible starting characters of a number as just '0'.
+func (k Kind) normalize() Kind {
+	if k == '-' || ('0' <= k && k <= '9') {
+		return '0'
+	}
+	return k
 }
