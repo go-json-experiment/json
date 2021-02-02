@@ -251,7 +251,7 @@ func TestObjectNamespace(t *testing.T) {
 		insert{`"mike"`, true},
 		insert{`"november"`, true},
 		insert{`"oscar"`, true},
-		insert{`"papa"`, true}, 
+		insert{`"papa"`, true},
 		insert{`"quebec"`, true},
 		insert{`"romeo"`, true},
 		insert{`"sierra"`, true},
