@@ -93,7 +93,11 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 			if validateUTF8 {
 				return dst, &SyntaxError{str: "invalid UTF-8 within string"}
 			}
-			dst = append(dst, `\ufffd`...)
+			if escapeRune != nil && escapeRune('\ufffd') {
+				dst = append(dst, `\ufffd`...)
+			} else {
+				dst = append(dst, "\ufffd"...)
+			}
 			s = s[1:]
 		case escapeRune != nil && escapeRune(r):
 			if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
