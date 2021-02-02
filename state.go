@@ -216,3 +216,136 @@ func (e stateEntry) needImplicitComma(next Kind) bool {
 func (e *stateEntry) increment() {
 	(*e)++
 }
+
+// objectNamespaceStack is a stack of object namespaces.
+// This data structure assists in detecting duplicate names.
+type objectNamespaceStack []objectNamespace
+
+// push starts a new namespace for a nested JSON object.
+func (nss *objectNamespaceStack) push() {
+	if cap(*nss) > len(*nss) {
+		*nss = (*nss)[:len(*nss)+1]
+	} else {
+		*nss = append(*nss, objectNamespace{})
+	}
+}
+
+// last returns a pointer to the last JSON object namespace.
+func (nss objectNamespaceStack) last() *objectNamespace {
+	return &nss[len(nss)-1]
+}
+
+// pop terminates the namespace for a nested JSON object.
+func (nss *objectNamespaceStack) pop() {
+	nss.last().reset()
+	*nss = (*nss)[:len(*nss)-1]
+}
+
+// objectNamespace is the namespace for a JSON object.
+// It relies on a linear search over all the names before switching
+// to use a Go map for direct lookup.
+//
+// The zero value is an empty namespace ready for use.
+type objectNamespace struct {
+	// endOffsets is a list of offsets to the end of each name in buffers.
+	// The length of offsets is the number of names in the namespace.
+	endOffsets []uint
+	// allNames is a back-to-back concatenation of every name in the namespace.
+	allNames []byte
+	// mapNames is a Go map containing every name in the namespace.
+	// Only valid if non-nil.
+	mapNames map[string]struct{}
+}
+
+// reset resets the namespace to be empty.
+func (ns *objectNamespace) reset() {
+	ns.endOffsets = ns.endOffsets[:0]
+	ns.allNames = ns.allNames[:0]
+	ns.mapNames = nil
+	if cap(ns.endOffsets) > 1<<6 {
+		ns.endOffsets = nil // avoid pinning arbitrarily large amounts of memory
+	}
+	if cap(ns.allNames) > 1<<10 {
+		ns.allNames = nil // avoid pinning arbitrarily large amounts of memory
+	}
+}
+
+// length reports the number names in the namespace.
+func (ns *objectNamespace) length() int {
+	return len(ns.endOffsets)
+}
+
+// get retrieves the ith name in the namespace.
+func (ns *objectNamespace) get(i int) []byte {
+	if i == 0 {
+		return ns.allNames[:ns.endOffsets[0]]
+	} else {
+		return ns.allNames[ns.endOffsets[i-1]:ns.endOffsets[i-0]]
+	}
+}
+
+// last retrieves the last name in the namespace.
+func (ns *objectNamespace) last() []byte {
+	return ns.get(ns.length() - 1)
+}
+
+// insert inserts an escaped name and reports whether it was inserted,
+// which only occurs if name is not already in the namespace.
+// The provided name must be a valid JSON string.
+func (ns *objectNamespace) insert(b []byte) bool {
+	// TODO: Consider making two variations of insert that operate on
+	// both escaped and unescaped strings.
+	allNames, _ := unescapeString(ns.allNames, b)
+	name := allNames[len(ns.allNames):]
+
+	// Switch to a map if the buffer is too large for linear search.
+	// This does not add the current name to the map.
+	if ns.length() > 16 {
+		ns.mapNames = make(map[string]struct{})
+		var startOffset uint
+		for _, endOffset := range ns.endOffsets {
+			name := ns.allNames[startOffset:endOffset]
+			ns.mapNames[string(name)] = struct{}{}
+			startOffset = endOffset
+		}
+	}
+
+	if ns.mapNames == nil {
+		// Perform linear search over the buffer to find matching names.
+		// It provides O(n) lookup, but doesn't require any allocations.
+		var startOffset uint
+		for _, endOffset := range ns.endOffsets {
+			if string(ns.allNames[startOffset:endOffset]) == string(name) {
+				return false
+			}
+			startOffset = endOffset
+		}
+	} else {
+		// Use the map if it is populated.
+		// It provides O(1) lookup, but requires a string allocation per name.
+		if _, ok := ns.mapNames[string(name)]; ok {
+			return false
+		}
+		ns.mapNames[string(name)] = struct{}{}
+	}
+
+	ns.allNames = allNames
+	ns.endOffsets = append(ns.endOffsets, uint(len(ns.allNames)))
+	return true
+}
+
+// removeLast removes the last name in the namespace.
+func (ns *objectNamespace) removeLast() {
+	// TODO: Delete this if Marshal/Unmarshal don't need to provide the ability
+	// to unwrite/unread an object name.
+	if ns.mapNames != nil {
+		delete(ns.mapNames, string(ns.last()))
+	}
+	if ns.length()-1 == 0 {
+		ns.endOffsets = ns.endOffsets[:0]
+		ns.allNames = ns.allNames[:0]
+	} else {
+		ns.endOffsets = ns.endOffsets[:ns.length()-1]
+		ns.allNames = ns.allNames[:ns.endOffsets[ns.length()-1]]
+	}
+}

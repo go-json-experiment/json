@@ -7,6 +7,7 @@ package json
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -203,5 +204,123 @@ func (s *stateMachine) append(k Kind) error {
 		return s.popArray()
 	default:
 		panic(fmt.Sprintf("invalid token kind: '%c'", k))
+	}
+}
+
+func TestObjectNamespace(t *testing.T) {
+	type operation interface{}
+	type (
+		insert struct {
+			name         string
+			wantInserted bool
+		}
+		removeLast struct{}
+	)
+
+	// Sequence of insert operations to perform (order matters).
+	ops := []operation{
+		insert{`""`, true},
+		removeLast{},
+		insert{`""`, true},
+		insert{`""`, false},
+
+		// Test insertion of the same name with different formatting.
+		insert{`"alpha"`, true},
+		insert{`"ALPHA"`, true}, // case-sensitive matching
+		insert{`"alpha"`, false},
+		insert{`"\u0061\u006c\u0070\u0068\u0061"`, false}, // unescapes to "alpha"
+		removeLast{},                                      // removes "ALPHA"
+		insert{`"alpha"`, false},
+		removeLast{}, // removes "alpha"
+		insert{`"alpha"`, true},
+		removeLast{},
+
+		// Bulk insert simple names.
+		insert{`"alpha"`, true},
+		insert{`"bravo"`, true},
+		insert{`"charlie"`, true},
+		insert{`"delta"`, true},
+		insert{`"echo"`, true},
+		insert{`"foxtrot"`, true},
+		insert{`"golf"`, true},
+		insert{`"hotel"`, true},
+		insert{`"india"`, true},
+		insert{`"juliet"`, true},
+		insert{`"kilo"`, true},
+		insert{`"lima"`, true},
+		insert{`"mike"`, true},
+		insert{`"november"`, true},
+		insert{`"oscar"`, true},
+		insert{`"papa"`, true}, 
+		insert{`"quebec"`, true},
+		insert{`"romeo"`, true},
+		insert{`"sierra"`, true},
+		insert{`"tango"`, true},
+		insert{`"uniform"`, true},
+		insert{`"victor"`, true},
+		insert{`"whiskey"`, true},
+		insert{`"xray"`, true},
+		insert{`"yankee"`, true},
+		insert{`"zulu"`, true},
+
+		// Test insertion of invalid UTF-8.
+		insert{`"` + "\ufffd" + `"`, true},
+		insert{`"` + "\ufffd" + `"`, false},
+		insert{`"\ufffd"`, false},         // unescapes to Unicode replacement character
+		insert{`"\uFFFD"`, false},         // unescapes to Unicode replacement character
+		insert{`"` + "\xff" + `"`, false}, // mangles as Unicode replacement character
+		removeLast{},
+		insert{`"` + "\ufffd" + `"`, true},
+
+		// Test insertion of unicode characters.
+		insert{`"☺☻☹"`, true},
+		insert{`"☺☻☹"`, false},
+		removeLast{},
+		insert{`"☺☻☹"`, true},
+	}
+
+	// Execute the sequence of operations twice:
+	// 1) on a fresh namespace and 2) on a namespace that has been reset.
+	var ns objectNamespace
+	wantNames := []string{}
+	for _, reset := range []bool{false, true} {
+		if reset {
+			ns.reset()
+			wantNames = nil
+		}
+
+		// Execute the operations and ensure the state is consistent.
+		for i, op := range ops {
+			switch op := op.(type) {
+			case insert:
+				gotInserted := ns.insert([]byte(op.name))
+				if gotInserted != op.wantInserted {
+					t.Fatalf("%d: objectNamespace{%v}.insert(%v) = %v, want %v", i, strings.Join(wantNames, " "), op.name, gotInserted, op.wantInserted)
+				}
+				if gotInserted {
+					b, _ := unescapeString(nil, []byte(op.name))
+					wantNames = append(wantNames, string(b))
+				}
+			case removeLast:
+				ns.removeLast()
+				wantNames = wantNames[:len(wantNames)-1]
+			default:
+				panic(fmt.Sprintf("unknown operation: %T", op))
+			}
+
+			// Check that the namespace is consistent.
+			gotNames := []string{}
+			for i := 0; i < ns.length(); i++ {
+				gotNames = append(gotNames, string(ns.get(i)))
+			}
+			if !reflect.DeepEqual(gotNames, wantNames) {
+				t.Fatalf("%d: objectNamespace = {%v}, want {%v}", i, strings.Join(gotNames, " "), strings.Join(wantNames, " "))
+			}
+		}
+
+		// Verify that we eventually switched to using a Go map.
+		if ns.mapNames == nil {
+			t.Errorf("objectNamespace.mapNames = nil, want non-nil")
+		}
 	}
 }
