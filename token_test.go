@@ -28,6 +28,8 @@ func TestTokenAccessors(t *testing.T) {
 		{Null, token{String: "null", Kind: 'n'}},
 		{False, token{Bool: false, String: "false", Kind: 'f'}},
 		{True, token{Bool: true, String: "true", Kind: 't'}},
+		{Bool(false), token{Bool: false, String: "false", Kind: 'f'}},
+		{Bool(true), token{Bool: true, String: "true", Kind: 't'}},
 		{ObjectStart, token{String: "{", Kind: '{'}},
 		{ObjectEnd, token{String: "}", Kind: '}'}},
 		{ArrayStart, token{String: "[", Kind: '['}},
@@ -47,6 +49,10 @@ func TestTokenAccessors(t *testing.T) {
 		{Int(+1), token{String: "1", Float: +1, Int: +1, Uint: +1, Kind: '0'}},
 		{Int(maxInt64 - 1), token{String: "9223372036854775806", Float: maxInt64 - 1, Int: maxInt64 - 1, Uint: maxInt64 - 1, Kind: '0'}},
 		{Int(maxInt64), token{String: "9223372036854775807", Float: maxInt64, Int: maxInt64, Uint: maxInt64, Kind: '0'}},
+		{Uint(minUint64), token{String: "0", Kind: '0'}},
+		{Uint(minUint64+1), token{String:"1", Float: minUint64+1, Int: minUint64+1, Uint: minUint64+1, Kind:'0'}},
+		{Uint(maxUint64-1), token{String:"18446744073709551614", Float: maxUint64-1, Int: maxInt64, Uint: maxUint64-1, Kind:'0'}},
+		{Uint(maxUint64), token{String: "18446744073709551615", Float: maxUint64, Int: maxInt64, Uint: maxUint64, Kind:'0'}},
 		{rawToken(`-0`), token{String: "-0", Float: math.Copysign(0, -1), Int: 0, Uint: 0, Kind: '0'}},
 		{rawToken(`1e1000`), token{String: "1e1000", Float: math.MaxFloat64, Int: maxInt64, Uint: maxUint64, Kind: '0'}},
 		{rawToken(`-1e1000`), token{String: "-1e1000", Float: -math.MaxFloat64, Int: minInt64, Uint: minUint64, Kind: '0'}},
@@ -58,6 +64,8 @@ func TestTokenAccessors(t *testing.T) {
 		{rawToken(`-0.5`), token{String: "-0.5", Float: -0.5, Int: 0, Uint: 0, Kind: '0'}},
 		{rawToken(`-0.9`), token{String: "-0.9", Float: -0.9, Int: 0, Uint: 0, Kind: '0'}},
 		{rawToken(`-1.1`), token{String: "-1.1", Float: -1.1, Int: -1, Uint: 0, Kind: '0'}},
+		{rawToken(`99999999999999999999`), token{String: "99999999999999999999", Float:1e20-1, Int: maxInt64, Uint: maxUint64, Kind: '0'}},
+		{rawToken(`-99999999999999999999`), token{String: "-99999999999999999999", Float:-1e20-1, Int: minInt64, Uint: minUint64, Kind: '0'}},
 	}
 
 	for _, tt := range tests {
