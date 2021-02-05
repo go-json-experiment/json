@@ -200,6 +200,27 @@ func (t Token) Bool() bool {
 	}
 }
 
+// appendString appends a JSON string to dst and returns it.
+// It panics if t is not a JSON string.
+func (t Token) appendString(dst []byte, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
+	if raw := t.raw; raw != nil {
+		// Handle raw string value.
+		buf := raw.previousBuffer()
+		if Kind(buf[0]) == '"' {
+			if escapeRune == nil && consumeSimpleString(buf) == len(buf) {
+				return append(dst, buf...), nil
+			}
+			dst, _, err := reformatString(dst, buf, validateUTF8, escapeRune)
+			return dst, err
+		}
+	} else if len(t.str) != 0 && t.num == 0 {
+		// Handle exact string value.
+		return appendString(dst, t.str, validateUTF8, escapeRune)
+	}
+
+	panic("invalid JSON token kind: " + t.Kind().String())
+}
+
 // String returns the unescaped string value for a JSON string.
 // For other JSON kinds, this returns the raw JSON represention.
 func (t Token) String() string {
@@ -230,6 +251,30 @@ func (t Token) String() string {
 		}
 	}
 	return "<invalid json.Token>"
+}
+
+// appendNumber appends a JSON number to dst and returns it.
+// It panics if t is not a JSON number.
+func (t Token) appendNumber(dst []byte) ([]byte, error) {
+	if raw := t.raw; raw != nil {
+		// Handle raw number value.
+		buf := raw.previousBuffer()
+		if Kind(buf[0]).normalize() == '0' {
+			return append(dst, buf...), nil
+		}
+	} else if t.num != 0 {
+		// Handle exact number value.
+		switch t.str[0] {
+		case 'f':
+			return appendNumber(dst, math.Float64frombits(t.num), 64), nil
+		case 'i':
+			return strconv.AppendInt(dst, int64(t.num), 10), nil
+		case 'u':
+			return strconv.AppendUint(dst, uint64(t.num), 10), nil
+		}
+	}
+
+	panic("invalid JSON token kind: " + t.Kind().String())
 }
 
 // Float returns the floating-point value for a JSON number.

@@ -12,6 +12,17 @@ var (
 	errMismatchDelim = &SyntaxError{str: "mismatching structural token for object or array"}
 )
 
+type state struct {
+	// tokens validates whether the next token kind is valid.
+	tokens stateMachine
+	// namespaces is a stack of object namespaces.
+	namespaces objectNamespaceStack
+}
+
+func (s *state) init() {
+	s.tokens.init()
+}
+
 // stateMachine is a push-down automaton that validates whether
 // a sequence of tokens is valid or not according to the JSON grammar.
 // It is useful for both encoding and decoding.
@@ -120,6 +131,26 @@ func (m *stateMachine) popArray() error {
 	default:
 		*m = (*m)[:len(*m)-1]
 		return nil
+	}
+}
+
+// needIndent reports whether indent whitespace should be injected.
+// A zero value means that no whitespace should be injected.
+// A positive value means '\n', indentPrefix, and (n-1) copies of indentBody
+// should be appended to the output immediately before the next token.
+func (m stateMachine) needIndent(next Kind) (n int) {
+	willEnd := next == '}' || next == ']'
+	switch e := m.last(); {
+	case m.depth() == 1:
+		return 0 // top-level values are never indented
+	case e.length() == 0 && willEnd:
+		return 0 // an empty object or array is never indented
+	case e.length() == 0 || e.needImplicitComma(next):
+		return m.depth()
+	case willEnd:
+		return m.depth() - 1
+	default:
+		return 0
 	}
 }
 

@@ -111,5 +111,8 @@ func (v *RawValue) UnmarshalJSON(b []byte) error {
 
 // Kind returns the starting token kind.
 func (v RawValue) Kind() Kind {
-	panic("not implemented")
+	if v := v[consumeWhitespace(v):]; len(v) > 0 {
+		return Kind(v[0]).normalize()
+	}
+	return invalidKind
 }
