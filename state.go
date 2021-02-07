@@ -536,6 +536,7 @@ func (nss *objectNamespaceStack) reset() {
 func (nss *objectNamespaceStack) push() {
 	if cap(*nss) > len(*nss) {
 		*nss = (*nss)[:len(*nss)+1]
+		nss.last().reset()
 	} else {
 		*nss = append(*nss, objectNamespace{})
 	}
@@ -548,7 +549,6 @@ func (nss objectNamespaceStack) last() *objectNamespace {
 
 // pop terminates the namespace for a nested JSON object.
 func (nss *objectNamespaceStack) pop() {
-	nss.last().reset()
 	*nss = (*nss)[:len(*nss)-1]
 }
 

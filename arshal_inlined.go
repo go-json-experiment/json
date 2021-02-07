@@ -44,8 +44,8 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			return nil
 		}
 
-		dec := new(Decoder) // TODO: Pool this?
-		dec.reset(b, nil, DecodeOptions{AllowDuplicateNames: true, AllowInvalidUTF8: true})
+		dec := getDecoder(b, nil, DecodeOptions{AllowDuplicateNames: true, AllowInvalidUTF8: true})
+		defer putDecoder(dec)
 
 		tok, err := dec.ReadToken()
 		if err != nil {

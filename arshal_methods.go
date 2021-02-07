@@ -84,6 +84,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case jsonMarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
+			enc.escaped = true // pessimistically assume MarshalNextJSON leaks the Encoder
 			prevDepth, prevLength := enc.tokens.depthLength()
 			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalNextJSON(enc, mo)
 			currDepth, currLength := enc.tokens.depthLength()
@@ -138,6 +139,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case jsonUnmarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
+			dec.escaped = true // pessimistically assume UnmarshalNextJSON leaks the Decoder
 			prevDepth, prevLength := dec.tokens.depthLength()
 			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalNextJSON(dec, uo)
 			currDepth, currLength := dec.tokens.depthLength()

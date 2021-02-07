@@ -100,6 +100,8 @@ type Decoder struct {
 	state
 	decodeBuffer
 	options DecodeOptions
+
+	escaped bool // only used when unmarshaling
 }
 
 // decodeBuffer is a buffer split into 4 segments:
