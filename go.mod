@@ -8,4 +8,4 @@
 // use the "replace" directive to opt-in to its functionality.
 module encoding/json/v2
 
-go 1.15
+go 1.16

@@ -107,10 +107,8 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 // consumeWhitespace consumes leading JSON whitespace per RFC 7159, section 2.
 func consumeWhitespace(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
-loop:
-	if len(b) > n && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
+	for len(b) > n && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
 		n++
-		goto loop // TODO(https://golang.org/issue/14768): Use for loop when Go1.16 is released.
 	}
 	return n
 }
@@ -170,10 +168,8 @@ func consumeSimpleString(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
 	if len(b) > 0 && b[0] == '"' {
 		n++
-	loop:
-		if len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] <= unicode.MaxASCII) {
+		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] <= unicode.MaxASCII) {
 			n++
-			goto loop // TODO(https://golang.org/issue/14768): Use for loop when Go1.16 is released.
 		}
 		if len(b) > n && b[n] == '"' {
 			n++
@@ -373,10 +369,8 @@ func consumeSimpleNumber(b []byte) (n int) {
 			n++
 		} else if '1' <= b[0] && b[0] <= '9' {
 			n++
-		loop:
-			if len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+			for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 				n++
-				goto loop // TODO(https://golang.org/issue/14768): Use for loop when Go1.16 is released.
 			}
 		} else {
 			return 0
