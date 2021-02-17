@@ -1,12 +1,10 @@
 on: [push, pull_request]
 name: Test
-env:
-  TEST_INLINE: true
 jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.16.x]
+        go-version: [1.13.x, 1.14.x, 1.15.x, 1.16.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -18,6 +16,10 @@ jobs:
       uses: actions/checkout@v2
     - name: Test
       run: go test ./...
+    - name: TestInline
+      if: matrix.go-version == '1.16.x' && matrix.os == 'ubuntu-latest'
+      run: go test -v -run=TestInline
+      env: {TEST_INLINE: true}
     - name: Format
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.go-version == '1.16.x' && matrix.os == 'ubuntu-latest'
       run: diff -u <(echo -n) <(gofmt -d .)
