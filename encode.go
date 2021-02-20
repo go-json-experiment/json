@@ -178,7 +178,7 @@ func (e *encodeBuffer) flush() error {
 	grow := cap(e.buf) <= maxBufferSize/growthSizeFactor
 	// Growing can be expensive, so only grow
 	// if a sufficient number of bytes have been processed.
-	grow = grow && int64(cap(e.buf)/growthRateFactor) > e.currentOffset()
+	grow = grow && int64(cap(e.buf)/growthRateFactor) > e.previousOffsetEnd()
 	if grow {
 		e.buf = make([]byte, 0, cap(e.buf)*growthSizeFactor)
 	}
@@ -186,8 +186,8 @@ func (e *encodeBuffer) flush() error {
 	return nil
 }
 
-func (e *encodeBuffer) currentOffset() int64    { return e.baseOffset + int64(len(e.buf)) }
-func (e *encodeBuffer) unflushedBuffer() []byte { return e.buf }
+func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.buf)) }
+func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 
 // WriteToken writes the next token and advances the internal write offset.
 //
@@ -578,7 +578,7 @@ func (e *Encoder) reformatArray(b []byte, v RawValue, depth int) ([]byte, RawVal
 // The number of bytes actually written to the underlying io.Writer may be less
 // than this offset due to internal buffering effects.
 func (e *Encoder) OutputOffset() int64 {
-	return e.currentOffset()
+	return e.previousOffsetEnd()
 }
 
 // appendString appends s to dst as a JSON string per RFC 7159, section 7.

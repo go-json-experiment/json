@@ -48,7 +48,7 @@ func (e *SyntaxError) Error() string              { return errorPrefix + e.str }
 func (e *SyntaxError) Is(target error) bool       { return e == target || target == Error }
 func (e *SyntaxError) withOffset(pos int64) error { return &SyntaxError{Offset: pos, str: e.str} }
 
-func newInvalidCharacterError(c byte, where string) error {
+func newInvalidCharacterError(c byte, where string) *SyntaxError {
 	return &SyntaxError{str: "invalid character " + escapeCharacter(c) + " " + where}
 }
 

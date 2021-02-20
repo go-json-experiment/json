@@ -55,7 +55,7 @@ type Token struct {
 	//
 	// Notes:
 	//	• For tokens stored in "raw" form, the num field contains the
-	//	  absolute offset determined by raw.previousOffset().
+	//	  absolute offset determined by raw.previousOffsetStart().
 	//	  The buffer itself is stored in raw.previousBuffer().
 	//	• JSON literals and structural characters are always in the "raw" form.
 	//	• JSON strings and numbers can be in either "raw" or "exact" forms.
@@ -65,7 +65,7 @@ type Token struct {
 
 	// raw contains a reference to the raw decode buffer.
 	// If non-nil, then its value takes precedence over str and num.
-	// It is only valid if num == raw.previousOffset().
+	// It is only valid if num == raw.previousOffsetStart().
 	raw *decodeBuffer
 
 	// str is the unescaped JSON string if num is zero.
@@ -99,7 +99,7 @@ var (
 )
 
 func rawToken(s string) Token {
-	return Token{raw: &decodeBuffer{buf: []byte(s), prevPos: 0, currPos: len(s)}}
+	return Token{raw: &decodeBuffer{buf: []byte(s), prevStart: 0, prevEnd: len(s)}}
 }
 
 // Bool constructs a Token representing a JSON boolean.
@@ -159,7 +159,7 @@ func (t Token) Clone() Token {
 	// TODO: Allow caller to avoid any allocations?
 	if raw := t.raw; raw != nil {
 		// Avoid copying globals.
-		if t.raw.prevPos == 0 {
+		if t.raw.prevStart == 0 {
 			switch t.raw {
 			case Null.raw:
 				return Null
@@ -178,11 +178,11 @@ func (t Token) Clone() Token {
 			}
 		}
 
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		buf := append([]byte(nil), raw.previousBuffer()...)
-		return Token{raw: &decodeBuffer{buf: buf, prevPos: 0, currPos: len(buf)}}
+		return Token{raw: &decodeBuffer{buf: buf, prevStart: 0, prevEnd: len(buf)}}
 	}
 	return t
 }
@@ -225,7 +225,7 @@ func (t Token) appendString(dst []byte, validateUTF8 bool, escapeRune func(rune)
 // For other JSON kinds, this returns the raw JSON represention.
 func (t Token) String() string {
 	if raw := t.raw; raw != nil {
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		buf := raw.previousBuffer()
@@ -284,7 +284,7 @@ func (t Token) appendNumber(dst []byte) ([]byte, error) {
 func (t Token) Float() float64 {
 	if raw := t.raw; raw != nil {
 		// Handle raw number value.
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		buf := raw.previousBuffer()
@@ -341,7 +341,7 @@ func (t Token) Float() float64 {
 func (t Token) Int() int64 {
 	if raw := t.raw; raw != nil {
 		// Handle raw integer value.
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		neg := false
@@ -402,7 +402,7 @@ func (t Token) Uint() uint64 {
 
 	if raw := t.raw; raw != nil {
 		// Handle raw integer value.
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		neg := false
@@ -449,10 +449,10 @@ func (t Token) Kind() Kind {
 	switch {
 	case t.raw != nil:
 		raw := t.raw
-		if uint64(raw.previousOffset()) != t.num {
+		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
-		return Kind(t.raw.buf[raw.prevPos]).normalize()
+		return Kind(t.raw.buf[raw.prevStart]).normalize()
 	case t.num != 0:
 		return '0'
 	case len(t.str) != 0:
