@@ -49,8 +49,10 @@ import (
 type DecodeOptions struct {
 	// TODO: Rename as UnmarshalOptions?
 
-	// RejectDuplicateNames specifies that JSON objects must not contain duplicate names.
-	// This ensures that the input is compliant with RFC 7493, section 2.3.
+	// RejectDuplicateNames specifies that JSON objects must not contain
+	// duplicate member names to ensure that the input is compliant with
+	// RFC 7493, section 2.3. Use of the feature incurs some performance and
+	// memory cost needed to keep track of all member names processed so far.
 	RejectDuplicateNames bool
 
 	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
