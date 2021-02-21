@@ -4,8 +4,11 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.13.x, 1.14.x, 1.15.x, 1.16.x]
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # TODO: GitHub actions are not free on private repositories.
+        # When this is made public, we should test starting from 1.13.x, and
+        # with macos-latest and windows-latest.
+        go-version: [1.16.x]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
     - name: Install Go
