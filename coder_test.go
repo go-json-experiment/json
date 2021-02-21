@@ -5,7 +5,13 @@
 package json
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"math"
+	"path"
+	"strings"
+	"testing"
 )
 
 var (
@@ -230,3 +236,77 @@ var coderTestdata = []coderTestdataEntry{{
 		ObjectEnd,
 	},
 }}
+
+// TestCoderInterleaved tests that we can interleave calls that operate on
+// tokens and raw values. The only error condition is trying to operate on a
+// raw value when the next token is an end of object or array.
+func TestCoderInterleaved(t *testing.T) {
+	for _, td := range coderTestdata {
+		// In TokenFirst and ValueFirst, alternate between tokens and values.
+		// In TokenDelims, only use tokens for object and array delimiters.
+		for _, modeName := range []string{"TokenFirst", "ValueFirst", "TokenDelims"} {
+			t.Run(path.Join(td.name, modeName), func(t *testing.T) {
+				testCoderInterleaved(t, modeName, td)
+			})
+		}
+	}
+}
+func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) {
+	src := strings.NewReader(td.in)
+	dst := new(bytes.Buffer)
+	dec := NewDecoder(src)
+	enc := NewEncoder(dst)
+	tickTock := modeName == "TokenFirst"
+	for {
+		if modeName == "TokenDelims" {
+			switch dec.PeekKind() {
+			case '{', '}', '[', ']':
+				tickTock = true // as token
+			default:
+				tickTock = false // as value
+			}
+		}
+		if tickTock {
+			tok, err := dec.ReadToken()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				t.Fatalf("Decoder.ReadToken error: %v", err)
+			}
+			if err := enc.WriteToken(tok); err != nil {
+				t.Fatalf("Encoder.WriteToken error: %v", err)
+			}
+		} else {
+			val, err := dec.ReadValue()
+			if err != nil {
+				// It is a syntax error to call ReadValue
+				// at the end of an object or array.
+				// Retry as a ReadToken call.
+				expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
+				if expectError {
+					if !errors.As(err, new(*SyntaxError)) {
+						t.Errorf("Decoder.ReadToken error is %T, want %T", err, new(SyntaxError))
+					}
+					tickTock = !tickTock
+					continue
+				}
+
+				if err == io.EOF {
+					break
+				}
+				t.Fatalf("Decoder.ReadValue error: %v", err)
+			}
+			if err := enc.WriteValue(val); err != nil {
+				t.Fatalf("Encoder.WriteValue error: %v", err)
+			}
+		}
+		tickTock = !tickTock
+	}
+
+	got := dst.String()
+	want := td.outCompact + "\n"
+	if got != want {
+		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
+	}
+}
