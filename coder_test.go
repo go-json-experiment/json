@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"math/rand"
 	"path"
 	"strings"
 	"testing"
@@ -309,4 +310,68 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 	if got != want {
 		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
 	}
+}
+
+// FaultyBuffer implements io.Reader and io.Writer.
+// It may process fewer bytes than the provided buffer
+// and may randomly return an error.
+type FaultyBuffer struct {
+	B []byte
+
+	// MaxBytes is the maximum number of bytes read/written.
+	// A random number of bytes within [0, MaxBytes] are processed.
+	// A non-positive value is treated as infinity.
+	MaxBytes int
+
+	// MayError specifies whether to randomly provide this error.
+	// Even if an error is returned, no bytes are dropped.
+	MayError error
+
+	// Rand to use for pseudo-random behavior.
+	// If nil, it will be initialized with rand.NewSource(0).
+	Rand rand.Source
+}
+
+func (p *FaultyBuffer) Read(b []byte) (int, error) {
+	b = b[:copy(b[:p.mayTruncate(len(b))], p.B)]
+	p.B = p.B[len(b):]
+	if len(p.B) == 0 && (len(b) == 0 || p.randN(2) == 0) {
+		return len(b), io.EOF
+	}
+	return len(b), p.mayError()
+}
+
+func (p *FaultyBuffer) Write(b []byte) (int, error) {
+	b2 := b[:p.mayTruncate(len(b))]
+	p.B = append(p.B, b2...)
+	if len(b2) < len(b) {
+		return len(b2), io.ErrShortWrite
+	}
+	return len(b2), p.mayError()
+}
+
+// mayTruncate may return a value between [0, n].
+func (p *FaultyBuffer) mayTruncate(n int) int {
+	if p.MaxBytes > 0 {
+		if n > p.MaxBytes {
+			n = p.MaxBytes
+		}
+		return p.randN(n + 1)
+	}
+	return n
+}
+
+// mayError may return a non-nil error.
+func (p *FaultyBuffer) mayError() error {
+	if p.MayError != nil && p.randN(2) == 0 {
+		return p.MayError
+	}
+	return nil
+}
+
+func (p *FaultyBuffer) randN(n int) int {
+	if p.Rand == nil {
+		p.Rand = rand.NewSource(0)
+	}
+	return int(p.Rand.Int63() % int64(n))
 }

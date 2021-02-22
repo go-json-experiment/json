@@ -5,6 +5,7 @@
 package json
 
 import (
+	"errors"
 	"io"
 	"math"
 	"net"
@@ -93,6 +94,68 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 		}
 		if !equalTokens(tokens, td.tokens) {
 			t.Fatalf("tokens mismatch:\ngot  %v\nwant %v", tokens, td.tokens)
+		}
+	}
+}
+
+// TestFaultyDecoder tests that temporary I/O errors are not fatal.
+func TestFaultyDecoder(t *testing.T) {
+	for _, td := range coderTestdata {
+		for _, typeName := range []string{"Token", "Value"} {
+			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
+				testFaultyDecoder(t, typeName, td)
+			})
+		}
+	}
+}
+func testFaultyDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
+	b := &FaultyBuffer{
+		B:        []byte(td.in),
+		MaxBytes: 1,
+		MayError: io.ErrNoProgress,
+	}
+
+	// Read all the tokens.
+	// If the underlying io.Reader is faulty, then Read may return
+	// an error without changing the internal state machine.
+	// In other words, I/O errors occur before syntax errors.
+	dec := NewDecoder(b)
+	switch typeName {
+	case "Token":
+		var tokens []Token
+		for {
+			tok, err := dec.ReadToken()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				if !errors.Is(err, io.ErrNoProgress) {
+					t.Fatalf("%d: Decoder.ReadToken error: %v", len(tokens), err)
+				}
+				continue
+			}
+			tokens = append(tokens, tok.Clone())
+		}
+		if !equalTokens(tokens, td.tokens) {
+			t.Fatalf("tokens mismatch:\ngot  %s\nwant %s", tokens, td.tokens)
+		}
+	case "Value":
+		for {
+			val, err := dec.ReadValue()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				if !errors.Is(err, io.ErrNoProgress) {
+					t.Fatalf("Decoder.ReadValue error: %v", err)
+				}
+				continue
+			}
+			got := string(val)
+			want := strings.TrimSpace(td.in)
+			if got != want {
+				t.Fatalf("Decoder.ReadValue = %s, want %s", got, want)
+			}
 		}
 	}
 }

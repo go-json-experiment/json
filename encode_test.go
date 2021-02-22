@@ -6,6 +6,7 @@ package json
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"math"
 	"path"
@@ -82,6 +83,49 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 	got := dst.String()
 	if got != want {
 		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
+	}
+}
+
+// TestFaultyEncoder tests that temporary I/O errors are not fatal.
+func TestFaultyEncoder(t *testing.T) {
+	for _, td := range coderTestdata {
+		for _, typeName := range []string{"Token", "Value"} {
+			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
+				testFaultyEncoder(t, typeName, td)
+			})
+		}
+	}
+}
+func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
+	b := &FaultyBuffer{
+		MaxBytes: 1,
+		MayError: io.ErrShortWrite,
+	}
+
+	// Write all the tokens.
+	// Even if the underlying io.Writer may be faulty,
+	// writing a valid token or value is guaranteed to at least
+	// be appended to the internal buffer.
+	// In other words, syntax errors occur before I/O errors.
+	enc := NewEncoder(b)
+	switch typeName {
+	case "Token":
+		for i, tok := range td.tokens {
+			err := enc.WriteToken(tok)
+			if err != nil && !errors.Is(err, io.ErrShortWrite) {
+				t.Fatalf("%d: Encoder.WriteToken error: %v", i, err)
+			}
+		}
+	case "Value":
+		err := enc.WriteValue(RawValue(td.in))
+		if err != nil && !errors.Is(err, io.ErrShortWrite) {
+			t.Fatalf("Encoder.WriteValue error: %v", err)
+		}
+	}
+	gotOutput := string(append(b.B, enc.unflushedBuffer()...))
+	wantOutput := td.outCompact + "\n"
+	if gotOutput != wantOutput {
+		t.Fatalf("output mismatch:\ngot  %s\nwant %s", gotOutput, wantOutput)
 	}
 }
 
