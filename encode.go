@@ -337,12 +337,16 @@ func (e *Encoder) WriteValue(v RawValue) error {
 		if err = e.tokens.pushObject(); err != nil {
 			break
 		}
-		err = e.tokens.popObject() // never fails
+		if err = e.tokens.popObject(); err != nil {
+			panic("BUG: popObject should never fail immediately after pushObject: " + err.Error())
+		}
 	case '[':
 		if err = e.tokens.pushArray(); err != nil {
 			break
 		}
-		err = e.tokens.popArray() // never fails
+		if err = e.tokens.popArray(); err != nil {
+			panic("BUG: popArray should never fail immediately after pushArray: " + err.Error())
+		}
 	}
 	if err != nil {
 		return err

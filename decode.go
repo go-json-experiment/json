@@ -504,12 +504,16 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 		if err = d.tokens.pushObject(); err != nil {
 			break
 		}
-		err = d.tokens.popObject() // never fails
+		if err = d.tokens.popObject(); err != nil {
+			panic("BUG: popObject should never fail immediately after pushObject: " + err.Error())
+		}
 	case '[':
 		if err = d.tokens.pushArray(); err != nil {
 			break
 		}
-		err = d.tokens.popArray() // never fails
+		if err = d.tokens.popArray(); err != nil {
+			panic("BUG: popArray should never fail immediately after pushArray: " + err.Error())
+		}
 	}
 	if err != nil {
 		return nil, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of value
