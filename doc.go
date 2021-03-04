@@ -6,7 +6,7 @@
 // as specified in RFC 4627, RFC 7159, RFC 7493, RFC 8259, and RFC 8785.
 // JSON is a simple data interchange format that can represent
 // primitive data types such as booleans, strings, and numbers,
-// in addition to composite data types such as objects and arrays.
+// in addition to structured data types such as objects and arrays.
 //
 //
 // Terminology
