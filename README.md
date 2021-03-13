@@ -82,8 +82,8 @@ the packing or parsing of JSON data. They operate on `Token` and `Value` types
 which represent the common data structures that are representable in JSON.
 `Encoder` and `Decoder` do not aim to provide any interpretation of the data.
 
-Top-level functions like `Marshal`, `MarshalWriter`, `MarshalNext`, `Unmarshal`,
-`UnmarshalReader`, and `UnmarshalNext` provide semantic meaning by correlating
+Functions like `Marshal`, `MarshalFull`, `MarshalNext`, `Unmarshal`,
+`UnmarshalFull`, and `UnmarshalNext` provide semantic meaning by correlating
 any arbitrary Go type with some JSON representation of that type (as stored in
 data types like `[]byte`, `io.Writer`, `io.Reader`, `Encoder`, or `Decoder`).
 
