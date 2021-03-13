@@ -826,6 +826,14 @@ func (d *Decoder) InputOffset() int64 {
 	return d.previousOffsetEnd()
 }
 
+// UnreadBuffer returns the data remaining in the unread buffer,
+// which may contain zero or more bytes.
+// The returned buffer must not be mutated while Decoder continues to be used.
+// The buffer contents are valid until the next Peek or Read call.
+func (d *Decoder) UnreadBuffer() []byte {
+	return d.unreadBuffer()
+}
+
 // consumeWhitespace consumes leading JSON whitespace per RFC 7159, section 2.
 func consumeWhitespace(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.

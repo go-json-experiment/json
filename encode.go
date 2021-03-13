@@ -109,6 +109,11 @@ type encodeBuffer struct {
 	baseOffset int64
 
 	wr io.Writer
+
+	// maxValue is the approximate maximum RawValue size passed to WriteValue.
+	maxValue int
+	// unusedCache is the buffer returned by the UnusedBuffer method.
+	unusedCache []byte
 }
 
 // NewEncoder constructs a new streaming encoder writing to w.
@@ -292,6 +297,8 @@ func (e *Encoder) WriteToken(t Token) error {
 // (see examples on Encoder.WriteToken). If the provided token is invalid,
 // then it reports a SyntaxError and the internal state remains unchanged.
 func (e *Encoder) WriteValue(v RawValue) error {
+	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
+
 	k := v.Kind()
 	b := e.buf // use local variable to avoid mutating e in case of error
 
@@ -585,6 +592,31 @@ func (e *Encoder) reformatArray(b []byte, v RawValue, depth int) ([]byte, RawVal
 // than this offset due to internal buffering effects.
 func (e *Encoder) OutputOffset() int64 {
 	return e.previousOffsetEnd()
+}
+
+// UnusedBuffer returns a zero-length buffer with a possible non-zero capacity.
+// This buffer is intended to be used to populate a RawValue
+// being passed to an immediately succeeding WriteValue call.
+//
+// Example usage:
+//
+//  b := d.UnusedBuffer()
+//  b = append(b, '"')
+//  b = appendString(b, v) // append the string formatting of v
+//  b = append(b, '"')
+//  ... := d.WriteValue(b)
+//
+// It is the user's responsibility to ensure that the value is valid JSON.
+func (e *Encoder) UnusedBuffer() []byte {
+	// NOTE: We don't return e.buf[len(e.buf):cap(e.buf)] since WriteValue would
+	// need to take special care to avoid mangling the data while reformatting.
+	// WriteValue can't easily identify whether the input RawValue aliases e.buf
+	// without using unsafe.Pointer. Thus, we just return a different buffer.
+	n := 1 << bits.Len(uint(e.maxValue|63)) // fast approximation for max length
+	if cap(e.unusedCache) < n {
+		e.unusedCache = make([]byte, 0, n)
+	}
+	return e.unusedCache
 }
 
 // appendString appends s to dst as a JSON string per RFC 7159, section 7.
