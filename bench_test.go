@@ -246,10 +246,6 @@ func TestSlowStreamingDecoder(t *testing.T) {
 	}
 }
 func BenchmarkSlowStreamingDecoder(b *testing.B) {
-	// TODO: The decoder has quadratic behavior on large JSON strings or numbers
-	// when reading from a stream that only returns a few bytes at a time.
-	// Fix this by adding support for preserving the parsing state
-	// whenever we encounter a truncated JSON value.
 	for _, td := range slowStreamingDecoderTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
 			b.Run(path.Join(td.name, typeName), func(b *testing.B) {

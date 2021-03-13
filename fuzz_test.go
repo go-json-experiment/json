@@ -15,8 +15,10 @@ package json
 import (
 	"bytes"
 	"errors"
+	"hash/adler32"
 	"io"
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
@@ -38,14 +40,14 @@ func FuzzCoder(f *testing.F) {
 	f.Fuzz(func(t *testing.T, b []byte) {
 		var tokVals []tokOrVal
 		// TODO: Use dedicated seed when structured arguments are supported.
-		rn := rand.New(rand.NewSource(int64(len(b))))
+		rn := rand.NewSource(int64(adler32.Checksum(b)))
 
 		// Read a sequence of tokens or values. Skip the test for any errors
 		// since we expect this with randomly generated fuzz inputs.
 		src := bytes.NewReader(b)
 		dec := NewDecoder(src)
 		for {
-			if rn.Intn(8) > 0 {
+			if rn.Int63()%8 > 0 {
 				tok, err := dec.ReadToken()
 				if err != nil {
 					if err == io.EOF {
@@ -106,5 +108,37 @@ func FuzzCoder(f *testing.F) {
 		if !equalTokens(got, want) {
 			t.Fatalf("mismatching output:\ngot  %v\nwant %v", got, want)
 		}
+	})
+}
+
+func FuzzResumableDecoder(f *testing.F) {
+	for _, td := range resumableDecoderTestdata {
+		f.Add([]byte(td))
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		// TODO: Use dedicated seed when structured arguments are supported.
+		rn := rand.NewSource(int64(adler32.Checksum(b)))
+
+		// Regardless of how many bytes the underlying io.Reader produces,
+		// the provided tokens, values, and errors should always be identical.
+		t.Run("ReadToken", func(t *testing.T) {
+			decGot := NewDecoder(&FaultyBuffer{B: b, MaxBytes: 8, Rand: rn})
+			decWant := NewDecoder(bytes.NewReader(b))
+			gotTok, gotErr := decGot.ReadToken()
+			wantTok, wantErr := decWant.ReadToken()
+			if gotTok.String() != wantTok.String() || !reflect.DeepEqual(gotErr, wantErr) {
+				t.Errorf("Decoder.ReadToken = (%v, %v), want (%v, %v)", gotTok, gotErr, wantTok, wantErr)
+			}
+		})
+		t.Run("ReadValue", func(t *testing.T) {
+			decGot := NewDecoder(&FaultyBuffer{B: b, MaxBytes: 8, Rand: rn})
+			decWant := NewDecoder(bytes.NewReader(b))
+			gotVal, gotErr := decGot.ReadValue()
+			wantVal, wantErr := decWant.ReadValue()
+			if !reflect.DeepEqual(gotVal, wantVal) || !reflect.DeepEqual(gotErr, wantErr) {
+				t.Errorf("Decoder.ReadValue = (%s, %v), want (%s, %v)", gotVal, gotErr, wantVal, wantErr)
+			}
+		})
 	})
 }

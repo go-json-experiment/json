@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 // equalTokens reports whether to sequences of tokens formats the same way.
@@ -672,6 +673,55 @@ func testDecoderErrors(t *testing.T, opts DecodeOptions, in string, calls []deco
 	}
 }
 
+var resumableDecoderTestdata = []string{
+	`0`,
+	`123456789`,
+	`0.0`,
+	`0.123456789`,
+	`0e0`,
+	`0e+0`,
+	`0e123456789`,
+	`0e+123456789`,
+	`123456789.123456789e+123456789`,
+	`-0`,
+	`-123456789`,
+	`-0.0`,
+	`-0.123456789`,
+	`-0e0`,
+	`-0e-0`,
+	`-0e123456789`,
+	`-0e-123456789`,
+	`-123456789.123456789e-123456789`,
+
+	`""`,
+	`"a"`,
+	`"ab"`,
+	`"abc"`,
+	`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`,
+	`"\"\\\/\b\f\n\r\t"`,
+	`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`,
+	`"\ud800\udead"`,
+	"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"",
+	`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`,
+}
+
+// TestResumableDecoder tests that resume logic for parsing a
+// JSON string and number properly works across every possible split point.
+func TestResumableDecoder(t *testing.T) {
+	for _, want := range resumableDecoderTestdata {
+		t.Run("", func(t *testing.T) {
+			dec := NewDecoder(iotest.OneByteReader(strings.NewReader(want)))
+			got, err := dec.ReadValue()
+			if err != nil {
+				t.Fatalf("Decoder.ReadValue error: %v", err)
+			}
+			if string(got) != want {
+				t.Fatalf("Decoder.ReadValue = %s, want %s", got, want)
+			}
+		})
+	}
+}
+
 // TestBlockingDecoder verifies that JSON values except numbers can be
 // synchronously sent and received on a blocking pipe without a deadlock.
 // Numbers are the exception since termination cannot be determined until
@@ -875,7 +925,6 @@ func TestConsumeString(t *testing.T) {
 		{`"\uefX0"`, false, 1, "", &SyntaxError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
 		{`"\uDEAD"`, false, 8, "\ufffd", nil, io.ErrUnexpectedEOF},
 		{`"\uDEAD______"`, false, 14, "\ufffd______", nil, &SyntaxError{str: "invalid unpaired surrogate half within string"}},
-		{`"\uDEAD\u"`, false, 7, "\ufffd", io.ErrUnexpectedEOF, nil},
 		{`"\uDEAD\uXXXX"`, false, 7, "\ufffd", &SyntaxError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
 		{`"\uDEAD\uBEEF"`, false, 14, "\ufffd\ubeef", nil, &SyntaxError{str: `invalid surrogate pair in string`}},
 		{`"\uD800\udead"`, false, 14, "\U000102ad", nil, nil},
@@ -948,12 +997,12 @@ func TestConsumeNumber(t *testing.T) {
 		{"- 9876543210", false, 1, newInvalidCharacterError(' ', "within number (expecting digit)")},
 		{strings.Repeat("9876543210", 1000), true, 10000, nil},
 		{"-" + strings.Repeat("9876543210", 1000), false, 1 + 10000, nil},
-		{"0.", false, 2, io.ErrUnexpectedEOF},
-		{"-0.", false, 3, io.ErrUnexpectedEOF},
-		{"0e", false, 2, io.ErrUnexpectedEOF},
-		{"-0e", false, 3, io.ErrUnexpectedEOF},
-		{"0E", false, 2, io.ErrUnexpectedEOF},
-		{"-0E", false, 3, io.ErrUnexpectedEOF},
+		{"0.", false, 1, io.ErrUnexpectedEOF},
+		{"-0.", false, 2, io.ErrUnexpectedEOF},
+		{"0e", false, 1, io.ErrUnexpectedEOF},
+		{"-0e", false, 2, io.ErrUnexpectedEOF},
+		{"0E", false, 1, io.ErrUnexpectedEOF},
+		{"-0E", false, 2, io.ErrUnexpectedEOF},
 		{"0.0", false, 3, nil},
 		{"-0.0", false, 4, nil},
 		{"0e0", false, 3, nil},

@@ -626,9 +626,9 @@ func (d *Decoder) consumeLiteral(pos int, lit string) (newPos int, err error) {
 // consumeString consumes a single JSON string starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the string.
 func (d *Decoder) consumeString(pos int) (newPos int, err error) {
-	// TODO: Add ability to resume parsing of a very large string.
+	var n int
 	for {
-		n, err := consumeString(d.buf[pos:], !d.options.AllowInvalidUTF8)
+		n, err = consumeStringResumable(d.buf[pos:], n, !d.options.AllowInvalidUTF8)
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -645,9 +645,10 @@ func (d *Decoder) consumeString(pos int) (newPos int, err error) {
 // consumeNumber consumes a single JSON number starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the number.
 func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
-	// TODO: Add ability to resume parsing of a very large number.
+	var n int
+	var state consumeNumberState
 	for {
-		n, err := consumeNumber(d.buf[pos:])
+		n, state, err = consumeNumberResumable(d.buf[pos:], n, state)
 		// NOTE: Since JSON numbers are not self-terminating,
 		// we need to make sure that the next byte is not part of a number.
 		if err == io.ErrUnexpectedEOF || d.needMore(pos+n) {
@@ -906,13 +907,16 @@ func consumeSimpleString(b []byte) (n int) {
 // It reports the number of bytes consumed and whether an error was encounted.
 // If the input appears truncated, it returns io.ErrUnexpectedEOF.
 func consumeString(b []byte, validateUTF8 bool) (n int, err error) {
-	// TODO: Add a "continuation offset" argument that allows this function
-	// to start at some offset into b where the previous bytes are validated.
-	// The offset must not point to the middle of a multi-byte UTF-8 character
-	// or an escape sequence.
+	return consumeStringResumable(b, 0, validateUTF8)
+}
 
+// consumeStringResumable is identical to consumeString but supports resuming
+// from a previous call that returned io.ErrUnexpectedEOF.
+func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
 	// Consume the leading quote.
 	switch {
+	case resumeOffset > 0:
+		n = resumeOffset // already handled the leading quote
 	case len(b) == 0:
 		return n, io.ErrUnexpectedEOF
 	case b[0] == '"':
@@ -952,15 +956,16 @@ func consumeString(b []byte, validateUTF8 bool) (n int, err error) {
 			n++
 			return n, nil
 		case r == '\\': // escape sequence
+			resumeOffset = n
 			if len(b) < n+2 {
-				return n, io.ErrUnexpectedEOF
+				return resumeOffset, io.ErrUnexpectedEOF
 			}
 			switch r := b[n+1]; r {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 				n += 2
 			case 'u':
 				if len(b) < n+6 {
-					return n, io.ErrUnexpectedEOF
+					return resumeOffset, io.ErrUnexpectedEOF
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
 				if !ok {
@@ -973,7 +978,7 @@ func consumeString(b []byte, validateUTF8 bool) (n int, err error) {
 						return n, &SyntaxError{str: "invalid unpaired surrogate half within string"}
 					}
 					if len(b) < n+6 {
-						return n, io.ErrUnexpectedEOF
+						return resumeOffset, io.ErrUnexpectedEOF
 					}
 					v2, ok := parseHexUint16(b[n+2 : n+6])
 					if !ok {
@@ -1103,6 +1108,18 @@ func consumeSimpleNumber(b []byte) (n int) {
 	return 0
 }
 
+type consumeNumberState uint
+
+const (
+	consumeNumberInit consumeNumberState = iota
+	beforeIntegerDigits
+	withinIntegerDigits
+	beforeFractionalDigits
+	withinFractionalDigits
+	beforeExponentDigits
+	withinExponentDigits
+)
+
 // consumeNumber consumes the next JSON number per RFC 7159, section 6.
 // It reports the number of bytes consumed and whether an error was encounted.
 // If the input appears truncated, it returns io.ErrUnexpectedEOF.
@@ -1111,62 +1128,103 @@ func consumeSimpleNumber(b []byte) (n int) {
 // If the entire input is consumed, then the caller needs to consider whether
 // there may be subsequent unread data that may still be part of this number.
 func consumeNumber(b []byte) (n int, err error) {
-	// Consume optional minus sign.
+	n, _, err = consumeNumberResumable(b, 0, consumeNumberInit)
+	return n, err
+}
+
+// consumeNumberResumable is identical to consumeNumber but supports resuming
+// from a previous call that returned io.ErrUnexpectedEOF.
+func consumeNumberResumable(b []byte, resumeOffset int, state consumeNumberState) (n int, _ consumeNumberState, err error) {
+	// Jump to the right state when resuming from a partial consumption.
+	n = resumeOffset
+	if state > consumeNumberInit {
+		switch state {
+		case withinIntegerDigits, withinFractionalDigits, withinExponentDigits:
+			// Consume leading digits.
+			for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+				n++
+			}
+			if len(b) == n {
+				return n, state, nil // still within the same state
+			}
+			state++ // switches "withinX" to "beforeY" where Y is the state after X
+		}
+		switch state {
+		case beforeIntegerDigits:
+			goto beforeInteger
+		case beforeFractionalDigits:
+			goto beforeFractional
+		case beforeExponentDigits:
+			goto beforeExponent
+		default:
+			return n, state, nil
+		}
+	}
+
+	// Consume required integer component (with optional minus sign).
+beforeInteger:
+	resumeOffset = n
 	if len(b) > 0 && b[0] == '-' {
 		n++
 	}
-
-	// Consume required integer component.
 	switch {
 	case len(b) == n:
-		return n, io.ErrUnexpectedEOF
+		return resumeOffset, beforeIntegerDigits, io.ErrUnexpectedEOF
 	case b[n] == '0':
 		n++
+		state = beforeFractionalDigits
 	case '1' <= b[n] && b[n] <= '9':
 		n++
 		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
+		state = withinIntegerDigits
 	default:
-		return n, newInvalidCharacterError(b[n], "within number (expecting digit)")
+		return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
 	}
 
 	// Consume optional fractional component.
+beforeFractional:
 	if len(b) > n && b[n] == '.' {
+		resumeOffset = n
 		n++
 		switch {
 		case len(b) == n:
-			return n, io.ErrUnexpectedEOF
+			return resumeOffset, beforeFractionalDigits, io.ErrUnexpectedEOF
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
-			return n, newInvalidCharacterError(b[n], "within number (expecting digit)")
+			return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
 		}
 		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
+		state = withinFractionalDigits
 	}
 
 	// Consume optional exponent component.
+beforeExponent:
 	if len(b) > n && (b[n] == 'e' || b[n] == 'E') {
+		resumeOffset = n
 		n++
 		if len(b) > n && (b[n] == '-' || b[n] == '+') {
 			n++
 		}
 		switch {
 		case len(b) == n:
-			return n, io.ErrUnexpectedEOF
+			return resumeOffset, beforeExponentDigits, io.ErrUnexpectedEOF
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
-			return n, newInvalidCharacterError(b[n], "within number (expecting digit)")
+			return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
 		}
 		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
+		state = withinExponentDigits
 	}
 
-	return n, nil
+	return n, state, nil
 }
 
 // parseHexUint16 is similar to strconv.ParseUint,

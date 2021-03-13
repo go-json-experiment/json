@@ -33,7 +33,9 @@ func TestInline(t *testing.T) {
 			"consumeFalse",
 			"consumeTrue",
 			"consumeSimpleString",
+			"consumeString", // thin wrapper over consumeStringResumable
 			"consumeSimpleNumber",
+			"consumeNumber", // thin wrapper over consumeNumberResumable
 			"stateMachine.appendLiteral",
 			"stateMachine.appendNumber",
 			"stateMachine.appendString",
