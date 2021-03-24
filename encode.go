@@ -619,6 +619,40 @@ func (e *Encoder) UnusedBuffer() []byte {
 	return e.unusedCache
 }
 
+// StackDepth returns the depth of the state machine for written JSON data.
+// Each level on the stack represents a nested JSON object or array.
+// It is incremented whenever an ObjectStart or ArrayStart token is encountered
+// and decremented whenever an ObjectEnd or ArrayEnd token is encountered.
+// The depth is zero-indexed, where zero represents the top-level JSON value.
+func (e *Encoder) StackDepth() int {
+	// NOTE: Keep in sync with Decoder.StackDepth.
+	return e.tokens.depth() - 1
+}
+
+// StackIndex returns information about the specified stack level.
+// It must be a number between 0 and StackDepth, inclusive.
+// For each level, it reports the kind:
+//
+//  • 0 for a level of zero,
+//  • '{' for a level representing a JSON object, and
+//  • '[' for a level representing a JSON array.
+//
+// and also reports the length of that JSON object or array.
+// Each name and value in a JSON object is counted separately,
+// so the effective number of members would be half the length.
+// A complete JSON object must have an even length.
+func (e *Encoder) StackIndex(i int) (Kind, int) {
+	// NOTE: Keep in sync with Decoder.StackIndex.
+	switch s := e.tokens[i]; {
+	case i > 0 && s.isObject():
+		return '{', s.length()
+	case i > 0 && s.isArray():
+		return '[', s.length()
+	default:
+		return 0, s.length()
+	}
+}
+
 // appendString appends s to dst as a JSON string per RFC 7159, section 7.
 //
 // If validateUTF8 is specified, this rejects input that contains invalid UTF-8
