@@ -15,12 +15,17 @@ var (
 type state struct {
 	// tokens validates whether the next token kind is valid.
 	tokens stateMachine
+
+	// tokensBootstrap allows the tokens slice to not incur an extra
+	// allocation for values with relatively small depth.
+	tokensBootstrap [8]stateEntry
+
 	// namespaces is a stack of object namespaces.
 	namespaces objectNamespaceStack
 }
 
 func (s *state) init() {
-	s.tokens.init()
+	s.tokens.init(s.tokensBootstrap[:0])
 }
 
 // stateMachine is a push-down automaton that validates whether
@@ -39,8 +44,8 @@ type stateMachine []stateEntry
 
 // init initializes the state machine.
 // The machine always starts with a minimum depth of 1.
-func (m *stateMachine) init() {
-	*m = append((*m)[:0], stateTypeArray)
+func (m *stateMachine) init(bootstrap []stateEntry) {
+	*m = append(bootstrap, stateTypeArray)
 }
 
 // depth is the current nested depth of JSON objects and arrays.

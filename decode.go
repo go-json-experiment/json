@@ -130,7 +130,7 @@ func (o DecodeOptions) NewDecoder(r io.Reader) *Decoder {
 		panic("json: invalid nil io.Reader")
 	}
 	d := new(Decoder)
-	d.tokens.init()
+	d.state.init()
 	d.rd = r
 	d.options = o
 	return d
