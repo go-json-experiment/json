@@ -72,19 +72,19 @@ type EncodeOptions struct {
 //
 // can be composed with the following calls (ignoring errors for brevity):
 //
-//	e.WriteToken(StartObject)           // {
+//	e.WriteToken(ObjectStart)           // {
 //	e.WriteToken(String("name"))        // "name"
 //	e.WriteToken(String("value"))       // "value"
 //	e.WriteValue(RawValue(`"array"`))   // "array"
-//	e.WriteToken(StartArray)            // [
+//	e.WriteToken(ArrayStart)            // [
 //	e.WriteToken(Null)                  // null
 //	e.WriteToken(False)                 // false
 //	e.WriteValue(RawValue("true"))      // true
-//	e.WriteToken(Number(3.14159))       // 3.14159
-//	e.WriteToken(EndArray)              // ]
+//	e.WriteToken(Float(3.14159))        // 3.14159
+//	e.WriteToken(ArrayEnd)              // ]
 //	e.WriteValue(RawValue(`"object"`))  // "object"
 //	e.WriteValue(RawValue(`{"k":"v"}`)) // {"k":"v"}
-//	e.WriteToken(EndObject)             // }
+//	e.WriteToken(ObjectEnd)             // }
 //
 // The above is one of many possible sequence of calls and
 // may not represent the most sensible method to call for any given token/value.
