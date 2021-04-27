@@ -15,7 +15,6 @@ package json
 import (
 	"bytes"
 	"errors"
-	"hash/adler32"
 	"io"
 	"math/rand"
 	"reflect"
@@ -25,22 +24,21 @@ import (
 func FuzzCoder(f *testing.F) {
 	// Add a number of inputs to the corpus including valid and invalid data.
 	for _, td := range coderTestdata {
-		f.Add([]byte(td.in))
+		f.Add(int64(0), []byte(td.in))
 	}
 	for _, td := range decoderErrorTestdata {
-		f.Add([]byte(td.in))
+		f.Add(int64(0), []byte(td.in))
 	}
 	for _, td := range encoderErrorTestdata {
-		f.Add([]byte(td.wantOut))
+		f.Add(int64(0), []byte(td.wantOut))
 	}
 	for _, td := range benchTestdata {
-		f.Add([]byte(td.data))
+		f.Add(int64(0), []byte(td.data))
 	}
 
-	f.Fuzz(func(t *testing.T, b []byte) {
+	f.Fuzz(func(t *testing.T, seed int64, b []byte) {
 		var tokVals []tokOrVal
-		// TODO: Use dedicated seed when structured arguments are supported.
-		rn := rand.NewSource(int64(adler32.Checksum(b)))
+		rn := rand.NewSource(seed)
 
 		// Read a sequence of tokens or values. Skip the test for any errors
 		// since we expect this with randomly generated fuzz inputs.
@@ -113,12 +111,11 @@ func FuzzCoder(f *testing.F) {
 
 func FuzzResumableDecoder(f *testing.F) {
 	for _, td := range resumableDecoderTestdata {
-		f.Add([]byte(td))
+		f.Add(int64(0), []byte(td))
 	}
 
-	f.Fuzz(func(t *testing.T, b []byte) {
-		// TODO: Use dedicated seed when structured arguments are supported.
-		rn := rand.NewSource(int64(adler32.Checksum(b)))
+	f.Fuzz(func(t *testing.T, seed int64, b []byte) {
+		rn := rand.NewSource(seed)
 
 		// Regardless of how many bytes the underlying io.Reader produces,
 		// the provided tokens, values, and errors should always be identical.
