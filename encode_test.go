@@ -33,7 +33,7 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 	dst := new(bytes.Buffer)
 	enc := NewEncoder(dst)
 	enc.options.omitTopLevelNewline = true
-	want = td.outCompact
+	want = td.outCompacted
 	switch formatName {
 	case "Escaped":
 		enc.options.EscapeRune = func(rune) bool { return true }
@@ -42,8 +42,8 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 		}
 	case "Indented":
 		enc.options.multiline = true
-		enc.options.IndentPrefix = ">"
-		enc.options.Indent = "_"
+		enc.options.IndentPrefix = "\t"
+		enc.options.Indent = "    "
 		if td.outIndented != "" {
 			want = td.outIndented
 		}
@@ -123,7 +123,7 @@ func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
 		}
 	}
 	gotOutput := string(append(b.B, enc.unflushedBuffer()...))
-	wantOutput := td.outCompact + "\n"
+	wantOutput := td.outCompacted + "\n"
 	if gotOutput != wantOutput {
 		t.Fatalf("output mismatch:\ngot  %s\nwant %s", gotOutput, wantOutput)
 	}

@@ -295,3 +295,51 @@ func runSlowStreamingDecoder(t testing.TB, typeName string, data []byte) {
 		}
 	}
 }
+
+func BenchmarkRawValue(b *testing.B) {
+	var data []byte
+	for _, ts := range benchTestdata {
+		if ts.name == "StarcraftSettings" {
+			data = ts.data
+		}
+	}
+
+	b.Run("IsValid", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			RawValue(data).IsValid()
+		}
+	})
+
+	methods := []struct {
+		name   string
+		format func(*RawValue) error
+	}{
+		{"Compact", (*RawValue).Compact},
+		{"Indent", func(v *RawValue) error { return v.Indent("\t", "    ") }},
+		{"Canonicalize", (*RawValue).Canonicalize},
+	}
+
+	for _, method := range methods {
+		b.Run(method.name, func(b *testing.B) {
+			v := RawValue(string(data))
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				v = append(v[:0], data...) // reset with original input
+				if err := method.format(&v); err != nil {
+					b.Errorf("RawValue.%v error: %v", method.name, err)
+				}
+			}
+		})
+		b.Run(path.Join(method.name, "Noop"), func(b *testing.B) {
+			v := RawValue(string(data))
+			method.format(&v)
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if err := method.format(&v); err != nil {
+					b.Errorf("RawValue.%v error: %v", method.name, err)
+				}
+			}
+		})
+	}
+}

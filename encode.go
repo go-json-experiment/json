@@ -40,6 +40,10 @@ type EncodeOptions struct {
 	// RFC 7493, section 2.1, and RFC 8259, section 8.1.
 	AllowInvalidUTF8 bool
 
+	preserveRawStrings bool
+
+	canonicalizeNumbers bool
+
 	// EscapeRune reports whether the provided character should be escaped
 	// as a hexadecimal Unicode codepoint (e.g., \ufffd).
 	// If nil, the smallest and simplest representable encoding will be used,
@@ -235,7 +239,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		err = e.tokens.appendLiteral()
 	case '"':
 		n0 := len(b) // buffer size before t.appendString
-		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.EscapeRune); err != nil {
+		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
 			break
 		}
 		if e.options.RejectDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
@@ -244,7 +248,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		}
 		err = e.tokens.appendString()
 	case '0':
-		if b, err = t.appendNumber(b); err != nil {
+		if b, err = t.appendNumber(b, e.options.canonicalizeNumbers); err != nil {
 			break
 		}
 		err = e.tokens.appendNumber()
@@ -411,11 +415,13 @@ func (e *Encoder) reformatValue(b []byte, v RawValue, depth int) ([]byte, RawVal
 			b, v = append(b, v[:n]...), v[n:] // copy simple strings verbatim
 			return b, v, nil
 		}
-		return reformatString(b, v, !e.options.AllowInvalidUTF8, e.options.EscapeRune)
+		return reformatString(b, v, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
 	case '0':
-		if n = consumeSimpleNumber(v); n == 0 {
-			n, err = consumeNumber(v)
+		if n := consumeSimpleNumber(v); n > 0 && !e.options.canonicalizeNumbers {
+			b, v = append(b, v[:n]...), v[n:] // copy simple numbers verbatim
+			return b, v, nil
 		}
+		return reformatNumber(b, v, e.options.canonicalizeNumbers)
 	case '{':
 		return e.reformatObject(b, v, depth)
 	case '[':
@@ -474,7 +480,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 		if n > 0 && e.options.EscapeRune == nil {
 			b, v = append(b, v[:n]...), v[n:] // copy simple strings verbatim
 		} else {
-			b, v, err = reformatString(b, v, !e.options.AllowInvalidUTF8, e.options.EscapeRune)
+			b, v, err = reformatString(b, v, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
 		}
 		if err != nil {
 			return b, v, err
@@ -731,11 +737,16 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 // reformatString consumes a JSON string from src and appends it to dst,
 // reformatting it if necessary for the given escapeRune parameter.
 // It returns the appended output and the remainder of the input.
-func reformatString(dst, src []byte, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, []byte, error) {
+func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, []byte, error) {
 	n, err := consumeString(src, validateUTF8)
 	if err != nil {
 		return dst, src[n:], err
 	}
+	if preserveRaw {
+		dst = append(dst, src[:n]...) // copy the string verbatim
+		return dst, src[n:], nil
+	}
+
 	// TODO: Implement a direct, raw-to-raw reformat for strings.
 	// If the escapeRune option would have resulted in no changes to the output,
 	// it would be faster to simply append src to dst without going through
@@ -749,9 +760,9 @@ func reformatString(dst, src []byte, validateUTF8 bool, escapeRune func(rune) bo
 // It formats numbers similar to the ES6 number-to-string conversion.
 // See https://golang.org/issue/14135.
 //
-// The output is identical to ECMA-262, 6th edition, section 7.1.12.1
-// for 64-bit floating-point numbers except
-// for -0, which is formatted as -0 instead of just 0,
+// The output is identical to ECMA-262, 6th edition, section 7.1.12.1 and with
+// RFC 8785, section 3.2.2.3 for 64-bit floating-point numbers except for
+// -0, which is formatted as -0 instead of just 0,
 // NaN, which is formatted as the JSON string "NaN",
 // +Inf, which is formatted as the JSON string "Infinity", and
 // -Inf, which is formatted as the JSON string "-Infinity".
@@ -791,6 +802,38 @@ func appendNumber(dst []byte, v float64, bits int) []byte {
 		}
 	}
 	return dst
+}
+
+// reformatNumber consumes a JSON string from src and appends it to dst,
+// canonicalizing it if specified.
+// It returns the appended output and the remainder of the input.
+func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, []byte, error) {
+	n, err := consumeNumber(src)
+	if err != nil {
+		return dst, src[n:], err
+	}
+	if !canonicalize {
+		dst = append(dst, src[:n]...) // copy the number verbatim
+		return dst, src[n:], nil
+	}
+
+	// Canonicalize the number per RFC 8785, section 3.2.2.3.
+	// As an optimization, we can copy integer numbers below 2⁵³ verbatim.
+	const maxExactIntegerDigits = 16 // len(strconv.AppendUint(nil, 1<<53, 10))
+	if n < maxExactIntegerDigits && consumeSimpleNumber(src[:n]) == n {
+		dst = append(dst, src[:n]...) // copy the number verbatim
+		return dst, src[n:], nil
+	}
+	fv, _ := strconv.ParseFloat(string(src[:n]), 64)
+	switch {
+	case fv == 0:
+		fv = 0 // normalize negative zero as just zero
+	case math.IsInf(fv, +1):
+		fv = +math.MaxFloat64
+	case math.IsInf(fv, -1):
+		fv = -math.MaxFloat64
+	}
+	return appendNumber(dst, fv, 64), src[n:], nil
 }
 
 // appendHexUint16 appends v to dst as a 4-byte hexadecimal number.

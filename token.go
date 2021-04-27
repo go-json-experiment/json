@@ -202,7 +202,7 @@ func (t Token) Bool() bool {
 
 // appendString appends a JSON string to dst and returns it.
 // It panics if t is not a JSON string.
-func (t Token) appendString(dst []byte, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
+func (t Token) appendString(dst []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, error) {
 	if raw := t.raw; raw != nil {
 		// Handle raw string value.
 		buf := raw.previousBuffer()
@@ -210,7 +210,7 @@ func (t Token) appendString(dst []byte, validateUTF8 bool, escapeRune func(rune)
 			if escapeRune == nil && consumeSimpleString(buf) == len(buf) {
 				return append(dst, buf...), nil
 			}
-			dst, _, err := reformatString(dst, buf, validateUTF8, escapeRune)
+			dst, _, err := reformatString(dst, buf, validateUTF8, preserveRaw, escapeRune)
 			return dst, err
 		}
 	} else if len(t.str) != 0 && t.num == 0 {
@@ -255,12 +255,16 @@ func (t Token) String() string {
 
 // appendNumber appends a JSON number to dst and returns it.
 // It panics if t is not a JSON number.
-func (t Token) appendNumber(dst []byte) ([]byte, error) {
+func (t Token) appendNumber(dst []byte, canonicalize bool) ([]byte, error) {
 	if raw := t.raw; raw != nil {
 		// Handle raw number value.
 		buf := raw.previousBuffer()
 		if Kind(buf[0]).normalize() == '0' {
-			return append(dst, buf...), nil
+			if !canonicalize {
+				return append(dst, buf...), nil
+			}
+			dst, _, err := reformatNumber(dst, buf, canonicalize)
+			return dst, err
 		}
 	} else if t.num != 0 {
 		// Handle exact number value.

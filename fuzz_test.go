@@ -19,6 +19,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 func FuzzCoder(f *testing.F) {
@@ -137,5 +139,130 @@ func FuzzResumableDecoder(f *testing.F) {
 				t.Errorf("Decoder.ReadValue = (%s, %v), want (%s, %v)", gotVal, gotErr, wantVal, wantErr)
 			}
 		})
+	})
+}
+
+func FuzzRawValueReformat(f *testing.F) {
+	for _, td := range rawValueTestdata {
+		f.Add([]byte(td.in))
+	}
+
+	// isValid reports whether b is valid according to the specified options.
+	isValid := func(opts DecodeOptions, b []byte) bool {
+		d := opts.NewDecoder(bytes.NewReader(b))
+		_, errVal := d.ReadValue()
+		_, errEOF := d.ReadToken()
+		return errVal == nil && errEOF == io.EOF
+	}
+
+	// stripWhitespace removes all JSON whitespace characters from the input.
+	stripWhitespace := func(in []byte) (out []byte) {
+		out = make([]byte, 0, len(in))
+		for _, c := range in {
+			switch c {
+			case ' ', '\n', '\r', '\t':
+			default:
+				out = append(out, c)
+			}
+		}
+		return out
+	}
+
+	// unmarshal unmarhals the input into an interface{}.
+	unmarshal := func(in []byte) (out interface{}) {
+		// TODO: Check that unmarshaling into interface{} produces same results.
+		/*
+			if err := Unmarshal(in, &out); err != nil {
+				return nil // ignore invalid input
+			}
+		*/
+		return out
+	}
+
+	f.Fuzz(func(t *testing.T, b []byte) {
+		validRFC7159 := isValid(DecodeOptions{AllowInvalidUTF8: true, RejectDuplicateNames: false}, b)
+		validRFC8259 := isValid(DecodeOptions{AllowInvalidUTF8: false, RejectDuplicateNames: false}, b)
+		validRFC7493 := isValid(DecodeOptions{AllowInvalidUTF8: false, RejectDuplicateNames: true}, b)
+
+		gotValid := RawValue(b).IsValid()
+		wantValid := validRFC8259
+		if gotValid != wantValid {
+			t.Errorf("RawValue.IsValid = %v, want %v", gotValid, wantValid)
+		}
+
+		gotCompacted := RawValue(string(b))
+		gotCompactOk := gotCompacted.Compact() == nil
+		wantCompactOk := validRFC7159
+		if !bytes.Equal(stripWhitespace(gotCompacted), stripWhitespace(b)) {
+			t.Errorf("stripWhitespace(RawValue.Compact) = %s, want %s", stripWhitespace(gotCompacted), stripWhitespace(b))
+		}
+		if !reflect.DeepEqual(unmarshal(gotCompacted), unmarshal(b)) {
+			t.Errorf("unmarshal(RawValue.Compact) = %s, want %s", unmarshal(gotCompacted), unmarshal(b))
+		}
+		if gotCompactOk != wantCompactOk {
+			t.Errorf("RawValue.Compact success mismatch: got %v, want %v", gotCompactOk, wantCompactOk)
+		}
+
+		gotIndented := RawValue(string(b))
+		gotIndentOk := gotIndented.Indent("", " ") == nil
+		wantIndentOk := validRFC7159
+		if !bytes.Equal(stripWhitespace(gotIndented), stripWhitespace(b)) {
+			t.Errorf("stripWhitespace(RawValue.Indent) = %s, want %s", stripWhitespace(gotIndented), stripWhitespace(b))
+		}
+		if !reflect.DeepEqual(unmarshal(gotIndented), unmarshal(b)) {
+			t.Errorf("unmarshal(RawValue.Indent) = %s, want %s", unmarshal(gotIndented), unmarshal(b))
+		}
+		if gotIndentOk != wantIndentOk {
+			t.Errorf("RawValue.Indent success mismatch: got %v, want %v", gotIndentOk, wantIndentOk)
+		}
+
+		gotCanonicalized := RawValue(string(b))
+		gotCanonicalizeOk := gotCanonicalized.Canonicalize() == nil
+		wantCanonicalizeOk := validRFC7493
+		if !reflect.DeepEqual(unmarshal(gotCanonicalized), unmarshal(b)) {
+			t.Errorf("unmarshal(RawValue.Canonicalize) = %s, want %s", unmarshal(gotCanonicalized), unmarshal(b))
+		}
+		if gotCanonicalizeOk != wantCanonicalizeOk {
+			t.Errorf("RawValue.Canonicalize success mismatch: got %v, want %v", gotCanonicalizeOk, wantCanonicalizeOk)
+		}
+	})
+}
+
+func FuzzLessUTF16(f *testing.F) {
+	for _, td1 := range lessUTF16Testdata {
+		for _, td2 := range lessUTF16Testdata {
+			f.Add([]byte(td1), []byte(td2))
+		}
+	}
+
+	// lessUTF16Simple is identical to lessUTF16,
+	// but relies on naively converting a string to a []uint16 codepoints.
+	// It is easy to verify as correct, but is slow.
+	lessUTF16Simple := func(x, y []byte) bool {
+		ux := utf16.Encode([]rune(string(x)))
+		uy := utf16.Encode([]rune(string(y)))
+		for {
+			if len(ux) == 0 || len(uy) == 0 {
+				return len(ux) < len(uy)
+			}
+			if ux[0] != uy[0] {
+				return ux[0] < uy[0]
+			}
+			ux, uy = ux[1:], uy[1:]
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
+		// The strings must be valid UTF-8 for lessUTF8 to work.
+		if !utf8.Valid(s1) || !utf8.Valid(s2) {
+			t.Skipf("invalid UTF-8 input")
+		}
+
+		// Compare the optimized and simplified implementations.
+		got := lessUTF16(s1, s2)
+		want := lessUTF16Simple(s1, s2)
+		if got != want {
+			t.Errorf("lessUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
+		}
 	})
 }
