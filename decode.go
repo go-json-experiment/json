@@ -980,16 +980,10 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 		switch r, rn := utf8.DecodeRune(b[n:]); {
 		case r == utf8.RuneError && rn == 1: // invalid UTF-8
 			if validateUTF8 {
-				switch {
-				case b[n]&0b111_00000 == 0b110_00000 && len(b) < n+2:
+				if !utf8.FullRune(b[n:]) {
 					return n, io.ErrUnexpectedEOF
-				case b[n]&0b1111_0000 == 0b1110_0000 && len(b) < n+3:
-					return n, io.ErrUnexpectedEOF
-				case b[n]&0b11111_000 == 0b11110_000 && len(b) < n+4:
-					return n, io.ErrUnexpectedEOF
-				default:
-					return n, &SyntaxError{str: "invalid UTF-8 within string"}
 				}
+				return n, &SyntaxError{str: "invalid UTF-8 within string"}
 			}
 			n++
 		case r < ' ': // invalid control character
