@@ -1118,7 +1118,7 @@ func TestParseDecUint(t *testing.T) {
 		{"123456789d", 0, false},
 		{"18446744073709551614", math.MaxUint64 - 1, true},
 		{"18446744073709551615", math.MaxUint64, true},
-		{"99999999999999999999999999999999", math.MaxUint64, true},
+		{"99999999999999999999999999999999", math.MaxUint64, false},
 		{"99999999999999999999999999999999f", 0, false},
 	}
 

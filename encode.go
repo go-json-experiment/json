@@ -133,6 +133,9 @@ func (o EncodeOptions) NewEncoder(w io.Writer) *Encoder {
 	if w == nil {
 		panic("json: invalid nil io.Writer")
 	}
+	return o.newEncoder(w, nil)
+}
+func (o EncodeOptions) newEncoder(w io.Writer, b []byte) *Encoder {
 	if len(o.Indent) > 0 {
 		o.multiline = true
 		if s := strings.Trim(o.IndentPrefix, " \t"); len(s) > 0 {
@@ -145,6 +148,7 @@ func (o EncodeOptions) NewEncoder(w io.Writer) *Encoder {
 	e := new(Encoder)
 	e.state.init()
 	e.wr = w
+	e.buf = b
 	e.options = o
 	return e
 }

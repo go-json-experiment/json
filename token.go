@@ -293,21 +293,8 @@ func (t Token) Float() float64 {
 		}
 		buf := raw.previousBuffer()
 		if Kind(buf[0]).normalize() == '0' {
-			// The JSON number grammar is a strict subset of the Go number grammar.
-			// The only way ParseFloat fails is if the number exceeds MaxFloat64.
-			// Since MaxFloat64 is infinitely more accurate than infinity
-			// for representing any finite value, we use that in overflow cases.
-			//
-			// Note that the []byte->string conversion unfortunately allocates.
-			// See https://golang.org/issue/42429 for more information.
-			switch fv, _ := strconv.ParseFloat(string(buf), 64); {
-			case math.IsInf(fv, +1):
-				return +math.MaxFloat64
-			case math.IsInf(fv, -1):
-				return -math.MaxFloat64
-			default:
-				return fv
-			}
+			fv, _ := parseFloat(buf, 64)
+			return fv
 		}
 	} else if t.num != 0 {
 		// Handle exact number value.

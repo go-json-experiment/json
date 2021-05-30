@@ -67,11 +67,35 @@ type SemanticError struct {
 	// GoType is the Go type that could not be handled.
 	GoType reflect.Type // may be nil if unknown
 
+	// Err is the underlying error.
+	Err error // may be nil
+
 	str string
 }
 
 func (e *SemanticError) Error() string        { return errorPrefix + e.str }
 func (e *SemanticError) Is(target error) bool { return e == target || target == Error }
+func (e *SemanticError) Unwrap() error        { return e.Err }
+
+func newMarshalError(k Kind, t reflect.Type, err error) *SemanticError {
+	return newSemanticError("marshal", "from", k, t, err)
+}
+func newUnmarshalError(k Kind, t reflect.Type, err error) *SemanticError {
+	return newSemanticError("unmarshal", "into", k, t, err)
+}
+func newSemanticError(action, direction string, k Kind, t reflect.Type, err error) *SemanticError {
+	s := "cannot " + action
+	if k > 0 {
+		s += " JSON " + k.String()
+	}
+	if t != nil {
+		s += " " + direction + " Go value of type " + t.String()
+	}
+	if err != nil {
+		s += ": " + err.Error()
+	}
+	return &SemanticError{JSONKind: k, GoType: t, Err: err, str: s} // TODO: Set position.
+}
 
 // SyntaxError is a description of a JSON syntax error.
 //

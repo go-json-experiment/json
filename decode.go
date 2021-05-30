@@ -129,9 +129,13 @@ func (o DecodeOptions) NewDecoder(r io.Reader) *Decoder {
 	if r == nil {
 		panic("json: invalid nil io.Reader")
 	}
+	return o.newDecoder(r, nil)
+}
+func (o DecodeOptions) newDecoder(r io.Reader, b []byte) *Decoder {
 	d := new(Decoder)
 	d.state.init()
 	d.rd = r
+	d.buf = b
 	d.options = o
 	return d
 }
@@ -1120,6 +1124,21 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 	return dst, false // truncated input
 }
 
+// unescapeSimpleString returns the unescaped form of src.
+// If there are no escaped characters, the output is simply a subslice of
+// the input with the surrounding quotes removed.
+// Otherwise, a new buffer is allocated for the output.
+func unescapeSimpleString(src []byte) []byte {
+	if consumeSimpleString(src) == len(src) {
+		return src[len(`"`) : len(src)-len(`"`)]
+	}
+	out, ok := unescapeString(nil, src)
+	if !ok {
+		panic("BUG: invalid JSON string")
+	}
+	return out
+}
+
 // consumeSimpleNumber consumes the next JSON number per RFC 7159, section 6
 // but is limited to the grammar for a positive integer.
 // It returns 0 if it is invalid or more complicated than a simple integer,
@@ -1289,7 +1308,7 @@ func parseHexUint16(b []byte) (v uint16, ok bool) {
 // parseDecUint is similar to strconv.ParseUint,
 // but operates directly on []byte and is optimized for base-10.
 // If the number is syntactically valid but overflows uint64,
-// then it returns (math.MaxUint64, true).
+// then it returns (math.MaxUint64, false).
 // See https://golang.org/issue/42429.
 func parseDecUint(b []byte) (v uint64, ok bool) {
 	// Overflow logic is based on strconv/atoi.go:138-149 from Go1.15, where:
@@ -1308,11 +1327,36 @@ func parseDecUint(b []byte) (v uint64, ok bool) {
 
 		n++
 	}
-	if overflow {
-		v = math.MaxUint64
-	}
 	if n == 0 || len(b) != n {
 		return 0, false
 	}
+	if overflow {
+		return math.MaxUint64, false
+	}
 	return v, true
+}
+
+// parseFloat parses a floating point number according to the Go float grammar.
+// Note that the JSON number grammar is a strict subset.
+//
+// If the number overflows the finite representation of a float,
+// then we return MaxFloat since any finite value will always be infinitely
+// more accurate at representing another finite value than an infinite value.
+func parseFloat(b []byte, bits int) (v float64, ok bool) {
+	// Note that the []byte->string conversion unfortunately allocates.
+	// See https://golang.org/issue/42429 for more information.
+	fv, err := strconv.ParseFloat(string(b), bits)
+	if math.IsInf(fv, 0) {
+		switch {
+		case bits == 32 && math.IsInf(fv, +1):
+			return +math.MaxFloat32, true
+		case bits == 64 && math.IsInf(fv, +1):
+			return +math.MaxFloat64, true
+		case bits == 32 && math.IsInf(fv, -1):
+			return -math.MaxFloat32, true
+		case bits == 64 && math.IsInf(fv, -1):
+			return -math.MaxFloat64, true
+		}
+	}
+	return fv, err == nil
 }
