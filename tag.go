@@ -6,6 +6,7 @@ package json
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -31,9 +32,9 @@ type fieldOptions struct {
 func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	var opts []tagOption
 	if tag, ok := sf.Tag.Lookup("json"); ok {
-		opts, err = splitTagOptions(tag)
-		if err != nil {
-			return fieldOptions{}, err
+		opts, ok = splitTagOptions(tag)
+		if !ok {
+			return fieldOptions{}, fmt.Errorf("Go struct field %q has malformed `json` tag: %s", sf.Name, sf.Tag.Get("json"))
 		}
 	}
 
@@ -51,11 +52,11 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		// of purely exported fields.
 		// See https://golang.org/issue/21357 and https://golang.org/issue/24153.
 		if sf.Anonymous {
-			return fieldOptions{}, errors.New("embedded field of an unexported type must be explicitly ignored with a `json:\"-\"` tag")
+			return fieldOptions{}, fmt.Errorf("embedded Go struct field %q of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name())
 		}
 		// Tag options specified on an unexported field suggests user error.
 		if opts != nil {
-			return fieldOptions{}, errors.New("invalid `json` tag on unexported field")
+			return fieldOptions{}, fmt.Errorf("unexported Go struct field %q cannot have non-ignored `json` tag", sf.Name)
 		}
 		return fieldOptions{}, errIgnoredField
 	}
@@ -77,7 +78,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			key, value = "format", opt.value[len("format="):]
 		}
 		if seenKeys[key] && key != "" {
-			return fieldOptions{}, errors.New("invalid duplicate appearance of `" + key + "` tag option")
+			return fieldOptions{}, fmt.Errorf("Go struct field %q has duplicate appearance of `json` tag option %q", sf.Name, key)
 		}
 		seenKeys[key] = true
 		switch key {
@@ -117,14 +118,13 @@ var (
 
 // splitTagOptions splits the tag up as a comma-delimited sequence of options,
 // where each option is either a quoted string or not.
-func splitTagOptions(s string) (opts []tagOption, err error) {
-	s0 := s
+func splitTagOptions(s string) (opts []tagOption, ok bool) {
 	opts = make([]tagOption, 0)
 	for len(s) > 0 {
 		// Consume comma delimiter.
 		if len(opts) > 0 {
 			if len(s) == 0 || s[0] != ',' {
-				return nil, errors.New("malformed `json` tag: " + s0)
+				return nil, false
 			}
 			s = s[len(`,`):]
 		}
@@ -133,10 +133,11 @@ func splitTagOptions(s string) (opts []tagOption, err error) {
 		var n int
 		opt := tagOption{quoted: len(s) > 0 && (s[0] == '"' || s[0] == '`')}
 		if opt.quoted {
+			var err error
 			prefix, _ := quotedPrefix(s)
 			opt.value, err = strconv.Unquote(prefix)
 			if err != nil {
-				return nil, errors.New("malformed `json` tag: " + s0)
+				return nil, false
 			}
 			n += len(prefix)
 		} else {
@@ -149,7 +150,7 @@ func splitTagOptions(s string) (opts []tagOption, err error) {
 		opts = append(opts, opt)
 		s = s[n:]
 	}
-	return opts, nil
+	return opts, true
 }
 
 // quotedPrefix is identical to strconv.QuotedPrefix.

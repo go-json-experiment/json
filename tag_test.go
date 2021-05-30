@@ -41,19 +41,19 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			v int `json:"Hello"`
 		}{},
-		wantErr: errors.New("invalid `json` tag on unexported field"),
+		wantErr: errors.New("unexported Go struct field \"v\" cannot have non-ignored `json` tag"),
 	}, {
 		name: "UnexportedEmpty",
 		in: struct {
 			v int `json:""`
 		}{},
-		wantErr: errors.New("invalid `json` tag on unexported field"),
+		wantErr: errors.New("unexported Go struct field \"v\" cannot have non-ignored `json` tag"),
 	}, {
 		name: "EmbedUnexported",
 		in: struct {
 			unexported
 		}{},
-		wantErr: errors.New("embedded field of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
+		wantErr: errors.New("embedded Go struct field \"unexported\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
 	}, {
 		name: "Ignored",
 		in: struct {
@@ -230,7 +230,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",format=alpha,format=bravo"`
 		}{},
-		wantErr: errors.New("invalid duplicate appearance of `format` tag option"),
+		wantErr: errors.New("Go struct field \"FieldName\" has duplicate appearance of `json` tag option \"format\""),
 	}, {
 		name: "AllOptions",
 		in: struct {
@@ -292,13 +292,13 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:"\"hello,string"`
 		}{},
-		wantErr: errors.New("malformed `json` tag: \"hello,string"),
+		wantErr: errors.New("Go struct field \"FieldName\" has malformed `json` tag: \"hello,string"),
 	}, {
 		name: "MalformedQuotedString/MissingComma",
 		in: struct {
 			FieldName int `json:"\"hello\"inline,string"`
 		}{},
-		wantErr: errors.New("malformed `json` tag: \"hello\"inline,string"),
+		wantErr: errors.New("Go struct field \"FieldName\" has malformed `json` tag: \"hello\"inline,string"),
 	}, {
 		name: "MisnamedTag",
 		in: struct {
