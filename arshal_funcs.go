@@ -241,7 +241,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 			va.SetBool(tok.Bool())
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -265,7 +265,7 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 			va.SetString(tok.String())
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -321,7 +321,7 @@ func makeBytesArshaler(t reflect.Type) *arshaler {
 				b = va.Slice(0, t.Len()).Bytes()
 				if n != len(b) {
 					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, t.Len())
-					return newUnmarshalError(k, t, err)
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 			} else {
 				b = va.Bytes()
@@ -332,14 +332,14 @@ func makeBytesArshaler(t reflect.Type) *arshaler {
 				}
 			}
 			if _, err := base64.StdEncoding.Decode(b, val); err != nil {
-				return newUnmarshalError(k, t, err)
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			if t.Kind() == reflect.Slice {
 				va.SetBytes(b)
 			}
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -385,13 +385,13 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			if !ok {
 				if n != math.MaxUint64 {
 					err := fmt.Errorf("cannot parse %q as signed integer: %w", val, strconv.ErrSyntax)
-					return newUnmarshalError(k, t, err)
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 				overflow = true
 			}
 			if overflow {
 				err := fmt.Errorf("cannot parse %q as signed integer: %w", val, strconv.ErrRange)
-				return newUnmarshalError(k, t, err)
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			if neg {
 				va.SetInt(int64(-n))
@@ -400,7 +400,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			}
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -441,18 +441,18 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			if !ok {
 				if n != math.MaxUint64 {
 					err := fmt.Errorf("cannot parse %q as unsigned integer: %w", val, strconv.ErrSyntax)
-					return newUnmarshalError(k, t, err)
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 				overflow = true
 			}
 			if overflow {
 				err := fmt.Errorf("cannot parse %q as unsigned integer: %w", val, strconv.ErrRange)
-				return newUnmarshalError(k, t, err)
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			va.SetUint(uint64(n))
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -487,7 +487,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			val = unescapeSimpleString(val)
 			if n, err := consumeNumber(val); n != len(val) || err != nil {
 				err := fmt.Errorf("cannot parse %q as JSON number: %w", val, strconv.ErrSyntax)
-				return newUnmarshalError(k, t, err)
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			fallthrough
 		case '0':
@@ -499,7 +499,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			va.SetFloat(fv)
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -587,7 +587,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 				if k.Kind() == reflect.Interface && !k.IsNil() && !k.Elem().Type().Comparable() {
 					err := fmt.Errorf("invalid incomparable key type %v", k.Elem().Type())
-					return newUnmarshalError(0, t, err)
+					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}
 
 				if v2 := va.MapIndex(k.Value); v2.IsValid() {
@@ -606,7 +606,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			}
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -680,7 +680,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			}
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -729,7 +729,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			for dec.PeekKind() != ']' {
 				if i >= t.Len() {
 					err := errors.New("too many array elements")
-					return newUnmarshalError(0, t, err)
+					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}
 				v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
 				v.Set(reflect.Zero(v.Type()))
@@ -743,11 +743,11 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			}
 			if i < t.Len() {
 				err := errors.New("too few array elements")
-				return newUnmarshalError(0, t, err)
+				return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 			}
 			return nil
 		}
-		return newUnmarshalError(k, t, nil)
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }
@@ -820,7 +820,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				// the type set contains exactly one Go type.
 				// See https://golang.org/issue/45346.
 				err := errors.New("cannot derive concrete type for non-empty interface")
-				return newUnmarshalError(k, t, err)
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			switch k {
 			case 'f', 't':
@@ -855,10 +855,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 func makeInvalidArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		return newMarshalError(0, t, nil)
+		return &SemanticError{action: "marshal", GoType: t}
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		return newUnmarshalError(0, t, nil)
+		return &SemanticError{action: "unmarshal", GoType: t}
 	}
 	return &fncs
 }

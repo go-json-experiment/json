@@ -5,6 +5,7 @@
 package json
 
 import (
+	"errors"
 	"io"
 	"reflect"
 )
@@ -138,7 +139,15 @@ func (uo UnmarshalOptions) UnmarshalFull(do DecodeOptions, in io.Reader, out int
 func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out interface{}) error {
 	v := reflect.ValueOf(out)
 	if !v.IsValid() || (v.Kind() != reflect.Ptr || v.IsNil()) {
-		return &SemanticError{str: "unable to mutate input; must be a non-nil pointer"}
+		var t reflect.Type
+		if v.IsValid() {
+			t = v.Type()
+			if t.Kind() == reflect.Ptr {
+				t = t.Elem()
+			}
+		}
+		err := errors.New("value must be passed as a non-nil pointer reference")
+		return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 	}
 	va := addressableValue{v.Elem()} // dereferenced pointer is always addressable
 	t := va.Type()

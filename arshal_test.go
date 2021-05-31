@@ -28,6 +28,30 @@ type (
 	recursiveSlice []recursiveSlice
 )
 
+var (
+	namedBoolType       = reflect.TypeOf((*namedBool)(nil)).Elem()
+	intType             = reflect.TypeOf((*int)(nil)).Elem()
+	int8Type            = reflect.TypeOf((*int8)(nil)).Elem()
+	int16Type           = reflect.TypeOf((*int16)(nil)).Elem()
+	int32Type           = reflect.TypeOf((*int32)(nil)).Elem()
+	int64Type           = reflect.TypeOf((*int64)(nil)).Elem()
+	uintType            = reflect.TypeOf((*uint)(nil)).Elem()
+	uint8Type           = reflect.TypeOf((*uint8)(nil)).Elem()
+	uint16Type          = reflect.TypeOf((*uint16)(nil)).Elem()
+	uint32Type          = reflect.TypeOf((*uint32)(nil)).Elem()
+	uint64Type          = reflect.TypeOf((*uint64)(nil)).Elem()
+	sliceStringType     = reflect.TypeOf((*[]string)(nil)).Elem()
+	array1StringType    = reflect.TypeOf((*[1]string)(nil)).Elem()
+	array0ByteType      = reflect.TypeOf((*[0]byte)(nil)).Elem()
+	array1ByteType      = reflect.TypeOf((*[1]byte)(nil)).Elem()
+	array2ByteType      = reflect.TypeOf((*[2]byte)(nil)).Elem()
+	array3ByteType      = reflect.TypeOf((*[3]byte)(nil)).Elem()
+	array4ByteType      = reflect.TypeOf((*[4]byte)(nil)).Elem()
+	mapStringStringType = reflect.TypeOf((*map[string]string)(nil)).Elem()
+	ioReaderType        = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	chanStringType      = reflect.TypeOf((*chan string)(nil)).Elem()
+)
+
 func addr(v interface{}) interface{} {
 	v1 := reflect.ValueOf(v)
 	v2 := reflect.New(v1.Type())
@@ -160,7 +184,7 @@ func TestMarshal(t *testing.T) {
 		name:    "Maps/InvalidKey/Channel",
 		in:      map[chan string]string{make(chan string): "value"},
 		want:    `{`,
-		wantErr: newMarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
 		name: "Maps/ValidKey/Int",
 		in:   map[int64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
@@ -201,7 +225,7 @@ func TestMarshal(t *testing.T) {
 			"key": nil,
 		},
 		want:    `{"key"`,
-		wantErr: newMarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
 		name: "Maps/RecursiveMap",
 		in: recursiveMap{
@@ -226,7 +250,7 @@ func TestMarshal(t *testing.T) {
 		name:    "Slices/Invalid/Channel",
 		in:      [](chan string){nil},
 		want:    `[`,
-		wantErr: newMarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
 		name: "Slices/RecursiveSlice",
 		in: recursiveSlice{
@@ -268,7 +292,7 @@ func TestMarshal(t *testing.T) {
 		name:    "Arrays/Invalid/Channel",
 		in:      new([1]chan string),
 		want:    `[`,
-		wantErr: newMarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
 		name: "Pointers/NilL0",
 		in:   (*int)(nil),
@@ -336,7 +360,19 @@ func TestUnmarshal(t *testing.T) {
 	}{{
 		name:    "Nil",
 		inBuf:   `null`,
-		wantErr: &SemanticError{str: "unable to mutate input; must be a non-nil pointer"},
+		wantErr: &SemanticError{action: "unmarshal", Err: errors.New("value must be passed as a non-nil pointer reference")},
+	}, {
+		name:    "NilPointer",
+		inBuf:   `null`,
+		inVal:   (*string)(nil),
+		want:    (*string)(nil),
+		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New("value must be passed as a non-nil pointer reference")},
+	}, {
+		name:    "NonPointer",
+		inBuf:   `null`,
+		inVal:   "unchanged",
+		want:    "unchanged",
+		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New("value must be passed as a non-nil pointer reference")},
 	}, {
 		name:  "Bools/Null",
 		inBuf: `null`,
@@ -358,38 +394,38 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"false"`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/StringifiedTrue",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"true"`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/Number",
 		inBuf:   `0`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/String",
 		inBuf:   `""`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('{', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: boolType},
 	}, {
 		name:  "Strings/Null",
 		inBuf: `null`,
@@ -415,25 +451,25 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `false`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
-		wantErr: newUnmarshalError('f', reflect.TypeOf(string("")), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 'f', GoType: stringType},
 	}, {
 		name:    "Strings/Invalid/True",
 		inBuf:   `true`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
-		wantErr: newUnmarshalError('t', reflect.TypeOf(string("")), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: stringType},
 	}, {
 		name:    "Strings/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
-		wantErr: newUnmarshalError('{', reflect.TypeOf(string("")), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: stringType},
 	}, {
 		name:    "Strings/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(string("")), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: stringType},
 	}, {
 		name:  "Bytes/Null",
 		inBuf: `null`,
@@ -494,16 +530,16 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"A"`,
 		inVal: new([0]byte),
 		want:  addr([0]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([0]byte{}), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array0ByteType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 0), []byte("A"))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/ByteArray0/Overflow",
 		inBuf:   `"AA=="`,
 		inVal:   new([0]byte),
 		want:    addr([0]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([0]byte{}), errors.New("decoded base64 length of 1 mismatches array length of 0")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array0ByteType, Err: errors.New("decoded base64 length of 1 mismatches array length of 0")},
 	}, {
 		name:  "Bytes/ByteArray1/Valid",
 		inBuf: `"AQ=="`,
@@ -514,22 +550,22 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"$$=="`,
 		inVal: new([1]byte),
 		want:  addr([1]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([1]byte{}), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1ByteType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 1), []byte("$$=="))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/ByteArray1/Underflow",
 		inBuf:   `""`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([1]byte{}), errors.New("decoded base64 length of 0 mismatches array length of 1")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1ByteType, Err: errors.New("decoded base64 length of 0 mismatches array length of 1")},
 	}, {
 		name:    "Bytes/ByteArray1/Overflow",
 		inBuf:   `"AQI="`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([1]byte{}), errors.New("decoded base64 length of 2 mismatches array length of 1")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1ByteType, Err: errors.New("decoded base64 length of 2 mismatches array length of 1")},
 	}, {
 		name:  "Bytes/ByteArray2/Valid",
 		inBuf: `"AQI="`,
@@ -540,22 +576,22 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"$$$="`,
 		inVal: new([2]byte),
 		want:  addr([2]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([2]byte{}), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array2ByteType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 2), []byte("$$$="))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/ByteArray2/Underflow",
 		inBuf:   `"AQ=="`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([2]byte{}), errors.New("decoded base64 length of 1 mismatches array length of 2")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array2ByteType, Err: errors.New("decoded base64 length of 1 mismatches array length of 2")},
 	}, {
 		name:    "Bytes/ByteArray2/Overflow",
 		inBuf:   `"AQID"`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([2]byte{}), errors.New("decoded base64 length of 3 mismatches array length of 2")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array2ByteType, Err: errors.New("decoded base64 length of 3 mismatches array length of 2")},
 	}, {
 		name:  "Bytes/ByteArray3/Valid",
 		inBuf: `"AQID"`,
@@ -566,22 +602,22 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"$$$$"`,
 		inVal: new([3]byte),
 		want:  addr([3]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([3]byte{}), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array3ByteType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 3), []byte("$$$$"))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/ByteArray3/Underflow",
 		inBuf:   `"AQI="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([3]byte{}), errors.New("decoded base64 length of 2 mismatches array length of 3")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array3ByteType, Err: errors.New("decoded base64 length of 2 mismatches array length of 3")},
 	}, {
 		name:    "Bytes/ByteArray3/Overflow",
 		inBuf:   `"AQIDAQ=="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([3]byte{}), errors.New("decoded base64 length of 4 mismatches array length of 3")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array3ByteType, Err: errors.New("decoded base64 length of 4 mismatches array length of 3")},
 	}, {
 		name:  "Bytes/ByteArray4/Valid",
 		inBuf: `"AQIDBA=="`,
@@ -592,22 +628,22 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"$$$$$$=="`,
 		inVal: new([4]byte),
 		want:  addr([4]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([4]byte{}), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array4ByteType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 4), []byte("$$$$$$=="))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/ByteArray4/Underflow",
 		inBuf:   `"AQID"`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([4]byte{}), errors.New("decoded base64 length of 3 mismatches array length of 4")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array4ByteType, Err: errors.New("decoded base64 length of 3 mismatches array length of 4")},
 	}, {
 		name:    "Bytes/ByteArray4/Overflow",
 		inBuf:   `"AQIDBAU="`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([4]byte{}), errors.New("decoded base64 length of 5 mismatches array length of 4")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array4ByteType, Err: errors.New("decoded base64 length of 5 mismatches array length of 4")},
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a array of uints.
@@ -625,52 +661,52 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"AQ="`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([]byte(nil)), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 0), []byte("AQ="))
 			return err
-		}()),
+		}()},
 	}, {
 		name:  "Bytes/Invalid/Unpadded2",
 		inBuf: `"AQ"`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([]byte(nil)), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 0), []byte("AQ"))
 			return err
-		}()),
+		}()},
 	}, {
 		name:  "Bytes/Invalid/Character",
 		inBuf: `"@@@@"`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([]byte(nil)), func() error {
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
 			_, err := base64.StdEncoding.Decode(make([]byte, 3), []byte("@@@@"))
 			return err
-		}()),
+		}()},
 	}, {
 		name:    "Bytes/Invalid/Bool",
 		inBuf:   `true`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
-		wantErr: newUnmarshalError('t', reflect.TypeOf([]byte(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: bytesType},
 	}, {
 		name:    "Bytes/Invalid/Number",
 		inBuf:   `0`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
-		wantErr: newUnmarshalError('0', reflect.TypeOf([]byte(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: bytesType},
 	}, {
 		name:    "Bytes/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
-		wantErr: newUnmarshalError('{', reflect.TypeOf([]byte(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: bytesType},
 	}, {
 		name:    "Bytes/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
-		wantErr: newUnmarshalError('[', reflect.TypeOf([]byte(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
 	}, {
 		name:  "Ints/Null",
 		inBuf: `null`,
@@ -686,7 +722,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `-129`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int8(0)), fmt.Errorf(`cannot parse "-129" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int8Type, Err: fmt.Errorf(`cannot parse "-129" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Ints/Int8/Min",
 		inBuf: `-128`,
@@ -702,13 +738,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `128`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int8(0)), fmt.Errorf(`cannot parse "128" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int8Type, Err: fmt.Errorf(`cannot parse "128" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Ints/Int16/MinOverflow",
 		inBuf:   `-32769`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int16(0)), fmt.Errorf(`cannot parse "-32769" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int16Type, Err: fmt.Errorf(`cannot parse "-32769" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Ints/Int16/Min",
 		inBuf: `-32768`,
@@ -724,13 +760,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `32768`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int16(0)), fmt.Errorf(`cannot parse "32768" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int16Type, Err: fmt.Errorf(`cannot parse "32768" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Ints/Int32/MinOverflow",
 		inBuf:   `-2147483649`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int32(0)), fmt.Errorf(`cannot parse "-2147483649" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int32Type, Err: fmt.Errorf(`cannot parse "-2147483649" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Ints/Int32/Min",
 		inBuf: `-2147483648`,
@@ -746,13 +782,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `2147483648`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int32(0)), fmt.Errorf(`cannot parse "2147483648" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int32Type, Err: fmt.Errorf(`cannot parse "2147483648" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Ints/Int64/MinOverflow",
 		inBuf:   `-9223372036854775809`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int64(0)), fmt.Errorf(`cannot parse "-9223372036854775809" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int64Type, Err: fmt.Errorf(`cannot parse "-9223372036854775809" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Ints/Int64/Min",
 		inBuf: `-9223372036854775808`,
@@ -768,7 +804,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `9223372036854775808`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int64(0)), fmt.Errorf(`cannot parse "9223372036854775808" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int64Type, Err: fmt.Errorf(`cannot parse "9223372036854775808" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Ints/Named",
 		inBuf: `-6464`,
@@ -796,71 +832,71 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `1.0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/Exponent",
 		inBuf:   `1e0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/StringifiedFraction",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/StringifiedExponent",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/Overflow",
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Ints/Invalid/OverflowSyntax",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/Whitespace",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(int(0)), fmt.Errorf(`cannot parse "0 " as signed integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "0 " as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/Bool",
 		inBuf:   `true`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('t', reflect.TypeOf(int(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: intType},
 	}, {
 		name:    "Ints/Invalid/String",
 		inBuf:   `"0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(int(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType},
 	}, {
 		name:    "Ints/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('{', reflect.TypeOf(int(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: intType},
 	}, {
 		name:    "Ints/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(int(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: intType},
 	}, {
 		name:  "Uints/Null",
 		inBuf: `null`,
@@ -886,7 +922,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `256`,
 		inVal:   addr(uint8(1)),
 		want:    addr(uint8(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint8(0)), fmt.Errorf(`cannot parse "256" as unsigned integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint8Type, Err: fmt.Errorf(`cannot parse "256" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Uints/Uint16/Min",
 		inBuf: `0`,
@@ -902,7 +938,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `65536`,
 		inVal:   addr(uint16(1)),
 		want:    addr(uint16(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint16(0)), fmt.Errorf(`cannot parse "65536" as unsigned integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint16Type, Err: fmt.Errorf(`cannot parse "65536" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Uints/Uint32/Min",
 		inBuf: `0`,
@@ -918,7 +954,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `4294967296`,
 		inVal:   addr(uint32(1)),
 		want:    addr(uint32(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint32(0)), fmt.Errorf(`cannot parse "4294967296" as unsigned integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint32Type, Err: fmt.Errorf(`cannot parse "4294967296" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Uints/Uint64/Min",
 		inBuf: `0`,
@@ -934,7 +970,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `18446744073709551616`,
 		inVal:   addr(uint64(1)),
 		want:    addr(uint64(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint64(0)), fmt.Errorf(`cannot parse "18446744073709551616" as unsigned integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint64Type, Err: fmt.Errorf(`cannot parse "18446744073709551616" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:  "Uints/Named",
 		inBuf: `6464`,
@@ -957,83 +993,83 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `-1`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "-1" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "-1" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/NegativeZero",
 		inBuf:   `-0`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "-0" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "-0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Fraction",
 		inBuf:   `1.0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Exponent",
 		inBuf:   `1e0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/StringifiedFraction",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/StringifiedExponent",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Overflow",
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Uints/Invalid/OverflowSyntax",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Whitespace",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(uint(0)), fmt.Errorf(`cannot parse "0 " as unsigned integer: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "0 " as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Bool",
 		inBuf:   `true`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('t', reflect.TypeOf(uint(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: uintType},
 	}, {
 		name:    "Uints/Invalid/String",
 		inBuf:   `"0"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(uint(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType},
 	}, {
 		name:    "Uints/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('{', reflect.TypeOf(uint(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: uintType},
 	}, {
 		name:    "Uints/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(uint(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: uintType},
 	}, {
 		name:  "Floats/Null",
 		inBuf: `null`,
@@ -1092,52 +1128,52 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"NaN"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(float64(0)), fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/Infinity",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"Infinity"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(float64(0)), fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/Whitespace",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1 "`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(float64(0)), fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/GoSyntax",
 		opts:    UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1p-2"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(float64(0)), fmt.Errorf(`cannot parse "1p-2" as JSON number: %w`, strconv.ErrSyntax)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1p-2" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/Bool",
 		inBuf:   `true`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('t', reflect.TypeOf(float64(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: float64Type},
 	}, {
 		name:    "Floats/Invalid/String",
 		inBuf:   `"0"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(float64(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
 	}, {
 		name:    "Floats/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('{', reflect.TypeOf(float64(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: float64Type},
 	}, {
 		name:    "Floats/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(float64(0)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: float64Type},
 	}, {
 		name:  "Maps/Null",
 		inBuf: `null`,
@@ -1148,25 +1184,25 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"true":"false"}`,
 		inVal:   new(map[bool]bool),
 		want:    addr(make(map[bool]bool)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(bool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    "Maps/InvalidKey/NamedBool",
 		inBuf:   `{"true":"false"}`,
 		inVal:   new(map[namedBool]bool),
 		want:    addr(make(map[namedBool]bool)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(namedBool(false)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: namedBoolType},
 	}, {
 		name:    "Maps/InvalidKey/Array",
 		inBuf:   `{"key":"value"}`,
 		inVal:   new(map[[1]string]string),
 		want:    addr(make(map[[1]string]string)),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([1]string{}), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1StringType},
 	}, {
 		name:    "Maps/InvalidKey/Channel",
 		inBuf:   `{"key":"value"}`,
 		inVal:   new(map[chan string]string),
 		want:    addr(make(map[chan string]string)),
-		wantErr: newUnmarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
 		name:  "Maps/ValidKey/Int",
 		inBuf: `{"0":0,"-1":1,"2":2,"-3":3}`,
@@ -1224,7 +1260,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(map[string]chan string{
 			"key": nil,
 		}),
-		wantErr: newUnmarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
 		name:  "Maps/RecursiveMap",
 		inBuf: `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
@@ -1254,25 +1290,25 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `true`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
-		wantErr: newUnmarshalError('t', reflect.TypeOf(map[string]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: mapStringStringType},
 	}, {
 		name:    "Maps/Invalid/String",
 		inBuf:   `""`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf(map[string]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: mapStringStringType},
 	}, {
 		name:    "Maps/Invalid/Number",
 		inBuf:   `0`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
-		wantErr: newUnmarshalError('0', reflect.TypeOf(map[string]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: mapStringStringType},
 	}, {
 		name:    "Maps/Invalid/Array",
 		inBuf:   `[]`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
-		wantErr: newUnmarshalError('[', reflect.TypeOf(map[string]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: mapStringStringType},
 	}, {
 		name:  "Slices/Null",
 		inBuf: `null`,
@@ -1321,7 +1357,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `["hello"]`,
 		inVal:   new([]chan string),
 		want:    addr([]chan string{nil}),
-		wantErr: newUnmarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
 		name:  "Slices/RecursiveSlice",
 		inBuf: `[[],[],[[]],[[],[]]]`,
@@ -1337,25 +1373,25 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `true`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
-		wantErr: newUnmarshalError('t', reflect.TypeOf([]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: sliceStringType},
 	}, {
 		name:    "Slices/Invalid/String",
 		inBuf:   `""`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: sliceStringType},
 	}, {
 		name:    "Slices/Invalid/Number",
 		inBuf:   `0`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
-		wantErr: newUnmarshalError('0', reflect.TypeOf([]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: sliceStringType},
 	}, {
 		name:    "Slices/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
-		wantErr: newUnmarshalError('{', reflect.TypeOf([]string(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: sliceStringType},
 	}, {
 		name:  "Arrays/Null",
 		inBuf: `null`,
@@ -1403,43 +1439,43 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `["hello"]`,
 		inVal:   new([1]chan string),
 		want:    new([1]chan string),
-		wantErr: newUnmarshalError(0, reflect.TypeOf((chan string)(nil)), nil),
+		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
 		name:    "Arrays/Invalid/Underflow",
 		inBuf:   `[]`,
 		inVal:   new([1]string),
 		want:    addr([1]string{}),
-		wantErr: newUnmarshalError(0, reflect.TypeOf([1]string{}), errors.New("too few array elements")),
+		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too few array elements")},
 	}, {
 		name:    "Arrays/Invalid/Overflow",
 		inBuf:   `["1","2"]`,
 		inVal:   new([1]string),
 		want:    addr([1]string{"1"}),
-		wantErr: newUnmarshalError(0, reflect.TypeOf([1]string{}), errors.New("too many array elements")),
+		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too many array elements")},
 	}, {
 		name:    "Arrays/Invalid/Bool",
 		inBuf:   `true`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
-		wantErr: newUnmarshalError('t', reflect.TypeOf([1]string{}), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: array1StringType},
 	}, {
 		name:    "Arrays/Invalid/String",
 		inBuf:   `""`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
-		wantErr: newUnmarshalError('"', reflect.TypeOf([1]string{}), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1StringType},
 	}, {
 		name:    "Arrays/Invalid/Number",
 		inBuf:   `0`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
-		wantErr: newUnmarshalError('0', reflect.TypeOf([1]string{}), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: array1StringType},
 	}, {
 		name:    "Arrays/Invalid/Object",
 		inBuf:   `{}`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
-		wantErr: newUnmarshalError('{', reflect.TypeOf([1]string{}), nil),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: array1StringType},
 	}, {
 		name:  "Pointers/NullL0",
 		inBuf: `null`,
@@ -1500,7 +1536,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"hello"`,
 		inVal:   new(io.Reader),
 		want:    new(io.Reader),
-		wantErr: newUnmarshalError('"', reflect.TypeOf((*io.Reader)(nil)).Elem(), errors.New("cannot derive concrete type for non-empty interface")),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: ioReaderType, Err: errors.New("cannot derive concrete type for non-empty interface")},
 	}, {
 		name:  "Interfaces/Empty/False",
 		inBuf: `false`,
