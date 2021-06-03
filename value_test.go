@@ -90,6 +90,16 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalized: `{"\r":"Carriage Return","1":"One","":"Control","ö":"Latin Small Letter O With Diaeresis","€":"Euro Sign","😀":"Emoji: Grinning Face","דּ":"Hebrew Letter Dalet With Dagesh"}`,
 }, {
+	name:          "LargeIntegers",
+	in:            ` [ -9223372036854775808 , 9223372036854775807 ] `,
+	wantValid:     true,
+	wantCompacted: `[-9223372036854775808,9223372036854775807]`,
+	wantIndented: `[
+	    -9223372036854775808,
+	    9223372036854775807
+	]`,
+	wantCanonicalized: `[-9223372036854776000,9223372036854776000]`, // NOTE: Loss of precision due to numbers being treated as floats.
+}, {
 	name:                "InvalidUTF8",
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 8259 as the definition; which validates UTF-8
