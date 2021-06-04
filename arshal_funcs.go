@@ -11,6 +11,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -612,12 +613,154 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 }
 
 func makeStructArshaler(t reflect.Type) *arshaler {
+	// TODO: Support `inline`, `unknown`, and `format`.
+	// TODO: Support MarshalOptions.DiscardUnknownMembers and UnmarshalOptions.RejectUnknownMembers.
 	var fncs arshaler
+	type field struct {
+		index int // index into reflect.StructField.Field
+		fncs  *arshaler
+		fieldOptions
+	}
+	var (
+		once         sync.Once
+		fields       []field
+		fieldsByName map[string]int // index into fields slice
+		hasNocase    bool           // does any field have `nocase` specified?
+		errInit      *SemanticError
+	)
+	init := func() {
+		var hasAnyJSONTag bool
+		fieldsByName = make(map[string]int, t.NumField())
+		for i := 0; i < t.NumField(); i++ {
+			sf := t.Field(i)
+			_, hasTag := sf.Tag.Lookup("json")
+			hasAnyJSONTag = hasAnyJSONTag || hasTag
+			options, err := parseFieldOptions(sf)
+			if err != nil {
+				if err == errIgnoredField {
+					continue
+				}
+				errInit = &SemanticError{GoType: t, Err: err}
+				return
+			}
+			if j, ok := fieldsByName[options.name]; ok {
+				err := fmt.Errorf("Go struct fields %q and %q conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
+				errInit = &SemanticError{GoType: t, Err: err}
+				return
+			}
+			fieldsByName[options.name] = len(fields)
+			fields = append(fields, field{
+				index:        i,
+				fncs:         lookupArshaler(sf.Type),
+				fieldOptions: options,
+			})
+			hasNocase = hasNocase || options.nocase
+		}
+
+		// NOTE: New users to the json package are occasionally surprised that
+		// unexported fields are ignored. This occurs by necessity due to our
+		// inability to directly introspect such fields with Go reflection
+		// without the use of unsafe.
+		//
+		// To reduce friction here, refuse to serialize any Go struct that
+		// has no JSON serializable fields, has at least one Go struct field,
+		// and does not have any `json` tags present. For example,
+		// errors returned by errors.New would fail to serialize.
+		if len(fields) == 0 && t.NumField() > 0 && !hasAnyJSONTag {
+			err := errors.New("Go struct kind has no exported fields")
+			errInit = &SemanticError{GoType: t, Err: err}
+			return
+		}
+	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		panic("not implemented")
+		// TODO: Perform depth check and cycle detection.
+		if err := enc.WriteToken(ObjectStart); err != nil {
+			return err
+		}
+		once.Do(init)
+		if errInit != nil {
+			err := *errInit // shallow copy SemanticError
+			err.action = "marshal"
+			return &err
+		}
+		for _, f := range fields {
+			v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
+			if f.omitzero && v.IsZero() {
+				continue
+			}
+			// TODO: Support `omitempty`.
+			if err := enc.WriteToken(String(f.name)); err != nil {
+				return err
+			}
+			marshal := f.fncs.marshal // TODO: Handle custom arshalers.
+			mo2 := mo
+			mo2.StringifyNumbers = mo2.StringifyNumbers || f.string
+			if err := marshal(mo2, enc, v); err != nil {
+				return err
+			}
+		}
+		if err := enc.WriteToken(ObjectEnd); err != nil {
+			return err
+		}
+		return nil
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		panic("not implemented")
+		tok, err := dec.ReadToken()
+		if err != nil {
+			return nil
+		}
+		k := tok.Kind()
+		switch k {
+		case 'n':
+			va.Set(reflect.Zero(t))
+			return nil
+		case '{':
+			once.Do(init)
+			if errInit != nil {
+				err := *errInit // shallow copy SemanticError
+				err.action = "unmarshal"
+				return &err
+			}
+			for dec.PeekKind() != '}' {
+				// Process the object member name.
+				val, err := dec.ReadValue()
+				if err != nil {
+					return err
+				}
+				name := unescapeSimpleString(val)
+				i, ok := fieldsByName[string(name)]
+				if !ok && hasNocase {
+					for i2, f := range fields {
+						if f.nocase && strings.EqualFold(f.name, string(name)) {
+							i, ok = i2, true
+							break
+						}
+					}
+				}
+				if !ok {
+					// Consume unknown object member.
+					if _, err := dec.ReadValue(); err != nil {
+						return err
+					}
+					continue
+				}
+				f := fields[i]
+
+				// Process the object member value.
+				unmarshal := f.fncs.unmarshal // TODO: Handle custom arshalers.
+				uo2 := uo
+				uo2.StringifyNumbers = uo2.StringifyNumbers || f.string
+				v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
+				if err := unmarshal(uo2, dec, v); err != nil {
+					return err
+				}
+			}
+			if _, err := dec.ReadToken(); err != nil {
+				return err
+			}
+			return nil
+		}
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
 }

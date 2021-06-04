@@ -26,30 +26,150 @@ type (
 
 	recursiveMap   map[string]recursiveMap
 	recursiveSlice []recursiveSlice
+
+	structEmpty       struct{}
+	structConflicting struct {
+		A string `json:"conflict"`
+		B string `json:"conflict"`
+	}
+	structNoneExported struct {
+		unexported string
+	}
+	structUnexportedIgnored struct {
+		ignored string `json:"-"`
+	}
+	structMalformedTag struct {
+		Malformed string `json:"\""`
+	}
+	structUnexportedTag struct {
+		unexported string `json:"name"`
+	}
+	structUnexportedEmbedded struct {
+		namedString
+	}
+	structIgnoredUnexportedEmbedded struct {
+		namedString `json:"-"`
+	}
+	structWeirdNames struct {
+		Empty string `json:"\"\""`
+		Comma string `json:"\",\""`
+		Quote string `json:"\"\\\"\""`
+	}
+	structNoCase struct {
+		AaA string `json:",nocase"`
+		AAa string `json:",nocase"`
+		AAA string
+	}
+	structScalars struct {
+		unexported bool
+		Ignored    bool `json:"-"`
+
+		Bool   bool
+		String string
+		Bytes  []byte
+		Int    int64
+		Uint   uint64
+		Float  float64
+	}
+	structSlices struct {
+		unexported bool
+		Ignored    bool `json:"-"`
+
+		SliceBool   []bool
+		SliceString []string
+		SliceBytes  [][]byte
+		SliceInt    []int64
+		SliceUint   []uint64
+		SliceFloat  []float64
+	}
+	structMaps struct {
+		unexported bool
+		Ignored    bool `json:"-"`
+
+		MapBool   map[string]bool
+		MapString map[string]string
+		MapBytes  map[string][]byte
+		MapInt    map[string]int64
+		MapUint   map[string]uint64
+		MapFloat  map[string]float64
+	}
+	structAll struct {
+		Bool          bool
+		String        string
+		Bytes         []byte
+		Int           int64
+		Uint          uint64
+		Float         float64
+		Map           map[string]string
+		StructScalars structScalars
+		StructMaps    structMaps
+		StructSlices  structSlices
+		Slice         []string
+		Array         [1]string
+		Ptr           *structAll
+		Interface     interface{}
+	}
+	structStringifiedAll struct {
+		Bool          bool                  `json:",string"`
+		String        string                `json:",string"`
+		Bytes         []byte                `json:",string"`
+		Int           int64                 `json:",string"`
+		Uint          uint64                `json:",string"`
+		Float         float64               `json:",string"`
+		Map           map[string]string     `json:",string"`
+		StructScalars structScalars         `json:",string"`
+		StructMaps    structMaps            `json:",string"`
+		StructSlices  structSlices          `json:",string"`
+		Slice         []string              `json:",string"`
+		Array         [1]string             `json:",string"`
+		Ptr           *structStringifiedAll `json:",string"`
+		Interface     interface{}           `json:",string"`
+	}
+	structOmitZeroAll struct {
+		Bool          bool               `json:",omitzero"`
+		String        string             `json:",omitzero"`
+		Bytes         []byte             `json:",omitzero"`
+		Int           int64              `json:",omitzero"`
+		Uint          uint64             `json:",omitzero"`
+		Float         float64            `json:",omitzero"`
+		Map           map[string]string  `json:",omitzero"`
+		StructScalars structScalars      `json:",omitzero"`
+		StructMaps    structMaps         `json:",omitzero"`
+		StructSlices  structSlices       `json:",omitzero"`
+		Slice         []string           `json:",omitzero"`
+		Array         [1]string          `json:",omitzero"`
+		Ptr           *structOmitZeroAll `json:",omitzero"`
+		Interface     interface{}        `json:",omitzero"`
+	}
 )
 
 var (
-	namedBoolType       = reflect.TypeOf((*namedBool)(nil)).Elem()
-	intType             = reflect.TypeOf((*int)(nil)).Elem()
-	int8Type            = reflect.TypeOf((*int8)(nil)).Elem()
-	int16Type           = reflect.TypeOf((*int16)(nil)).Elem()
-	int32Type           = reflect.TypeOf((*int32)(nil)).Elem()
-	int64Type           = reflect.TypeOf((*int64)(nil)).Elem()
-	uintType            = reflect.TypeOf((*uint)(nil)).Elem()
-	uint8Type           = reflect.TypeOf((*uint8)(nil)).Elem()
-	uint16Type          = reflect.TypeOf((*uint16)(nil)).Elem()
-	uint32Type          = reflect.TypeOf((*uint32)(nil)).Elem()
-	uint64Type          = reflect.TypeOf((*uint64)(nil)).Elem()
-	sliceStringType     = reflect.TypeOf((*[]string)(nil)).Elem()
-	array1StringType    = reflect.TypeOf((*[1]string)(nil)).Elem()
-	array0ByteType      = reflect.TypeOf((*[0]byte)(nil)).Elem()
-	array1ByteType      = reflect.TypeOf((*[1]byte)(nil)).Elem()
-	array2ByteType      = reflect.TypeOf((*[2]byte)(nil)).Elem()
-	array3ByteType      = reflect.TypeOf((*[3]byte)(nil)).Elem()
-	array4ByteType      = reflect.TypeOf((*[4]byte)(nil)).Elem()
-	mapStringStringType = reflect.TypeOf((*map[string]string)(nil)).Elem()
-	ioReaderType        = reflect.TypeOf((*io.Reader)(nil)).Elem()
-	chanStringType      = reflect.TypeOf((*chan string)(nil)).Elem()
+	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
+	intType                      = reflect.TypeOf((*int)(nil)).Elem()
+	int8Type                     = reflect.TypeOf((*int8)(nil)).Elem()
+	int16Type                    = reflect.TypeOf((*int16)(nil)).Elem()
+	int32Type                    = reflect.TypeOf((*int32)(nil)).Elem()
+	int64Type                    = reflect.TypeOf((*int64)(nil)).Elem()
+	uintType                     = reflect.TypeOf((*uint)(nil)).Elem()
+	uint8Type                    = reflect.TypeOf((*uint8)(nil)).Elem()
+	uint16Type                   = reflect.TypeOf((*uint16)(nil)).Elem()
+	uint32Type                   = reflect.TypeOf((*uint32)(nil)).Elem()
+	uint64Type                   = reflect.TypeOf((*uint64)(nil)).Elem()
+	sliceStringType              = reflect.TypeOf((*[]string)(nil)).Elem()
+	array1StringType             = reflect.TypeOf((*[1]string)(nil)).Elem()
+	array0ByteType               = reflect.TypeOf((*[0]byte)(nil)).Elem()
+	array1ByteType               = reflect.TypeOf((*[1]byte)(nil)).Elem()
+	array2ByteType               = reflect.TypeOf((*[2]byte)(nil)).Elem()
+	array3ByteType               = reflect.TypeOf((*[3]byte)(nil)).Elem()
+	array4ByteType               = reflect.TypeOf((*[4]byte)(nil)).Elem()
+	mapStringStringType          = reflect.TypeOf((*map[string]string)(nil)).Elem()
+	structConflictingType        = reflect.TypeOf((*structConflicting)(nil)).Elem()
+	structNoneExportedType       = reflect.TypeOf((*structNoneExported)(nil)).Elem()
+	structMalformedTagType       = reflect.TypeOf((*structMalformedTag)(nil)).Elem()
+	structUnexportedTagType      = reflect.TypeOf((*structUnexportedTag)(nil)).Elem()
+	structUnexportedEmbeddedType = reflect.TypeOf((*structUnexportedEmbedded)(nil)).Elem()
+	ioReaderType                 = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
 )
 
 func addr(v interface{}) interface{} {
@@ -66,6 +186,9 @@ func TestMarshal(t *testing.T) {
 		in      interface{}
 		want    string
 		wantErr error
+
+		multiline    bool // format the output as multilined?
+		canonicalize bool // canonicalize the output before comparing?
 	}{{
 		name: "Nil",
 		in:   nil,
@@ -131,7 +254,7 @@ func TestMarshal(t *testing.T) {
 		in: []interface{}{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
-		want: `[0,-128,-32768,-2147483648,-9223372036854776000,-6464]`,
+		want: `[0,-128,-32768,-2147483648,-9223372036854775808,-6464]`,
 	}, {
 		name: "Ints/Stringified",
 		opts: MarshalOptions{StringifyNumbers: true},
@@ -144,7 +267,7 @@ func TestMarshal(t *testing.T) {
 		in: []interface{}{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
-		want: `[0,255,65535,4294967295,18446744073709552000,6464]`,
+		want: `[0,255,65535,4294967295,18446744073709551615,6464]`,
 	}, {
 		name: "Uints/Stringified",
 		opts: MarshalOptions{StringifyNumbers: true},
@@ -186,21 +309,25 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name: "Maps/ValidKey/Int",
-		in:   map[int64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
-		want: `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
+		name:         "Maps/ValidKey/Int",
+		in:           map[int64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
+		canonicalize: true,
+		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
 	}, {
-		name: "Maps/ValidKey/NamedInt",
-		in:   map[namedInt64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
-		want: `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
+		name:         "Maps/ValidKey/NamedInt",
+		in:           map[namedInt64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
+		canonicalize: true,
+		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
 	}, {
-		name: "Maps/ValidKey/Uint",
-		in:   map[uint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
-		want: `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
+		name:         "Maps/ValidKey/Uint",
+		in:           map[uint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
+		canonicalize: true,
+		want:         `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
 	}, {
-		name: "Maps/ValidKey/NamedUint",
-		in:   map[namedUint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
-		want: `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
+		name:         "Maps/ValidKey/NamedUint",
+		in:           map[namedUint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
+		canonicalize: true,
+		want:         `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
 	}, {
 		// TODO: In v1 json, floating point keys were rejected since the
 		// initial release could not canonically serialize floats.
@@ -218,7 +345,8 @@ func TestMarshal(t *testing.T) {
 			namedUint64(+64):    uint32(+32),
 			namedFloat64(64.64): float32(32.32),
 		},
-		want: `{"-64":-32,"64":32,"64.64":32.32,"key":"key"}`,
+		canonicalize: true,
+		want:         `{"-64":-32,"64":32,"64.64":32.32,"key":"key"}`,
 	}, {
 		name: "Maps/InvalidValue/Channel",
 		in: map[string]chan string{
@@ -235,7 +363,407 @@ func TestMarshal(t *testing.T) {
 			},
 			"buzz": nil,
 		},
-		want: `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
+		canonicalize: true,
+		want:         `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
+	}, {
+		name: "Structs/Empty",
+		in:   structEmpty{},
+		want: `{}`,
+	}, {
+		name: "Structs/UnexportedIgnored",
+		in:   structUnexportedIgnored{ignored: "ignored"},
+		want: `{}`,
+	}, {
+		name: "Structs/IgnoredUnexportedEmbedded",
+		in:   structIgnoredUnexportedEmbedded{namedString: "ignored"},
+		want: `{}`,
+	}, {
+		name: "Structs/WeirdNames",
+		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
+		want: `{"":"empty",",":"comma","\"":"quote"}`,
+	}, {
+		name: "Structs/NoCase",
+		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
+		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+	}, {
+		name: "Structs/Normal",
+		in: structAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Ptr:       new(structAll),
+			Interface: (*structAll)(nil),
+		},
+		multiline: true,
+		want: `{
+	"Bool": true,
+	"String": "hello",
+	"Bytes": "AQID",
+	"Int": -64,
+	"Uint": 64,
+	"Float": 3.14159,
+	"Map": {
+		"key": "value"
+	},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64,
+		"Uint": 64,
+		"Float": 3.14159
+	},
+	"StructMaps": {
+		"MapBool": {
+			"": true
+		},
+		"MapString": {
+			"": "hello"
+		},
+		"MapBytes": {
+			"": "AQID"
+		},
+		"MapInt": {
+			"": -64
+		},
+		"MapUint": {
+			"": 64
+		},
+		"MapFloat": {
+			"": 3.14159
+		}
+	},
+	"StructSlices": {
+		"SliceBool": [
+			true
+		],
+		"SliceString": [
+			"hello"
+		],
+		"SliceBytes": [
+			"AQID"
+		],
+		"SliceInt": [
+			-64
+		],
+		"SliceUint": [
+			64
+		],
+		"SliceFloat": [
+			3.14159
+		]
+	},
+	"Slice": [
+		"fizz",
+		"buzz"
+	],
+	"Array": [
+		"goodbye"
+	],
+	"Ptr": {
+		"Bool": false,
+		"String": "",
+		"Bytes": "",
+		"Int": 0,
+		"Uint": 0,
+		"Float": 0,
+		"Map": {},
+		"StructScalars": {
+			"Bool": false,
+			"String": "",
+			"Bytes": "",
+			"Int": 0,
+			"Uint": 0,
+			"Float": 0
+		},
+		"StructMaps": {
+			"MapBool": {},
+			"MapString": {},
+			"MapBytes": {},
+			"MapInt": {},
+			"MapUint": {},
+			"MapFloat": {}
+		},
+		"StructSlices": {
+			"SliceBool": [],
+			"SliceString": [],
+			"SliceBytes": [],
+			"SliceInt": [],
+			"SliceUint": [],
+			"SliceFloat": []
+		},
+		"Slice": [],
+		"Array": [
+			""
+		],
+		"Ptr": null,
+		"Interface": null
+	},
+	"Interface": null
+}`,
+	}, {
+		name: "Structs/Stringified",
+		in: structStringifiedAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,     // should be stringified
+			Uint:   +64,     // should be stringified
+			Float:  3.14159, // should be stringified
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,     // should be stringified
+				Uint:   +64,     // should be stringified
+				Float:  3.14159, // should be stringified
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},       // should be stringified
+				MapUint:   map[string]uint64{"": +64},      // should be stringified
+				MapFloat:  map[string]float64{"": 3.14159}, // should be stringified
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},       // should be stringified
+				SliceUint:   []uint64{+64},      // should be stringified
+				SliceFloat:  []float64{3.14159}, // should be stringified
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Ptr:       new(structStringifiedAll), // should be stringified
+			Interface: (*structStringifiedAll)(nil),
+		},
+		multiline: true,
+		want: `{
+	"Bool": true,
+	"String": "hello",
+	"Bytes": "AQID",
+	"Int": "-64",
+	"Uint": "64",
+	"Float": "3.14159",
+	"Map": {
+		"key": "value"
+	},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": "-64",
+		"Uint": "64",
+		"Float": "3.14159"
+	},
+	"StructMaps": {
+		"MapBool": {
+			"": true
+		},
+		"MapString": {
+			"": "hello"
+		},
+		"MapBytes": {
+			"": "AQID"
+		},
+		"MapInt": {
+			"": "-64"
+		},
+		"MapUint": {
+			"": "64"
+		},
+		"MapFloat": {
+			"": "3.14159"
+		}
+	},
+	"StructSlices": {
+		"SliceBool": [
+			true
+		],
+		"SliceString": [
+			"hello"
+		],
+		"SliceBytes": [
+			"AQID"
+		],
+		"SliceInt": [
+			"-64"
+		],
+		"SliceUint": [
+			"64"
+		],
+		"SliceFloat": [
+			"3.14159"
+		]
+	},
+	"Slice": [
+		"fizz",
+		"buzz"
+	],
+	"Array": [
+		"goodbye"
+	],
+	"Ptr": {
+		"Bool": false,
+		"String": "",
+		"Bytes": "",
+		"Int": "0",
+		"Uint": "0",
+		"Float": "0",
+		"Map": {},
+		"StructScalars": {
+			"Bool": false,
+			"String": "",
+			"Bytes": "",
+			"Int": "0",
+			"Uint": "0",
+			"Float": "0"
+		},
+		"StructMaps": {
+			"MapBool": {},
+			"MapString": {},
+			"MapBytes": {},
+			"MapInt": {},
+			"MapUint": {},
+			"MapFloat": {}
+		},
+		"StructSlices": {
+			"SliceBool": [],
+			"SliceString": [],
+			"SliceBytes": [],
+			"SliceInt": [],
+			"SliceUint": [],
+			"SliceFloat": []
+		},
+		"Slice": [],
+		"Array": [
+			""
+		],
+		"Ptr": null,
+		"Interface": null
+	},
+	"Interface": null
+}`,
+	}, {
+		name: "Structs/OmitZero/Zero",
+		in:   structOmitZeroAll{},
+		want: `{}`,
+	}, {
+		name: "Structs/OmitZero/NonZero",
+		in: structOmitZeroAll{
+			Bool:          true,                                   // not omitted since true is non-zero
+			String:        " ",                                    // not omitted since non-empty string is non-zero
+			Bytes:         []byte{},                               // not omitted since allocated slice is non-zero
+			Int:           1,                                      // not omitted since 1 is non-zero
+			Uint:          1,                                      // not omitted since 1 is non-zero
+			Float:         math.Copysign(0, -1),                   // not omitted since -0 is technically non-zero
+			Map:           map[string]string{},                    // not omitted since allocated map is non-zero
+			StructScalars: structScalars{unexported: true},        // not omitted since unexported is non-zero
+			StructSlices:  structSlices{Ignored: true},            // not omitted since Ignored is non-zero
+			StructMaps:    structMaps{MapBool: map[string]bool{}}, // not omitted since MapBool is non-zero
+			Slice:         []string{},                             // not omitted since allocated slice is non-zero
+			Array:         [1]string{" "},                         // not omitted since single array element is non-zero
+			Ptr:           new(structOmitZeroAll),                 // not omitted since pointer is non-zero (even if all fields of the struct value are zero)
+			Interface:     (*structOmitZeroAll)(nil),              // not omitted since interface value is non-zero (even if interface value is a nil pointer)
+		},
+		multiline: true,
+		want: `{
+	"Bool": true,
+	"String": " ",
+	"Bytes": "",
+	"Int": 1,
+	"Uint": 1,
+	"Float": -0,
+	"Map": {},
+	"StructScalars": {
+		"Bool": false,
+		"String": "",
+		"Bytes": "",
+		"Int": 0,
+		"Uint": 0,
+		"Float": 0
+	},
+	"StructMaps": {
+		"MapBool": {},
+		"MapString": {},
+		"MapBytes": {},
+		"MapInt": {},
+		"MapUint": {},
+		"MapFloat": {}
+	},
+	"StructSlices": {
+		"SliceBool": [],
+		"SliceString": [],
+		"SliceBytes": [],
+		"SliceInt": [],
+		"SliceUint": [],
+		"SliceFloat": []
+	},
+	"Slice": [],
+	"Array": [
+		" "
+	],
+	"Ptr": {},
+	"Interface": null
+}`,
+	}, {
+		name:    "Structs/Invalid/Conflicting",
+		in:      structConflicting{},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: structConflictingType, Err: errors.New("Go struct fields \"A\" and \"B\" conflict over JSON object name \"conflict\"")},
+	}, {
+		name:    "Structs/Invalid/NoneExported",
+		in:      structNoneExported{},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
+	}, {
+		name:    "Structs/Invalid/MalformedTag",
+		in:      structMalformedTag{},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: structMalformedTagType, Err: errors.New("Go struct field \"Malformed\" has malformed `json` tag: \"")},
+	}, {
+		name:    "Structs/Invalid/UnexportedTag",
+		in:      structUnexportedTag{},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field \"unexported\" cannot have non-ignored `json` tag")},
+	}, {
+		name:    "Structs/Invalid/UnexportedEmbedded",
+		in:      structUnexportedEmbedded{},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field \"namedString\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
 		name: "Slices/Interface",
 		in: []interface{}{
@@ -279,11 +807,11 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: "Arrays/Int",
 		in:   [2]int64{math.MinInt64, math.MaxInt64},
-		want: `[-9223372036854776000,9223372036854776000]`,
+		want: `[-9223372036854775808,9223372036854775807]`,
 	}, {
 		name: "Arrays/Uint",
 		in:   [2]uint64{0, math.MaxUint64},
-		want: `[0,18446744073709552000]`,
+		want: `[0,18446744073709551615]`,
 	}, {
 		name: "Arrays/Float",
 		in:   [2]float64{-math.MaxFloat64, +math.MaxFloat64},
@@ -337,8 +865,14 @@ func TestMarshal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := tt.opts.Marshal(EncodeOptions{}, tt.in)
-			(*RawValue)(&got).Canonicalize()
+			var indent string
+			if tt.multiline {
+				indent = "\t"
+			}
+			got, gotErr := tt.opts.Marshal(EncodeOptions{Indent: indent}, tt.in)
+			if tt.canonicalize {
+				(*RawValue)(&got).Canonicalize()
+			}
 			if string(got) != tt.want {
 				t.Errorf("Marshal output mismatch:\ngot  %s\nwant %s", got, tt.want)
 			}
@@ -1310,9 +1844,411 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: mapStringStringType},
 	}, {
+		name:  "Structs/Null",
+		inBuf: `null`,
+		inVal: addr(structAll{String: "something"}),
+		want:  addr(structAll{}),
+	}, {
+		name:  "Structs/Empty",
+		inBuf: `{}`,
+		inVal: addr(structAll{
+			String: "hello",
+			Map:    map[string]string{},
+			Slice:  []string{},
+		}),
+		want: addr(structAll{
+			String: "hello",
+			Map:    map[string]string{},
+			Slice:  []string{},
+		}),
+	}, {
+		name: "Structs/Normal",
+		inBuf: `{
+	"Bool": true,
+	"String": "hello",
+	"Bytes": "AQID",
+	"Int": -64,
+	"Uint": 64,
+	"Float": 3.14159,
+	"Map": {"key": "value"},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64,
+		"Uint": 64,
+		"Float": 3.14159
+	},
+	"StructMaps": {
+		"MapBool": {"": true},
+		"MapString": {"": "hello"},
+		"MapBytes": {"": "AQID"},
+		"MapInt": {"": -64},
+		"MapUint": {"": 64},
+		"MapFloat": {"": 3.14159}
+	},
+	"StructSlices": {
+		"SliceBool": [true],
+		"SliceString": ["hello"],
+		"SliceBytes": ["AQID"],
+		"SliceInt": [-64],
+		"SliceUint": [64],
+		"SliceFloat": [3.14159]
+	},
+	"Slice": ["fizz","buzz"],
+	"Array": ["goodbye"],
+	"Ptr": {},
+	"Interface": null
+}`,
+		inVal: new(structAll),
+		want: addr(structAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice: []string{"fizz", "buzz"},
+			Array: [1]string{"goodbye"},
+			Ptr:   new(structAll),
+		}),
+	}, {
+		name: "Structs/Merge",
+		inBuf: `{
+	"Bool": false,
+	"String": "goodbye",
+	"Int": -64,
+	"Float": 3.14159,
+	"Map": {"k2": "v2"},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64
+	},
+	"StructMaps": {
+		"MapBool": {"": true},
+		"MapString": {"": "hello"},
+		"MapBytes": {"": "AQID"},
+		"MapInt": {"": -64},
+		"MapUint": {"": 64},
+		"MapFloat": {"": 3.14159}
+	},
+	"StructSlices": {
+		"SliceString": ["hello"],
+		"SliceBytes": ["AQID"],
+		"SliceInt": [-64],
+		"SliceUint": [64]
+	},
+	"Slice": ["fizz","buzz"],
+	"Array": ["goodbye"],
+	"Ptr": {},
+	"Interface": {"k2":"v2"}
+}`,
+		inVal: addr(structAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Uint:   +64,
+			Float:  math.NaN(),
+			Map:    map[string]string{"k1": "v1"},
+			StructScalars: structScalars{
+				String: "hello",
+				Bytes:  make([]byte, 2, 4),
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:  map[string]bool{"": false},
+				MapBytes: map[string][]byte{"": []byte{}},
+				MapInt:   map[string]int64{"": 123},
+				MapFloat: map[string]float64{"": math.Inf(+1)},
+			},
+			StructSlices: structSlices{
+				SliceBool:  []bool{true},
+				SliceBytes: [][]byte{nil, nil},
+				SliceInt:   []int64{-123},
+				SliceUint:  []uint64{+123},
+				SliceFloat: []float64{3.14159},
+			},
+			Slice:     []string{"buzz", "fizz", "gizz"},
+			Array:     [1]string{"hello"},
+			Ptr:       new(structAll),
+			Interface: map[string]string{"k1": "v1"},
+		}),
+		want: addr(structAll{
+			Bool:   false,
+			String: "goodbye",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"k1": "v1", "k2": "v2"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Ptr:       new(structAll),
+			Interface: map[string]string{"k1": "v1", "k2": "v2"},
+		}),
+	}, {
+		name: "Structs/Stringified/Normal",
+		inBuf: `{
+	"Bool": true,
+	"String": "hello",
+	"Bytes": "AQID",
+	"Int": -64,
+	"Uint": 64,
+	"Float": 3.14159,
+	"Map": {"key": "value"},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64,
+		"Uint": 64,
+		"Float": 3.14159
+	},
+	"StructMaps": {
+		"MapBool": {"": true},
+		"MapString": {"": "hello"},
+		"MapBytes": {"": "AQID"},
+		"MapInt": {"": -64},
+		"MapUint": {"": 64},
+		"MapFloat": {"": 3.14159}
+	},
+	"StructSlices": {
+		"SliceBool": [true],
+		"SliceString": ["hello"],
+		"SliceBytes": ["AQID"],
+		"SliceInt": [-64],
+		"SliceUint": [64],
+		"SliceFloat": [3.14159]
+	},
+	"Slice": ["fizz","buzz"],
+	"Array": ["goodbye"],
+	"Ptr": {},
+	"Interface": null
+}`,
+		inVal: new(structStringifiedAll),
+		want: addr(structStringifiedAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,     // may be stringified
+			Uint:   +64,     // may be stringified
+			Float:  3.14159, // may be stringified
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,     // may be stringified
+				Uint:   +64,     // may be stringified
+				Float:  3.14159, // may be stringified
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},       // may be stringified
+				MapUint:   map[string]uint64{"": +64},      // may be stringified
+				MapFloat:  map[string]float64{"": 3.14159}, // may be stringified
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},       // may be stringified
+				SliceUint:   []uint64{+64},      // may be stringified
+				SliceFloat:  []float64{3.14159}, // may be stringified
+			},
+			Slice: []string{"fizz", "buzz"},
+			Array: [1]string{"goodbye"},
+			Ptr:   new(structStringifiedAll), // may be stringified
+		}),
+	}, {
+		name: "Structs/Stringified/String",
+		inBuf: `{
+	"Bool": true,
+	"String": "hello",
+	"Bytes": "AQID",
+	"Int": "-64",
+	"Uint": "64",
+	"Float": "3.14159",
+	"Map": {"key": "value"},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": "-64",
+		"Uint": "64",
+		"Float": "3.14159"
+	},
+	"StructMaps": {
+		"MapBool": {"": true},
+		"MapString": {"": "hello"},
+		"MapBytes": {"": "AQID"},
+		"MapInt": {"": "-64"},
+		"MapUint": {"": "64"},
+		"MapFloat": {"": "3.14159"}
+	},
+	"StructSlices": {
+		"SliceBool": [true],
+		"SliceString": ["hello"],
+		"SliceBytes": ["AQID"],
+		"SliceInt": ["-64"],
+		"SliceUint": ["64"],
+		"SliceFloat": ["3.14159"]
+	},
+	"Slice": ["fizz","buzz"],
+	"Array": ["goodbye"],
+	"Ptr": {},
+	"Interface": null
+}`,
+		inVal: new(structStringifiedAll),
+		want: addr(structStringifiedAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,     // may be stringified
+			Uint:   +64,     // may be stringified
+			Float:  3.14159, // may be stringified
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,     // may be stringified
+				Uint:   +64,     // may be stringified
+				Float:  3.14159, // may be stringified
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},       // may be stringified
+				MapUint:   map[string]uint64{"": +64},      // may be stringified
+				MapFloat:  map[string]float64{"": 3.14159}, // may be stringified
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceInt:    []int64{-64},       // may be stringified
+				SliceUint:   []uint64{+64},      // may be stringified
+				SliceFloat:  []float64{3.14159}, // may be stringified
+			},
+			Slice: []string{"fizz", "buzz"},
+			Array: [1]string{"goodbye"},
+			Ptr:   new(structStringifiedAll), // may be stringified
+		}),
+	}, {
+		name:  "Structs/UnexportedIgnored",
+		inBuf: `{"ignored":"unused"}`,
+		inVal: new(structUnexportedIgnored),
+		want:  new(structUnexportedIgnored),
+	}, {
+		name:  "Structs/IgnoredUnexportedEmbedded",
+		inBuf: `{"namedString":"unused"}`,
+		inVal: new(structIgnoredUnexportedEmbedded),
+		want:  new(structIgnoredUnexportedEmbedded),
+	}, {
+		name:  "Structs/WeirdNames",
+		inBuf: `{"":"empty",",":"comma","\"":"quote"}`,
+		inVal: new(structWeirdNames),
+		want:  addr(structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"}),
+	}, {
+		name:  "Structs/NoCase/Exact",
+		inBuf: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+		inVal: new(structNoCase),
+		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"}),
+	}, {
+		name:  "Structs/NoCase/Merge",
+		inBuf: `{"AaA":"AaA","aaa":"aaa","aAa":"aAa"}`,
+		inVal: new(structNoCase),
+		want:  addr(structNoCase{AaA: "aAa"}),
+	}, {
+		name:    "Structs/Invalid/Conflicting",
+		inBuf:   `{}`,
+		inVal:   addr(structConflicting{}),
+		want:    addr(structConflicting{}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structConflictingType, Err: errors.New("Go struct fields \"A\" and \"B\" conflict over JSON object name \"conflict\"")},
+	}, {
+		name:    "Structs/Invalid/NoneExported",
+		inBuf:   `{}`,
+		inVal:   addr(structNoneExported{}),
+		want:    addr(structNoneExported{}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
+	}, {
+		name:    "Structs/Invalid/MalformedTag",
+		inBuf:   `{}`,
+		inVal:   addr(structMalformedTag{}),
+		want:    addr(structMalformedTag{}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structMalformedTagType, Err: errors.New("Go struct field \"Malformed\" has malformed `json` tag: \"")},
+	}, {
+		name:    "Structs/Invalid/UnexportedTag",
+		inBuf:   `{}`,
+		inVal:   addr(structUnexportedTag{}),
+		want:    addr(structUnexportedTag{}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field \"unexported\" cannot have non-ignored `json` tag")},
+	}, {
+		name:    "Structs/Invalid/UnexportedEmbedded",
+		inBuf:   `{}`,
+		inVal:   addr(structUnexportedEmbedded{}),
+		want:    addr(structUnexportedEmbedded{}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field \"namedString\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
+	}, {
 		name:  "Slices/Null",
 		inBuf: `null`,
-		inVal: new([]string),
+		inVal: addr([]string{"something"}),
 		want:  addr([]string(nil)),
 	}, {
 		name:  "Slices/Bool",
@@ -1395,7 +2331,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  "Arrays/Null",
 		inBuf: `null`,
-		inVal: new([1]string),
+		inVal: addr([1]string{"something"}),
 		want:  addr([1]string{}),
 	}, {
 		name:  "Arrays/Bool",
@@ -1590,7 +2526,7 @@ func TestUnmarshal(t *testing.T) {
 		// where existing map entries were not merged into.
 		// See https://golang.org/issue/26946.
 		// See https://golang.org/issue/33993.
-		name:  "Interfaces/Merge",
+		name:  "Interfaces/Merge/Map",
 		inBuf: `{"k2":"v2"}`,
 		inVal: func() interface{} {
 			var vi interface{} = map[string]string{"k1": "v1"}
@@ -1600,8 +2536,28 @@ func TestUnmarshal(t *testing.T) {
 			var vi interface{} = map[string]string{"k1": "v1", "k2": "v2"}
 			return &vi
 		}(),
-		// TODO: Add merge test for non-pointer named primitive.
-		// TODO: Add merge test for non-pointer struct value.
+	}, {
+		name:  "Interfaces/Merge/Struct",
+		inBuf: `{"Array":["goodbye"]}`,
+		inVal: func() interface{} {
+			var vi interface{} = structAll{String: "hello"}
+			return &vi
+		}(),
+		want: func() interface{} {
+			var vi interface{} = structAll{String: "hello", Array: [1]string{"goodbye"}}
+			return &vi
+		}(),
+	}, {
+		name:  "Interfaces/Merge/NamedInt",
+		inBuf: `64`,
+		inVal: func() interface{} {
+			var vi interface{} = namedInt64(-64)
+			return &vi
+		}(),
+		want: func() interface{} {
+			var vi interface{} = namedInt64(+64)
+			return &vi
+		}(),
 	}}
 
 	for _, tt := range tests {
