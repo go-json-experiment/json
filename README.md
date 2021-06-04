@@ -67,6 +67,14 @@ the existing v1 `encoding/json` package.
 its addition to the standard library.
 5. Some other unforeseen outcome (among the infinite number of possibilities).
 
+## Development
+
+This module is primarily developed by [@dsnet](https://github.com/dsnet) and [@mvdan](https://github.com/mvdan)
+with feedback provided by [@rogpeppe](https://github.com/rogpeppe), [@ChrisHines](https://github.com/ChrisHines), and [@rsc](https://github.com/rsc).
+
+Discussion about semantics occur semi-regularly, where a
+[record of past meetings can be found here](https://docs.google.com/document/d/1rovrOTd-wTawGMPPlPuKhwXaYBg9VszTXR9AQQL5LfI/edit?usp=sharing).
+
 ## Design overview
 
 This package aims to provide a clean separation between syntax and semantics.
