@@ -54,6 +54,12 @@ func (m stateMachine) depth() int {
 	return len(m)
 }
 
+// depthLength reports the current nested depth and
+// the length of the last JSON object or array.
+func (m stateMachine) depthLength() (int, int) {
+	return len(m), m[len(m)-1].length()
+}
+
 // last returns a pointer to the last entry.
 func (m stateMachine) last() *stateEntry {
 	return &m[len(m)-1]

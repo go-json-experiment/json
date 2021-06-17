@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"reflect"
 	"strconv"
 	"testing"
@@ -141,7 +142,147 @@ type (
 		Ptr           *structOmitZeroAll `json:",omitzero"`
 		Interface     interface{}        `json:",omitzero"`
 	}
+
+	allMethods struct {
+		method string // the method that was called
+		value  []byte // the raw value to provide or store
+	}
+	allMethodsExceptJSONv2 struct {
+		allMethods
+		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
+		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
+	}
+	allMethodsExceptJSONv1 struct {
+		allMethods
+		MarshalJSON   struct{} // cancel out MarshalJSON method with collision
+		UnmarshalJSON struct{} // cancel out UnmarshalJSON method with collision
+	}
+	allMethodsExceptText struct {
+		allMethods
+		MarshalText   struct{} // cancel out MarshalText method with collision
+		UnmarshalText struct{} // cancel out UnmarshalText method with collision
+	}
+	onlyMethodJSONv2 struct {
+		allMethods
+		MarshalJSON   struct{} // cancel out MarshalJSON method with collision
+		UnmarshalJSON struct{} // cancel out UnmarshalJSON method with collision
+		MarshalText   struct{} // cancel out MarshalText method with collision
+		UnmarshalText struct{} // cancel out UnmarshalText method with collision
+	}
+	onlyMethodJSONv1 struct {
+		allMethods
+		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
+		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
+		MarshalText       struct{} // cancel out MarshalText method with collision
+		UnmarshalText     struct{} // cancel out UnmarshalText method with collision
+	}
+	onlyMethodText struct {
+		allMethods
+		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
+		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
+		MarshalJSON       struct{} // cancel out MarshalJSON method with collision
+		UnmarshalJSON     struct{} // cancel out UnmarshalJSON method with collision
+	}
+	structMethodJSONv2  struct{ value string }
+	structMethodJSONv1  struct{ value string }
+	structMethodText    struct{ value string }
+	marshalJSONv2Func   func(*Encoder, MarshalOptions) error
+	marshalJSONv1Func   func() ([]byte, error)
+	marshalTextFunc     func() ([]byte, error)
+	unmarshalJSONv2Func func(*Decoder, UnmarshalOptions) error
+	unmarshalJSONv1Func func([]byte) error
+	unmarshalTextFunc   func([]byte) error
 )
+
+func (p *allMethods) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
+	if got, want := "MarshalNextJSON", p.method; got != want {
+		return fmt.Errorf("called wrong method: got %v, want %v", got, want)
+	}
+	return enc.WriteValue(p.value)
+}
+func (p *allMethods) MarshalJSON() ([]byte, error) {
+	if got, want := "MarshalJSON", p.method; got != want {
+		return nil, fmt.Errorf("called wrong method: got %v, want %v", got, want)
+	}
+	return p.value, nil
+}
+func (p *allMethods) MarshalText() ([]byte, error) {
+	if got, want := "MarshalText", p.method; got != want {
+		return nil, fmt.Errorf("called wrong method: got %v, want %v", got, want)
+	}
+	return p.value, nil
+}
+
+func (p *allMethods) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
+	p.method = "UnmarshalNextJSON"
+	val, err := dec.ReadValue()
+	p.value = val
+	return err
+}
+func (p *allMethods) UnmarshalJSON(val []byte) error {
+	p.method = "UnmarshalJSON"
+	p.value = val
+	return nil
+}
+func (p *allMethods) UnmarshalText(val []byte) error {
+	p.method = "UnmarshalText"
+	p.value = val
+	return nil
+}
+
+func (s structMethodJSONv2) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
+	return enc.WriteToken(String(s.value))
+}
+func (s *structMethodJSONv2) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
+	tok, err := dec.ReadToken()
+	if err != nil {
+		return err
+	}
+	if k := tok.Kind(); k != '"' {
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: structMethodJSONv2Type}
+	}
+	s.value = tok.String()
+	return nil
+}
+
+func (s structMethodJSONv1) MarshalJSON() ([]byte, error) {
+	return appendString(nil, s.value, false, nil)
+}
+func (s *structMethodJSONv1) UnmarshalJSON(b []byte) error {
+	if k := RawValue(b).Kind(); k != '"' {
+		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: structMethodJSONv1Type}
+	}
+	b, _ = unescapeString(nil, b)
+	s.value = string(b)
+	return nil
+}
+
+func (s structMethodText) MarshalText() ([]byte, error) {
+	return []byte(s.value), nil
+}
+func (s *structMethodText) UnmarshalText(b []byte) error {
+	s.value = string(b)
+	return nil
+}
+
+func (f marshalJSONv2Func) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
+	return f(enc, mo)
+}
+func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
+	return f()
+}
+func (f marshalTextFunc) MarshalText() ([]byte, error) {
+	return f()
+}
+func (f unmarshalJSONv2Func) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
+	return f(dec, uo)
+}
+func (f unmarshalJSONv1Func) UnmarshalJSON(b []byte) error {
+	return f(b)
+}
+func (f unmarshalTextFunc) UnmarshalText(b []byte) error {
+	return f(b)
+}
 
 var (
 	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
@@ -168,6 +309,22 @@ var (
 	structMalformedTagType       = reflect.TypeOf((*structMalformedTag)(nil)).Elem()
 	structUnexportedTagType      = reflect.TypeOf((*structUnexportedTag)(nil)).Elem()
 	structUnexportedEmbeddedType = reflect.TypeOf((*structUnexportedEmbedded)(nil)).Elem()
+	allMethodsType               = reflect.TypeOf((*allMethods)(nil)).Elem()
+	allMethodsExceptJSONv2Type   = reflect.TypeOf((*allMethodsExceptJSONv2)(nil)).Elem()
+	allMethodsExceptJSONv1Type   = reflect.TypeOf((*allMethodsExceptJSONv1)(nil)).Elem()
+	allMethodsExceptTextType     = reflect.TypeOf((*allMethodsExceptText)(nil)).Elem()
+	onlyMethodJSONv2Type         = reflect.TypeOf((*onlyMethodJSONv2)(nil)).Elem()
+	onlyMethodJSONv1Type         = reflect.TypeOf((*onlyMethodJSONv1)(nil)).Elem()
+	onlyMethodTextType           = reflect.TypeOf((*onlyMethodText)(nil)).Elem()
+	structMethodJSONv2Type       = reflect.TypeOf((*structMethodJSONv2)(nil)).Elem()
+	structMethodJSONv1Type       = reflect.TypeOf((*structMethodJSONv1)(nil)).Elem()
+	structMethodTextType         = reflect.TypeOf((*structMethodText)(nil)).Elem()
+	marshalJSONv2FuncType        = reflect.TypeOf((*marshalJSONv2Func)(nil)).Elem()
+	marshalJSONv1FuncType        = reflect.TypeOf((*marshalJSONv1Func)(nil)).Elem()
+	marshalTextFuncType          = reflect.TypeOf((*marshalTextFunc)(nil)).Elem()
+	unmarshalJSONv2FuncType      = reflect.TypeOf((*unmarshalJSONv2Func)(nil)).Elem()
+	unmarshalJSONv1FuncType      = reflect.TypeOf((*unmarshalJSONv1Func)(nil)).Elem()
+	unmarshalTextFuncType        = reflect.TypeOf((*unmarshalTextFunc)(nil)).Elem()
 	ioReaderType                 = reflect.TypeOf((*io.Reader)(nil)).Elem()
 	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
 )
@@ -871,6 +1028,145 @@ func TestMarshal(t *testing.T) {
 		name: "Interfaces/Nil/NonEmpty",
 		in:   [1]io.Reader{nil},
 		want: `[null]`,
+	}, {
+		name: "Methods/NilPointer",
+		in:   struct{ X *allMethods }{X: (*allMethods)(nil)}, // method should not be called
+		want: `{"X":null}`,
+	}, {
+		// NOTE: Fixes https://github.com/dominikh/go-tools/issues/975.
+		name: "Methods/NilInterface",
+		in:   struct{ X MarshalerV2 }{X: (*allMethods)(nil)}, // method should not be called
+		want: `{"X":null}`,
+	}, {
+		name: "Methods/AllMethods",
+		in:   struct{ X *allMethods }{X: &allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/AllMethodsExceptJSONv2",
+		in:   struct{ X *allMethodsExceptJSONv2 }{X: &allMethodsExceptJSONv2{allMethods: allMethods{method: "MarshalJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/AllMethodsExceptJSONv1",
+		in:   struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/AllMethodsExceptText",
+		in:   struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/OnlyMethodJSONv2",
+		in:   struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/OnlyMethodJSONv1",
+		in:   struct{ X *onlyMethodJSONv1 }{X: &onlyMethodJSONv1{allMethods: allMethods{method: "MarshalJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/OnlyMethodText",
+		in:   struct{ X *onlyMethodText }{X: &onlyMethodText{allMethods: allMethods{method: "MarshalText", value: []byte(`hello`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		name: "Methods/IP",
+		in:   net.IPv4(192, 168, 0, 100),
+		want: `"192.168.0.100"`,
+	}, {
+		// NOTE: Fixes https://golang.org/issue/46516.
+		name: "Methods/Anonymous",
+		in:   struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		want: `{"X":"hello"}`,
+	}, {
+		// NOTE: Fixes https://golang.org/issue/22967.
+		name: "Methods/Addressable",
+		in: struct {
+			V allMethods
+			M map[string]allMethods
+			I interface{}
+		}{
+			V: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)},
+			M: map[string]allMethods{"K": {method: "MarshalNextJSON", value: []byte(`"hello"`)}},
+			I: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)},
+		},
+		want: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
+	}, {
+		// NOTE: Fixes https://golang.org/issue/29732.
+		name:         "Methods/MapKey/JSONv2",
+		in:           map[structMethodJSONv2]string{{"k1"}: "v1", {"k2"}: "v2"},
+		want:         `{"k1":"v1","k2":"v2"}`,
+		canonicalize: true,
+	}, {
+		// NOTE: Fixes https://golang.org/issue/29732.
+		name:         "Methods/MapKey/JSONv1",
+		in:           map[structMethodJSONv1]string{{"k1"}: "v1", {"k2"}: "v2"},
+		want:         `{"k1":"v1","k2":"v2"}`,
+		canonicalize: true,
+	}, {
+		name:         "Methods/MapKey/Text",
+		in:           map[structMethodText]string{{"k1"}: "v1", {"k2"}: "v2"},
+		want:         `{"k1":"v1","k2":"v2"}`,
+		canonicalize: true,
+	}, {
+		name: "Methods/Invalid/JSONv2/Error",
+		in: marshalJSONv2Func(func(*Encoder, MarshalOptions) error {
+			return errors.New("some error")
+		}),
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("some error")},
+	}, {
+		name: "Methods/Invalid/JSONv2/TooFew",
+		in: marshalJSONv2Func(func(*Encoder, MarshalOptions) error {
+			return nil // do nothing
+		}),
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
+	}, {
+		name: "Methods/Invalid/JSONv2/TooMany",
+		in: marshalJSONv2Func(func(enc *Encoder, mo MarshalOptions) error {
+			enc.WriteToken(Null)
+			enc.WriteToken(Null)
+			return nil
+		}),
+		want:    `nullnull`,
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
+	}, {
+		name: "Methods/Invalid/JSONv1/Error",
+		in: marshalJSONv1Func(func() ([]byte, error) {
+			return nil, errors.New("some error")
+		}),
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv1FuncType, Err: errors.New("some error")},
+	}, {
+		name: "Methods/Invalid/JSONv1/Syntax",
+		in: marshalJSONv1Func(func() ([]byte, error) {
+			return []byte("invalid"), nil
+		}),
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError('i', "at start of value")},
+	}, {
+		name: "Methods/Invalid/Text/Error",
+		in: marshalTextFunc(func() ([]byte, error) {
+			return nil, errors.New("some error")
+		}),
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: errors.New("some error")},
+	}, {
+		name: "Methods/Invalid/Text/UTF8",
+		in: marshalTextFunc(func() ([]byte, error) {
+			return []byte("\xde\xad\xbe\xef"), nil
+		}),
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntaxError{str: "invalid UTF-8 within string"}},
+	}, {
+		name: "Methods/Invalid/MapKey/JSONv2/Syntax",
+		in: map[interface{}]string{
+			addr(marshalJSONv2Func(func(enc *Encoder, mo MarshalOptions) error {
+				return enc.WriteToken(Null)
+			})): "invalid",
+		},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errMissingName},
+	}, {
+		name: "Methods/Invalid/MapKey/JSONv1/Syntax",
+		in: map[interface{}]string{
+			addr(marshalJSONv1Func(func() ([]byte, error) {
+				return []byte(`null`), nil
+			})): "invalid",
+		},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName},
 	}}
 
 	for _, tt := range tests {
@@ -2567,13 +2863,159 @@ func TestUnmarshal(t *testing.T) {
 			var vi interface{} = namedInt64(+64)
 			return &vi
 		}(),
+	}, {
+		name:  "Methods/NilPointer/Null",
+		inBuf: `{"X":null}`,
+		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
+		want:  addr(struct{ X *allMethods }{X: (*allMethods)(nil)}), // method should not be called
+	}, {
+		name:  "Methods/NilPointer/Value",
+		inBuf: `{"X":"value"}`,
+		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
+		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
+	}, {
+		name:  "Methods/NilInterface/Null",
+		inBuf: `{"X":null}`,
+		inVal: addr(struct{ X MarshalerV2 }{X: (*allMethods)(nil)}),
+		want:  addr(struct{ X MarshalerV2 }{X: nil}), // interface value itself is nil'd out
+	}, {
+		name:  "Methods/NilInterface/Value",
+		inBuf: `{"X":"value"}`,
+		inVal: addr(struct{ X MarshalerV2 }{X: (*allMethods)(nil)}),
+		want:  addr(struct{ X MarshalerV2 }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
+	}, {
+		name:  "Methods/AllMethods",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *allMethods }),
+		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}),
+	}, {
+		name:  "Methods/AllMethodsExceptJSONv2",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *allMethodsExceptJSONv2 }),
+		want:  addr(struct{ X *allMethodsExceptJSONv2 }{X: &allMethodsExceptJSONv2{allMethods: allMethods{method: "UnmarshalJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		name:  "Methods/AllMethodsExceptJSONv1",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *allMethodsExceptJSONv1 }),
+		want:  addr(struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		name:  "Methods/AllMethodsExceptText",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *allMethodsExceptText }),
+		want:  addr(struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		name:  "Methods/OnlyMethodJSONv2",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *onlyMethodJSONv2 }),
+		want:  addr(struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		name:  "Methods/OnlyMethodJSONv1",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *onlyMethodJSONv1 }),
+		want:  addr(struct{ X *onlyMethodJSONv1 }{X: &onlyMethodJSONv1{allMethods: allMethods{method: "UnmarshalJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		name:  "Methods/OnlyMethodText",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X *onlyMethodText }),
+		want:  addr(struct{ X *onlyMethodText }{X: &onlyMethodText{allMethods: allMethods{method: "UnmarshalText", value: []byte(`hello`)}}}),
+	}, {
+		name:  "Methods/IP",
+		inBuf: `"192.168.0.100"`,
+		inVal: new(net.IP),
+		want:  addr(net.IPv4(192, 168, 0, 100)),
+	}, {
+		// NOTE: Fixes https://golang.org/issue/46516.
+		name:  "Methods/Anonymous",
+		inBuf: `{"X":"hello"}`,
+		inVal: new(struct{ X struct{ allMethods } }),
+		want:  addr(struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+	}, {
+		// NOTE: Fixes https://golang.org/issue/22967.
+		name:  "Methods/Addressable",
+		inBuf: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
+		inVal: addr(struct {
+			V allMethods
+			M map[string]allMethods
+			I interface{}
+		}{
+			I: allMethods{}, // need to initialize with concrete value
+		}),
+		want: addr(struct {
+			V allMethods
+			M map[string]allMethods
+			I interface{}
+		}{
+			V: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
+			M: map[string]allMethods{"K": {method: "UnmarshalNextJSON", value: []byte(`"hello"`)}},
+			I: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
+		}),
+	}, {
+		// NOTE: Fixes https://golang.org/issue/29732.
+		name:  "Methods/MapKey/JSONv2",
+		inBuf: `{"k1":"v1b","k2":"v2"}`,
+		inVal: addr(map[structMethodJSONv2]string{{"k1"}: "v1a", {"k3"}: "v3"}),
+		want:  addr(map[structMethodJSONv2]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
+	}, {
+		// NOTE: Fixes https://golang.org/issue/29732.
+		name:  "Methods/MapKey/JSONv1",
+		inBuf: `{"k1":"v1b","k2":"v2"}`,
+		inVal: addr(map[structMethodJSONv1]string{{"k1"}: "v1a", {"k3"}: "v3"}),
+		want:  addr(map[structMethodJSONv1]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
+	}, {
+		name:  "Methods/MapKey/Text",
+		inBuf: `{"k1":"v1b","k2":"v2"}`,
+		inVal: addr(map[structMethodText]string{{"k1"}: "v1a", {"k3"}: "v3"}),
+		want:  addr(map[structMethodText]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
+	}, {
+		name:  "Methods/Invalid/JSONv2/Error",
+		inBuf: `{}`,
+		inVal: addr(unmarshalJSONv2Func(func(*Decoder, UnmarshalOptions) error {
+			return errors.New("some error")
+		})),
+		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("some error")},
+	}, {
+		name: "Methods/Invalid/JSONv2/TooFew",
+		inVal: addr(unmarshalJSONv2Func(func(*Decoder, UnmarshalOptions) error {
+			return nil // do nothing
+		})),
+		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
+	}, {
+		name:  "Methods/Invalid/JSONv2/TooMany",
+		inBuf: `{}{}`,
+		inVal: addr(unmarshalJSONv2Func(func(dec *Decoder, uo UnmarshalOptions) error {
+			dec.ReadValue()
+			dec.ReadValue()
+			return nil
+		})),
+		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
+	}, {
+		name:  "Methods/Invalid/JSONv1/Error",
+		inBuf: `{}`,
+		inVal: addr(unmarshalJSONv1Func(func([]byte) error {
+			return errors.New("some error")
+		})),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalJSONv1FuncType, Err: errors.New("some error")},
+	}, {
+		name:  "Methods/Invalid/Text/Error",
+		inBuf: `"value"`,
+		inVal: addr(unmarshalTextFunc(func([]byte) error {
+			return errors.New("some error")
+		})),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: unmarshalTextFuncType, Err: errors.New("some error")},
+	}, {
+		name:  "Methods/Invalid/Text/Syntax",
+		inBuf: `{}`,
+		inVal: addr(unmarshalTextFunc(func([]byte) error {
+			panic("should not be called")
+		})),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalTextFuncType, Err: errors.New("JSON value must be string type")},
 	}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.inVal
 			gotErr := tt.opts.Unmarshal(DecodeOptions{}, []byte(tt.inBuf), got)
-			if !reflect.DeepEqual(got, tt.want) {
+			if !reflect.DeepEqual(got, tt.want) && tt.want != nil {
 				t.Errorf("Unmarshal output mismatch:\ngot  %v\nwant %v", got, tt.want)
 			}
 			if !reflect.DeepEqual(gotErr, tt.wantErr) {
