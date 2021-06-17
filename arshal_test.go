@@ -329,11 +329,6 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
 	}, {
-		// TODO: In v1 json, floating point keys were rejected since the
-		// initial release could not canonically serialize floats.
-		// Even if it could, there's no guarantee that we receive canonically
-		// serialized floats when decoding. Should we allow this?
-		// @mvdan feels probably not.
 		name: "Maps/ValidKey/Float",
 		in:   map[float64]string{3.14159: "value"},
 		want: `{"3.14159":"value"}`,
@@ -1765,7 +1760,6 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(map[namedUint64]uint),
 		want:  addr(map[namedUint64]uint{0: 0, 1: 1, 2: 2, 3: 3}),
 	}, {
-		// TODO: Should we forbid floating point keys?
 		name:  "Maps/ValidKey/Float",
 		inBuf: `{"1.234":1.234,"12.34":12.34,"123.4":123.4}`,
 		inVal: new(map[float64]float64),
