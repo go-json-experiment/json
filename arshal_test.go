@@ -289,6 +289,21 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `["3.4028235e+38","1.7976931348623157e+308","64.64"]`,
 	}, {
+		name:    "Floats/Invalid/NaN",
+		opts:    MarshalOptions{StringifyNumbers: true},
+		in:      math.NaN(),
+		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.NaN())},
+	}, {
+		name:    "Floats/Invalid/PositiveInfinity",
+		opts:    MarshalOptions{StringifyNumbers: true},
+		in:      math.Inf(+1),
+		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(+1))},
+	}, {
+		name:    "Floats/Invalid/NegativeInfinity",
+		opts:    MarshalOptions{StringifyNumbers: true},
+		in:      math.Inf(-1),
+		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
+	}, {
 		name:    "Maps/InvalidKey/Bool",
 		in:      map[bool]string{false: "value"},
 		want:    `{`,

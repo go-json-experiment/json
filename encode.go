@@ -765,11 +765,8 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 // See https://golang.org/issue/14135.
 //
 // The output is identical to ECMA-262, 6th edition, section 7.1.12.1 and with
-// RFC 8785, section 3.2.2.3 for 64-bit floating-point numbers except for
-// -0, which is formatted as -0 instead of just 0,
-// NaN, which is formatted as the JSON string "NaN",
-// +Inf, which is formatted as the JSON string "Infinity", and
-// -Inf, which is formatted as the JSON string "-Infinity".
+// RFC 8785, section 3.2.2.3 for 64-bit floating-point numbers except for -0,
+// which is formatted as -0 instead of just 0.
 //
 // For 32-bit floating-point numbers,
 // the output is a 32-bit equivalent of the algorithm.
@@ -777,15 +774,6 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 func appendNumber(dst []byte, v float64, bits int) []byte {
 	if bits == 32 {
 		v = float64(float32(v))
-	}
-
-	switch {
-	case math.IsNaN(v):
-		return append(dst, `"NaN"`...)
-	case math.IsInf(v, +1):
-		return append(dst, `"Infinity"`...)
-	case math.IsInf(v, -1):
-		return append(dst, `"-Infinity"`...)
 	}
 
 	abs := math.Abs(v)

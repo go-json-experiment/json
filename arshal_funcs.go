@@ -461,11 +461,16 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 func makeFloatArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
+		fv := va.Float()
+		if math.IsNaN(fv) || math.IsInf(fv, 0) {
+			err := fmt.Errorf("invalid value: %v", fv)
+			return &SemanticError{action: "marshal", GoType: t, Err: err}
+		}
 		val := enc.UnusedBuffer()
 		if mo.StringifyNumbers {
 			val = append(val, '"')
 		}
-		val = appendNumber(val, va.Float(), t.Bits())
+		val = appendNumber(val, fv, t.Bits())
 		if mo.StringifyNumbers {
 			val = append(val, '"')
 		}

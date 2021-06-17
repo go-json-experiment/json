@@ -484,13 +484,10 @@ func TestAppendNumber(t *testing.T) {
 	}{
 		{math.E, "2.7182817", "2.718281828459045"},
 		{math.Pi, "3.1415927", "3.141592653589793"},
-		{math.NaN(), `"NaN"`, `"NaN"`},
-		{math.Inf(+1), `"Infinity"`, `"Infinity"`},
-		{math.Inf(-1), `"-Infinity"`, `"-Infinity"`},
 		{math.SmallestNonzeroFloat32, "1e-45", "1.401298464324817e-45"},
 		{math.SmallestNonzeroFloat64, "0", "5e-324"},
 		{math.MaxFloat32, "3.4028235e+38", "3.4028234663852886e+38"},
-		{math.MaxFloat64, `"Infinity"`, "1.7976931348623157e+308"},
+		{math.MaxFloat64, "", "1.7976931348623157e+308"},
 		{0.1111111111111111, "0.11111111", "0.1111111111111111"},
 		{0.2222222222222222, "0.22222222", "0.2222222222222222"},
 		{0.3333333333333333, "0.33333334", "0.3333333333333333"},
@@ -507,13 +504,11 @@ func TestAppendNumber(t *testing.T) {
 		{math.Float64frombits(0x8000000000000000), "-0", "-0"}, // differs from RFC 8785
 		{math.Float64frombits(0x0000000000000001), "0", "5e-324"},
 		{math.Float64frombits(0x8000000000000001), "-0", "-5e-324"},
-		{math.Float64frombits(0x7fefffffffffffff), `"Infinity"`, "1.7976931348623157e+308"},
-		{math.Float64frombits(0xffefffffffffffff), `"-Infinity"`, "-1.7976931348623157e+308"},
+		{math.Float64frombits(0x7fefffffffffffff), "", "1.7976931348623157e+308"},
+		{math.Float64frombits(0xffefffffffffffff), "", "-1.7976931348623157e+308"},
 		{math.Float64frombits(0x4340000000000000), "9007199000000000", "9007199254740992"},
 		{math.Float64frombits(0xc340000000000000), "-9007199000000000", "-9007199254740992"},
 		{math.Float64frombits(0x4430000000000000), "295147900000000000000", "295147905179352830000"},
-		{math.Float64frombits(0x7fffffffffffffff), `"NaN"`, `"NaN"`},
-		{math.Float64frombits(0x7ff0000000000000), `"Infinity"`, `"Infinity"`},
 		{math.Float64frombits(0x44b52d02c7e14af5), "1e+23", "9.999999999999997e+22"},
 		{math.Float64frombits(0x44b52d02c7e14af6), "1e+23", "1e+23"},
 		{math.Float64frombits(0x44b52d02c7e14af7), "1e+23", "1.0000000000000001e+23"},
@@ -546,10 +541,10 @@ func TestAppendNumber(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			if got32 := string(appendNumber(nil, tt.in, 32)); got32 != tt.want32 {
+			if got32 := string(appendNumber(nil, tt.in, 32)); got32 != tt.want32 && tt.want32 != "" {
 				t.Errorf("appendNumber(nil, %v, 32) = %v, want %v", tt.in, got32, tt.want32)
 			}
-			if got64 := string(appendNumber(nil, tt.in, 64)); got64 != tt.want64 {
+			if got64 := string(appendNumber(nil, tt.in, 64)); got64 != tt.want64 && tt.want64 != "" {
 				t.Errorf("appendNumber(nil, %v, 64) = %v, want %v", tt.in, got64, tt.want64)
 			}
 		})
