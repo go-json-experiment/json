@@ -737,7 +737,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		tok, err := dec.ReadToken()
 		if err != nil {
-			return nil
+			return err
 		}
 		k := tok.Kind()
 		switch k {

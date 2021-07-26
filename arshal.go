@@ -116,8 +116,7 @@ func UnmarshalFull(in io.Reader, out interface{}) error {
 // See UnmarshalNext for details about the conversion of JSON into a Go value.
 func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out interface{}) error {
 	dec := do.newDecoder(nil, in) // TODO: Pool this.
-	err := uo.UnmarshalNext(dec, out)
-	return err
+	return uo.unmarshalFull(dec, out)
 }
 
 // UnmarshalFull deserializes a Go value from an io.Reader according to the
@@ -128,8 +127,17 @@ func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out interface{
 func (uo UnmarshalOptions) UnmarshalFull(do DecodeOptions, in io.Reader, out interface{}) error {
 	// NOTE: We cannot pool the intermediate buffer since it leaks to in.
 	dec := do.NewDecoder(in)
-	err := uo.UnmarshalNext(dec, out)
-	return err
+	return uo.unmarshalFull(dec, out)
+}
+func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out interface{}) error {
+	switch err := uo.UnmarshalNext(in, out); err {
+	case nil:
+		return in.checkEOF()
+	case io.EOF:
+		return io.ErrUnexpectedEOF
+	default:
+		return err
+	}
 }
 
 // UnmarshalNext deserializes the next JSON value into a Go value according to

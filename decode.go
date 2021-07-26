@@ -527,6 +527,18 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 	return d.buf[pos-n : pos : pos], nil
 }
 
+// checkEOF verifies that the input has no more data.
+func (d *Decoder) checkEOF() error {
+	switch pos, err := d.consumeWhitespace(d.prevEnd); err {
+	case nil:
+		return newInvalidCharacterError(d.buf[pos], "after top-level value")
+	case io.ErrUnexpectedEOF:
+		return nil
+	default:
+		return err
+	}
+}
+
 // consumeWhitespace consumes all whitespace starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the last whitespace.
 // If it returns nil, there is guaranteed to at least be one unread byte.

@@ -1214,6 +1214,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    "unchanged",
 		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New("value must be passed as a non-nil pointer reference")},
 	}, {
+		name:    "Bools/TrailingJunk",
+		inBuf:   `falsetrue`,
+		inVal:   addr(true),
+		want:    addr(false),
+		wantErr: newInvalidCharacterError('t', "after top-level value"),
+	}, {
 		name:  "Bools/Null",
 		inBuf: `null`,
 		inVal: addr(true),
@@ -2520,6 +2526,18 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `{"AaA":"AaA","aaa":"aaa","aAa":"aAa"}`,
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "aAa"}),
+	}, {
+		name:    "Structs/Invalid/ErrUnexpectedEOF",
+		inBuf:   ``,
+		inVal:   addr(structAll{}),
+		want:    addr(structAll{}),
+		wantErr: io.ErrUnexpectedEOF,
+	}, {
+		name:    "Structs/Invalid/NestedErrUnexpectedEOF",
+		inBuf:   `{"Ptr":`,
+		inVal:   addr(structAll{}),
+		want:    addr(structAll{Ptr: new(structAll)}),
+		wantErr: io.ErrUnexpectedEOF,
 	}, {
 		name:    "Structs/Invalid/Conflicting",
 		inBuf:   `{}`,
