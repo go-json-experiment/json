@@ -447,6 +447,8 @@ func (d *Decoder) ReadToken() (Token, error) {
 // The value is stripped of any leading or trailing whitespace.
 // The returned value is only valid until the next Peek or Read call and
 // may not be mutated while the Decoder remains in use.
+// If the decoder is currently at the end token for an object or array,
+// then it reports a SyntaxError and the internal state remains unchanged.
 // It returns io.EOF if there are no more values.
 func (d *Decoder) ReadValue() (RawValue, error) {
 	d.invalidatePreviousRead()

@@ -301,8 +301,8 @@ func (e *Encoder) WriteToken(t Token) error {
 // parses it to ensure that it is syntactically valid and reformats it
 // according to how the Encoder is configured to format whitespace and strings.
 //
-// The provided token kind must be consistent with the JSON grammar
-// (see examples on Encoder.WriteToken). If the provided token is invalid,
+// The provided value kind must be consistent with the JSON grammar
+// (see examples on Encoder.WriteToken). If the provided value is invalid,
 // then it reports a SyntaxError and the internal state remains unchanged.
 func (e *Encoder) WriteValue(v RawValue) error {
 	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
