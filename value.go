@@ -262,7 +262,7 @@ func (v RawValue) reorderObjects(d *Decoder) {
 // The inputs must be valid UTF-8, otherwise this may panic.
 func lessUTF16(x, y []byte) bool {
 	// NOTE: This is an optimized, allocation-free implementation
-	// of lessUTF16Simple in value_test.go. FuzzLessUTF16 verifies that the
+	// of lessUTF16Simple in fuzz_test.go. FuzzLessUTF16 verifies that the
 	// two implementations agree on the result of comparing any two strings.
 
 	isUTF16Self := func(r rune) bool {
