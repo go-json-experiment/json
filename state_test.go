@@ -131,7 +131,7 @@ func TestStateMachine(t *testing.T) {
 			appendTokens(`}]`),
 			appendToken{'}', errMismatchDelim}, // appending '}' that mismatches preceding '['
 			appendTokens(`]`),
-			appendToken{']', errMismatchDelim}, // appending ']' without precdeding '['
+			appendToken{']', errMismatchDelim}, // appending ']' without preceding '['
 		},
 	}}
 

@@ -14,7 +14,7 @@ in v2 to be named the same and have the same signature.
 Behaviorally, we should aim for 95% to 99% backwards compatibility.
 We do not aim for 100% compatibility since we want the freedom to break
 certain behaviors that are now considered to have been a mistake.
-We may provide options that can bring the v2 implemention to 100% compatibility,
+We may provide options that can bring the v2 implementation to 100% compatibility,
 but it will not be the default.
 
 * **More flexible:** There is a
@@ -40,7 +40,7 @@ which may result in subtle bugs (see [#36225](https://golang.org/issue/36225)).
 * **v1 and v2 maintainability:** Since the v1 implementation must stay forever,
 it would be beneficial if v1 could be implemented under the hood with v2,
 allowing for less maintenance burden in the future. This probably implies that
-behaviorial changes in v2 relative to v1 need to be exposed as options.
+behavioral changes in v2 relative to v1 need to be exposed as options.
 
 * **Avoid unsafe:** Standard library packages generally avoid the use of
 package `unsafe` even if it could provide a performance boost.
@@ -78,7 +78,7 @@ Discussion about semantics occur semi-regularly, where a
 ## Design overview
 
 This package aims to provide a clean separation between syntax and semantics.
-Syntax deals with the structural represention of JSON (as specified in
+Syntax deals with the structural representation of JSON (as specified in
 [RFC 7159](https://tools.ietf.org/html/rfc7159),
 [RFC 7493](https://tools.ietf.org/html/rfc7493),
 [RFC 8259](https://tools.ietf.org/html/rfc8259), and

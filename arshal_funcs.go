@@ -78,7 +78,7 @@ type MarshalerV2 interface {
 // A nil *Marshalers is equivalent to an empty list.
 type Marshalers struct{}
 
-// NewMarshalers constructs a list of marshal functons to override
+// NewMarshalers constructs a list of marshal functions to override
 // the marshal behavior for specific types.
 //
 // Each input must be a function with one the following signatures:
@@ -131,7 +131,7 @@ type UnmarshalerV2 interface {
 // A nil *Unmarshalers is equivalent to an empty list.
 type Unmarshalers struct{}
 
-// NewUnmarshalers constructs a list of unmarshal functons to override
+// NewUnmarshalers constructs a list of unmarshal functions to override
 // the unmarshal behavior for specific types.
 //
 // Each input must be a function with one the following signatures:

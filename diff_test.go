@@ -70,8 +70,8 @@ func TestCaseSensitivity(t *testing.T) {
 				},
 				"FieldC": {
 					"baz":    true, // exact match for explicitly specified JSON name
-					"Baz":    true, // v2 is case-insentive due to `nocase` tag
-					"BAZ":    true, // v2 is case-insentive due to `nocase` tag
+					"Baz":    true, // v2 is case-insensitive due to `nocase` tag
+					"BAZ":    true, // v2 is case-insensitive due to `nocase` tag
 					"bar":    false,
 					"FieldA": false,
 					"FieldC": false, // explicit JSON name means that the Go field name is not used for matching
@@ -106,7 +106,7 @@ func TestCaseSensitivity(t *testing.T) {
 // transition to/from languages with different type systems.
 //
 // Furthermore, consider two related Go types: string and []byte.
-// It's an assemtric oddity of v1 that zero values of string and []byte marshal
+// It's an asymmetric oddity of v1 that zero values of string and []byte marshal
 // as an empty JSON string for the former, while the latter as a JSON null.
 // The non-zero values of those types always marshal as JSON strings.
 //

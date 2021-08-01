@@ -38,7 +38,7 @@ import (
 //	  responsible for updated Decoder.prevStart and Decoder.prevEnd.
 //
 //	• For performance, much of the implementation uses the pattern of calling
-//	  the inlineable consumeXXX functions first, and if more work is neccessary,
+//	  the inlineable consumeXXX functions first, and if more work is necessary,
 //	  then it calls the slower Decoder.consumeXXX methods.
 //	  TODO: Revisit this pattern if the Go compiler provides finer control
 //	  over exactly which calls are inlined or not.
@@ -962,7 +962,7 @@ func consumeSimpleString(b []byte) (n int) {
 // consumeString consumes the next JSON string per RFC 7159, section 7.
 // If validateUTF8 is false, then this allows the presence of invalid UTF-8
 // characters within the string itself.
-// It reports the number of bytes consumed and whether an error was encounted.
+// It reports the number of bytes consumed and whether an error was encountered.
 // If the input appears truncated, it returns io.ErrUnexpectedEOF.
 func consumeString(b []byte, validateUTF8 bool) (n int, err error) {
 	return consumeStringResumable(b, 0, validateUTF8)
@@ -1188,7 +1188,7 @@ const (
 )
 
 // consumeNumber consumes the next JSON number per RFC 7159, section 6.
-// It reports the number of bytes consumed and whether an error was encounted.
+// It reports the number of bytes consumed and whether an error was encountered.
 // If the input appears truncated, it returns io.ErrUnexpectedEOF.
 //
 // Note that JSON numbers are not self-terminating.

@@ -79,7 +79,7 @@ func TestParseTagOptions(t *testing.T) {
 		}{},
 		wantOpts: fieldOptions{name: "-"},
 	}, {
-		name: "LatinPunctiationName",
+		name: "LatinPunctuationName",
 		in: struct {
 			V int `json:"$%-/"`
 		}{},

@@ -912,16 +912,16 @@ func TestConsumeString(t *testing.T) {
 		{"\"x\xed\xba\xad\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
 		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
 		{`"¢"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"¢"`[:3], false, 3, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminiating quote
+		{`"¢"`[:3], false, 3, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
 		{`"¢"`[:4], false, 4, "¢", nil, nil},
 		{`"€"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
 		{`"€"`[:3], false, 3, "\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"€"`[:4], false, 4, "€", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminiating quote
+		{`"€"`[:4], false, 4, "€", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
 		{`"€"`[:5], false, 5, "€", nil, nil},
 		{`"𐍈"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
 		{`"𐍈"`[:3], false, 3, "\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
 		{`"𐍈"`[:4], false, 4, "\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:5], false, 5, "𐍈", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminiating quote
+		{`"𐍈"`[:5], false, 5, "𐍈", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
 		{`"𐍈"`[:6], false, 6, "𐍈", nil, nil},
 		{`"x\`, false, 2, "x", io.ErrUnexpectedEOF, nil},
 		{`"x\"`, false, 4, "x\"", io.ErrUnexpectedEOF, nil},
