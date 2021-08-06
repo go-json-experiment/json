@@ -232,7 +232,7 @@ var slowStreamingDecoderTestdata = []struct {
 	{"LargeString", []byte(`"` + strings.Repeat(" ", 4<<10) + `"`)},
 	{"LargeNumber", []byte("0." + strings.Repeat("0", 4<<10))},
 	{"LargeWhitespace/Null", []byte(ws + "null" + ws)},
-	{"LargeWhitespace/Object", []byte(ws + "{" + ws + `"name"` + ws + ":" + ws + `"value"` + ws + "," + ws + `"name"` + ws + ":" + ws + `"value"` + ws + "}" + ws)},
+	{"LargeWhitespace/Object", []byte(ws + "{" + ws + `"name1"` + ws + ":" + ws + `"value"` + ws + "," + ws + `"name2"` + ws + ":" + ws + `"value"` + ws + "}" + ws)},
 	{"LargeWhitespace/Array", []byte(ws + "[" + ws + `"value"` + ws + "," + ws + `"value"` + ws + "]" + ws)},
 }
 

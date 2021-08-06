@@ -69,8 +69,13 @@ its addition to the standard library.
 
 ## Development
 
-This module is primarily developed by [@dsnet](https://github.com/dsnet) and [@mvdan](https://github.com/mvdan)
-with feedback provided by [@rogpeppe](https://github.com/rogpeppe), [@ChrisHines](https://github.com/ChrisHines), and [@rsc](https://github.com/rsc).
+This module is primarily developed by
+[@dsnet](https://github.com/dsnet) and
+[@mvdan](https://github.com/mvdan)
+with feedback provided by
+[@rogpeppe](https://github.com/rogpeppe),
+[@ChrisHines](https://github.com/ChrisHines), and
+[@rsc](https://github.com/rsc).
 
 Discussion about semantics occur semi-regularly, where a
 [record of past meetings can be found here](https://docs.google.com/document/d/1rovrOTd-wTawGMPPlPuKhwXaYBg9VszTXR9AQQL5LfI/edit?usp=sharing).
@@ -79,14 +84,15 @@ Discussion about semantics occur semi-regularly, where a
 
 This package aims to provide a clean separation between syntax and semantics.
 Syntax deals with the structural representation of JSON (as specified in
+[RFC 4627](https://tools.ietf.org/html/rfc4627),
 [RFC 7159](https://tools.ietf.org/html/rfc7159),
 [RFC 7493](https://tools.ietf.org/html/rfc7493),
 [RFC 8259](https://tools.ietf.org/html/rfc8259), and
 [RFC 8785](https://tools.ietf.org/html/rfc8785)).
 Semantics deals with the meaning of syntactic data as usable application data.
 
-The `Encoder` and `Decoder` types are streaming tokenizers concerned with
-the packing or parsing of JSON data. They operate on `Token` and `Value` types
+The `Encoder` and `Decoder` types are streaming tokenizers concerned with the
+packing or parsing of JSON data. They operate on `Token` and `RawValue` types
 which represent the common data structures that are representable in JSON.
 `Encoder` and `Decoder` do not aim to provide any interpretation of the data.
 

@@ -17,7 +17,7 @@ import (
 
 // EncodeOptions configures how JSON encoding operates.
 // The zero value is equivalent to the default settings,
-// which is compliant with RFC 8259.
+// which is compliant with both RFC 7493 and RFC 8259.
 type EncodeOptions struct {
 	// TODO: Rename as MarshalOptions?
 
@@ -28,11 +28,12 @@ type EncodeOptions struct {
 	// that is typically appended after every top-level JSON value.
 	omitTopLevelNewline bool
 
-	// RejectDuplicateNames specifies that JSON objects must not contain
-	// duplicate member names to ensure that the output is compliant with
-	// RFC 7493, section 2.3. Use of the feature incurs some performance and
-	// memory cost needed to keep track of all member names processed so far.
-	RejectDuplicateNames bool
+	// AllowDuplicateNames specifies that JSON objects may contain
+	// duplicate member names. Disabling the duplicate name check may provide
+	// computational and performance benefits, but breaks compliance with
+	// RFC 7493, section 2.3. The output will still be compliant with RFC 8259,
+	// which leaves the handling of duplicate names as unspecified behavior.
+	AllowDuplicateNames bool
 
 	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
 	// which will be mangled as the Unicode replacement character, U+FFFD.
@@ -246,7 +247,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
 			break
 		}
-		if e.options.RejectDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
+		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
 			err = &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			break
 		}
@@ -261,7 +262,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		if err = e.tokens.pushObject(); err != nil {
 			break
 		}
-		if e.options.RejectDuplicateNames {
+		if !e.options.AllowDuplicateNames {
 			e.namespaces.push()
 		}
 	case '}':
@@ -269,7 +270,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		if err = e.tokens.popObject(); err != nil {
 			break
 		}
-		if e.options.RejectDuplicateNames {
+		if !e.options.AllowDuplicateNames {
 			e.namespaces.push()
 		}
 	case '[':
@@ -341,7 +342,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	case 'n', 'f', 't':
 		err = e.tokens.appendLiteral()
 	case '"':
-		if e.options.RejectDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
+		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
 			err = &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			break
 		}
@@ -462,7 +463,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 
 	var err error
 	var names *objectNamespace
-	if e.options.RejectDuplicateNames {
+	if !e.options.AllowDuplicateNames {
 		e.namespaces.push()
 		defer e.namespaces.pop()
 		names = e.namespaces.last()
@@ -489,7 +490,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 		if err != nil {
 			return b, v, err
 		}
-		if e.options.RejectDuplicateNames && !names.insert(b[n0:]) {
+		if !e.options.AllowDuplicateNames && !names.insert(b[n0:]) {
 			return b, v, &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
 		}
 

@@ -339,12 +339,12 @@ func addr(v interface{}) interface{} {
 func TestMarshal(t *testing.T) {
 	tests := []struct {
 		name    string
-		opts    MarshalOptions
+		mopts   MarshalOptions
+		eopts   EncodeOptions
 		in      interface{}
 		want    string
 		wantErr error
 
-		multiline    bool // format the output as multilined?
 		canonicalize bool // canonicalize the output before comparing?
 	}{{
 		name: "Nil",
@@ -359,10 +359,10 @@ func TestMarshal(t *testing.T) {
 		in:   []namedBool{false, true},
 		want: `[false,true]`,
 	}, {
-		name: "Bools/NotStringified",
-		opts: MarshalOptions{StringifyNumbers: true},
-		in:   []bool{false, true},
-		want: `[false,true]`,
+		name:  "Bools/NotStringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
+		in:    []bool{false, true},
+		want:  `[false,true]`,
 	}, {
 		name: "Strings",
 		in:   []string{"", "hello", "世界"},
@@ -384,10 +384,10 @@ func TestMarshal(t *testing.T) {
 		in:   []namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
-		name: "Bytes/NotStringified",
-		opts: MarshalOptions{StringifyNumbers: true},
-		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
-		want: `["","","AQ==","AQI=","AQID"]`,
+		name:  "Bytes/NotStringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
+		in:    [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
+		want:  `["","","AQ==","AQI=","AQID"]`,
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a slice of uints.
@@ -413,8 +413,8 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[0,-128,-32768,-2147483648,-9223372036854775808,-6464]`,
 	}, {
-		name: "Ints/Stringified",
-		opts: MarshalOptions{StringifyNumbers: true},
+		name:  "Ints/Stringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []interface{}{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
@@ -426,8 +426,8 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[0,255,65535,4294967295,18446744073709551615,6464]`,
 	}, {
-		name: "Uints/Stringified",
-		opts: MarshalOptions{StringifyNumbers: true},
+		name:  "Uints/Stringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []interface{}{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
@@ -439,25 +439,25 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[3.4028235e+38,1.7976931348623157e+308,64.64]`,
 	}, {
-		name: "Floats/Stringified",
-		opts: MarshalOptions{StringifyNumbers: true},
+		name:  "Floats/Stringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []interface{}{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `["3.4028235e+38","1.7976931348623157e+308","64.64"]`,
 	}, {
 		name:    "Floats/Invalid/NaN",
-		opts:    MarshalOptions{StringifyNumbers: true},
+		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.NaN(),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.NaN())},
 	}, {
 		name:    "Floats/Invalid/PositiveInfinity",
-		opts:    MarshalOptions{StringifyNumbers: true},
+		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.Inf(+1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(+1))},
 	}, {
 		name:    "Floats/Invalid/NegativeInfinity",
-		opts:    MarshalOptions{StringifyNumbers: true},
+		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.Inf(-1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
 	}, {
@@ -553,7 +553,8 @@ func TestMarshal(t *testing.T) {
 		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
 		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 	}, {
-		name: "Structs/Normal",
+		name:  "Structs/Normal",
+		eopts: EncodeOptions{Indent: "\t"},
 		in: structAll{
 			Bool:   true,
 			String: "hello",
@@ -591,7 +592,6 @@ func TestMarshal(t *testing.T) {
 			Ptr:       new(structAll),
 			Interface: (*structAll)(nil),
 		},
-		multiline: true,
 		want: `{
 	"Bool": true,
 	"String": "hello",
@@ -699,7 +699,8 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name: "Structs/Stringified",
+		name:  "Structs/Stringified",
+		eopts: EncodeOptions{Indent: "\t"},
 		in: structStringifiedAll{
 			Bool:   true,
 			String: "hello",
@@ -737,7 +738,6 @@ func TestMarshal(t *testing.T) {
 			Ptr:       new(structStringifiedAll), // should be stringified
 			Interface: (*structStringifiedAll)(nil),
 		},
-		multiline: true,
 		want: `{
 	"Bool": true,
 	"String": "hello",
@@ -849,7 +849,8 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
-		name: "Structs/OmitZero/NonZero",
+		name:  "Structs/OmitZero/NonZero",
+		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitZeroAll{
 			Bool:          true,                                   // not omitted since true is non-zero
 			String:        " ",                                    // not omitted since non-empty string is non-zero
@@ -866,7 +867,6 @@ func TestMarshal(t *testing.T) {
 			Ptr:           new(structOmitZeroAll),                 // not omitted since pointer is non-zero (even if all fields of the struct value are zero)
 			Interface:     (*structOmitZeroAll)(nil),              // not omitted since interface value is non-zero (even if interface value is a nil pointer)
 		},
-		multiline: true,
 		want: `{
 	"Bool": true,
 	"String": " ",
@@ -1171,11 +1171,7 @@ func TestMarshal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var indent string
-			if tt.multiline {
-				indent = "\t"
-			}
-			got, gotErr := tt.opts.Marshal(EncodeOptions{Indent: indent}, tt.in)
+			got, gotErr := tt.mopts.Marshal(tt.eopts, tt.in)
 			if tt.canonicalize {
 				(*RawValue)(&got).Canonicalize()
 			}
@@ -1192,7 +1188,8 @@ func TestMarshal(t *testing.T) {
 func TestUnmarshal(t *testing.T) {
 	tests := []struct {
 		name    string
-		opts    UnmarshalOptions
+		dopts   DecodeOptions
+		uopts   UnmarshalOptions
 		inBuf   string
 		inVal   interface{}
 		want    interface{}
@@ -1236,14 +1233,14 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr([]namedBool{false, false, true}),
 	}, {
 		name:    "Bools/Invalid/StringifiedFalse",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"false"`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    "Bools/Invalid/StringifiedTrue",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"true"`,
 		inVal:   addr(true),
 		want:    addr(true),
@@ -1348,7 +1345,7 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr([]namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
 		name:  "Bytes/NotStringified",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `[null,"","AQ==","AQI=","AQID"]`,
 		inVal: new([][]byte),
 		want:  addr([][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
@@ -1658,13 +1655,13 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedInt64(-6464)),
 	}, {
 		name:  "Ints/Stringified",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"-6464"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
 		name:  "Ints/Escaped",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u002d\u0036\u0034\u0036\u0034"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
@@ -1687,14 +1684,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/StringifiedFraction",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/StringifiedExponent",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
@@ -1707,14 +1704,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Ints/Invalid/OverflowSyntax",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Ints/Invalid/Whitespace",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
@@ -1824,13 +1821,13 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedUint64(6464)),
 	}, {
 		name:  "Uints/Stringified",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"6464"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
 	}, {
 		name:  "Uints/Escaped",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u0036\u0034\u0036\u0034"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
@@ -1860,14 +1857,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/StringifiedFraction",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/StringifiedExponent",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
@@ -1880,14 +1877,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    "Uints/Invalid/OverflowSyntax",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Uints/Invalid/Whitespace",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
@@ -1958,40 +1955,40 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedFloat64(64.64)),
 	}, {
 		name:  "Floats/Stringified",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"64.64"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
 		name:  "Floats/Escaped",
-		opts:  UnmarshalOptions{StringifyNumbers: true},
+		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u0036\u0034\u002e\u0036\u0034"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
 		name:    "Floats/Invalid/NaN",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"NaN"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/Infinity",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"Infinity"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/Whitespace",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1 "`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    "Floats/Invalid/GoSyntax",
-		opts:    UnmarshalOptions{StringifyNumbers: true},
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1p-2"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
@@ -2122,6 +2119,7 @@ func TestUnmarshal(t *testing.T) {
 		// where existing map entries were not merged into.
 		// See https://golang.org/issue/31924.
 		name:  "Maps/Merge",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"k1":{"k2":"v2"},"k2":{"k1":"v1"},"k2":{"k2":"v2"}}`,
 		inVal: addr(map[string]map[string]string{
 			"k1": {"k1": "v1"},
@@ -3032,7 +3030,7 @@ func TestUnmarshal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.inVal
-			gotErr := tt.opts.Unmarshal(DecodeOptions{}, []byte(tt.inBuf), got)
+			gotErr := tt.uopts.Unmarshal(tt.dopts, []byte(tt.inBuf), got)
 			if !reflect.DeepEqual(got, tt.want) && tt.want != nil {
 				t.Errorf("Unmarshal output mismatch:\ngot  %v\nwant %v", got, tt.want)
 			}

@@ -535,8 +535,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "ValidObject/DuplicateNames",
-	opts: DecodeOptions{RejectDuplicateNames: true},
+	name: "ValidObject/UniqueNames",
 	in:   `{"0":0,"1":1} `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil},
@@ -548,8 +547,20 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0,"1":1}`),
 }, {
+	name: "ValidObject/DuplicateNames",
+	opts: DecodeOptions{AllowDuplicateNames: true},
+	in:   `{"0":0,"0":0} `,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil},
+		{'"', String("0"), nil},
+		{'0', Uint(0), nil},
+		{'"', String("0"), nil},
+		{'0', Uint(0), nil},
+		{'}', ObjectEnd, nil},
+	},
+	wantOffset: len(`{"0":0,"0":0}`),
+}, {
 	name: "InvalidObject/DuplicateNames",
-	opts: DecodeOptions{RejectDuplicateNames: true},
 	in:   `{"0":0,"1":1,"0":0} `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, (&SyntaxError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},

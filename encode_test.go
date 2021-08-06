@@ -315,8 +315,7 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: "{}\n",
 }, {
-	name: "ValidObject/DuplicateNames",
-	opts: EncodeOptions{RejectDuplicateNames: true},
+	name: "ValidObject/UniqueNames",
 	calls: []encoderMethodCall{
 		{ObjectStart, nil},
 		{String("0"), nil},
@@ -328,8 +327,20 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: `{"0":0,"1":1}` + "\n" + `{"0":0,"1":1}` + "\n",
 }, {
+	name: "ValidObject/DuplicateNames",
+	opts: EncodeOptions{AllowDuplicateNames: true},
+	calls: []encoderMethodCall{
+		{ObjectStart, nil},
+		{String("0"), nil},
+		{Uint(0), nil},
+		{String("0"), nil},
+		{Uint(0), nil},
+		{ObjectEnd, nil},
+		{RawValue(` { "0" : 0 , "0" : 0 } `), nil},
+	},
+	wantOut: `{"0":0,"0":0}` + "\n" + `{"0":0,"0":0}` + "\n",
+}, {
 	name: "InvalidObject/DuplicateNames",
-	opts: EncodeOptions{RejectDuplicateNames: true},
 	calls: []encoderMethodCall{
 		{ObjectStart, nil},
 		{String("0"), nil},

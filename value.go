@@ -24,16 +24,17 @@ import (
 //	• an entire JSON array (e.g., [1,2,3] )
 //
 // RawValue can represent entire array or object values, while Token cannot.
+// RawValue may contain leading and/or trailing whitespace.
 type RawValue []byte
 
 // IsValid reports whether the raw JSON value is syntactically valid
-// according to RFC 8259, section 2.
+// according to RFC 7493.
 //
-// It does not verify whether an object has duplicate names or
-// whether numbers are representable within the limits
+// It verifies whether the input is properly encoded as UTF-8,
+// that escape sequences within strings decode to valid Unicode codepoints, and
+// that all names in each object are unique.
+// It does not verify whether numbers are representable within the limits
 // of any common numeric type (e.g., float64, int64, or uint64).
-// It does verify that the input is properly encoded as UTF-8 and
-// that escape sequences within strings decode to valid Unicode codepoints.
 func (v RawValue) IsValid() bool {
 	d := new(Decoder) // TODO: Pool this.
 	d.state.init()
@@ -47,7 +48,7 @@ func (v RawValue) IsValid() bool {
 //
 // It does not reformat JSON strings to use any other representation.
 // It is guaranteed to succeed if the input is valid.
-// If the value is already compact, then the buffer is not mutated.
+// If the value is already compacted, then the buffer is not mutated.
 func (v *RawValue) Compact() error {
 	return v.reformat(false, false, "", "")
 }
@@ -81,10 +82,7 @@ func (v *RawValue) Indent(prefix, indent string) error {
 // beyond ±2⁵³ will lose their precision. It is recommended that
 // int64 and uint64 data types be represented as a JSON string.
 //
-// It is possible that Canonicalize reports an error even if the value is valid
-// according to IsValid (which only validates against RFC 8259).
-// JCS only operates on input that is compliant with RFC 7493,
-// which requires that JSON objects must not have duplicate member names.
+// It is guaranteed to succeed if the input is valid.
 // If the value is already canonicalized, then the buffer is not mutated.
 func (v *RawValue) Canonicalize() error {
 	return v.reformat(true, false, "", "")
@@ -129,7 +127,7 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 
 	if canonical {
 		e.options.AllowInvalidUTF8 = false    // per RFC 8785, section 3.2.4
-		e.options.RejectDuplicateNames = true // per RFC 8785, section 3.1
+		e.options.AllowDuplicateNames = false // per RFC 8785, section 3.1
 		e.options.canonicalizeNumbers = true  // per RFC 8785, section 3.2.2.3
 		e.options.EscapeRune = nil            // per RFC 8785, section 3.2.2.2
 		e.options.multiline = false           // per RFC 8785, section 3.2.1
@@ -141,6 +139,7 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
 		}
 		e.options.AllowInvalidUTF8 = true
+		e.options.AllowDuplicateNames = true
 		e.options.preserveRawStrings = true
 		e.options.multiline = multiline // in case indent is empty
 		e.options.IndentPrefix = prefix

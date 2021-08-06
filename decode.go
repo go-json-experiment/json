@@ -45,15 +45,16 @@ import (
 
 // DecodeOptions configures how JSON decoding operates.
 // The zero value is equivalent to the default settings,
-// which is compliant with RFC 8259.
+// which is compliant with both RFC 7493 and RFC 8259.
 type DecodeOptions struct {
 	// TODO: Rename as UnmarshalOptions?
 
-	// RejectDuplicateNames specifies that JSON objects must not contain
-	// duplicate member names to ensure that the input is compliant with
-	// RFC 7493, section 2.3. Use of the feature incurs some performance and
-	// memory cost needed to keep track of all member names processed so far.
-	RejectDuplicateNames bool
+	// AllowDuplicateNames specifies that JSON objects may contain
+	// duplicate member names. Disabling the duplicate name check may provide
+	// computational and performance benefits, but breaks compliance with
+	// RFC 7493, section 2.3. The input will still be compliant with RFC 8259,
+	// which leaves the handling of duplicate names as unspecified behavior.
+	AllowDuplicateNames bool
 
 	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
 	// which will be mangled as the Unicode replacement character, U+FFFD.
@@ -369,7 +370,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if d.options.RejectDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
+		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
 			err = &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of string
 		}
@@ -403,7 +404,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if err = d.tokens.pushObject(); err != nil {
 			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
 		}
-		if d.options.RejectDuplicateNames {
+		if !d.options.AllowDuplicateNames {
 			d.namespaces.push()
 		}
 		pos += 1
@@ -414,7 +415,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if err = d.tokens.popObject(); err != nil {
 			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
 		}
-		if d.options.RejectDuplicateNames {
+		if !d.options.AllowDuplicateNames {
 			d.namespaces.pop()
 		}
 		pos += 1
@@ -499,7 +500,7 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 	case 'n', 't', 'f':
 		err = d.tokens.appendLiteral()
 	case '"':
-		if d.options.RejectDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
+		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
 			err = &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 			break
 		}
@@ -691,7 +692,7 @@ func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
 func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 	var n int
 	var names *objectNamespace
-	if d.options.RejectDuplicateNames {
+	if !d.options.AllowDuplicateNames {
 		d.namespaces.push()
 		defer d.namespaces.pop()
 		names = d.namespaces.last()
@@ -734,7 +735,7 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 		} else {
 			pos += n
 		}
-		if d.options.RejectDuplicateNames && !names.insert(d.buf[pos-n:pos]) {
+		if !d.options.AllowDuplicateNames && !names.insert(d.buf[pos-n:pos]) {
 			return pos - n, &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 		}
 

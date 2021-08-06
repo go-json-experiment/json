@@ -35,21 +35,30 @@
 //
 // Specifications
 //
-// Relevant specifications include RFC 7159, RFC 7493, RFC 8259, and RFC 8785.
-// By default, this package operates on RFC 8259, but can be configured
-// to operate according to the other RFC specifications.
-// Each RFC is generally a stricter subset of another RFC.
+// Relevant specifications include RFC 4627, RFC 7159, RFC 7493, RFC 8259,
+// and RFC 8785. Each RFC is generally a stricter subset of another RFC.
 // In increasing order of strictness:
 //
-//	• RFC 7159 does not require (but recommends) the use of UTF-8,
-//	  and also does not require that object names be unique.
+//	• RFC 4627 and RFC 7159 do not require (but recommend) the use of UTF-8
+//	  and also do not require (but recommend) that object names be unique.
 //	• RFC 8259 requires the use of UTF-8,
-//	  but does not require that object names be unique.
-//	• RFC 7493 requires the use of UTF-8,
+//	  but does not require (but recommends) that object names be unique.
+//	• RFC 7493 requires the use of UTF-8
 //	  and also requires that object names be unique.
 //	• RFC 8785 defines a canonical representation. It requires the use of UTF-8
 //	  and also requires that object names be unique and in a specific ordering.
 //	  It specifies exactly how strings and numbers must be formatted.
+//
+// The primary difference between RFC 4627 and RFC 7159 is that the former
+// restricted top-level values to only JSON objects and arrays, while
+// RFC 7159 and subsequent RFCs permit top-level values to additionally be
+// JSON nulls, booleans, strings, or numbers.
+//
+// By default, this package operates on RFC 7493, but can be configured
+// to operate according to the other RFC specifications.
+// RFC 7493 is a stricter subset of RFC 8259 and fully compliant with it.
+// In particular, it makes specific choices about behavior that RFC 8259
+// leaves as undefined in order to ensure greater interoperability.
 //
 // JSON produced by Marshal functionality is not guaranteed to be deterministic.
 // To obtain more stable JSON output, consider using RawValue.Canonicalize.

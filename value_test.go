@@ -108,7 +108,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 }, {
 	name:          "DuplicateNames",
 	in:            ` { "0" : 0 , "1" : 1 , "0" : 0 }`,
-	wantValid:     true, // uses RFC 8259 as the definition; which does not check for object uniqueness
+	wantValid:     false, // uses RFC 7493 as the definition; which does check for object uniqueness
 	wantCompacted: `{"0":0,"1":1,"0":0}`,
 	wantIndented: `{
 	    "0": 0,
