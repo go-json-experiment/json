@@ -177,12 +177,18 @@ func FuzzRawValueReformat(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, b []byte) {
-		validRFC7159 := isValid(DecodeOptions{AllowInvalidUTF8: true, RejectDuplicateNames: false}, b)
-		validRFC8259 := isValid(DecodeOptions{AllowInvalidUTF8: false, RejectDuplicateNames: false}, b)
-		validRFC7493 := isValid(DecodeOptions{AllowInvalidUTF8: false, RejectDuplicateNames: true}, b)
+		validRFC7159 := isValid(DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true}, b)
+		validRFC8259 := isValid(DecodeOptions{AllowInvalidUTF8: false, AllowDuplicateNames: true}, b)
+		validRFC7493 := isValid(DecodeOptions{AllowInvalidUTF8: false, AllowDuplicateNames: false}, b)
+		switch {
+		case !validRFC7159 && validRFC8259:
+			t.Errorf("invalid input per RFC 7159 implies invalid per RFC 8259")
+		case !validRFC8259 && validRFC7493:
+			t.Errorf("invalid input per RFC 8259 implies invalid per RFC 7493")
+		}
 
 		gotValid := RawValue(b).IsValid()
-		wantValid := validRFC8259
+		wantValid := validRFC7493
 		if gotValid != wantValid {
 			t.Errorf("RawValue.IsValid = %v, want %v", gotValid, wantValid)
 		}
