@@ -41,19 +41,19 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			v int `json:"Hello"`
 		}{},
-		wantErr: errors.New("unexported Go struct field \"v\" cannot have non-ignored `json` tag"),
+		wantErr: errors.New("unexported Go struct field v cannot have non-ignored `json:\"Hello\"` tag"),
 	}, {
 		name: "UnexportedEmpty",
 		in: struct {
 			v int `json:""`
 		}{},
-		wantErr: errors.New("unexported Go struct field \"v\" cannot have non-ignored `json` tag"),
+		wantErr: errors.New("unexported Go struct field v cannot have non-ignored `json:\"\"` tag"),
 	}, {
 		name: "EmbedUnexported",
 		in: struct {
 			unexported
 		}{},
-		wantErr: errors.New("embedded Go struct field \"unexported\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
+		wantErr: errors.New("embedded Go struct field unexported of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
 	}, {
 		name: "Ignored",
 		in: struct {
@@ -67,15 +67,15 @@ func TestParseTagOptions(t *testing.T) {
 		}{},
 		wantErr: errIgnoredField,
 	}, {
-		name: "DashCommaName",
+		name: "DashComma",
 		in: struct {
 			V int `json:"-,"`
 		}{},
-		wantOpts: fieldOptions{name: "-"},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '-' at start of option (expecting Unicode letter or single quote)"),
 	}, {
 		name: "QuotedDashName",
 		in: struct {
-			V int `json:"\"-\""`
+			V int `json:"'-'"`
 		}{},
 		wantOpts: fieldOptions{name: "-"},
 	}, {
@@ -83,11 +83,23 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"$%-/"`
 		}{},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '$' at start of option (expecting Unicode letter or single quote)"),
+	}, {
+		name: "QuotedLatinPunctuationName",
+		in: struct {
+			V int `json:"'$%-/'"`
+		}{},
 		wantOpts: fieldOptions{name: "$%-/"},
 	}, {
 		name: "LatinDigitsName",
 		in: struct {
 			V int `json:"0123456789"`
+		}{},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '0' at start of option (expecting Unicode letter or single quote)"),
+	}, {
+		name: "QuotedLatinDigitsName",
+		in: struct {
+			V int `json:"'0123456789'"`
 		}{},
 		wantOpts: fieldOptions{name: "0123456789"},
 	}, {
@@ -111,7 +123,7 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: "QuotedGreekName",
 		in: struct {
-			V string `json:"\"Ελλάδα\""`
+			V string `json:"'Ελλάδα'"`
 		}{},
 		wantOpts: fieldOptions{name: "Ελλάδα"},
 	}, {
@@ -123,57 +135,63 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: "QuotedChineseName",
 		in: struct {
-			V string `json:"\"世界\""`
+			V string `json:"'世界'"`
 		}{},
 		wantOpts: fieldOptions{name: "世界"},
 	}, {
-		name: "PercentSlashName", // https://golang.org/issue/2718
+		name: "PercentSlashName",
 		in: struct {
 			V int `json:"text/html%"`
 		}{},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '/' before next option (expecting ',')"),
+	}, {
+		name: "QuotedPercentSlashName",
+		in: struct {
+			V int `json:"'text/html%'"`
+		}{},
 		wantOpts: fieldOptions{name: "text/html%"},
 	}, {
-		name: "PunctuationName", // https://golang.org/issue/3546
+		name: "PunctuationName",
 		in: struct {
 			V string `json:"!#$%&()*+-./:;<=>?@[]^_{|}~ "`
+		}{},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '!' at start of option (expecting Unicode letter or single quote)"),
+	}, {
+		name: "QuotedPunctuationName",
+		in: struct {
+			V string `json:"'!#$%&()*+-./:;<=>?@[]^_{|}~ '"`
 		}{},
 		wantOpts: fieldOptions{name: "!#$%&()*+-./:;<=>?@[]^_{|}~ "},
 	}, {
 		name: "EmptyName",
 		in: struct {
-			V int `json:"\"\""`
+			V int `json:"''"`
 		}{},
 		wantOpts: fieldOptions{name: ""},
 	}, {
 		name: "SpaceName",
 		in: struct {
-			V int `json:" "`
+			V int `json:"' '"`
 		}{},
 		wantOpts: fieldOptions{name: " "},
 	}, {
-		name: "QuotedSpaceName",
+		name: "CommaQuotes",
 		in: struct {
-			V int `json:"\" \""`
+			V int `json:"',\\'\"\\\"'"`
 		}{},
-		wantOpts: fieldOptions{name: " "},
-	}, {
-		name: "CommaQuote",
-		in: struct {
-			V int `json:"\",\\\"\""`
-		}{},
-		wantOpts: fieldOptions{name: `,"`},
+		wantOpts: fieldOptions{name: `,'""`},
 	}, {
 		name: "SingleComma",
 		in: struct {
 			V int `json:","`
 		}{},
-		wantOpts: fieldOptions{name: `V`},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: unexpected EOF"),
 	}, {
 		name: "SuperfluousCommas",
 		in: struct {
 			V int `json:",,,,\"\",,inline,unknown,,,,"`
 		}{},
-		wantOpts: fieldOptions{name: "V", inline: true, unknown: true},
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character ',' at start of option (expecting Unicode letter or single quote)"),
 	}, {
 		name: "NoCaseOption",
 		in: struct {
@@ -217,24 +235,45 @@ func TestParseTagOptions(t *testing.T) {
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", string: true},
 	}, {
-		name: "FormatOption",
+		name: "FormatOptionEqual",
 		in: struct {
 			FieldName int `json:",format=fizzbuzz"`
+		}{},
+		wantErr: errors.New("Go struct field FieldName is missing value for `json` tag option format"),
+	}, {
+		name: "FormatOptionColon",
+		in: struct {
+			FieldName int `json:",format:fizzbuzz"`
 		}{},
 		wantOpts: fieldOptions{
 			name:   "FieldName",
 			format: "fizzbuzz",
 		},
 	}, {
+		name: "FormatOptionQuoted",
+		in: struct {
+			FieldName int `json:",format:'2006-01-02'"`
+		}{},
+		wantOpts: fieldOptions{
+			name:   "FieldName",
+			format: "2006-01-02",
+		},
+	}, {
+		name: "FormatOptionInvalid",
+		in: struct {
+			FieldName int `json:",format:'2006-01-02"`
+		}{},
+		wantErr: errors.New("Go struct field FieldName has malformed value for `json` tag option format: single-quoted string not terminated: '2006-01-0..."),
+	}, {
 		name: "DuplicateFormatOptions",
 		in: struct {
-			FieldName int `json:",format=alpha,format=bravo"`
+			FieldName int `json:",format:alpha,format:bravo"`
 		}{},
-		wantErr: errors.New("Go struct field \"FieldName\" has duplicate appearance of `json` tag option \"format\""),
+		wantErr: errors.New("Go struct field FieldName has duplicate appearance of `json` tag option format"),
 	}, {
 		name: "AllOptions",
 		in: struct {
-			FieldName int `json:",nocase,inline,unknown,omitzero,omitempty,string,format=format"`
+			FieldName int `json:",nocase,inline,unknown,omitzero,omitempty,string,format:format"`
 		}{},
 		wantOpts: fieldOptions{
 			name:      "FieldName",
@@ -249,34 +288,21 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: "AllOptionsQuoted",
 		in: struct {
-			FieldName int `json:",\"nocase\",\"inline\",\"unknown\",\"omitzero\",\"omitempty\",\"string\",\"format=format\""`
+			FieldName int `json:",'nocase','inline','unknown','omitzero','omitempty','string','format':'format'"`
 		}{},
-		wantOpts: fieldOptions{
-			name:      "FieldName",
-			nocase:    true,
-			inline:    true,
-			unknown:   true,
-			omitzero:  true,
-			omitempty: true,
-			string:    true,
-			format:    "format",
-		},
+		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `json` tag option 'nocase'; specify nocase instead"),
 	}, {
 		name: "AllOptionsCaseSensitive",
 		in: struct {
-			FieldName int `json:",NOCASE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT=FORMAT"`
+			FieldName int `json:",NOCASE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT:FORMAT"`
 		}{},
-		wantOpts: fieldOptions{
-			name: "FieldName",
-		},
+		wantErr: errors.New("Go struct field FieldName has invalid appearance of `json` tag option NOCASE; specify nocase instead"),
 	}, {
 		name: "AllOptionsSpaceSensitive",
 		in: struct {
-			FieldName int `json:", nocase , inline , unknown , omitzero , omitempty , string , format=format "`
+			FieldName int `json:", nocase , inline , unknown , omitzero , omitempty , string , format:format "`
 		}{},
-		wantOpts: fieldOptions{
-			name: "FieldName",
-		},
+		wantErr: errors.New("Go struct field FieldName has malformed `json` tag: invalid character ' ' at start of option (expecting Unicode letter or single quote)"),
 	}, {
 		name: "UnknownOption",
 		in: struct {
@@ -290,15 +316,21 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: "MalformedQuotedString/MissingQuote",
 		in: struct {
-			FieldName int `json:"\"hello,string"`
+			FieldName int `json:"'hello,string"`
 		}{},
-		wantErr: errors.New("Go struct field \"FieldName\" has malformed `json` tag: \"hello,string"),
+		wantErr: errors.New("Go struct field FieldName has malformed `json` tag: single-quoted string not terminated: 'hello,str..."),
 	}, {
 		name: "MalformedQuotedString/MissingComma",
 		in: struct {
-			FieldName int `json:"\"hello\"inline,string"`
+			FieldName int `json:"'hello'inline,string"`
 		}{},
-		wantErr: errors.New("Go struct field \"FieldName\" has malformed `json` tag: \"hello\"inline,string"),
+		wantErr: errors.New("Go struct field FieldName has malformed `json` tag: invalid character 'i' before next option (expecting ',')"),
+	}, {
+		name: "MalformedQuotedString/InvalidEscape",
+		in: struct {
+			FieldName int `json:"'hello\\u####',inline,string"`
+		}{},
+		wantErr: errors.New("Go struct field FieldName has malformed `json` tag: invalid single-quoted string: 'hello\\u####'"),
 	}, {
 		name: "MisnamedTag",
 		in: struct {

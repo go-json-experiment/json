@@ -52,9 +52,9 @@ type (
 		namedString `json:"-"`
 	}
 	structWeirdNames struct {
-		Empty string `json:"\"\""`
-		Comma string `json:"\",\""`
-		Quote string `json:"\"\\\"\""`
+		Empty string `json:"''"`
+		Comma string `json:"','"`
+		Quote string `json:"'\"'"`
 	}
 	structNoCase struct {
 		AaA string `json:",nocase"`
@@ -920,17 +920,17 @@ func TestMarshal(t *testing.T) {
 		name:    "Structs/Invalid/MalformedTag",
 		in:      structMalformedTag{},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: structMalformedTagType, Err: errors.New("Go struct field \"Malformed\" has malformed `json` tag: \"")},
+		wantErr: &SemanticError{action: "marshal", GoType: structMalformedTagType, Err: errors.New("Go struct field Malformed has malformed `json` tag: invalid character '\"' at start of option (expecting Unicode letter or single quote)")},
 	}, {
 		name:    "Structs/Invalid/UnexportedTag",
 		in:      structUnexportedTag{},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field \"unexported\" cannot have non-ignored `json` tag")},
+		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")},
 	}, {
 		name:    "Structs/Invalid/UnexportedEmbedded",
 		in:      structUnexportedEmbedded{},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field \"namedString\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
+		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
 		name: "Slices/Interface",
 		in: []interface{}{
@@ -2553,19 +2553,19 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{}`,
 		inVal:   addr(structMalformedTag{}),
 		want:    addr(structMalformedTag{}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structMalformedTagType, Err: errors.New("Go struct field \"Malformed\" has malformed `json` tag: \"")},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structMalformedTagType, Err: errors.New("Go struct field Malformed has malformed `json` tag: invalid character '\"' at start of option (expecting Unicode letter or single quote)")},
 	}, {
 		name:    "Structs/Invalid/UnexportedTag",
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedTag{}),
 		want:    addr(structUnexportedTag{}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field \"unexported\" cannot have non-ignored `json` tag")},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")},
 	}, {
 		name:    "Structs/Invalid/UnexportedEmbedded",
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedEmbedded{}),
 		want:    addr(structUnexportedEmbedded{}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field \"namedString\" of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
 		name:  "Slices/Null",
 		inBuf: `null`,

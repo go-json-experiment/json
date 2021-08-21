@@ -7,9 +7,12 @@ package json
 import (
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var errIgnoredField = errors.New("ignored field")
@@ -30,16 +33,10 @@ type fieldOptions struct {
 // the JSON member name and other features.
 // As a special case, it returns errIgnoredField if the field is ignored.
 func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
-	var opts []tagOption
-	if tag, ok := sf.Tag.Lookup("json"); ok {
-		opts, ok = splitTagOptions(tag)
-		if !ok {
-			return fieldOptions{}, fmt.Errorf("Go struct field %q has malformed `json` tag: %s", sf.Name, sf.Tag.Get("json"))
-		}
-	}
+	tag, hasTag := sf.Tag.Lookup("json")
 
 	// Check whether this field is explicitly ignored.
-	if len(opts) == 1 && opts[0] == unquotedDash {
+	if tag == "-" {
 		return fieldOptions{}, errIgnoredField
 	}
 
@@ -52,36 +49,49 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		// of purely exported fields.
 		// See https://golang.org/issue/21357 and https://golang.org/issue/24153.
 		if sf.Anonymous {
-			return fieldOptions{}, fmt.Errorf("embedded Go struct field %q of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name())
+			return fieldOptions{}, fmt.Errorf("embedded Go struct field %s of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name())
 		}
 		// Tag options specified on an unexported field suggests user error.
-		if opts != nil {
-			return fieldOptions{}, fmt.Errorf("unexported Go struct field %q cannot have non-ignored `json` tag", sf.Name)
+		if hasTag {
+			return fieldOptions{}, fmt.Errorf("unexported Go struct field %s cannot have non-ignored `json:%q` tag", sf.Name, tag)
 		}
 		return fieldOptions{}, errIgnoredField
 	}
 
-	// Determine the JSON member name for this Go field.
+	// Determine the JSON member name for this Go field. A user-specified name
+	// may be provided as either an identifier or a single-quoted string.
+	// The single-quoted string allows arbitrary characters in the name.
+	// See https://golang.org/issue/2718 and https://golang.org/issue/3546.
 	out.name = sf.Name // always starts with an uppercase character
-	if len(opts) > 0 && opts[0] != unquotedEmpty {
-		out.name = opts[0].value
+	if len(tag) > 0 && !strings.HasPrefix(tag, ",") {
+		opt, n, err := consumeTagOption(tag)
+		if err != nil {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
+		}
+		out.name = opt
+		tag = tag[n:]
 	}
 
 	// Handle any additional tag options (if any).
-	if len(opts) <= 1 {
-		return out, nil
-	}
-	seenKeys := make(map[string]bool)
-	for _, opt := range opts[1:] {
-		key, value := opt.value, ""
-		if strings.HasPrefix(opt.value, "format=") {
-			key, value = "format", opt.value[len("format="):]
+	seenOpts := make(map[string]bool)
+	for len(tag) > 0 {
+		// Consume comma delimiter.
+		if tag[0] != ',' {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid character %q before next option (expecting ',')", sf.Name, tag[0])
 		}
-		if seenKeys[key] && key != "" {
-			return fieldOptions{}, fmt.Errorf("Go struct field %q has duplicate appearance of `json` tag option %q", sf.Name, key)
+		tag = tag[len(","):]
+
+		// Consume and process the tag option.
+		opt, n, err := consumeTagOption(tag)
+		if err != nil {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
 		}
-		seenKeys[key] = true
-		switch key {
+		rawOpt := tag[:n]
+		tag = tag[n:]
+		if strings.HasPrefix(rawOpt, "'") && strings.TrimFunc(opt, isLetterOrDigit) == "" {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `json` tag option %s; specify %s instead", sf.Name, rawOpt, opt)
+		}
+		switch opt {
 		case "nocase":
 			out.nocase = true
 		case "inline":
@@ -96,96 +106,92 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		case "string":
 			out.string = true
 		case "format":
-			out.format = value
+			if !strings.HasPrefix(tag, ":") {
+				return fieldOptions{}, fmt.Errorf("Go struct field %s is missing value for `json` tag option format", sf.Name)
+			}
+			tag = tag[len(":"):]
+			opt, n, err := consumeTagOption(tag)
+			if err != nil {
+				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed value for `json` tag option format: %v", sf.Name, err)
+			}
+			tag = tag[n:]
+			out.format = opt
 		default:
+			// Reject keys that resemble one of the supported options.
+			// This catches invalid mutants such as "omitEmpty" or "omit_empty".
+			normOpt := strings.ReplaceAll(strings.ToLower(opt), "_", "")
+			switch normOpt {
+			case "nocase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
+				return fieldOptions{}, fmt.Errorf("Go struct field %s has invalid appearance of `json` tag option %s; specify %s instead", sf.Name, opt, normOpt)
+			}
+
 			// NOTE: Everything else is ignored. This does not mean it is
 			// forward compatible to insert arbitrary tag options since
 			// a future version of this package may understand that tag.
 		}
+
+		// Reject duplicates.
+		if seenOpts[opt] {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has duplicate appearance of `json` tag option %s", sf.Name, rawOpt)
+		}
+		seenOpts[opt] = true
 	}
 	return out, nil
 }
 
-type tagOption struct {
-	quoted bool
-	value  string
+func consumeTagOption(in string) (string, int, error) {
+	switch r, _ := utf8.DecodeRuneInString(in); {
+	// Option as a Go identifier.
+	case r == '_' || unicode.IsLetter(r):
+		n := len(in) - len(strings.TrimLeftFunc(in, isLetterOrDigit))
+		return in[:n], n, nil
+	// Option as a single-quoted string.
+	case r == '\'':
+		// The grammar is nearly identical to a double-quoted Go string literal,
+		// but uses single quotes as the terminators. The reason for a custom
+		// syntax is because both backtick and double quotes cannot be used
+		// verbatim in a struct tag.
+		//
+		// Convert a single-quoted string to a double-quote string and rely on
+		// strconv.Unquote to handle the rest.
+		var inEscape bool
+		b := []byte{'"'}
+		n := len(`'`)
+		for len(in) > n {
+			r, rn := utf8.DecodeRuneInString(in[n:])
+			switch {
+			case inEscape:
+				if r == '\'' {
+					b = b[:len(b)-1] // remove escape character: `\'` => `'`
+				}
+				inEscape = false
+			case r == '\\':
+				inEscape = true
+			case r == '"':
+				b = append(b, '\\') // insert escape character: `"` => `\"`
+			case r == '\'':
+				b = append(b, '"')
+				n += len(`'`)
+				out, err := strconv.Unquote(string(b))
+				if err != nil {
+					return "", 0, fmt.Errorf("invalid single-quoted string: %s", in[:n])
+				}
+				return out, n, nil
+			}
+			b = append(b, in[n:][:rn]...)
+			n += rn
+		}
+		if n > 10 {
+			n = 10 // limit the amount of context printed in the error
+		}
+		return "", 0, fmt.Errorf("single-quoted string not terminated: %s...", in[:n])
+	case len(in) == 0:
+		return "", 0, io.ErrUnexpectedEOF
+	default:
+		return "", 0, fmt.Errorf("invalid character %q at start of option (expecting Unicode letter or single quote)", r)
+	}
 }
 
-var (
-	unquotedEmpty = tagOption{quoted: false, value: ""}
-	unquotedDash  = tagOption{quoted: false, value: "-"}
-)
-
-// splitTagOptions splits the tag up as a comma-delimited sequence of options,
-// where each option is either a quoted string or not.
-func splitTagOptions(s string) (opts []tagOption, ok bool) {
-	opts = make([]tagOption, 0)
-	for len(s) > 0 {
-		// Consume comma delimiter.
-		if len(opts) > 0 {
-			if len(s) == 0 || s[0] != ',' {
-				return nil, false
-			}
-			s = s[len(`,`):]
-		}
-
-		// Parse as either a quoted or unquoted string.
-		var n int
-		opt := tagOption{quoted: len(s) > 0 && (s[0] == '"' || s[0] == '`')}
-		if opt.quoted {
-			var err error
-			prefix, _ := quotedPrefix(s)
-			opt.value, err = strconv.Unquote(prefix)
-			if err != nil {
-				return nil, false
-			}
-			n += len(prefix)
-		} else {
-			n = strings.IndexByte(s, ',')
-			if n < 0 {
-				n = len(s)
-			}
-			opt.value = s[:n]
-		}
-		opts = append(opts, opt)
-		s = s[n:]
-	}
-	return opts, true
-}
-
-// quotedPrefix is identical to strconv.QuotedPrefix.
-// TODO(https://golang.org/issue/45033): Use strconv.QuotedPrefix.
-func quotedPrefix(s string) (prefix string, err error) {
-	quotedPrefixLen := func(s string) int {
-		if len(s) == 0 {
-			return len(s)
-		}
-		switch s[0] {
-		case '`':
-			for i, r := range s[len("`"):] {
-				if r == '`' {
-					return len("`") + i + len("`")
-				}
-			}
-		case '"':
-			var inEscape bool
-			for i, r := range s[len(`"`):] {
-				switch {
-				case inEscape:
-					inEscape = false
-				case r == '\\':
-					inEscape = true
-				case r == '"':
-					return len(`"`) + i + len(`"`)
-				}
-			}
-		}
-		return len(s)
-	}
-
-	n := quotedPrefixLen(s)
-	if _, err := strconv.Unquote(s[:n]); err != nil {
-		return "", err
-	}
-	return s[:n], nil
+func isLetterOrDigit(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
 }
