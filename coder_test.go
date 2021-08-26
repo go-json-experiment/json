@@ -374,13 +374,13 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 		} else {
 			val, err := dec.ReadValue()
 			if err != nil {
-				// It is a syntax error to call ReadValue
+				// It is a syntactic error to call ReadValue
 				// at the end of an object or array.
 				// Retry as a ReadToken call.
 				expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
 				if expectError {
-					if !errors.As(err, new(*SyntaxError)) {
-						t.Errorf("Decoder.ReadToken error is %T, want %T", err, new(SyntaxError))
+					if !errors.As(err, new(*SyntacticError)) {
+						t.Errorf("Decoder.ReadToken error is %T, want %T", err, new(SyntacticError))
 					}
 					tickTock = !tickTock
 					continue

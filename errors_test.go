@@ -54,22 +54,22 @@ func TestSemanticError(t *testing.T) {
 		err:  &SemanticError{action: "unmarshal", JSONKind: ']', GoType: reflect.TypeOf(strings.Reader{})},
 		want: "json: cannot unmarshal JSON array into Go value of type strings.Reader",
 	}, {
-		err:  &SemanticError{action: "unmarshal", JSONKind: '{', GoType: reflect.TypeOf(float64(0)), Offset: 123},
+		err:  &SemanticError{action: "unmarshal", JSONKind: '{', GoType: reflect.TypeOf(float64(0)), ByteOffset: 123},
 		want: "json: cannot unmarshal JSON object into Go value of type float64 after byte offset 123",
 	}, {
-		err:  &SemanticError{action: "marshal", JSONKind: 'f', GoType: reflect.TypeOf(complex128(0)), Offset: 123, Pointer: "/foo/2/bar/3"},
+		err:  &SemanticError{action: "marshal", JSONKind: 'f', GoType: reflect.TypeOf(complex128(0)), ByteOffset: 123, JSONPointer: "/foo/2/bar/3"},
 		want: "json: cannot marshal JSON boolean from Go value of type complex128 within JSON value at \"/foo/2/bar/3\"",
 	}, {
-		err:  &SemanticError{action: "unmarshal", JSONKind: '}', GoType: reflect.TypeOf((*io.Reader)(nil)).Elem(), Offset: 123, Pointer: "/foo/2/bar/3", Err: errors.New("some underlying error")},
+		err:  &SemanticError{action: "unmarshal", JSONKind: '}', GoType: reflect.TypeOf((*io.Reader)(nil)).Elem(), ByteOffset: 123, JSONPointer: "/foo/2/bar/3", Err: errors.New("some underlying error")},
 		want: "json: cannot unmarshal JSON object into Go value of type io.Reader within JSON value at \"/foo/2/bar/3\": some underlying error",
 	}, {
 		err:  &SemanticError{Err: errors.New("some underlying error")},
 		want: "json: cannot handle: some underlying error",
 	}, {
-		err:  &SemanticError{Offset: 123},
+		err:  &SemanticError{ByteOffset: 123},
 		want: "json: cannot handle after byte offset 123",
 	}, {
-		err:  &SemanticError{Pointer: "/foo/2/bar/3"},
+		err:  &SemanticError{JSONPointer: "/foo/2/bar/3"},
 		want: "json: cannot handle within JSON value at \"/foo/2/bar/3\"",
 	}}
 
@@ -92,12 +92,12 @@ func TestErrorsIs(t *testing.T) {
 	)
 
 	var (
-		someWrapError      = &wrapError{str: "some wrap error", err: io.ErrShortWrite}
-		otherWrapError     = &wrapError{str: "other wrap error", err: io.ErrShortWrite}
-		someSyntaxError    = &SyntaxError{str: "some syntax error"}
-		otherSyntaxError   = &SyntaxError{str: "other syntax error"}
-		someSemanticError  = &SemanticError{action: "unmarshal", JSONKind: '0', GoType: reflect.TypeOf(int(0)), Err: strconv.ErrRange}
-		otherSemanticError = &SemanticError{action: "marshal", GoType: reflect.TypeOf(complex128(0))}
+		someWrapError       = &wrapError{str: "some wrap error", err: io.ErrShortWrite}
+		otherWrapError      = &wrapError{str: "other wrap error", err: io.ErrShortWrite}
+		someSyntacticError  = &SyntacticError{str: "some syntactic error"}
+		otherSyntacticError = &SyntacticError{str: "other syntactic error"}
+		someSemanticError   = &SemanticError{action: "unmarshal", JSONKind: '0', GoType: reflect.TypeOf(int(0)), Err: strconv.ErrRange}
+		otherSemanticError  = &SemanticError{action: "marshal", GoType: reflect.TypeOf(complex128(0))}
 	)
 
 	tests := []struct {
@@ -111,31 +111,31 @@ func TestErrorsIs(t *testing.T) {
 		// All sub-error values should match the top-level Error value.
 		{someGlobalError, Error, true},
 		{someWrapError, Error, true},
-		{someSyntaxError, Error, true},
+		{someSyntacticError, Error, true},
 		{someSemanticError, Error, true},
 
 		// Top-level Error should not match any other sub-error value.
 		{Error, someGlobalError, false},
 		{Error, someWrapError, false},
-		{Error, someSyntaxError, false},
+		{Error, someSyntacticError, false},
 		{Error, someSemanticError, false},
 
 		// Sub-error values should match itself (identity).
 		{someGlobalError, someGlobalError, true},
 		{someWrapError, someWrapError, true},
-		{someSyntaxError, someSyntaxError, true},
+		{someSyntacticError, someSyntacticError, true},
 		{someSemanticError, someSemanticError, true},
 
 		// Sub-error values should not match each other.
 		{someGlobalError, someWrapError, false},
-		{someWrapError, someSyntaxError, false},
-		{someSyntaxError, someSemanticError, false},
+		{someWrapError, someSyntacticError, false},
+		{someSyntacticError, someSemanticError, false},
 		{someSemanticError, someGlobalError, false},
 
 		// Sub-error values should not match other error values of same type.
 		{someGlobalError, otherGlobalError, false},
 		{someWrapError, otherWrapError, false},
-		{someSyntaxError, otherSyntaxError, false},
+		{someSyntacticError, otherSyntacticError, false},
 		{someSemanticError, otherSemanticError, false},
 
 		// Error should not match any other random error.

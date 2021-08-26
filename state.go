@@ -5,11 +5,11 @@
 package json
 
 var (
-	errMissingName   = &SyntaxError{str: "missing string for object name"}
-	errMissingColon  = &SyntaxError{str: "missing character ':' after object name"}
-	errMissingValue  = &SyntaxError{str: "missing value after object name"}
-	errMissingComma  = &SyntaxError{str: "missing character ',' after object or array value"}
-	errMismatchDelim = &SyntaxError{str: "mismatching structural token for object or array"}
+	errMissingName   = &SyntacticError{str: "missing string for object name"}
+	errMissingColon  = &SyntacticError{str: "missing character ':' after object name"}
+	errMissingValue  = &SyntacticError{str: "missing value after object name"}
+	errMissingComma  = &SyntacticError{str: "missing character ',' after object or array value"}
+	errMismatchDelim = &SyntacticError{str: "mismatching structural token for object or array"}
 )
 
 type state struct {

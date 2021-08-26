@@ -1148,7 +1148,7 @@ func TestMarshal(t *testing.T) {
 		in: marshalTextFunc(func() ([]byte, error) {
 			return []byte("\xde\xad\xbe\xef"), nil
 		}),
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntaxError{str: "invalid UTF-8 within string"}},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntacticError{str: "invalid UTF-8 within string"}},
 	}, {
 		name: "Methods/Invalid/MapKey/JSONv2/Syntax",
 		in: map[interface{}]string{

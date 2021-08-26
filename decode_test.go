@@ -119,7 +119,7 @@ func testFaultyDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 	// Read all the tokens.
 	// If the underlying io.Reader is faulty, then Read may return
 	// an error without changing the internal state machine.
-	// In other words, I/O errors occur before syntax errors.
+	// In other words, I/O errors occur before syntactic errors.
 	dec := NewDecoder(b)
 	switch typeName {
 	case "Token":
@@ -292,8 +292,8 @@ var decoderErrorTestdata = []struct {
 	opts: DecodeOptions{AllowInvalidUTF8: false},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
-		{'"', zeroToken, (&SyntaxError{str: "invalid UTF-8 within string"}).withOffset(int64(len("\"living\xde\xad")))},
-		{'"', zeroValue, (&SyntaxError{str: "invalid UTF-8 within string"}).withOffset(int64(len("\"living\xde\xad")))},
+		{'"', zeroToken, (&SyntacticError{str: "invalid UTF-8 within string"}).withOffset(int64(len("\"living\xde\xad")))},
+		{'"', zeroValue, (&SyntacticError{str: "invalid UTF-8 within string"}).withOffset(int64(len("\"living\xde\xad")))},
 	},
 }, {
 	name: "TruncatedNumber",
@@ -563,14 +563,14 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/DuplicateNames",
 	in:   `{"0":0,"1":1,"0":0} `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, (&SyntaxError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
+		{'{', zeroValue, (&SyntacticError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
 		{'{', ObjectStart, nil},
 		{'"', String("0"), nil},
 		{'0', Uint(0), nil},
 		{'"', String("1"), nil},
 		{'0', Uint(1), nil},
-		{'"', zeroToken, (&SyntaxError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
-		{'"', zeroValue, (&SyntaxError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
+		{'"', zeroToken, (&SyntacticError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
+		{'"', zeroValue, (&SyntacticError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":0,"1":1,`)))},
 	},
 	wantOffset: len(`{"0":0,"1":1`),
 }, {
@@ -909,18 +909,18 @@ func TestConsumeString(t *testing.T) {
 		{`"\u001f"`, false, 8, "\x1f", nil, nil},
 		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil},
 		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil},
-		{"\"x\x80\"", false, 4, "x\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xff\"", false, 4, "x\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xc0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xc0\x80\"", false, 5, "x\ufffd\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
+		{"\"x\x80\"", false, 4, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xff\"", false, 4, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xc0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xc0\x80\"", false, 5, "x\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
 		{"\"x\xe0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xe0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xe0\x80\x80\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
+		{"\"x\xe0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xe0\x80\x80\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
 		{"\"x\xf0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xf0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xf0\x80\x80", false, 5, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xf0\x80\x80\x80\"", false, 7, "x\ufffd\ufffd\ufffd\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"\"x\xed\xba\xad\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0\x80\x80", false, 5, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0\x80\x80\x80\"", false, 7, "x\ufffd\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xed\xba\xad\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
 		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
 		{`"¢"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
 		{`"¢"`[:3], false, 3, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
@@ -936,7 +936,7 @@ func TestConsumeString(t *testing.T) {
 		{`"𐍈"`[:6], false, 6, "𐍈", nil, nil},
 		{`"x\`, false, 2, "x", io.ErrUnexpectedEOF, nil},
 		{`"x\"`, false, 4, "x\"", io.ErrUnexpectedEOF, nil},
-		{`"x\x"`, false, 2, "x", &SyntaxError{str: `invalid escape sequence "\\x" within string`}, nil},
+		{`"x\x"`, false, 2, "x", &SyntacticError{str: `invalid escape sequence "\\x" within string`}, nil},
 		{`"\"\\\/\b\f\n\r\t"`, false, 18, "\"\\/\b\f\n\r\t", nil, nil},
 		{`"\u`, false, 1, "", io.ErrUnexpectedEOF, nil},
 		{`"\uf`, false, 1, "", io.ErrUnexpectedEOF, nil},
@@ -945,11 +945,11 @@ func TestConsumeString(t *testing.T) {
 		{`"\ufffd`, false, 7, "\ufffd", io.ErrUnexpectedEOF, nil},
 		{`"\ufffd"`, false, 8, "\ufffd", nil, nil},
 		{`"\uABCD"`, false, 8, "\uabcd", nil, nil},
-		{`"\uefX0"`, false, 1, "", &SyntaxError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
+		{`"\uefX0"`, false, 1, "", &SyntacticError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
 		{`"\uDEAD"`, false, 8, "\ufffd", nil, io.ErrUnexpectedEOF},
-		{`"\uDEAD______"`, false, 14, "\ufffd______", nil, &SyntaxError{str: "invalid unpaired surrogate half within string"}},
-		{`"\uDEAD\uXXXX"`, false, 7, "\ufffd", &SyntaxError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
-		{`"\uDEAD\uBEEF"`, false, 14, "\ufffd\ubeef", nil, &SyntaxError{str: `invalid surrogate pair in string`}},
+		{`"\uDEAD______"`, false, 14, "\ufffd______", nil, &SyntacticError{str: "invalid unpaired surrogate half within string"}},
+		{`"\uDEAD\uXXXX"`, false, 7, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
+		{`"\uDEAD\uBEEF"`, false, 14, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair in string`}},
 		{`"\uD800\udead"`, false, 14, "\U000102ad", nil, nil},
 		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, "\"\\/\b\f\n\r\t", nil, nil},
 		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},

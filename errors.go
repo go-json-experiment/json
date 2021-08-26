@@ -40,16 +40,6 @@ func (e *wrapError) Is(target error) bool {
 	return e == target || target == Error || errors.Is(e.err, target)
 }
 
-// TODO: Rename the exported error types?
-//
-// The words "semantic" and "syntactic" are adjectives.
-// The words "semantics" and "syntax" are nouns.
-// To be consistent, the error types should either be called
-//	"SemanticError" and "SyntacticError", or
-//	"SemanticsError" and "SyntaxError".
-// Since "Error" is a noun and the word before it is usually an adjective,
-// this suggests that "SemanticError" and "SyntacticError" are the right names.
-
 // SemanticError describes an error determining the meaning
 // of JSON data as Go data or vice-versa.
 //
@@ -60,13 +50,11 @@ type SemanticError struct {
 
 	action string // either "marshal" or "unmarshal"
 
-	// Offset indicates that an error occurred after processing Offset bytes.
-	Offset int64
-	// Pointer indicates that an error occurred within this specific JSON value
+	// ByteOffset indicates that an error occurred after this byte offset.
+	ByteOffset int64
+	// JSONPointer indicates that an error occurred within this JSON value
 	// as indicated using the JSON Pointer notation (see RFC 6901).
-	Pointer string
-	// TODO: Rename Offset as ByteOffset and Pointer as JSONPointer?
-	// If so, rename SyntaxError.Offset to be consistent.
+	JSONPointer string
 
 	// JSONKind is the JSON kind that could not be handled.
 	JSONKind Kind // may be zero if unknown
@@ -134,12 +122,12 @@ func (e *SemanticError) Error() string {
 
 	// Format where.
 	switch {
-	case e.Pointer != "":
+	case e.JSONPointer != "":
 		sb.WriteString(" within JSON value at ")
-		sb.WriteString(strconv.Quote(e.Pointer))
-	case e.Offset > 0:
+		sb.WriteString(strconv.Quote(e.JSONPointer))
+	case e.ByteOffset > 0:
 		sb.WriteString(" after byte offset ")
-		sb.WriteString(strconv.FormatInt(e.Offset, 10))
+		sb.WriteString(strconv.FormatInt(e.ByteOffset, 10))
 	}
 
 	// Format underlying error.
@@ -157,30 +145,31 @@ func (e *SemanticError) Unwrap() error {
 	return e.Err
 }
 
-// SyntaxError is a description of a JSON syntax error.
+// SyntacticError is a description of a syntactic error that occurred when
+// encoding or decoding JSON according to the grammar.
 //
 // The contents of this error as produced by this package may change over time.
-type SyntaxError struct {
+type SyntacticError struct {
 	requireKeyedLiterals
 	nonComparable
 
-	// Offset indicates that an error occurred after processing Offset bytes.
-	Offset int64
-	str    string
+	// ByteOffset indicates that an error occurred after this byte offset.
+	ByteOffset int64
+	str        string
 }
 
-func (e *SyntaxError) Error() string {
+func (e *SyntacticError) Error() string {
 	return errorPrefix + e.str
 }
-func (e *SyntaxError) Is(target error) bool {
+func (e *SyntacticError) Is(target error) bool {
 	return e == target || target == Error
 }
-func (e *SyntaxError) withOffset(pos int64) error {
-	return &SyntaxError{Offset: pos, str: e.str}
+func (e *SyntacticError) withOffset(pos int64) error {
+	return &SyntacticError{ByteOffset: pos, str: e.str}
 }
 
-func newInvalidCharacterError(c byte, where string) *SyntaxError {
-	return &SyntaxError{str: "invalid character " + escapeCharacter(c) + " " + where}
+func newInvalidCharacterError(c byte, where string) *SyntacticError {
+	return &SyntacticError{str: "invalid character " + escapeCharacter(c) + " " + where}
 }
 
 func escapeCharacter(c byte) string {

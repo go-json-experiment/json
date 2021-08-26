@@ -1008,7 +1008,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				v = newAddressableValue(sliceIfaceType)
 			default:
 				// TODO: This could also be due to an I/O error.
-				return &SyntaxError{Offset: dec.InputOffset(), str: "invalid JSON token"}
+				return &SyntacticError{ByteOffset: dec.InputOffset(), str: "invalid JSON token"}
 			}
 		} else {
 			// Shallow copy the existing value to keep it addressable.

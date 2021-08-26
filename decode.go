@@ -219,11 +219,11 @@ func (d *decodeBuffer) needMore(pos int) bool {
 	return pos == len(d.buf)
 }
 
-// injectSyntaxErrorWithPosition wraps a SyntaxError with the position,
+// injectSyntacticErrorWithPosition wraps a SyntacticError with the position,
 // otherwise it returns the error as is.
 // It takes a position relative to the start of the start of d.buf.
-func (d *decodeBuffer) injectSyntaxErrorWithPosition(err error, pos int) error {
-	if serr, ok := err.(*SyntaxError); ok {
+func (d *decodeBuffer) injectSyntacticErrorWithPosition(err error, pos int) error {
+	if serr, ok := err.(*SyntacticError); ok {
 		return serr.withOffset(d.baseOffset + int64(pos))
 	}
 	return err
@@ -309,7 +309,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		pos = d.prevEnd // restore position to right after leading whitespace
 		pos += consumeWhitespace(d.buf[pos:])
 		err = d.tokens.checkDelim(delim, next)
-		return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+		return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 	}
 
 	// Handle the next token.
@@ -319,13 +319,13 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if consumeNull(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "null")
 			if err != nil {
-				return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 			}
 		} else {
 			pos += len("null")
 		}
 		if err = d.tokens.appendLiteral(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-len("null")) // report position at start of literal
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("null")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return Null, nil
@@ -334,13 +334,13 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if consumeFalse(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "false")
 			if err != nil {
-				return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 			}
 		} else {
 			pos += len("false")
 		}
 		if err = d.tokens.appendLiteral(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-len("false")) // report position at start of literal
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("false")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return False, nil
@@ -349,13 +349,13 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if consumeTrue(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "true")
 			if err != nil {
-				return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 			}
 		} else {
 			pos += len("true")
 		}
 		if err = d.tokens.appendLiteral(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-len("true")) // report position at start of literal
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("true")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return True, nil
@@ -367,17 +367,17 @@ func (d *Decoder) ReadToken() (Token, error) {
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
 			if err != nil {
-				return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 			}
 		} else {
 			pos += n
 		}
 		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
-			err = &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of string
+			err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 		}
 		if err = d.tokens.appendString(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of string
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
 		return Token{raw: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
@@ -391,20 +391,20 @@ func (d *Decoder) ReadToken() (Token, error) {
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
 			if err != nil {
-				return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 			}
 		} else {
 			pos += n
 		}
 		if err = d.tokens.appendNumber(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of number
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of number
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
 		return Token{raw: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
 
 	case '{':
 		if err = d.tokens.pushObject(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		if !d.options.AllowDuplicateNames {
 			d.namespaces.push()
@@ -415,7 +415,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 
 	case '}':
 		if err = d.tokens.popObject(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		if !d.options.AllowDuplicateNames {
 			d.namespaces.pop()
@@ -426,7 +426,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 
 	case '[':
 		if err = d.tokens.pushArray(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
@@ -434,7 +434,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 
 	case ']':
 		if err = d.tokens.popArray(); err != nil {
-			return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
@@ -442,7 +442,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 
 	default:
 		err = newInvalidCharacterError(byte(next), "at start of token")
-		return Token{}, d.injectSyntaxErrorWithPosition(err, pos)
+		return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 	}
 }
 
@@ -451,7 +451,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 // The returned value is only valid until the next Peek or Read call and
 // may not be mutated while the Decoder remains in use.
 // If the decoder is currently at the end token for an object or array,
-// then it reports a SyntaxError and the internal state remains unchanged.
+// then it reports a SyntacticError and the internal state remains unchanged.
 // It returns io.EOF if there are no more values.
 func (d *Decoder) ReadValue() (RawValue, error) {
 	d.invalidatePreviousRead()
@@ -487,7 +487,7 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 		pos = d.prevEnd // restore position to right after leading whitespace
 		pos += consumeWhitespace(d.buf[pos:])
 		err = d.tokens.checkDelim(delim, next)
-		return nil, d.injectSyntaxErrorWithPosition(err, pos)
+		return nil, d.injectSyntacticErrorWithPosition(err, pos)
 	}
 
 	// Handle the next value.
@@ -496,14 +496,14 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 	newAbsPos := d.baseOffset + int64(pos)
 	n := int(newAbsPos - oldAbsPos)
 	if err != nil {
-		return nil, d.injectSyntaxErrorWithPosition(err, pos)
+		return nil, d.injectSyntacticErrorWithPosition(err, pos)
 	}
 	switch next {
 	case 'n', 't', 'f':
 		err = d.tokens.appendLiteral()
 	case '"':
 		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
-			err = &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+			err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 			break
 		}
 		err = d.tokens.appendString()
@@ -525,7 +525,7 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 		}
 	}
 	if err != nil {
-		return nil, d.injectSyntaxErrorWithPosition(err, pos-n) // report position at start of value
+		return nil, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of value
 	}
 	d.prevEnd = pos
 	d.prevStart = pos - n
@@ -738,7 +738,7 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 			pos += n
 		}
 		if !d.options.AllowDuplicateNames && !names.insert(d.buf[pos-n:pos]) {
-			return pos - n, &SyntaxError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+			return pos - n, &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 		}
 
 		// Handle after name.
@@ -1004,7 +1004,7 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 				if !utf8.FullRune(b[n:]) {
 					return n, io.ErrUnexpectedEOF
 				}
-				return n, &SyntaxError{str: "invalid UTF-8 within string"}
+				return n, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
 			n++
 		case r < ' ': // invalid control character
@@ -1026,28 +1026,28 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
 				if !ok {
-					return n, &SyntaxError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
+					return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
 				}
 				n += 6
 
 				if validateUTF8 && utf16.IsSurrogate(rune(v1)) {
 					if len(b) >= n+2 && (b[n] != '\\' || b[n+1] != 'u') {
-						return n, &SyntaxError{str: "invalid unpaired surrogate half within string"}
+						return n, &SyntacticError{str: "invalid unpaired surrogate half within string"}
 					}
 					if len(b) < n+6 {
 						return resumeOffset, io.ErrUnexpectedEOF
 					}
 					v2, ok := parseHexUint16(b[n+2 : n+6])
 					if !ok {
-						return n, &SyntaxError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
+						return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
 					}
 					if utf16.DecodeRune(rune(v1), rune(v2)) == unicode.ReplacementChar {
-						return n, &SyntaxError{str: "invalid surrogate pair in string"}
+						return n, &SyntacticError{str: "invalid surrogate pair in string"}
 					}
 					n += 6
 				}
 			default:
-				return n, &SyntaxError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+2])) + " within string"}
+				return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+2])) + " within string"}
 			}
 		default:
 			n += rn

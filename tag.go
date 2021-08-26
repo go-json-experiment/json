@@ -149,7 +149,7 @@ func consumeTagOption(in string) (string, int, error) {
 	case r == '\'':
 		// The grammar is nearly identical to a double-quoted Go string literal,
 		// but uses single quotes as the terminators. The reason for a custom
-		// syntax is because both backtick and double quotes cannot be used
+		// grammar is because both backtick and double quotes cannot be used
 		// verbatim in a struct tag.
 		//
 		// Convert a single-quoted string to a double-quote string and rely on

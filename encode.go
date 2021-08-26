@@ -213,7 +213,7 @@ func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 // For example, it is an error to provide a number when the encoder
 // is expecting an object name (which is always a string), or
 // to provide an end object delimiter when the encoder is finishing an array.
-// If the provided token is invalid, then it reports a SyntaxError and
+// If the provided token is invalid, then it reports a SyntacticError and
 // the internal state remains unchanged.
 func (e *Encoder) WriteToken(t Token) error {
 	k := t.Kind()
@@ -250,7 +250,7 @@ func (e *Encoder) WriteToken(t Token) error {
 			break
 		}
 		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
-			err = &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
+			err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			break
 		}
 		err = e.tokens.appendString()
@@ -282,7 +282,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		b = append(b, ']')
 		err = e.tokens.popArray()
 	default:
-		return &SyntaxError{str: "invalid json.Token"}
+		return &SyntacticError{str: "invalid json.Token"}
 	}
 	if err != nil {
 		return err
@@ -306,7 +306,7 @@ func (e *Encoder) WriteToken(t Token) error {
 //
 // The provided value kind must be consistent with the JSON grammar
 // (see examples on Encoder.WriteToken). If the provided value is invalid,
-// then it reports a SyntaxError and the internal state remains unchanged.
+// then it reports a SyntacticError and the internal state remains unchanged.
 func (e *Encoder) WriteValue(v RawValue) error {
 	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
 
@@ -345,7 +345,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 		err = e.tokens.appendLiteral()
 	case '"':
 		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
-			err = &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
+			err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			break
 		}
 		err = e.tokens.appendString()
@@ -493,7 +493,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 			return b, v, err
 		}
 		if !e.options.AllowDuplicateNames && !names.insert(b[n0:]) {
-			return b, v, &SyntaxError{str: "duplicate name " + string(b[n0:]) + " in object"}
+			return b, v, &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 		}
 
 		// Append colon.
@@ -695,7 +695,7 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 		switch r, rn := utf8.DecodeRuneInString(s); {
 		case r == utf8.RuneError && rn == 1:
 			if validateUTF8 {
-				return dst, &SyntaxError{str: "invalid UTF-8 within string"}
+				return dst, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
 			if escapeRune != nil && escapeRune('\ufffd') {
 				dst = append(dst, `\ufffd`...)

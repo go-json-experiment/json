@@ -104,7 +104,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 8259 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
-	wantCanonicalizeErr: &SyntaxError{str: "invalid UTF-8 within string"},
+	wantCanonicalizeErr: &SyntacticError{str: "invalid UTF-8 within string"},
 }, {
 	name:          "DuplicateNames",
 	in:            ` { "0" : 0 , "1" : 1 , "0" : 0 }`,
@@ -115,7 +115,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	    "1": 1,
 	    "0": 0
 	}`,
-	wantCanonicalizeErr: &SyntaxError{str: `duplicate name "0" in object`},
+	wantCanonicalizeErr: &SyntacticError{str: `duplicate name "0" in object`},
 }}...)
 
 func TestRawValueMethods(t *testing.T) {

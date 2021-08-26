@@ -115,7 +115,7 @@ func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
 	// Even if the underlying io.Writer may be faulty,
 	// writing a valid token or value is guaranteed to at least
 	// be appended to the internal buffer.
-	// In other words, syntax errors occur before I/O errors.
+	// In other words, syntactic errors occur before I/O errors.
 	enc := NewEncoder(b)
 	switch typeName {
 	case "Token":
@@ -151,7 +151,7 @@ var encoderErrorTestdata = []struct {
 }{{
 	name: "InvalidToken",
 	calls: []encoderMethodCall{
-		{zeroToken, &SyntaxError{str: "invalid json.Token"}},
+		{zeroToken, &SyntacticError{str: "invalid json.Token"}},
 	},
 }, {
 	name: "InvalidValue",
@@ -226,8 +226,8 @@ var encoderErrorTestdata = []struct {
 	name: "InvalidString/RejectInvalidUTF8",
 	opts: EncodeOptions{AllowInvalidUTF8: false},
 	calls: []encoderMethodCall{
-		{String("living\xde\xad\xbe\xef"), &SyntaxError{str: "invalid UTF-8 within string"}},
-		{RawValue("\"living\xde\xad\xbe\xef\""), &SyntaxError{str: "invalid UTF-8 within string"}},
+		{String("living\xde\xad\xbe\xef"), &SyntacticError{str: "invalid UTF-8 within string"}},
+		{RawValue("\"living\xde\xad\xbe\xef\""), &SyntacticError{str: "invalid UTF-8 within string"}},
 	},
 }, {
 	name: "TruncatedNumber",
@@ -354,14 +354,14 @@ var encoderErrorTestdata = []struct {
 		{ObjectStart, nil},
 		{String("0"), nil},
 		{Uint(0), nil},
-		{String("0"), &SyntaxError{str: `duplicate name "0" in object`}},
-		{RawValue(`"0"`), &SyntaxError{str: `duplicate name "0" in object`}},
+		{String("0"), &SyntacticError{str: `duplicate name "0" in object`}},
+		{RawValue(`"0"`), &SyntacticError{str: `duplicate name "0" in object`}},
 		{String("1"), nil},
 		{Uint(1), nil},
-		{String("1"), &SyntaxError{str: `duplicate name "1" in object`}},
-		{RawValue(`"1"`), &SyntaxError{str: `duplicate name "1" in object`}},
+		{String("1"), &SyntacticError{str: `duplicate name "1" in object`}},
+		{RawValue(`"1"`), &SyntacticError{str: `duplicate name "1" in object`}},
 		{ObjectEnd, nil},
-		{RawValue(` { "0" : 0 , "1" : 1 , "0" : 0 } `), &SyntaxError{str: `duplicate name "0" in object`}},
+		{RawValue(` { "0" : 0 , "1" : 1 , "0" : 0 } `), &SyntacticError{str: `duplicate name "0" in object`}},
 	},
 	wantOut: `{"0":0,"1":1}` + "\n",
 }, {
@@ -452,20 +452,20 @@ func TestAppendString(t *testing.T) {
 		{"\x1f", nil, `"\u001f"`, nil, nil},
 		{"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, `"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, nil, nil},
 		{" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, "\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", nil, nil},
-		{"x\x80\ufffd", nil, "\"x\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xff\ufffd", nil, "\"x\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\x80\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xff\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xc0", nil, "\"x\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xc0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xe0", nil, "\"x\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xe0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xe0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xf0", nil, "\"x\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xf0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xf0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xf0\x80\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
-		{"x\xed\xba\xad", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntaxError{str: "invalid UTF-8 within string"}},
+		{"x\x80\ufffd", nil, "\"x\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xff\ufffd", nil, "\"x\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\x80\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xff\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xc0", nil, "\"x\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xc0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xe0", nil, "\"x\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xe0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xe0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xf0", nil, "\"x\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xf0\x80", nil, "\"x\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xf0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xf0\x80\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"x\xed\xba\xad", nil, "\"x\ufffd\ufffd\ufffd\"", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
 		{"\"\\/\b\f\n\r\t", nil, `"\"\\/\b\f\n\r\t"`, nil, nil},
 		{"\"\\/\b\f\n\r\t", escapeEverything, `"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, nil, nil},
 		{"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃).", nil, `"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃)."`, nil, nil},
