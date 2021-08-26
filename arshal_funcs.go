@@ -674,7 +674,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				return
 			}
 			if j, ok := fieldsByName[options.name]; ok {
-				err := fmt.Errorf("Go struct fields %q and %q conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
+				err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
 				errInit = &SemanticError{GoType: t, Err: err}
 				return
 			}

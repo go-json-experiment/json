@@ -910,7 +910,7 @@ func TestMarshal(t *testing.T) {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: structConflictingType, Err: errors.New("Go struct fields \"A\" and \"B\" conflict over JSON object name \"conflict\"")},
+		wantErr: &SemanticError{action: "marshal", GoType: structConflictingType, Err: errors.New("Go struct fields A and B conflict over JSON object name \"conflict\"")},
 	}, {
 		name:    "Structs/Invalid/NoneExported",
 		in:      structNoneExported{},
@@ -2541,7 +2541,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{}`,
 		inVal:   addr(structConflicting{}),
 		want:    addr(structConflicting{}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structConflictingType, Err: errors.New("Go struct fields \"A\" and \"B\" conflict over JSON object name \"conflict\"")},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structConflictingType, Err: errors.New("Go struct fields A and B conflict over JSON object name \"conflict\"")},
 	}, {
 		name:    "Structs/Invalid/NoneExported",
 		inBuf:   `{}`,
