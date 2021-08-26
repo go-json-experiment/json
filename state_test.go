@@ -318,7 +318,17 @@ func TestObjectNamespace(t *testing.T) {
 			}
 		}
 
-		// Verify that we eventually switched to using a Go map.
+		// Verify that we have not switched to using a Go map.
+		if ns.mapNames != nil {
+			t.Errorf("objectNamespace.mapNames = non-nil, want nil")
+		}
+
+		// Insert a large number of names.
+		for i := 0; i < 64; i++ {
+			ns.insert([]byte(fmt.Sprintf(`"name%d"`, i)))
+		}
+
+		// Verify that we did switch to using a Go map.
 		if ns.mapNames == nil {
 			t.Errorf("objectNamespace.mapNames = nil, want non-nil")
 		}

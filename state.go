@@ -342,12 +342,12 @@ func (ns *objectNamespace) insert(b []byte) bool {
 
 	// Switch to a map if the buffer is too large for linear search.
 	// This does not add the current name to the map.
-	if ns.length() > 16 {
+	if ns.mapNames == nil && (ns.length() > 64 || len(ns.allNames) > 1024) {
 		ns.mapNames = make(map[string]struct{})
 		var startOffset uint
 		for _, endOffset := range ns.endOffsets {
 			name := ns.allNames[startOffset:endOffset]
-			ns.mapNames[string(name)] = struct{}{}
+			ns.mapNames[string(name)] = struct{}{} // allocates a new string
 			startOffset = endOffset
 		}
 	}
@@ -368,7 +368,7 @@ func (ns *objectNamespace) insert(b []byte) bool {
 		if _, ok := ns.mapNames[string(name)]; ok {
 			return false
 		}
-		ns.mapNames[string(name)] = struct{}{}
+		ns.mapNames[string(name)] = struct{}{} // allocates a new string
 	}
 
 	ns.allNames = allNames
