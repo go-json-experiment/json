@@ -31,6 +31,8 @@ const (
 // There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
 type Token struct {
+	nonComparable
+
 	// Tokens can exist in either a "raw" or an "exact" form.
 	// Tokens produced by the Decoder are in the "raw" form.
 	// Tokens returned by constructors are usually in the "exact" form.

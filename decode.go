@@ -48,6 +48,8 @@ import (
 // which is compliant with both RFC 7493 and RFC 8259.
 type DecodeOptions struct {
 	// TODO: Rename as UnmarshalOptions?
+	requireKeyedLiterals
+	nonComparable
 
 	// AllowDuplicateNames specifies that JSON objects may contain
 	// duplicate member names. Disabling the duplicate name check may provide

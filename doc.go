@@ -63,3 +63,9 @@
 // JSON produced by Marshal functionality is not guaranteed to be deterministic.
 // To obtain more stable JSON output, consider using RawValue.Canonicalize.
 package json
+
+// requireKeyedLiterals can be embedded in a struct to require keyed literals.
+type requireKeyedLiterals struct{}
+
+// nonComparable can be embedded in a struct to prevent comparability.
+type nonComparable [0]func()

@@ -20,6 +20,8 @@ import (
 // which is compliant with both RFC 7493 and RFC 8259.
 type EncodeOptions struct {
 	// TODO: Rename as MarshalOptions?
+	requireKeyedLiterals
+	nonComparable
 
 	// multiline specifies whether to the encoder should emit multiline output.
 	multiline bool

@@ -55,6 +55,9 @@ func (e *wrapError) Is(target error) bool {
 //
 // The contents of this error as produced by this package may change over time.
 type SemanticError struct {
+	requireKeyedLiterals
+	nonComparable
+
 	action string // either "marshal" or "unmarshal"
 
 	// Offset indicates that an error occurred after processing Offset bytes.
@@ -158,6 +161,9 @@ func (e *SemanticError) Unwrap() error {
 //
 // The contents of this error as produced by this package may change over time.
 type SyntaxError struct {
+	requireKeyedLiterals
+	nonComparable
+
 	// Offset indicates that an error occurred after processing Offset bytes.
 	Offset int64
 	str    string

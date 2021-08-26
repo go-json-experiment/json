@@ -13,6 +13,9 @@ import (
 // MarshalOptions configures how Go data is serialized as JSON data.
 // The zero value is equivalent to the default marshal settings.
 type MarshalOptions struct {
+	requireKeyedLiterals
+	nonComparable
+
 	// Marshalers is a list of type-specific marshalers to use.
 	Marshalers *Marshalers
 
@@ -88,6 +91,9 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in interface{}) error {
 // UnmarshalOptions configures how JSON data is deserialized as Go data.
 // The zero value is equivalent to the default unmarshal settings.
 type UnmarshalOptions struct {
+	requireKeyedLiterals
+	nonComparable
+
 	// Unmarshalers is a list of type-specific unmarshalers to use.
 	Unmarshalers *Unmarshalers
 
