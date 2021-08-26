@@ -25,18 +25,18 @@ func (e jsonError) Is(target error) bool {
 	return e == target || target == Error
 }
 
-type wrapError struct {
-	str string
-	err error
+type ioError struct {
+	action string // either "read" or "write"
+	err    error
 }
 
-func (e *wrapError) Error() string {
-	return errorPrefix + e.str + ": " + e.err.Error()
+func (e *ioError) Error() string {
+	return errorPrefix + e.action + " error: " + e.err.Error()
 }
-func (e *wrapError) Unwrap() error {
+func (e *ioError) Unwrap() error {
 	return e.err
 }
-func (e *wrapError) Is(target error) bool {
+func (e *ioError) Is(target error) bool {
 	return e == target || target == Error || errors.Is(e.err, target)
 }
 

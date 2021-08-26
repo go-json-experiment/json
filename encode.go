@@ -182,7 +182,7 @@ func (e *encodeBuffer) flush() error {
 		if n > 0 {
 			e.buf = e.buf[:copy(e.buf, e.buf[n:])]
 		}
-		return &wrapError{"write error", err}
+		return &ioError{action: "write", err: err}
 	}
 	e.buf = e.buf[:0]
 

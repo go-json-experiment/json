@@ -92,8 +92,8 @@ func TestErrorsIs(t *testing.T) {
 	)
 
 	var (
-		someWrapError       = &wrapError{str: "some wrap error", err: io.ErrShortWrite}
-		otherWrapError      = &wrapError{str: "other wrap error", err: io.ErrShortWrite}
+		someIOError         = &ioError{action: "write", err: io.ErrShortWrite}
+		otherIOError        = &ioError{action: "read", err: io.ErrUnexpectedEOF}
 		someSyntacticError  = &SyntacticError{str: "some syntactic error"}
 		otherSyntacticError = &SyntacticError{str: "other syntactic error"}
 		someSemanticError   = &SemanticError{action: "unmarshal", JSONKind: '0', GoType: reflect.TypeOf(int(0)), Err: strconv.ErrRange}
@@ -110,31 +110,31 @@ func TestErrorsIs(t *testing.T) {
 
 		// All sub-error values should match the top-level Error value.
 		{someGlobalError, Error, true},
-		{someWrapError, Error, true},
+		{someIOError, Error, true},
 		{someSyntacticError, Error, true},
 		{someSemanticError, Error, true},
 
 		// Top-level Error should not match any other sub-error value.
 		{Error, someGlobalError, false},
-		{Error, someWrapError, false},
+		{Error, someIOError, false},
 		{Error, someSyntacticError, false},
 		{Error, someSemanticError, false},
 
 		// Sub-error values should match itself (identity).
 		{someGlobalError, someGlobalError, true},
-		{someWrapError, someWrapError, true},
+		{someIOError, someIOError, true},
 		{someSyntacticError, someSyntacticError, true},
 		{someSemanticError, someSemanticError, true},
 
 		// Sub-error values should not match each other.
-		{someGlobalError, someWrapError, false},
-		{someWrapError, someSyntacticError, false},
+		{someGlobalError, someIOError, false},
+		{someIOError, someSyntacticError, false},
 		{someSyntacticError, someSemanticError, false},
 		{someSemanticError, someGlobalError, false},
 
 		// Sub-error values should not match other error values of same type.
 		{someGlobalError, otherGlobalError, false},
-		{someWrapError, otherWrapError, false},
+		{someIOError, otherIOError, false},
 		{someSyntacticError, otherSyntacticError, false},
 		{someSemanticError, otherSemanticError, false},
 
@@ -145,9 +145,9 @@ func TestErrorsIs(t *testing.T) {
 		{Error, io.ErrShortWrite, false},
 
 		// Wrapped errors should be matched.
-		{&wrapError{err: fmt.Errorf("%w", io.ErrShortWrite)}, io.ErrShortWrite, true}, // doubly wrapped
-		{&wrapError{err: io.ErrShortWrite}, io.ErrShortWrite, true},                   // singly wrapped
-		{&wrapError{err: io.ErrShortWrite}, io.EOF, false},
+		{&ioError{err: fmt.Errorf("%w", io.ErrShortWrite)}, io.ErrShortWrite, true}, // doubly wrapped
+		{&ioError{err: io.ErrShortWrite}, io.ErrShortWrite, true},                   // singly wrapped
+		{&ioError{err: io.ErrShortWrite}, io.EOF, false},
 		{&SemanticError{Err: fmt.Errorf("%w", strconv.ErrRange)}, strconv.ErrRange, true}, // doubly wrapped
 		{&SemanticError{Err: strconv.ErrRange}, strconv.ErrRange, true},                   // singly wrapped
 		{&SemanticError{Err: strconv.ErrRange}, io.EOF, false},

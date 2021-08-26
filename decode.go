@@ -193,7 +193,7 @@ func (d *decodeBuffer) fetch() error {
 		case err == io.EOF:
 			return io.ErrUnexpectedEOF
 		case err != nil:
-			return &wrapError{"read error", err}
+			return &ioError{action: "read", err: err}
 		default:
 			continue // Read returned (0, nil)
 		}
