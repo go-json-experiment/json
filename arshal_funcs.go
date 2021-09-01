@@ -42,6 +42,37 @@ var (
 	textUnmarshalerType   = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 )
 
+const startDetectingCyclesAfter = 1000
+
+type seenPointers map[typedPointer]struct{}
+
+type typedPointer struct {
+	typ reflect.Type
+	// TODO: This breaks if Go ever switches to a moving garbage collector.
+	// This should use unsafe.Pointer, but that requires importing unsafe.
+	// We only use pointers for comparisons, and never for unsafe type casts.
+	// See https://golang.org/cl/14137 and https://golang.org/issue/40592.
+	ptr uintptr
+}
+
+// visit visits pointer p of type t, reporting an error if seen before.
+// If successfully visited, then the caller must eventually call leave.
+func (m *seenPointers) visit(v reflect.Value) error {
+	p := typedPointer{v.Type(), v.Pointer()}
+	if _, ok := (*m)[p]; ok {
+		return &SemanticError{action: "marshal", GoType: p.typ, Err: errors.New("encountered a cycle")}
+	}
+	if *m == nil {
+		*m = make(map[typedPointer]struct{})
+	}
+	(*m)[p] = struct{}{}
+	return nil
+}
+func (m *seenPointers) leave(v reflect.Value) {
+	p := typedPointer{v.Type(), v.Pointer()}
+	delete(*m, p)
+}
+
 // SkipFunc may be returned by custom marshal and unmarshal functions
 // that operate on an Encoder or Decoder.
 //
@@ -550,7 +581,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		valFncs = lookupArshaler(t.Elem())
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		// TODO: Perform depth check and cycle detection.
+		// Check for cycles.
+		if enc.tokens.depth() > startDetectingCyclesAfter {
+			if err := enc.seenPointers.visit(va.Value); err != nil {
+				return err
+			}
+			defer enc.seenPointers.leave(va.Value)
+		}
+
 		if err := enc.WriteToken(ObjectStart); err != nil {
 			return err
 		}
@@ -703,7 +741,6 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		}
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		// TODO: Perform depth check and cycle detection.
 		if err := enc.WriteToken(ObjectStart); err != nil {
 			return err
 		}
@@ -805,7 +842,14 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		valFncs = lookupArshaler(t.Elem())
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		// TODO: Perform depth check and cycle detection.
+		// Check for cycles.
+		if enc.tokens.depth() > startDetectingCyclesAfter {
+			if err := enc.seenPointers.visit(va.Value); err != nil {
+				return err
+			}
+			defer enc.seenPointers.leave(va.Value)
+		}
+
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
@@ -868,7 +912,6 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		valFncs = lookupArshaler(t.Elem())
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		// TODO: Perform depth check and cycle detection.
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
@@ -935,6 +978,14 @@ func makePtrArshaler(t reflect.Type) *arshaler {
 		valFncs = lookupArshaler(t.Elem())
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
+		// Check for cycles.
+		if enc.tokens.depth() > startDetectingCyclesAfter {
+			if err := enc.seenPointers.visit(va.Value); err != nil {
+				return err
+			}
+			defer enc.seenPointers.leave(va.Value)
+		}
+
 		if va.IsNil() {
 			return enc.WriteToken(Null)
 		}

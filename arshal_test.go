@@ -13,6 +13,7 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -27,6 +28,7 @@ type (
 
 	recursiveMap   map[string]recursiveMap
 	recursiveSlice []recursiveSlice
+	recursivePtr   struct{ P *recursivePtr }
 
 	structEmpty       struct{}
 	structConflicting struct {
@@ -533,6 +535,15 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
 	}, {
+		name: "Maps/CyclicMap",
+		in: func() recursiveMap {
+			m := recursiveMap{"k": nil}
+			m["k"] = m
+			return m
+		}(),
+		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveMap{}), Err: errors.New("encountered a cycle")},
+	}, {
 		name: "Structs/Empty",
 		in:   structEmpty{},
 		want: `{}`,
@@ -956,6 +967,15 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[[],[],[[]],[[],[]]]`,
 	}, {
+		name: "Slices/CyclicSlice",
+		in: func() recursiveSlice {
+			s := recursiveSlice{{}}
+			s[0] = s
+			return s
+		}(),
+		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveSlice{}), Err: errors.New("encountered a cycle")},
+	}, {
 		name: "Arrays/Empty",
 		in:   [0]struct{}{},
 		want: `[]`,
@@ -1020,6 +1040,15 @@ func TestMarshal(t *testing.T) {
 		name: "Pointers/Float",
 		in:   addr(addr(float64(3.14159))),
 		want: `3.14159`,
+	}, {
+		name: "Pointers/CyclicPointer",
+		in: func() *recursivePtr {
+			p := new(recursivePtr)
+			p.P = p
+			return p
+		}(),
+		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePtr)(nil)), Err: errors.New("encountered a cycle")},
 	}, {
 		name: "Interfaces/Nil/Empty",
 		in:   [1]interface{}{nil},

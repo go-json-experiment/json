@@ -101,6 +101,8 @@ type Encoder struct {
 	state
 	encodeBuffer
 	options EncodeOptions
+
+	seenPointers seenPointers // only used when marshaling
 }
 
 // encodeBuffer is a buffer split into 2 segments:
