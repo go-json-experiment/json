@@ -34,7 +34,7 @@ func FuzzCoder(f *testing.F) {
 	for _, td := range encoderErrorTestdata {
 		f.Add(int64(0), []byte(td.wantOut))
 	}
-	for _, td := range benchTestdata {
+	for _, td := range jsonTestdata() {
 		f.Add(int64(0), []byte(td.data))
 	}
 

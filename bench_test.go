@@ -6,15 +6,11 @@ package json
 
 import (
 	"bytes"
-	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -249,86 +245,74 @@ func BenchmarkMarshal(b *testing.B) {
 	}
 }
 
-var benchTestdata = func() (out []struct {
-	name string
-	data []byte
-}) {
-	fis, err := ioutil.ReadDir("testdata")
-	if err != nil {
-		panic(err)
-	}
-	sort.Slice(fis, func(i, j int) bool { return fis[i].Name() < fis[j].Name() })
-	for _, fi := range fis {
-		if !strings.HasSuffix(fi.Name(), ".json.gz") {
-			break
+func TestTestdata(t *testing.T)      { runAllTestdata(t) }
+func BenchmarkTestdata(b *testing.B) { runAllTestdata(b) }
+
+func runAllTestdata(tb testing.TB) {
+	for _, td := range jsonTestdata() {
+		for _, arshalName := range []string{"Marshal", "Unmarshal"} {
+			for _, typeName := range []string{"Concrete", "Interface"} {
+				newValue := func() interface{} { return new(interface{}) }
+				if typeName == "Concrete" {
+					if td.new == nil {
+						continue
+					}
+					newValue = td.new
+				}
+				value := mustUnmarshalValue(tb, td.data, newValue)
+				name := path.Join(td.name, arshalName, typeName)
+				runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+					runArshal(tb, arshalName, newValue, td.data, value)
+				})
+			}
 		}
 
-		// Convert snake_case file name to CamelCase.
-		words := strings.Split(strings.TrimSuffix(fi.Name(), ".json.gz"), "_")
-		for i := range words {
-			words[i] = strings.Title(words[i])
-		}
-		name := strings.Join(words, "")
-
-		// Read and decompress the test data.
-		b, err := ioutil.ReadFile(filepath.Join("testdata", fi.Name()))
-		if err != nil {
-			panic(err)
-		}
-		zr, err := gzip.NewReader(bytes.NewReader(b))
-		if err != nil {
-			panic(err)
-		}
-		data, err := ioutil.ReadAll(zr)
-		if err != nil {
-			panic(err)
-		}
-
-		out = append(out, struct {
-			name string
-			data []byte
-		}{name, data})
-	}
-	return out
-}()
-
-func TestTestdata(t *testing.T) {
-	for _, td := range benchTestdata {
-		tokens := mustDecodeTokens(t, td.data)
+		tokens := mustDecodeTokens(tb, td.data)
 		buffer := make([]byte, 0, 2*len(td.data))
-		for _, modeName := range []string{"Streaming", "Buffered"} {
+		for _, codeName := range []string{"Encode", "Decode"} {
 			for _, typeName := range []string{"Token", "Value"} {
-				t.Run(path.Join(td.name, modeName, typeName, "Encoder"), func(t *testing.T) {
-					runEncoder(t, modeName, typeName, buffer, td.data, tokens)
-				})
-				t.Run(path.Join(td.name, modeName, typeName, "Decoder"), func(t *testing.T) {
-					runDecoder(t, modeName, typeName, buffer, td.data, tokens)
-				})
+				for _, modeName := range []string{"Streaming", "Buffered"} {
+					name := path.Join(td.name, codeName, typeName, modeName)
+					runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+						runCode(tb, codeName, typeName, modeName, buffer, td.data, tokens)
+					})
+				}
 			}
 		}
 	}
 }
-func BenchmarkTestdata(b *testing.B) {
-	for _, td := range benchTestdata {
-		tokens := mustDecodeTokens(b, td.data)
-		buffer := make([]byte, 0, 2*len(td.data))
-		for _, modeName := range []string{"Streaming", "Buffered"} {
-			for _, typeName := range []string{"Token", "Value"} {
-				b.Run(path.Join(td.name, modeName, typeName, "Encoder"), func(b *testing.B) {
-					b.ReportAllocs()
-					b.SetBytes(int64(len(td.data)))
-					for i := 0; i < b.N; i++ {
-						runEncoder(b, modeName, typeName, buffer, td.data, tokens)
-					}
-				})
-				b.Run(path.Join(td.name, modeName, typeName, "Decoder"), func(b *testing.B) {
-					b.ReportAllocs()
-					b.SetBytes(int64(len(td.data)))
-					for i := 0; i < b.N; i++ {
-						runDecoder(b, modeName, typeName, buffer, td.data, tokens)
-					}
-				})
+
+func mustUnmarshalValue(t testing.TB, data []byte, newValue func() interface{}) (value interface{}) {
+	value = newValue()
+	if err := Unmarshal(data, value); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+	return value
+}
+
+func runArshal(t testing.TB, arshalName string, newValue func() interface{}, data []byte, value interface{}) {
+	if benchV1 {
+		switch arshalName {
+		case "Marshal":
+			if _, err := jsonv1.Marshal(value); err != nil {
+				t.Fatalf("Marshal error: %v", err)
 			}
+		case "Unmarshal":
+			if err := jsonv1.Unmarshal(data, newValue()); err != nil {
+				t.Fatalf("Unmarshal error: %v", err)
+			}
+		}
+		return
+	}
+
+	switch arshalName {
+	case "Marshal":
+		if _, err := Marshal(value); err != nil {
+			t.Fatalf("Marshal error: %v", err)
+		}
+	case "Unmarshal":
+		if err := Unmarshal(data, newValue()); err != nil {
+			t.Fatalf("Unmarshal error: %v", err)
 		}
 	}
 }
@@ -359,7 +343,16 @@ func mustDecodeTokens(t testing.TB, data []byte) []Token {
 	return tokens
 }
 
-func runEncoder(t testing.TB, modeName, typeName string, buffer, data []byte, tokens []Token) {
+func runCode(t testing.TB, codeName, typeName, modeName string, buffer, data []byte, tokens []Token) {
+	switch codeName {
+	case "Encode":
+		runEncode(t, typeName, modeName, buffer, data, tokens)
+	case "Decode":
+		runDecode(t, typeName, modeName, buffer, data, tokens)
+	}
+}
+
+func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []Token) {
 	if benchV1 {
 		if modeName == "Buffered" {
 			t.Skip("no support for direct buffered input in v1")
@@ -400,7 +393,7 @@ func runEncoder(t testing.TB, modeName, typeName string, buffer, data []byte, to
 	}
 }
 
-func runDecoder(t testing.TB, modeName, typeName string, buffer, data []byte, tokens []Token) {
+func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []Token) {
 	if benchV1 {
 		if modeName == "Buffered" {
 			t.Skip("no support for direct buffered output in v1")
@@ -452,7 +445,7 @@ func runDecoder(t testing.TB, modeName, typeName string, buffer, data []byte, to
 }
 
 var ws = strings.Repeat(" ", 4<<10)
-var slowStreamingDecoderTestdata = []struct {
+var slowStreamingDecodeTestdata = []struct {
 	name string
 	data []byte
 }{
@@ -463,33 +456,24 @@ var slowStreamingDecoderTestdata = []struct {
 	{"LargeWhitespace/Array", []byte(ws + "[" + ws + `"value"` + ws + "," + ws + `"value"` + ws + "]" + ws)},
 }
 
-func TestSlowStreamingDecoder(t *testing.T) {
-	for _, td := range slowStreamingDecoderTestdata {
+func TestSlowStreamingDecode(t *testing.T)      { runAllSlowStreamingDecode(t) }
+func BenchmarkSlowStreamingDecode(b *testing.B) { runAllSlowStreamingDecode(b) }
+
+func runAllSlowStreamingDecode(tb testing.TB) {
+	for _, td := range slowStreamingDecodeTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
-			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
-				runSlowStreamingDecoder(t, typeName, td.data)
-			})
-		}
-	}
-}
-func BenchmarkSlowStreamingDecoder(b *testing.B) {
-	for _, td := range slowStreamingDecoderTestdata {
-		for _, typeName := range []string{"Token", "Value"} {
-			b.Run(path.Join(td.name, typeName), func(b *testing.B) {
-				b.ReportAllocs()
-				b.SetBytes(int64(len(td.data)))
-				for i := 0; i < b.N; i++ {
-					runSlowStreamingDecoder(b, typeName, td.data)
-				}
+			name := path.Join(td.name, typeName)
+			runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+				runSlowStreamingDecode(tb, typeName, td.data)
 			})
 		}
 	}
 }
 
-// runSlowStreamingDecoder tests a streaming Decoder operating on
+// runSlowStreamingDecode tests a streaming Decoder operating on
 // a slow io.Reader that only returns 1 byte at a time,
 // which tends to exercise pathological behavior.
-func runSlowStreamingDecoder(t testing.TB, typeName string, data []byte) {
+func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 	if benchV1 {
 		dec := jsonv1.NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
 		switch typeName {
@@ -525,7 +509,7 @@ func runSlowStreamingDecoder(t testing.TB, typeName string, data []byte) {
 
 func BenchmarkRawValue(b *testing.B) {
 	var data []byte
-	for _, ts := range benchTestdata {
+	for _, ts := range jsonTestdata() {
 		if ts.name == "StarcraftSettings" {
 			data = ts.data
 		}
@@ -566,6 +550,24 @@ func BenchmarkRawValue(b *testing.B) {
 				if err := method.format(&v); err != nil {
 					b.Errorf("RawValue.%v error: %v", method.name, err)
 				}
+			}
+		})
+	}
+}
+
+func runTestOrBench(tb testing.TB, name string, numBytes int64, run func(tb testing.TB)) {
+	switch tb := tb.(type) {
+	case *testing.T:
+		tb.Run(name, func(t *testing.T) {
+			run(t)
+		})
+	case *testing.B:
+		tb.Run(name, func(b *testing.B) {
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.SetBytes(numBytes)
+			for i := 0; i < b.N; i++ {
+				run(b)
 			}
 		})
 	}
