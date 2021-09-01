@@ -1128,6 +1128,7 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 					}
 				}
 
+				// TODO(https://golang.org/issue/47609): Use utf8.AppendRune.
 				var arr [utf8.UTFMax]byte
 				dst = append(dst, arr[:utf8.EncodeRune(arr[:], r)]...)
 			default:
