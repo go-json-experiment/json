@@ -7,11 +7,13 @@ package json
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -21,6 +23,231 @@ import (
 )
 
 var benchV1 = os.Getenv("BENCHMARK_V1") != ""
+
+var arshalTestdata = []struct {
+	name   string
+	raw    []byte
+	val    interface{}
+	new    func() interface{}
+	skipV1 bool
+}{{
+	name: "Bool",
+	raw:  []byte("true"),
+	val:  addr(true),
+	new:  func() interface{} { return new(bool) },
+}, {
+	name: "String",
+	raw:  []byte(`"hello, world!"`),
+	val:  addr("hello, world!"),
+	new:  func() interface{} { return new(string) },
+}, {
+	name: "Int",
+	raw:  []byte("-1234"),
+	val:  addr(int64(-1234)),
+	new:  func() interface{} { return new(int64) },
+}, {
+	name: "Uint",
+	raw:  []byte("1234"),
+	val:  addr(uint64(1234)),
+	new:  func() interface{} { return new(uint64) },
+}, {
+	name: "Float",
+	raw:  []byte("12.34"),
+	val:  addr(float64(12.34)),
+	new:  func() interface{} { return new(float64) },
+}, {
+	name: "Map/OneLarge",
+	raw:  []byte(`{"A":"A","B":"B","C":"C","D":"D","E":"E","F":"F","G":"G","H":"H","I":"I","J":"J","K":"K","L":"L","M":"M","N":"N","O":"O","P":"P","Q":"Q","R":"R","S":"S","T":"T","U":"U","V":"V","W":"W","X":"X","Y":"Y","Z":"Z"}`),
+	val:  addr(map[string]string{"A": "A", "B": "B", "C": "C", "D": "D", "E": "E", "F": "F", "G": "G", "H": "H", "I": "I", "J": "J", "K": "K", "L": "L", "M": "M", "N": "N", "O": "O", "P": "P", "Q": "Q", "R": "R", "S": "S", "T": "T", "U": "U", "V": "V", "W": "W", "X": "X", "Y": "Y", "Z": "Z"}),
+	new:  func() interface{} { return new(map[string]string) },
+}, {
+	name: "Map/ManySmall",
+	raw:  []byte(`{"A":{"K":"V"},"B":{"K":"V"},"C":{"K":"V"},"D":{"K":"V"},"E":{"K":"V"},"F":{"K":"V"},"G":{"K":"V"},"H":{"K":"V"},"I":{"K":"V"},"J":{"K":"V"},"K":{"K":"V"},"L":{"K":"V"},"M":{"K":"V"},"N":{"K":"V"},"O":{"K":"V"},"P":{"K":"V"},"Q":{"K":"V"},"R":{"K":"V"},"S":{"K":"V"},"T":{"K":"V"},"U":{"K":"V"},"V":{"K":"V"},"W":{"K":"V"},"X":{"K":"V"},"Y":{"K":"V"},"Z":{"K":"V"}}`),
+	val:  addr(map[string]map[string]string{"A": {"K": "V"}, "B": {"K": "V"}, "C": {"K": "V"}, "D": {"K": "V"}, "E": {"K": "V"}, "F": {"K": "V"}, "G": {"K": "V"}, "H": {"K": "V"}, "I": {"K": "V"}, "J": {"K": "V"}, "K": {"K": "V"}, "L": {"K": "V"}, "M": {"K": "V"}, "N": {"K": "V"}, "O": {"K": "V"}, "P": {"K": "V"}, "Q": {"K": "V"}, "R": {"K": "V"}, "S": {"K": "V"}, "T": {"K": "V"}, "U": {"K": "V"}, "V": {"K": "V"}, "W": {"K": "V"}, "X": {"K": "V"}, "Y": {"K": "V"}, "Z": {"K": "V"}}),
+	new:  func() interface{} { return new(map[string]map[string]string) },
+}, {
+	name: "Struct/OneLarge",
+	raw:  []byte(`{"A":"A","B":"B","C":"C","D":"D","E":"E","F":"F","G":"G","H":"H","I":"I","J":"J","K":"K","L":"L","M":"M","N":"N","O":"O","P":"P","Q":"Q","R":"R","S":"S","T":"T","U":"U","V":"V","W":"W","X":"X","Y":"Y","Z":"Z"}`),
+	val:  addr(struct{ A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z string }{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}),
+	new: func() interface{} {
+		return new(struct{ A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z string })
+	},
+}, {
+	name: "Struct/ManySmall",
+	raw:  []byte(`{"A":{"K":"V"},"B":{"K":"V"},"C":{"K":"V"},"D":{"K":"V"},"E":{"K":"V"},"F":{"K":"V"},"G":{"K":"V"},"H":{"K":"V"},"I":{"K":"V"},"J":{"K":"V"},"K":{"K":"V"},"L":{"K":"V"},"M":{"K":"V"},"N":{"K":"V"},"O":{"K":"V"},"P":{"K":"V"},"Q":{"K":"V"},"R":{"K":"V"},"S":{"K":"V"},"T":{"K":"V"},"U":{"K":"V"},"V":{"K":"V"},"W":{"K":"V"},"X":{"K":"V"},"Y":{"K":"V"},"Z":{"K":"V"}}`),
+	val: func() interface{} {
+		V := struct{ K string }{"V"}
+		return addr(struct{ A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z struct{ K string } }{
+			V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V, V,
+		})
+	}(),
+	new: func() interface{} {
+		return new(struct{ A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z struct{ K string } })
+	},
+}, {
+	name: "Slice/OneLarge",
+	raw:  []byte(`["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]`),
+	val:  addr([]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}),
+	new:  func() interface{} { return new([]string) },
+}, {
+	name: "Slice/ManySmall",
+	raw:  []byte(`[["A"],["B"],["C"],["D"],["E"],["F"],["G"],["H"],["I"],["J"],["K"],["L"],["M"],["N"],["O"],["P"],["Q"],["R"],["S"],["T"],["U"],["V"],["W"],["X"],["Y"],["Z"]]`),
+	val:  addr([][]string{{"A"}, {"B"}, {"C"}, {"D"}, {"E"}, {"F"}, {"G"}, {"H"}, {"I"}, {"J"}, {"K"}, {"L"}, {"M"}, {"N"}, {"O"}, {"P"}, {"Q"}, {"R"}, {"S"}, {"T"}, {"U"}, {"V"}, {"W"}, {"X"}, {"Y"}, {"Z"}}),
+	new:  func() interface{} { return new([][]string) },
+}, {
+	name: "Array/OneLarge",
+	raw:  []byte(`["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]`),
+	val:  addr([26]string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"}),
+	new:  func() interface{} { return new([26]string) },
+}, {
+	name: "Array/ManySmall",
+	raw:  []byte(`[["A"],["B"],["C"],["D"],["E"],["F"],["G"],["H"],["I"],["J"],["K"],["L"],["M"],["N"],["O"],["P"],["Q"],["R"],["S"],["T"],["U"],["V"],["W"],["X"],["Y"],["Z"]]`),
+	val:  addr([26][1]string{{"A"}, {"B"}, {"C"}, {"D"}, {"E"}, {"F"}, {"G"}, {"H"}, {"I"}, {"J"}, {"K"}, {"L"}, {"M"}, {"N"}, {"O"}, {"P"}, {"Q"}, {"R"}, {"S"}, {"T"}, {"U"}, {"V"}, {"W"}, {"X"}, {"Y"}, {"Z"}}),
+	new:  func() interface{} { return new([26][1]string) },
+}, {
+	name: "Bytes/Slice",
+	raw:  []byte(`"47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="`),
+	val:  addr([]byte{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55}),
+	new:  func() interface{} { return new([]byte) },
+}, {
+	name:   "Bytes/Array",
+	raw:    []byte(`"47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="`),
+	val:    addr([32]byte{0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55}),
+	new:    func() interface{} { return new([32]byte) },
+	skipV1: true,
+}, {
+	name: "Pointer",
+	raw:  []byte("true"),
+	val:  addr(addr(addr(addr(addr(addr(addr(addr(addr(addr(addr(true))))))))))),
+	new:  func() interface{} { return new(**********bool) },
+}, {
+	name: "TextArshal",
+	raw:  []byte(`"method"`),
+	val:  new(textArshaler),
+	new:  func() interface{} { return new(textArshaler) },
+}, {
+	name: "JSONArshalV1",
+	raw:  []byte(`"method"`),
+	val:  new(jsonArshalerV1),
+	new:  func() interface{} { return new(jsonArshalerV1) },
+}, {
+	name:   "JSONArshalV2",
+	raw:    []byte(`"method"`),
+	val:    new(jsonArshalerV2),
+	new:    func() interface{} { return new(jsonArshalerV2) },
+	skipV1: true,
+}}
+
+type textArshaler struct{}
+
+func (*textArshaler) MarshalText() ([]byte, error) {
+	return []byte("method"), nil
+}
+func (*textArshaler) UnmarshalText(b []byte) error {
+	if string(b) != "method" {
+		return fmt.Errorf("UnmarshalText: got %q, want %q", b, "method")
+	}
+	return nil
+}
+
+type jsonArshalerV1 struct{}
+
+func (*jsonArshalerV1) MarshalJSON() ([]byte, error) {
+	return []byte(`"method"`), nil
+}
+func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
+	if string(b) != `"method"` {
+		return fmt.Errorf("UnmarshalJSON: got %q, want %q", b, `"method"`)
+	}
+	return nil
+}
+
+type jsonArshalerV2 struct{}
+
+func (*jsonArshalerV2) MarshalNextJSON(enc *Encoder, opts MarshalOptions) error {
+	return enc.WriteToken(String("method"))
+}
+func (*jsonArshalerV2) UnmarshalNextJSON(dec *Decoder, opts UnmarshalOptions) error {
+	b, err := dec.ReadValue()
+	if string(b) != `"method"` {
+		return fmt.Errorf("UnmarshalNextJSON: got %q, want %q", b, `"method"`)
+	}
+	return err
+}
+
+func BenchmarkUnmarshal(b *testing.B) {
+	for _, tt := range arshalTestdata {
+		b.Run(tt.name, func(b *testing.B) {
+			// Initial setup.
+			unmarshal := Unmarshal
+			if benchV1 {
+				if tt.skipV1 {
+					b.Skip("not supported in v1")
+				}
+				unmarshal = jsonv1.Unmarshal
+			}
+
+			// Run the benchmark.
+			var val interface{}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				val = tt.new()
+				if err := unmarshal(tt.raw, val); err != nil {
+					b.Fatalf("Unmarshal error: %v", err)
+				}
+			}
+
+			// Verify the results.
+			b.StopTimer()
+			if !reflect.DeepEqual(val, tt.val) {
+				b.Fatalf("Unmarshal output mismatch:\ngot  %v\nwant %v", val, tt.val)
+			}
+		})
+	}
+}
+
+func BenchmarkMarshal(b *testing.B) {
+	for _, tt := range arshalTestdata {
+		b.Run(tt.name, func(b *testing.B) {
+			// Initial setup.
+			marshal := Marshal
+			if benchV1 {
+				if tt.skipV1 {
+					b.Skip("not supported in v1")
+				}
+				marshal = jsonv1.Marshal
+			}
+
+			// Run the benchmark.
+			var raw []byte
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var err error
+				raw, err = marshal(tt.val)
+				if err != nil {
+					b.Fatalf("Marshal error: %v", err)
+				}
+			}
+
+			// Verify the results.
+			b.StopTimer()
+			if !bytes.Equal(raw, tt.raw) {
+				// Map marshaling in v2 are non-deterministic.
+				byteHistogram := func(b []byte) (h [256]int) {
+					for _, c := range b {
+						h[c]++
+					}
+					return h
+				}
+				if !(strings.HasPrefix(tt.name, "Map/") && byteHistogram(raw) == byteHistogram(tt.raw)) {
+					b.Fatalf("Marshal output mismatch:\ngot  %s\nwant %s", raw, tt.raw)
+				}
+			}
+		})
+	}
+}
 
 var benchTestdata = func() (out []struct {
 	name string
