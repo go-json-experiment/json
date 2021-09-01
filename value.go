@@ -27,6 +27,22 @@ import (
 // RawValue may contain leading and/or trailing whitespace.
 type RawValue []byte
 
+// Clone returns a copy of v.
+func (v RawValue) Clone() RawValue {
+	if v == nil {
+		return nil
+	}
+	return append(RawValue{}, v...)
+}
+
+// String returns the string formatting of v.
+func (v RawValue) String() string {
+	if v == nil {
+		return "null"
+	}
+	return string(v)
+}
+
 // IsValid reports whether the raw JSON value is syntactically valid
 // according to RFC 7493.
 //
