@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"sync"
 )
 
 // MarshalOptions configures how Go data is serialized as JSON data.
@@ -73,7 +74,7 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in interface{}) error {
 		return out.WriteToken(Null)
 	}
 	// Shallow copy non-pointer values to obtain an addressable value.
-	// It is beneficial to performance to always pass ponters to avoid this.
+	// It is beneficial to performance to always pass pointers to avoid this.
 	if v.Kind() != reflect.Ptr {
 		v2 := reflect.New(v.Type())
 		v2.Elem().Set(v)
@@ -170,4 +171,43 @@ func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out interface{}) error {
 	unmarshal := lookupArshaler(t).unmarshal
 	// TODO: Handle custom unmarshalers.
 	return unmarshal(uo, in, va)
+}
+
+// addressableValue is a reflect.Value that is guaranteed to be addressable
+// such that calling the Addr and Set methods do not panic.
+//
+// There is no compile magic that enforces this property,
+// but rather the need to construct this type makes it easier to examine each
+// construction site to ensure that this property is upheld.
+type addressableValue struct{ reflect.Value }
+
+// newAddressableValue constructs a new addressable value of type t.
+func newAddressableValue(t reflect.Type) addressableValue {
+	return addressableValue{reflect.New(t).Elem()}
+}
+
+// All marshal and unmarshal behavior is implemented using these signatures.
+type (
+	marshaler   func(MarshalOptions, *Encoder, addressableValue) error
+	unmarshaler func(UnmarshalOptions, *Decoder, addressableValue) error
+)
+
+type arshaler struct {
+	marshal   marshaler
+	unmarshal unmarshaler
+}
+
+var lookupArshalerCache sync.Map // map[reflect.Type]*arshaler
+
+func lookupArshaler(t reflect.Type) *arshaler {
+	if v, ok := lookupArshalerCache.Load(t); ok {
+		return v.(*arshaler)
+	}
+
+	fncs := makeDefaultArshaler(t)
+	fncs = makeMethodArshaler(fncs, t)
+
+	// Use the last stored so that duplicate arshalers can be garbage collected.
+	v, _ := lookupArshalerCache.LoadOrStore(t, fncs)
+	return v.(*arshaler)
 }

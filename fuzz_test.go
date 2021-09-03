@@ -8,6 +8,7 @@
 // To manually run the fuzzer:
 //	go test -tags=dev.fuzz -fuzz=Coder
 //
+//go:build dev.fuzz
 // +build dev.fuzz
 
 package json
