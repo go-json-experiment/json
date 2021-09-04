@@ -1142,3 +1142,47 @@ func TestParseDecUint(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFloat(t *testing.T) {
+	tests := []struct {
+		in     string
+		want32 float64
+		want64 float64
+		wantOk bool
+	}{
+		{"0", 0, 0, true},
+		{"-1", -1, -1, true},
+		{"1", 1, 1, true},
+
+		{"-16777215", -16777215, -16777215, true}, // -(1<<24 - 1)
+		{"16777215", 16777215, 16777215, true},    // +(1<<24 - 1)
+		{"-16777216", -16777216, -16777216, true}, // -(1<<24)
+		{"16777216", 16777216, 16777216, true},    // +(1<<24)
+		{"-16777217", -16777216, -16777217, true}, // -(1<<24 + 1)
+		{"16777217", 16777216, 16777217, true},    // +(1<<24 + 1)
+
+		{"-9007199254740991", -9007199254740992, -9007199254740991, true}, // -(1<<53 - 1)
+		{"9007199254740991", 9007199254740992, 9007199254740991, true},    // +(1<<53 - 1)
+		{"-9007199254740992", -9007199254740992, -9007199254740992, true}, // -(1<<53)
+		{"9007199254740992", 9007199254740992, 9007199254740992, true},    // +(1<<53)
+		{"-9007199254740993", -9007199254740992, -9007199254740992, true}, // -(1<<53 + 1)
+		{"9007199254740993", 9007199254740992, 9007199254740992, true},    // +(1<<53 + 1)
+
+		{"-1e1000", -math.MaxFloat32, -math.MaxFloat64, true},
+		{"1e1000", +math.MaxFloat32, +math.MaxFloat64, true},
+	}
+
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			got32, gotOk32 := parseFloat([]byte(tt.in), 32)
+			if got32 != tt.want32 || gotOk32 != tt.wantOk {
+				t.Errorf("parseFloat(%q, 32) = (%v, %v), want (%v, %v)", tt.in, got32, gotOk32, tt.want32, tt.wantOk)
+			}
+
+			got64, gotOk64 := parseFloat([]byte(tt.in), 64)
+			if got64 != tt.want64 || gotOk64 != tt.wantOk {
+				t.Errorf("parseFloat(%q, 64) = (%v, %v), want (%v, %v)", tt.in, got64, gotOk64, tt.want64, tt.wantOk)
+			}
+		})
+	}
+}
