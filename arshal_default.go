@@ -145,6 +145,7 @@ func makeBytesArshaler(t reflect.Type) *arshaler {
 		val := enc.UnusedBuffer()
 		var b []byte
 		if t.Kind() == reflect.Array {
+			// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
 			b = va.Slice(0, t.Len()).Bytes()
 		} else {
 			b = va.Bytes()
@@ -186,6 +187,7 @@ func makeBytesArshaler(t reflect.Type) *arshaler {
 
 			var b []byte
 			if t.Kind() == reflect.Array {
+				// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
 				b = va.Slice(0, t.Len()).Bytes()
 				if n != len(b) {
 					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, t.Len())
@@ -690,15 +692,23 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		case '[':
 			once.Do(init)
 			unmarshal := valFncs.unmarshal // TODO: Handle custom arshalers.
-			va.Set(va.Slice(0, 0))
-			var i int
-			for dec.PeekKind() != ']' {
-				va.Set(reflect.Append(va.Value, reflect.Zero(t.Elem())))
+			va.SetLen(0)
+			mustZero := true // we do not know the cleanliness of unused capacity
+			for i := 0; dec.PeekKind() != ']'; i++ {
+				if i+1 < va.Cap() {
+					va.SetLen(i + 1)
+				} else {
+					// TODO(https://golang.org/issue/48000): Use reflect.Value.Append.
+					va.Set(reflect.Append(va.Value, reflect.Zero(t.Elem())))
+					mustZero = false // append guarantees that unused capacity is zero-initialized
+				}
 				v := addressableValue{va.Index(i)} // indexed slice element is always addressable
+				if mustZero {
+					v.Set(reflect.Zero(t.Elem()))
+				}
 				if err := unmarshal(uo, dec, v); err != nil {
 					return err
 				}
-				i++
 			}
 			if va.IsNil() {
 				va.Set(reflect.MakeSlice(va.Type(), 0, 0))
