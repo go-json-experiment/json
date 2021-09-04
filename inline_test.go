@@ -55,6 +55,7 @@ func TestInline(t *testing.T) {
 			"stateEntry.needImplicitComma",
 			"stateEntry.needObjectName",
 			"stateEntry.needObjectValue",
+			"Token.String",
 		} {
 			m[s] = true
 		}

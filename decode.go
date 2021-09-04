@@ -1150,7 +1150,7 @@ func unescapeSimpleString(src []byte) []byte {
 	if consumeSimpleString(src) == len(src) {
 		return src[len(`"`) : len(src)-len(`"`)]
 	}
-	out, ok := unescapeString(nil, src)
+	out, ok := unescapeString(make([]byte, 0, len(src)), src)
 	if !ok {
 		panic("BUG: invalid JSON string")
 	}

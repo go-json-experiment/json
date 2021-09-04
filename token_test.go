@@ -10,6 +10,21 @@ import (
 	"testing"
 )
 
+func TestTokenStringAllocations(t *testing.T) {
+	tok := rawToken(`"hello"`)
+	var m map[string]bool
+	got := int(testing.AllocsPerRun(10, func() {
+		// This function uses tok.String() is a non-escaping manner
+		// (i.e., looking it up in a Go map). It should not allocate.
+		if m[tok.String()] {
+			panic("never executed")
+		}
+	}))
+	if got > 0 {
+		t.Errorf("Token.String allocated %d times, want 0", got)
+	}
+}
+
 func TestTokenAccessors(t *testing.T) {
 	type token struct {
 		Bool   bool

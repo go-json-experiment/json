@@ -226,33 +226,43 @@ func (t Token) appendString(dst []byte, validateUTF8, preserveRaw bool, escapeRu
 // String returns the unescaped string value for a JSON string.
 // For other JSON kinds, this returns the raw JSON represention.
 func (t Token) String() string {
+	// This is inlinable to take advantage of "function outlining".
+	// This avoids an allocation for the string(b) conversion
+	// if the caller does not use the string in an escaping manner.
+	// See https://blog.filippo.io/efficient-go-apis-with-the-inliner/
+	s, b := t.string()
+	if len(b) > 0 {
+		return string(b)
+	}
+	return s
+}
+func (t Token) string() (string, []byte) {
 	if raw := t.raw; raw != nil {
 		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
 		buf := raw.previousBuffer()
 		if buf[0] == '"' {
-			v, _ := unescapeString(make([]byte, 0, len(buf)), buf)
-			return string(v)
+			return "", unescapeSimpleString(buf)
 		}
 		// Handle tokens that are not JSON strings for fmt.Stringer.
-		return string(buf)
+		return "", buf
 	}
 	if len(t.str) != 0 && t.num == 0 {
-		return t.str
+		return t.str, nil
 	}
 	// Handle tokens that are not JSON strings for fmt.Stringer.
 	if t.num > 0 {
 		switch t.str[0] {
 		case 'f':
-			return string(appendNumber(nil, math.Float64frombits(t.num), 64))
+			return string(appendNumber(nil, math.Float64frombits(t.num), 64)), nil
 		case 'i':
-			return strconv.FormatInt(int64(t.num), 10)
+			return strconv.FormatInt(int64(t.num), 10), nil
 		case 'u':
-			return strconv.FormatUint(uint64(t.num), 10)
+			return strconv.FormatUint(uint64(t.num), 10), nil
 		}
 	}
-	return "<invalid json.Token>"
+	return "<invalid json.Token>", nil
 }
 
 // appendNumber appends a JSON number to dst and returns it.
