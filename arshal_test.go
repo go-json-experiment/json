@@ -2554,6 +2554,18 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "aAa"}),
 	}, {
+		name:  "Structs/OptionCaseInsensitive",
+		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
+		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
+		inVal: new(structScalars),
+		want:  addr(structScalars{Bool: true, String: "hello", Bytes: []byte{1, 2, 3}, Int: -64, Uint: 64, Float: 3.14159}),
+	}, {
+		name:  "Structs/OptionCaseSensitive",
+		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: false},
+		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
+		inVal: new(structScalars),
+		want:  addr(structScalars{}),
+	}, {
 		name:    "Structs/Invalid/ErrUnexpectedEOF",
 		inBuf:   ``,
 		inVal:   addr(structAll{}),

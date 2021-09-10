@@ -609,9 +609,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 				name := unescapeSimpleString(val)
 				i, ok := fieldsByName[string(name)]
-				if !ok && hasNocase {
+				if !ok && (hasNocase || uo.MatchCaseInsensitiveNames) {
 					for i2, f := range fields {
-						if f.nocase && strings.EqualFold(f.name, string(name)) {
+						if (f.nocase || uo.MatchCaseInsensitiveNames) && strings.EqualFold(f.name, string(name)) {
 							i, ok = i2, true
 							break
 						}

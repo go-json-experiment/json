@@ -102,6 +102,11 @@ type UnmarshalOptions struct {
 	// from either a JSON number or a JSON string containing a JSON number.
 	StringifyNumbers bool
 
+	// MatchCaseInsensitiveNames specifies that unmarshaling into a Go struct
+	// should fallback on a case insensitive match of the name if an exact match
+	// could not be found.
+	MatchCaseInsensitiveNames bool
+
 	// TODO: Add other options.
 }
 
