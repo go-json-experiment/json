@@ -353,17 +353,19 @@ var encoderErrorTestdata = []struct {
 	calls: []encoderMethodCall{
 		{ObjectStart, nil},
 		{String("0"), nil},
-		{Uint(0), nil},
+		{ObjectStart, nil},
+		{ObjectEnd, nil},
 		{String("0"), &SyntacticError{str: `duplicate name "0" in object`}},
 		{RawValue(`"0"`), &SyntacticError{str: `duplicate name "0" in object`}},
 		{String("1"), nil},
-		{Uint(1), nil},
+		{ObjectStart, nil},
+		{ObjectEnd, nil},
 		{String("1"), &SyntacticError{str: `duplicate name "1" in object`}},
 		{RawValue(`"1"`), &SyntacticError{str: `duplicate name "1" in object`}},
 		{ObjectEnd, nil},
 		{RawValue(` { "0" : 0 , "1" : 1 , "0" : 0 } `), &SyntacticError{str: `duplicate name "0" in object`}},
 	},
-	wantOut: `{"0":0,"1":1}` + "\n",
+	wantOut: `{"0":{},"1":{}}` + "\n",
 }, {
 	name: "TruncatedArray/AfterStart",
 	calls: []encoderMethodCall{

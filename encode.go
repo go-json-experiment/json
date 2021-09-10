@@ -275,7 +275,7 @@ func (e *Encoder) WriteToken(t Token) error {
 			break
 		}
 		if !e.options.AllowDuplicateNames {
-			e.namespaces.push()
+			e.namespaces.pop()
 		}
 	case '[':
 		b = append(b, '[')
