@@ -64,9 +64,17 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	// See https://golang.org/issue/2718 and https://golang.org/issue/3546.
 	out.name = sf.Name // always starts with an uppercase character
 	if len(tag) > 0 && !strings.HasPrefix(tag, ",") {
-		opt, n, err := consumeTagOption(tag)
-		if err != nil {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
+		// For better compatibility with v1, accept almost any unescaped name.
+		n := len(tag) - len(strings.TrimLeftFunc(tag, func(r rune) bool {
+			return !strings.ContainsRune(",\\'\"`", r) // reserve comma, backslash, and quotes
+		}))
+		opt := tag[:n]
+		if n == 0 {
+			// Allow a single quoted strings for arbitrary names.
+			opt, n, err = consumeTagOption(tag)
+			if err != nil {
+				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
+			}
 		}
 		out.name = opt
 		tag = tag[n:]
@@ -80,6 +88,9 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid character %q before next option (expecting ',')", sf.Name, tag[0])
 		}
 		tag = tag[len(","):]
+		if len(tag) == 0 {
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid trailing ',' character", sf.Name)
+		}
 
 		// Consume and process the tag option.
 		opt, n, err := consumeTagOption(tag)

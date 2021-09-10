@@ -71,7 +71,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"-,"`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '-' at start of option (expecting Unicode letter or single quote)"),
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid trailing ',' character"),
 	}, {
 		name: "QuotedDashName",
 		in: struct {
@@ -83,7 +83,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"$%-/"`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '$' at start of option (expecting Unicode letter or single quote)"),
+		wantOpts: fieldOptions{name: "$%-/"},
 	}, {
 		name: "QuotedLatinPunctuationName",
 		in: struct {
@@ -95,7 +95,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"0123456789"`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '0' at start of option (expecting Unicode letter or single quote)"),
+		wantOpts: fieldOptions{name: "0123456789"},
 	}, {
 		name: "QuotedLatinDigitsName",
 		in: struct {
@@ -143,7 +143,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"text/html%"`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '/' before next option (expecting ',')"),
+		wantOpts: fieldOptions{name: "text/html%"},
 	}, {
 		name: "QuotedPercentSlashName",
 		in: struct {
@@ -155,7 +155,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V string `json:"!#$%&()*+-./:;<=>?@[]^_{|}~ "`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid character '!' at start of option (expecting Unicode letter or single quote)"),
+		wantOpts: fieldOptions{name: "!#$%&()*+-./:;<=>?@[]^_{|}~ "},
 	}, {
 		name: "QuotedPunctuationName",
 		in: struct {
@@ -185,7 +185,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:","`
 		}{},
-		wantErr: errors.New("Go struct field V has malformed `json` tag: unexpected EOF"),
+		wantErr: errors.New("Go struct field V has malformed `json` tag: invalid trailing ',' character"),
 	}, {
 		name: "SuperfluousCommas",
 		in: struct {
