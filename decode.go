@@ -272,6 +272,45 @@ func (d *Decoder) PeekKind() Kind {
 	return Kind(d.buf[pos]).normalize()
 }
 
+// skipValue is semantically equivalent to calling ReadValue and discarding
+// the result except that memory is not wasted trying to hold the entire result.
+func (d *Decoder) skipValue() error {
+	switch d.PeekKind() {
+	case '{':
+		if _, err := d.ReadToken(); err != nil {
+			return err
+		}
+		for d.PeekKind() != '}' {
+			if _, err := d.ReadValue(); err != nil {
+				return err
+			}
+			if err := d.skipValue(); err != nil {
+				return err
+			}
+		}
+		if _, err := d.ReadToken(); err != nil {
+			return err
+		}
+	case '[':
+		if _, err := d.ReadToken(); err != nil {
+			return err
+		}
+		for d.PeekKind() != ']' {
+			if err := d.skipValue(); err != nil {
+				return err
+			}
+		}
+		if _, err := d.ReadToken(); err != nil {
+			return err
+		}
+	default:
+		if _, err := d.ReadValue(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ReadToken reads the next Token, advancing the read offset.
 // The returned token is only valid until the next Peek or Read call.
 // It returns io.EOF if there are no more tokens.

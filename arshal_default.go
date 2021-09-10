@@ -619,7 +619,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 				if !ok {
 					// Consume unknown object member.
-					if _, err := dec.ReadValue(); err != nil {
+					if err := dec.skipValue(); err != nil {
 						return err
 					}
 					continue

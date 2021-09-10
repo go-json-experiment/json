@@ -2596,6 +2596,21 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(structUnexportedEmbedded{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
+		name: "Structs/Unknown",
+		inBuf: `{
+	"object0": {},
+	"object1": {"key1": "value"},
+	"object2": {"key1": "value", "key2": "value"},
+	"objects": {"":{"":{"":{}}}},
+	"array0": [],
+	"array1": ["value1"],
+	"array2": ["value1", "value2"],
+	"array": [[[]]],
+	"scalars": [null, false, true, "string", 12.345]
+}`,
+		inVal: addr(struct{}{}),
+		want:  addr(struct{}{}),
+	}, {
 		name:  "Slices/Null",
 		inBuf: `null`,
 		inVal: addr([]string{"something"}),
