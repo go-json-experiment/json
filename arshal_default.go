@@ -495,7 +495,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 func makeStructArshaler(t reflect.Type) *arshaler {
 	// TODO: Support `inline`, `unknown`, and `format`.
-	// TODO: Support MarshalOptions.DiscardUnknownMembers and UnmarshalOptions.RejectUnknownMembers.
+	// TODO: Support MarshalOptions.DiscardUnknownMembers.
 	var fncs arshaler
 	type field struct {
 		index int // index into reflect.StructField.Field
@@ -618,6 +618,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					}
 				}
 				if !ok {
+					if uo.RejectUnknownNames {
+						return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: ErrUnknownName}
+					}
+
 					// Consume unknown object member.
 					if err := dec.skipValue(); err != nil {
 						return err

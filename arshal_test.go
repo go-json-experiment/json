@@ -306,6 +306,7 @@ var (
 	array3ByteType               = reflect.TypeOf((*[3]byte)(nil)).Elem()
 	array4ByteType               = reflect.TypeOf((*[4]byte)(nil)).Elem()
 	mapStringStringType          = reflect.TypeOf((*map[string]string)(nil)).Elem()
+	structAllType                = reflect.TypeOf((*structAll)(nil)).Elem()
 	structConflictingType        = reflect.TypeOf((*structConflicting)(nil)).Elem()
 	structNoneExportedType       = reflect.TypeOf((*structNoneExported)(nil)).Elem()
 	structMalformedTagType       = reflect.TypeOf((*structMalformedTag)(nil)).Elem()
@@ -2528,6 +2529,19 @@ func TestUnmarshal(t *testing.T) {
 			Array: [1]string{"goodbye"},
 			Ptr:   new(structStringifiedAll), // may be stringified
 		}),
+	}, {
+		name:  "Structs/UnknownIgnored",
+		uopts: UnmarshalOptions{RejectUnknownNames: false},
+		inBuf: `{"unknown":"fizzbuzz"}`,
+		inVal: new(structAll),
+		want:  new(structAll),
+	}, {
+		name:    "Structs/UnknownRejected",
+		uopts:   UnmarshalOptions{RejectUnknownNames: true},
+		inBuf:   `{"unknown":"fizzbuzz"}`,
+		inVal:   new(structAll),
+		want:    new(structAll),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: structAllType, Err: ErrUnknownName},
 	}, {
 		name:  "Structs/UnexportedIgnored",
 		inBuf: `{"ignored":"unused"}`,
