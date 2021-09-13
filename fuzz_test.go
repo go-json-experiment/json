@@ -19,6 +19,7 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -267,6 +268,26 @@ func FuzzLessUTF16(f *testing.F) {
 		want := lessUTF16Simple(s1, s2)
 		if got != want {
 			t.Errorf("lessUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
+		}
+	})
+}
+
+func FuzzEqualFold(f *testing.F) {
+	for _, tt := range equalFoldTestdata {
+		f.Add(tt.in1, tt.in2)
+	}
+
+	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
+		// The strings must be valid UTF-8 for equalFold to work.
+		if !utf8.Valid(s1) || !utf8.Valid(s2) {
+			t.Skipf("invalid UTF-8 input")
+		}
+
+		// Compare the optimized and simplified implementations.
+		got := equalFold(s1, s2)
+		want := bytes.EqualFold(s1, s2)
+		if got != want {
+			t.Errorf("equalFold(%q, %q) = %v, want %v", s1, s2, got, want)
 		}
 	})
 }

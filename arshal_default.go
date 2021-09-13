@@ -11,8 +11,8 @@ import (
 	"math"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // Most natural Go type that correspond with each JSON type.
@@ -503,15 +503,16 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		fieldOptions
 	}
 	var (
-		once         sync.Once
-		fields       []field
-		fieldsByName map[string]int // index into fields slice
-		hasNocase    bool           // does any field have `nocase` specified?
-		errInit      *SemanticError
+		once               sync.Once
+		fields             []field
+		fieldsByActualName map[string]int   // index into fields slice
+		fieldsByFoldedName map[string][]int // index into fields slice for all fold-equal fields
+		errInit            *SemanticError
 	)
 	init := func() {
 		var hasAnyJSONTag bool
-		fieldsByName = make(map[string]int, t.NumField())
+		fieldsByActualName = make(map[string]int, t.NumField())
+		fieldsByFoldedName = make(map[string][]int, t.NumField())
 		for i := 0; i < t.NumField(); i++ {
 			sf := t.Field(i)
 			_, hasTag := sf.Tag.Lookup("json")
@@ -524,18 +525,27 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				errInit = &SemanticError{GoType: t, Err: err}
 				return
 			}
-			if j, ok := fieldsByName[options.name]; ok {
+
+			// Process the JSON object name.
+			if !utf8.ValidString(options.name) {
+				err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, options.name)
+				errInit = &SemanticError{GoType: t, Err: err}
+				return
+			}
+			if j, ok := fieldsByActualName[options.name]; ok {
 				err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
 				errInit = &SemanticError{GoType: t, Err: err}
 				return
 			}
-			fieldsByName[options.name] = len(fields)
+			fieldsByActualName[options.name] = len(fields)
+			foldedName := string(foldName([]byte(options.name)))
+			fieldsByFoldedName[foldedName] = append(fieldsByFoldedName[foldedName], len(fields)) // may have conflicts
+
 			fields = append(fields, field{
 				index:        i,
 				fncs:         lookupArshaler(sf.Type),
 				fieldOptions: options,
 			})
-			hasNocase = hasNocase || options.nocase
 		}
 
 		// NOTE: New users to the json package are occasionally surprised that
@@ -608,25 +618,25 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					return err
 				}
 				name := unescapeSimpleString(val)
-				i, ok := fieldsByName[string(name)]
-				if !ok && (hasNocase || uo.MatchCaseInsensitiveNames) {
-					for i2, f := range fields {
-						if (f.nocase || uo.MatchCaseInsensitiveNames) && strings.EqualFold(f.name, string(name)) {
+				i, ok := fieldsByActualName[string(name)]
+				if !ok {
+					for _, i2 := range fieldsByFoldedName[string(foldName(name))] {
+						if fields[i2].nocase || uo.MatchCaseInsensitiveNames {
 							i, ok = i2, true
 							break
 						}
 					}
-				}
-				if !ok {
-					if uo.RejectUnknownNames {
-						return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: ErrUnknownName}
-					}
+					if !ok {
+						if uo.RejectUnknownNames {
+							return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: ErrUnknownName}
+						}
 
-					// Consume unknown object member.
-					if err := dec.skipValue(); err != nil {
-						return err
+						// Consume unknown object member.
+						if err := dec.skipValue(); err != nil {
+							return err
+						}
+						continue
 					}
-					continue
 				}
 				f := fields[i]
 

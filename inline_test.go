@@ -56,6 +56,7 @@ func TestInline(t *testing.T) {
 			"stateEntry.needObjectName",
 			"stateEntry.needObjectValue",
 			"Token.String",
+			"foldName",
 		} {
 			m[s] = true
 		}
