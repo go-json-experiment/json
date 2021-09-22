@@ -24,8 +24,9 @@ type structFields struct {
 }
 
 type structField struct {
-	index int // index into reflect.StructField.Field
-	fncs  *arshaler
+	index   int // index into reflect.StructField.Field
+	fncs    *arshaler
+	isEmpty func(addressableValue) bool
 	fieldOptions
 }
 
@@ -60,9 +61,25 @@ func makeStructFields(t reflect.Type) (structFields, *SemanticError) {
 		foldedName := string(foldName([]byte(options.name)))
 		fs.byFoldedName[foldedName] = append(fs.byFoldedName[foldedName], len(fs.flattened)) // may have conflicts
 
+		// Provide a function that can determine for certain that the value
+		// would serialize as an empty JSON value.
+		isEmpty := func(addressableValue) bool { return false }
+		switch sf.Type.Kind() {
+		case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
+			// If there is a custom marshal method, we cannot determine
+			// upfront whether it will write an empty JSON value.
+			if which, _ := implementsWhich(sf.Type, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which != nil {
+				break
+			}
+			isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
+		case reflect.Ptr, reflect.Interface:
+			isEmpty = func(va addressableValue) bool { return va.IsNil() }
+		}
+
 		fs.flattened = append(fs.flattened, structField{
 			index:        i,
 			fncs:         lookupArshaler(sf.Type),
+			isEmpty:      isEmpty,
 			fieldOptions: options,
 		})
 	}

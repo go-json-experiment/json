@@ -516,18 +516,36 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		}
 		for _, f := range fields.flattened {
 			v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
+
+			// OmitZero skips the field if the Go value is zero,
+			// which we can determine up front without calling the marshaler.
 			if f.omitzero && v.IsZero() {
 				continue
 			}
-			// TODO: Support `omitempty`.
+
+			hasCustomMarshal := false
+			marshal := f.fncs.marshal // TODO: Handle custom arshalers.
+
+			// OmitEmpty skips the field if the marshaled JSON value is empty,
+			// which we can know up front if there are no custom marshalers,
+			// otherwise we must marshal the value and unwrite it if empty.
+			if f.omitempty && !hasCustomMarshal && f.isEmpty(v) {
+				continue // fast path for omitempty
+			}
+
+			// Write the object member name and value.
 			if err := enc.WriteToken(String(f.name)); err != nil {
 				return err
 			}
-			marshal := f.fncs.marshal // TODO: Handle custom arshalers.
 			mo2 := mo
 			mo2.StringifyNumbers = mo2.StringifyNumbers || f.string
 			if err := marshal(mo2, enc, v); err != nil {
 				return err
+			}
+
+			// Try unwriting the member if empty (slow path for omitempty).
+			if f.omitempty {
+				enc.unwriteEmptyObjectMember()
 			}
 		}
 		if err := enc.WriteToken(ObjectEnd); err != nil {

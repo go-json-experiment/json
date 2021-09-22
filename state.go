@@ -259,6 +259,12 @@ func (e *stateEntry) increment() {
 	(*e)++
 }
 
+// decrement decrements the number of elements for the current object or array.
+// It is the callers responsibility to ensure that e.length > 0.
+func (e *stateEntry) decrement() {
+	(*e)--
+}
+
 // objectNamespaceStack is a stack of object namespaces.
 // This data structure assists in detecting duplicate names.
 type objectNamespaceStack []objectNamespace
@@ -378,8 +384,6 @@ func (ns *objectNamespace) insert(b []byte) bool {
 
 // removeLast removes the last name in the namespace.
 func (ns *objectNamespace) removeLast() {
-	// TODO: Delete this if Marshal/Unmarshal don't need to provide the ability
-	// to unwrite/unread an object name.
 	if ns.mapNames != nil {
 		delete(ns.mapNames, string(ns.last()))
 	}

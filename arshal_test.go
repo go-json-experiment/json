@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -144,6 +145,51 @@ type (
 		Ptr           *structOmitZeroAll `json:",omitzero"`
 		Interface     interface{}        `json:",omitzero"`
 	}
+	structOmitEmptyAll struct {
+		Bool              bool                    `json:",omitempty"`
+		PtrBool           *bool                   `json:",omitempty"`
+		String            string                  `json:",omitempty"`
+		StringEmpty       stringMarshalEmpty      `json:",omitempty"`
+		StringNonEmpty    stringMarshalNonEmpty   `json:",omitempty"`
+		PtrString         *string                 `json:",omitempty"`
+		PtrStringEmpty    *stringMarshalEmpty     `json:",omitempty"`
+		PtrStringNonEmpty *stringMarshalNonEmpty  `json:",omitempty"`
+		Bytes             []byte                  `json:",omitempty"`
+		BytesEmpty        bytesMarshalEmpty       `json:",omitempty"`
+		BytesNonEmpty     bytesMarshalNonEmpty    `json:",omitempty"`
+		PtrBytes          *[]byte                 `json:",omitempty"`
+		PtrBytesEmpty     *bytesMarshalEmpty      `json:",omitempty"`
+		PtrBytesNonEmpty  *bytesMarshalNonEmpty   `json:",omitempty"`
+		Float             float64                 `json:",omitempty"`
+		PtrFloat          *float64                `json:",omitempty"`
+		Map               map[string]string       `json:",omitempty"`
+		MapEmpty          mapMarshalEmpty         `json:",omitempty"`
+		MapNonEmpty       mapMarshalNonEmpty      `json:",omitempty"`
+		PtrMap            *map[string]string      `json:",omitempty"`
+		PtrMapEmpty       *mapMarshalEmpty        `json:",omitempty"`
+		PtrMapNonEmpty    *mapMarshalNonEmpty     `json:",omitempty"`
+		Slice             []string                `json:",omitempty"`
+		SliceEmpty        sliceMarshalEmpty       `json:",omitempty"`
+		SliceNonEmpty     sliceMarshalNonEmpty    `json:",omitempty"`
+		PtrSlice          *[]string               `json:",omitempty"`
+		PtrSliceEmpty     *sliceMarshalEmpty      `json:",omitempty"`
+		PtrSliceNonEmpty  *sliceMarshalNonEmpty   `json:",omitempty"`
+		Ptr               *structOmitZeroEmptyAll `json:",omitempty"`
+		Interface         interface{}             `json:",omitempty"`
+	}
+	structOmitZeroEmptyAll struct {
+		Bool      bool                    `json:",omitzero,omitempty"`
+		String    string                  `json:",omitzero,omitempty"`
+		Bytes     []byte                  `json:",omitzero,omitempty"`
+		Int       int64                   `json:",omitzero,omitempty"`
+		Uint      uint64                  `json:",omitzero,omitempty"`
+		Float     float64                 `json:",omitzero,omitempty"`
+		Map       map[string]string       `json:",omitzero,omitempty"`
+		Slice     []string                `json:",omitzero,omitempty"`
+		Array     [1]string               `json:",omitzero,omitempty"`
+		Ptr       *structOmitZeroEmptyAll `json:",omitzero,omitempty"`
+		Interface interface{}             `json:",omitzero,omitempty"`
+	}
 
 	allMethods struct {
 		method string // the method that was called
@@ -185,15 +231,26 @@ type (
 		MarshalJSON       struct{} // cancel out MarshalJSON method with collision
 		UnmarshalJSON     struct{} // cancel out UnmarshalJSON method with collision
 	}
-	structMethodJSONv2  struct{ value string }
-	structMethodJSONv1  struct{ value string }
-	structMethodText    struct{ value string }
+
+	structMethodJSONv2 struct{ value string }
+	structMethodJSONv1 struct{ value string }
+	structMethodText   struct{ value string }
+
 	marshalJSONv2Func   func(*Encoder, MarshalOptions) error
 	marshalJSONv1Func   func() ([]byte, error)
 	marshalTextFunc     func() ([]byte, error)
 	unmarshalJSONv2Func func(*Decoder, UnmarshalOptions) error
 	unmarshalJSONv1Func func([]byte) error
 	unmarshalTextFunc   func([]byte) error
+
+	stringMarshalEmpty    string
+	stringMarshalNonEmpty string
+	bytesMarshalEmpty     []byte
+	bytesMarshalNonEmpty  []byte
+	mapMarshalEmpty       map[string]string
+	mapMarshalNonEmpty    map[string]string
+	sliceMarshalEmpty     []string
+	sliceMarshalNonEmpty  []string
 )
 
 func (p *allMethods) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
@@ -286,6 +343,15 @@ func (f unmarshalTextFunc) UnmarshalText(b []byte) error {
 	return f(b)
 }
 
+func (stringMarshalEmpty) MarshalJSON() ([]byte, error)    { return []byte(`""`), nil }
+func (stringMarshalNonEmpty) MarshalJSON() ([]byte, error) { return []byte(`"value"`), nil }
+func (bytesMarshalEmpty) MarshalJSON() ([]byte, error)     { return []byte(`[]`), nil }
+func (bytesMarshalNonEmpty) MarshalJSON() ([]byte, error)  { return []byte(`["value"]`), nil }
+func (mapMarshalEmpty) MarshalJSON() ([]byte, error)       { return []byte(`{}`), nil }
+func (mapMarshalNonEmpty) MarshalJSON() ([]byte, error)    { return []byte(`{"key":"value"}`), nil }
+func (sliceMarshalEmpty) MarshalJSON() ([]byte, error)     { return []byte(`[]`), nil }
+func (sliceMarshalNonEmpty) MarshalJSON() ([]byte, error)  { return []byte(`["value"]`), nil }
+
 var (
 	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
 	intType                      = reflect.TypeOf((*int)(nil)).Elem()
@@ -333,6 +399,7 @@ var (
 )
 
 func addr(v interface{}) interface{} {
+	// TODO: Make this generic.
 	v1 := reflect.ValueOf(v)
 	v2 := reflect.New(v1.Type())
 	v2.Elem().Set(v1)
@@ -349,6 +416,7 @@ func TestMarshal(t *testing.T) {
 		wantErr error
 
 		canonicalize bool // canonicalize the output before comparing?
+		useWriter    bool // call MarshalFull instead
 	}{{
 		name: "Nil",
 		in:   nil,
@@ -919,6 +987,235 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
+		name:  "Structs/OmitEmpty/Zero",
+		eopts: EncodeOptions{Indent: "\t"},
+		in:    structOmitEmptyAll{},
+		want: `{
+	"Bool": false,
+	"StringNonEmpty": "value",
+	"BytesNonEmpty": [
+		"value"
+	],
+	"Float": 0,
+	"MapNonEmpty": {
+		"key": "value"
+	},
+	"SliceNonEmpty": [
+		"value"
+	]
+}`,
+	}, {
+		name:  "Structs/OmitEmpty/EmptyNonZero",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structOmitEmptyAll{
+			String:            string(""),
+			StringEmpty:       stringMarshalEmpty(""),
+			StringNonEmpty:    stringMarshalNonEmpty(""),
+			PtrString:         addr(string("")).(*string),
+			PtrStringEmpty:    addr(stringMarshalEmpty("")).(*stringMarshalEmpty),
+			PtrStringNonEmpty: addr(stringMarshalNonEmpty("")).(*stringMarshalNonEmpty),
+			Bytes:             []byte(""),
+			BytesEmpty:        bytesMarshalEmpty([]byte("")),
+			BytesNonEmpty:     bytesMarshalNonEmpty([]byte("")),
+			PtrBytes:          addr([]byte("")).(*[]byte),
+			PtrBytesEmpty:     addr(bytesMarshalEmpty([]byte(""))).(*bytesMarshalEmpty),
+			PtrBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte(""))).(*bytesMarshalNonEmpty),
+			Map:               map[string]string{},
+			MapEmpty:          mapMarshalEmpty{},
+			MapNonEmpty:       mapMarshalNonEmpty{},
+			PtrMap:            addr(map[string]string{}).(*map[string]string),
+			PtrMapEmpty:       addr(mapMarshalEmpty{}).(*mapMarshalEmpty),
+			PtrMapNonEmpty:    addr(mapMarshalNonEmpty{}).(*mapMarshalNonEmpty),
+			Slice:             []string{},
+			SliceEmpty:        sliceMarshalEmpty{},
+			SliceNonEmpty:     sliceMarshalNonEmpty{},
+			PtrSlice:          addr([]string{}).(*[]string),
+			PtrSliceEmpty:     addr(sliceMarshalEmpty{}).(*sliceMarshalEmpty),
+			PtrSliceNonEmpty:  addr(sliceMarshalNonEmpty{}).(*sliceMarshalNonEmpty),
+			Ptr:               &structOmitZeroEmptyAll{},
+			Interface:         []string{},
+		},
+		want: `{
+	"Bool": false,
+	"StringNonEmpty": "value",
+	"PtrStringNonEmpty": "value",
+	"BytesNonEmpty": [
+		"value"
+	],
+	"PtrBytesNonEmpty": [
+		"value"
+	],
+	"Float": 0,
+	"MapNonEmpty": {
+		"key": "value"
+	},
+	"PtrMapNonEmpty": {
+		"key": "value"
+	},
+	"SliceNonEmpty": [
+		"value"
+	],
+	"PtrSliceNonEmpty": [
+		"value"
+	]
+}`,
+	}, {
+		name:  "Structs/OmitEmpty/NonEmpty",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structOmitEmptyAll{
+			Bool:              true,
+			PtrBool:           addr(true).(*bool),
+			String:            string("value"),
+			StringEmpty:       stringMarshalEmpty("value"),
+			StringNonEmpty:    stringMarshalNonEmpty("value"),
+			PtrString:         addr(string("value")).(*string),
+			PtrStringEmpty:    addr(stringMarshalEmpty("value")).(*stringMarshalEmpty),
+			PtrStringNonEmpty: addr(stringMarshalNonEmpty("value")).(*stringMarshalNonEmpty),
+			Bytes:             []byte("value"),
+			BytesEmpty:        bytesMarshalEmpty([]byte("value")),
+			BytesNonEmpty:     bytesMarshalNonEmpty([]byte("value")),
+			PtrBytes:          addr([]byte("value")).(*[]byte),
+			PtrBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))).(*bytesMarshalEmpty),
+			PtrBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))).(*bytesMarshalNonEmpty),
+			Float:             math.Copysign(0, -1),
+			PtrFloat:          addr(math.Copysign(0, -1)).(*float64),
+			Map:               map[string]string{"": ""},
+			MapEmpty:          mapMarshalEmpty{"key": "value"},
+			MapNonEmpty:       mapMarshalNonEmpty{"key": "value"},
+			PtrMap:            addr(map[string]string{"": ""}).(*map[string]string),
+			PtrMapEmpty:       addr(mapMarshalEmpty{"key": "value"}).(*mapMarshalEmpty),
+			PtrMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}).(*mapMarshalNonEmpty),
+			Slice:             []string{""},
+			SliceEmpty:        sliceMarshalEmpty{"value"},
+			SliceNonEmpty:     sliceMarshalNonEmpty{"value"},
+			PtrSlice:          addr([]string{""}).(*[]string),
+			PtrSliceEmpty:     addr(sliceMarshalEmpty{"value"}).(*sliceMarshalEmpty),
+			PtrSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}).(*sliceMarshalNonEmpty),
+			Ptr:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
+			Interface:         []string{""},
+		},
+		want: `{
+	"Bool": true,
+	"PtrBool": true,
+	"String": "value",
+	"StringNonEmpty": "value",
+	"PtrString": "value",
+	"PtrStringNonEmpty": "value",
+	"Bytes": "dmFsdWU=",
+	"BytesNonEmpty": [
+		"value"
+	],
+	"PtrBytes": "dmFsdWU=",
+	"PtrBytesNonEmpty": [
+		"value"
+	],
+	"Float": -0,
+	"PtrFloat": -0,
+	"Map": {
+		"": ""
+	},
+	"MapNonEmpty": {
+		"key": "value"
+	},
+	"PtrMap": {
+		"": ""
+	},
+	"PtrMapNonEmpty": {
+		"key": "value"
+	},
+	"Slice": [
+		""
+	],
+	"SliceNonEmpty": [
+		"value"
+	],
+	"PtrSlice": [
+		""
+	],
+	"PtrSliceNonEmpty": [
+		"value"
+	],
+	"Ptr": {
+		"Float": -0
+	},
+	"Interface": [
+		""
+	]
+}`,
+	}, {
+		name: "Structs/OmitZeroEmpty/Zero",
+		in:   structOmitZeroEmptyAll{},
+		want: `{}`,
+	}, {
+		name: "Structs/OmitZeroEmpty/Empty",
+		in: structOmitZeroEmptyAll{
+			Bytes:     []byte{},
+			Map:       map[string]string{},
+			Slice:     []string{},
+			Ptr:       &structOmitZeroEmptyAll{},
+			Interface: []string{},
+		},
+		want: `{}`,
+	}, {
+		name: "Structs/OmitEmpty/PathologicalDepth",
+		in: func() interface{} {
+			type X struct {
+				X *X `json:",omitempty"`
+			}
+			var make func(int) *X
+			make = func(n int) *X {
+				if n == 0 {
+					return nil
+				}
+				return &X{make(n - 1)}
+			}
+			return make(100)
+		}(),
+		want:      `{}`,
+		useWriter: true,
+	}, {
+		name: "Structs/OmitEmpty/PathologicalBreadth",
+		in: func() interface{} {
+			var fields []reflect.StructField
+			for i := 0; i < 100; i++ {
+				fields = append(fields, reflect.StructField{
+					Name: fmt.Sprintf("X%d", i),
+					Type: reflect.TypeOf(stringMarshalEmpty("")),
+					Tag:  `json:",omitempty"`,
+				})
+			}
+			return reflect.New(reflect.StructOf(fields)).Interface()
+		}(),
+		want:      `{}`,
+		useWriter: true,
+	}, {
+		name: "Structs/OmitEmpty/PathologicalTree",
+		in: func() interface{} {
+			type X struct {
+				XL, XR *X `json:",omitempty"`
+			}
+			var make func(int) *X
+			make = func(n int) *X {
+				if n == 0 {
+					return nil
+				}
+				return &X{make(n - 1), make(n - 1)}
+			}
+			return make(8)
+		}(),
+		want:      `{}`,
+		useWriter: true,
+	}, {
+		name: "Structs/OmitZeroEmpty/NonEmpty",
+		in: structOmitZeroEmptyAll{
+			Bytes:     []byte("value"),
+			Map:       map[string]string{"": ""},
+			Slice:     []string{""},
+			Ptr:       &structOmitZeroEmptyAll{Bool: true},
+			Interface: []string{""},
+		},
+		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Ptr":{"Bool":true},"Interface":[""]}`,
+	}, {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
 		want:    `{`,
@@ -1201,7 +1498,15 @@ func TestMarshal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := tt.mopts.Marshal(tt.eopts, tt.in)
+			var got []byte
+			var gotErr error
+			if tt.useWriter {
+				bb := new(struct{ bytes.Buffer }) // avoid optimizations with bytes.Buffer
+				gotErr = tt.mopts.MarshalFull(tt.eopts, bb, tt.in)
+				got = bb.Bytes()
+			} else {
+				got, gotErr = tt.mopts.Marshal(tt.eopts, tt.in)
+			}
 			if tt.canonicalize {
 				(*RawValue)(&got).Canonicalize()
 			}

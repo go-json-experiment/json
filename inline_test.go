@@ -27,6 +27,10 @@ func TestInline(t *testing.T) {
 		m := make(map[string]bool)
 		for _, s := range []string{
 			"Encoder.needFlush",
+			"Encoder.avoidFlush",
+			"trimSuffixWhitespace",
+			"trimSuffixString",
+			"trimSuffixByte",
 			"decodeBuffer.needMore",
 			"consumeWhitespace",
 			"consumeNull",
@@ -48,6 +52,7 @@ func TestInline(t *testing.T) {
 			"stateMachine.pushArray",
 			"stateMachine.pushObject",
 			"stateEntry.increment",
+			"stateEntry.decrement",
 			"stateEntry.isArray",
 			"stateEntry.isObject",
 			"stateEntry.length",

@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"io"
 	"math"
 	"math/bits"
@@ -165,7 +166,7 @@ func (e *Encoder) needFlush() bool {
 	// Flush if less than 25% of the capacity remains.
 	// Flushing at some constant fraction ensures that the buffer stops growing
 	// so long as the largest Token or Value fits within that unused capacity.
-	return e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4
+	return e.wr != nil && (e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4)
 }
 
 // flush flushes the buffer to the underlying io.Writer.
@@ -208,6 +209,108 @@ func (e *encodeBuffer) flush() error {
 
 func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.buf)) }
 func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
+
+var emptyValues = [][]byte{
+	[]byte(`null`),
+	[]byte(`""`),
+	[]byte(`{}`), // encoder never emits whitespace within an empty object
+	[]byte(`[]`), // encoder never emits whitespace within an empty array
+}
+
+// avoidFlush indicates whether to avoid flushing to ensure there is always
+// enough in the buffer to unwrite the last object member if it were empty.
+func (e *Encoder) avoidFlush() bool {
+	// NOTE: This function is carefully written to be inlineable.
+	switch last := e.tokens.last(); {
+	case last.length() == 0:
+		// Never flush after ObjectStart or ArrayStart since we don't know yet
+		// if the object or array will end up being empty.
+		return true
+	case last.needObjectValue():
+		// Never flush before the object value since we don't know yet
+		// if the object value will end up being empty.
+		return true
+	case last.needObjectName():
+		// Never flush after the object value if it does turn out to be empty.
+		switch string(e.buf[len(e.buf)-2:]) {
+		case `ll`, `""`, `{}`, `[]`: // last two bytes of every emptyValues
+			return true
+		}
+	}
+	return false
+}
+
+// unwriteEmptyObjectMember tries to unwrite the last object member
+// if the value is empty. It reports whether it successfully unwrote it.
+func (e *Encoder) unwriteEmptyObjectMember() bool {
+	if e := e.tokens.last(); !e.isObject() || !e.needObjectName() || e.length() == 0 {
+		panic("BUG: must be called on an object after writing a value")
+	}
+
+	// The flushing logic is modified to never flush a trailing empty value.
+	// The encoder never writes trailing whitespace eagerly.
+	b := e.unflushedBuffer()
+
+	// Detect whether the last value was empty.
+	var val []byte
+	for _, v := range emptyValues {
+		if bytes.HasSuffix(b, v) {
+			val = v
+			break
+		}
+	}
+	if len(val) == 0 {
+		return false // the last written value was not empty
+	}
+
+	// Unwrite the value, whitespace, colon, name, whitespace, and comma.
+	b = b[:len(b)-len(val)]
+	b = trimSuffixWhitespace(b)
+	b = trimSuffixByte(b, ':')
+	b = trimSuffixString(b)
+	b = trimSuffixWhitespace(b)
+	b = trimSuffixByte(b, ',')
+	e.buf = b // store back truncated unflushed buffer
+
+	// Undo state changes.
+	e.tokens.last().decrement() // for object member value
+	e.tokens.last().decrement() // for object member name
+	if !e.options.AllowDuplicateNames {
+		e.namespaces.last().removeLast()
+	}
+	return true
+}
+
+func trimSuffixWhitespace(b []byte) []byte {
+	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	n := len(b) - 1
+	for n >= 0 && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
+		n--
+	}
+	return b[:n+1]
+}
+
+func trimSuffixString(b []byte) []byte {
+	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	if len(b) > 0 && b[len(b)-1] == '"' {
+		b = b[:len(b)-1]
+	}
+	for len(b) >= 2 && !(b[len(b)-1] == '"' && b[len(b)-2] != '\\') {
+		b = b[:len(b)-1] // trim all characters except an unescaped quote
+	}
+	if len(b) > 0 && b[len(b)-1] == '"' {
+		b = b[:len(b)-1]
+	}
+	return b
+}
+
+func trimSuffixByte(b []byte, c byte) []byte {
+	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	if len(b) > 0 && b[len(b)-1] == c {
+		return b[:len(b)-1]
+	}
+	return b
+}
 
 // WriteToken writes the next token and advances the internal write offset.
 //
@@ -295,7 +398,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		b = append(b, '\n')
 	}
 	e.buf = b
-	if e.needFlush() {
+	if e.needFlush() && !e.avoidFlush() {
 		return e.flush()
 	}
 	return nil
@@ -377,7 +480,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 		b = append(b, '\n')
 	}
 	e.buf = b
-	if e.needFlush() {
+	if e.needFlush() && !e.avoidFlush() {
 		return e.flush()
 	}
 	return nil
