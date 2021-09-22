@@ -11,6 +11,10 @@ import (
 )
 
 func TestTokenStringAllocations(t *testing.T) {
+	if testing.CoverMode() != "" {
+		t.Skip("coverage mode breaks the compiler optimization this depends on")
+	}
+
 	tok := rawToken(`"hello"`)
 	var m map[string]bool
 	got := int(testing.AllocsPerRun(10, func() {
