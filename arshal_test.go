@@ -6,7 +6,9 @@ package json
 
 import (
 	"bytes"
+	"encoding/base32"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -190,6 +192,39 @@ type (
 		Ptr       *structOmitZeroEmptyAll `json:",omitzero,omitempty"`
 		Interface interface{}             `json:",omitzero,omitempty"`
 	}
+	structFormatBytes struct {
+		Base16    []byte `json:",format:base16"`
+		Base32    []byte `json:",format:base32"`
+		Base32Hex []byte `json:",format:base32hex"`
+		Base64    []byte `json:",format:base64"`
+		Base64URL []byte `json:",format:base64url"`
+		UintArray []byte `json:",format:uintarray"`
+	}
+	structFormatFloats struct {
+		NonFinite    float64  `json:",format:nonfinite"`
+		PtrNonFinite *float64 `json:",format:nonfinite"`
+	}
+	structFormatMaps struct {
+		EmitNull    map[string]string  `json:",format:emitnull"`
+		PtrEmitNull *map[string]string `json:",format:emitnull"`
+	}
+	structFormatSlices struct {
+		EmitNull    []string  `json:",format:emitnull"`
+		PtrEmitNull *[]string `json:",format:emitnull"`
+	}
+	structFormatInvalid struct {
+		Bool      bool              `json:",omitzero,format:invalid"`
+		String    string            `json:",omitzero,format:invalid"`
+		Bytes     []byte            `json:",omitzero,format:invalid"`
+		Int       int64             `json:",omitzero,format:invalid"`
+		Uint      uint64            `json:",omitzero,format:invalid"`
+		Float     float64           `json:",omitzero,format:invalid"`
+		Map       map[string]string `json:",omitzero,format:invalid"`
+		Struct    structAll         `json:",omitzero,format:invalid"`
+		Slice     []string          `json:",omitzero,format:invalid"`
+		Array     [1]string         `json:",omitzero,format:invalid"`
+		Interface interface{}       `json:",omitzero,format:invalid"`
+	}
 
 	allMethods struct {
 		method string // the method that was called
@@ -353,6 +388,7 @@ func (sliceMarshalEmpty) MarshalJSON() ([]byte, error)     { return []byte(`[]`)
 func (sliceMarshalNonEmpty) MarshalJSON() ([]byte, error)  { return []byte(`["value"]`), nil }
 
 var (
+	emptyInterfaceType           = reflect.TypeOf((*interface{})(nil)).Elem()
 	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
 	intType                      = reflect.TypeOf((*int)(nil)).Elem()
 	int8Type                     = reflect.TypeOf((*int8)(nil)).Elem()
@@ -1215,6 +1251,164 @@ func TestMarshal(t *testing.T) {
 			Interface: []string{""},
 		},
 		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Ptr":{"Bool":true},"Interface":[""]}`,
+	}, {
+		name:  "Structs/Format/Bytes",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structFormatBytes{
+			Base16:    []byte("\x01\x23\x45\x67\x89\xab\xcd\xef"),
+			Base32:    []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
+			Base32Hex: []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
+			Base64:    []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
+			Base64URL: []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
+			UintArray: []byte{1, 2, 3, 4},
+		},
+		want: `{
+	"Base16": "0123456789abcdef",
+	"Base32": "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+	"Base32Hex": "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+	"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+	"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
+	"UintArray": [
+		1,
+		2,
+		3,
+		4
+	]
+}`,
+	}, {
+		name:  "Structs/Format/Floats",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: []structFormatFloats{
+			{NonFinite: math.Pi, PtrNonFinite: addr(math.Pi).(*float64)},
+			{NonFinite: math.NaN(), PtrNonFinite: addr(math.NaN()).(*float64)},
+			{NonFinite: math.Inf(-1), PtrNonFinite: addr(math.Inf(-1)).(*float64)},
+			{NonFinite: math.Inf(+1), PtrNonFinite: addr(math.Inf(+1)).(*float64)},
+		},
+		want: `[
+	{
+		"NonFinite": 3.141592653589793,
+		"PtrNonFinite": 3.141592653589793
+	},
+	{
+		"NonFinite": "NaN",
+		"PtrNonFinite": "NaN"
+	},
+	{
+		"NonFinite": "-Infinity",
+		"PtrNonFinite": "-Infinity"
+	},
+	{
+		"NonFinite": "Infinity",
+		"PtrNonFinite": "Infinity"
+	}
+]`,
+	}, {
+		name:  "Structs/Format/Maps",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: []structFormatMaps{
+			{EmitNull: nil, PtrEmitNull: new(map[string]string)},
+			{EmitNull: map[string]string{}, PtrEmitNull: addr(map[string]string{}).(*map[string]string)},
+			{EmitNull: map[string]string{"k": "v"}, PtrEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+		},
+		want: `[
+	{
+		"EmitNull": null,
+		"PtrEmitNull": null
+	},
+	{
+		"EmitNull": {},
+		"PtrEmitNull": {}
+	},
+	{
+		"EmitNull": {
+			"k": "v"
+		},
+		"PtrEmitNull": {
+			"k": "v"
+		}
+	}
+]`,
+	}, {
+		name:  "Structs/Format/Slices",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: []structFormatSlices{
+			{EmitNull: nil, PtrEmitNull: new([]string)},
+			{EmitNull: []string{}, PtrEmitNull: addr([]string{}).(*[]string)},
+			{EmitNull: []string{"v"}, PtrEmitNull: addr([]string{"v"}).(*[]string)},
+		},
+		want: `[
+	{
+		"EmitNull": null,
+		"PtrEmitNull": null
+	},
+	{
+		"EmitNull": [],
+		"PtrEmitNull": []
+	},
+	{
+		"EmitNull": [
+			"v"
+		],
+		"PtrEmitNull": [
+			"v"
+		]
+	}
+]`,
+	}, {
+		name:    "Structs/Format/Invalid/Bool",
+		in:      structFormatInvalid{Bool: true},
+		want:    `{"Bool"`,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/String",
+		in:      structFormatInvalid{String: "string"},
+		want:    `{"String"`,
+		wantErr: &SemanticError{action: "marshal", GoType: stringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Bytes",
+		in:      structFormatInvalid{Bytes: []byte("bytes")},
+		want:    `{"Bytes"`,
+		wantErr: &SemanticError{action: "marshal", GoType: bytesType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Int",
+		in:      structFormatInvalid{Int: 1},
+		want:    `{"Int"`,
+		wantErr: &SemanticError{action: "marshal", GoType: int64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Uint",
+		in:      structFormatInvalid{Uint: 1},
+		want:    `{"Uint"`,
+		wantErr: &SemanticError{action: "marshal", GoType: uint64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Float",
+		in:      structFormatInvalid{Float: 1},
+		want:    `{"Float"`,
+		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Map",
+		in:      structFormatInvalid{Map: map[string]string{}},
+		want:    `{"Map"`,
+		wantErr: &SemanticError{action: "marshal", GoType: mapStringStringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Struct",
+		in:      structFormatInvalid{Struct: structAll{Bool: true}},
+		want:    `{"Struct"`,
+		wantErr: &SemanticError{action: "marshal", GoType: structAllType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Slice",
+		in:      structFormatInvalid{Slice: []string{}},
+		want:    `{"Slice"`,
+		wantErr: &SemanticError{action: "marshal", GoType: sliceStringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Array",
+		in:      structFormatInvalid{Array: [1]string{"string"}},
+		want:    `{"Array"`,
+		wantErr: &SemanticError{action: "marshal", GoType: array1StringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Interface",
+		in:      structFormatInvalid{Interface: "anything"},
+		want:    `{"Interface"`,
+		wantErr: &SemanticError{action: "marshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
@@ -2834,6 +3028,231 @@ func TestUnmarshal(t *testing.T) {
 			Array: [1]string{"goodbye"},
 			Ptr:   new(structStringifiedAll), // may be stringified
 		}),
+	}, {
+		name: "Structs/Format/Bytes",
+		inBuf: `{
+	"Base16": "0123456789abcdef",
+	"Base32": "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
+	"Base32Hex": "0123456789ABCDEFGHIJKLMNOPQRSTUV",
+	"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+	"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
+	"UintArray": [1, 2, 3, 4]
+}`,
+		inVal: new(structFormatBytes),
+		want: addr(structFormatBytes{
+			Base16:    []byte("\x01\x23\x45\x67\x89\xab\xcd\xef"),
+			Base32:    []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
+			Base32Hex: []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
+			Base64:    []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
+			Base64URL: []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
+			UintArray: []byte{1, 2, 3, 4},
+		}),
+	}, {
+		name:    "Structs/Format/Bytes/Invalid/Base16/WrongKind",
+		inBuf:   `{"Base16": [1,2,3,4]}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base16/AllPadding",
+		inBuf: `{"Base16": "===="}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 2), []byte("====="))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base16/EvenPadding",
+		inBuf: `{"Base16": "0123456789abcdef="}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 8), []byte("0123456789abcdef="))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base16/OddPadding",
+		inBuf: `{"Base16": "0123456789abcdef0="}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 9), []byte("0123456789abcdef0="))
+			return err
+		}()},
+	}, {
+		name: "Structs/Format/Bytes/Invalid/Base32/Padding",
+		inBuf: `[
+			{"Base32": "NA======"},
+			{"Base32": "NBSQ===="},
+			{"Base32": "NBSWY==="},
+			{"Base32": "NBSWY3A="},
+			{"Base32": "NBSWY3DP"}
+		]`,
+		inVal: new([]structFormatBytes),
+		want: addr([]structFormatBytes{
+			{Base32: []byte("h")},
+			{Base32: []byte("he")},
+			{Base32: []byte("hel")},
+			{Base32: []byte("hell")},
+			{Base32: []byte("hello")},
+		}),
+	}, {
+		name: "Structs/Format/Bytes/Invalid/Base32/Invalid/NoPadding",
+		inBuf: `[
+				{"Base32": "NA"},
+				{"Base32": "NBSQ"},
+				{"Base32": "NBSWY"},
+				{"Base32": "NBSWY3A"},
+				{"Base32": "NBSWY3DP"}
+			]`,
+		inVal: new([]structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := base32.StdEncoding.Decode(make([]byte, 1), []byte("NA"))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base32/WrongAlphabet",
+		inBuf: `{"Base32": "0123456789ABCDEFGHIJKLMNOPQRSTUV"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := base32.StdEncoding.Decode(make([]byte, 20), []byte("0123456789ABCDEFGHIJKLMNOPQRSTUV"))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base32Hex/WrongAlphabet",
+		inBuf: `{"Base32Hex": "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := base32.HexEncoding.Decode(make([]byte, 20), []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base64/WrongAlphabet",
+		inBuf: `{"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := base64.StdEncoding.Decode(make([]byte, 48), []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"))
+			return err
+		}()},
+	}, {
+		name:  "Structs/Format/Bytes/Invalid/Base64URL/WrongAlphabet",
+		inBuf: `{"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := base64.URLEncoding.Decode(make([]byte, 48), []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"))
+			return err
+		}()},
+	}, {
+		name: "Structs/Format/Floats",
+		inBuf: `[
+	{"NonFinite": 3.141592653589793, "PtrNonFinite": 3.141592653589793},
+	{"NonFinite": "-Infinity", "PtrNonFinite": "-Infinity"},
+	{"NonFinite": "Infinity", "PtrNonFinite": "Infinity"}
+]`,
+		inVal: new([]structFormatFloats),
+		want: addr([]structFormatFloats{
+			{NonFinite: math.Pi, PtrNonFinite: addr(math.Pi).(*float64)},
+			{NonFinite: math.Inf(-1), PtrNonFinite: addr(math.Inf(-1)).(*float64)},
+			{NonFinite: math.Inf(+1), PtrNonFinite: addr(math.Inf(+1)).(*float64)},
+		}),
+	}, {
+		name:  "Structs/Format/Floats/NaN",
+		inBuf: `{"NonFinite": "NaN"}`,
+		inVal: new(structFormatFloats),
+		// Avoid checking want since reflect.DeepEqual fails for NaNs.
+	}, {
+		name:    "Structs/Format/Floats/Invalid/NaN",
+		inBuf:   `{"NonFinite": "nan"}`,
+		inVal:   new(structFormatFloats),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
+	}, {
+		name:    "Structs/Format/Floats/Invalid/PositiveInfinity",
+		inBuf:   `{"NonFinite": "+Infinity"}`,
+		inVal:   new(structFormatFloats),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
+	}, {
+		name:    "Structs/Format/Floats/Invalid/NegativeInfinitySpace",
+		inBuf:   `{"NonFinite": "-Infinity "}`,
+		inVal:   new(structFormatFloats),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
+	}, {
+		name: "Structs/Format/Maps",
+		inBuf: `[
+	{"EmitNull": null, "PtrEmitNull": null},
+	{"EmitNull": {}, "PtrEmitNull": {}},
+	{"EmitNull": {"k": "v"}, "PtrEmitNull": {"k": "v"}}
+]`,
+		inVal: new([]structFormatMaps),
+		want: addr([]structFormatMaps{
+			{EmitNull: nil, PtrEmitNull: nil},
+			{EmitNull: map[string]string{}, PtrEmitNull: addr(map[string]string{}).(*map[string]string)},
+			{EmitNull: map[string]string{"k": "v"}, PtrEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+		}),
+	}, {
+		name: "Structs/Format/Slices",
+		inBuf: `[
+	{"EmitNull": null, "PtrEmitNull": null},
+	{"EmitNull": [], "PtrEmitNull": []},
+	{"EmitNull": ["v"], "PtrEmitNull": ["v"]}
+]`,
+		inVal: new([]structFormatSlices),
+		want: addr([]structFormatSlices{
+			{EmitNull: nil, PtrEmitNull: nil},
+			{EmitNull: []string{}, PtrEmitNull: addr([]string{}).(*[]string)},
+			{EmitNull: []string{"v"}, PtrEmitNull: addr([]string{"v"}).(*[]string)},
+		}),
+	}, {
+		name:    "Structs/Format/Invalid/Bool",
+		inBuf:   `{"Bool":true}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: boolType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/String",
+		inBuf:   `{"String": "string"}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Bytes",
+		inBuf:   `{"Bytes": "bytes"}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: bytesType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Int",
+		inBuf:   `{"Int": 1}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: int64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Uint",
+		inBuf:   `{"Uint": 1}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: uint64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Float",
+		inBuf:   `{"Float": 1}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: float64Type, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Map",
+		inBuf:   `{"Map":{}}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: mapStringStringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Struct",
+		inBuf:   `{"Struct": {}}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Slice",
+		inBuf:   `{"Slice": {}}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: sliceStringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Array",
+		inBuf:   `{"Array": []}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:    "Structs/Format/Invalid/Interface",
+		inBuf:   `{"Interface": "anything"}`,
+		inVal:   new(structFormatInvalid),
+		wantErr: &SemanticError{action: "unmarshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
 		name:  "Structs/UnknownIgnored",
 		uopts: UnmarshalOptions{RejectUnknownNames: false},

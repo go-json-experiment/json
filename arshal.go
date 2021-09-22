@@ -34,6 +34,9 @@ type MarshalOptions struct {
 	// Escaping JSON numbers as a JSON string preserves the exact precision.
 	StringifyNumbers bool
 
+	// format is custom formatting for the top-level type.
+	format string
+
 	// TODO: Add other options.
 }
 
@@ -117,6 +120,9 @@ type UnmarshalOptions struct {
 	// an unmarshal implementation should return an error that matches
 	// ErrUnknownName according to errors.Is.
 	RejectUnknownNames bool
+
+	// format is custom formatting for the top-level type.
+	format string
 
 	// TODO: Add other options.
 }
