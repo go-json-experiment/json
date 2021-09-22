@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
-	"unicode/utf8"
 )
 
 // Most natural Go type that correspond with each JSON type.
@@ -497,71 +496,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 	// TODO: Support `inline`, `unknown`, and `format`.
 	// TODO: Support MarshalOptions.DiscardUnknownMembers.
 	var fncs arshaler
-	type field struct {
-		index int // index into reflect.StructField.Field
-		fncs  *arshaler
-		fieldOptions
-	}
 	var (
-		once               sync.Once
-		fields             []field
-		fieldsByActualName map[string]int   // index into fields slice
-		fieldsByFoldedName map[string][]int // index into fields slice for all fold-equal fields
-		errInit            *SemanticError
+		once    sync.Once
+		fields  structFields
+		errInit *SemanticError
 	)
 	init := func() {
-		var hasAnyJSONTag bool
-		fieldsByActualName = make(map[string]int, t.NumField())
-		fieldsByFoldedName = make(map[string][]int, t.NumField())
-		for i := 0; i < t.NumField(); i++ {
-			sf := t.Field(i)
-			_, hasTag := sf.Tag.Lookup("json")
-			hasAnyJSONTag = hasAnyJSONTag || hasTag
-			options, err := parseFieldOptions(sf)
-			if err != nil {
-				if err == errIgnoredField {
-					continue
-				}
-				errInit = &SemanticError{GoType: t, Err: err}
-				return
-			}
-
-			// Process the JSON object name.
-			if !utf8.ValidString(options.name) {
-				err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, options.name)
-				errInit = &SemanticError{GoType: t, Err: err}
-				return
-			}
-			if j, ok := fieldsByActualName[options.name]; ok {
-				err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
-				errInit = &SemanticError{GoType: t, Err: err}
-				return
-			}
-			fieldsByActualName[options.name] = len(fields)
-			foldedName := string(foldName([]byte(options.name)))
-			fieldsByFoldedName[foldedName] = append(fieldsByFoldedName[foldedName], len(fields)) // may have conflicts
-
-			fields = append(fields, field{
-				index:        i,
-				fncs:         lookupArshaler(sf.Type),
-				fieldOptions: options,
-			})
-		}
-
-		// NOTE: New users to the json package are occasionally surprised that
-		// unexported fields are ignored. This occurs by necessity due to our
-		// inability to directly introspect such fields with Go reflection
-		// without the use of unsafe.
-		//
-		// To reduce friction here, refuse to serialize any Go struct that
-		// has no JSON serializable fields, has at least one Go struct field,
-		// and does not have any `json` tags present. For example,
-		// errors returned by errors.New would fail to serialize.
-		if len(fields) == 0 && t.NumField() > 0 && !hasAnyJSONTag {
-			err := errors.New("Go struct kind has no exported fields")
-			errInit = &SemanticError{GoType: t, Err: err}
-			return
-		}
+		fields, errInit = makeStructFields(t)
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		if err := enc.WriteToken(ObjectStart); err != nil {
@@ -573,7 +514,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			err.action = "marshal"
 			return &err
 		}
-		for _, f := range fields {
+		for _, f := range fields.flattened {
 			v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
 			if f.omitzero && v.IsZero() {
 				continue
@@ -618,10 +559,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					return err
 				}
 				name := unescapeSimpleString(val)
-				i, ok := fieldsByActualName[string(name)]
+				i, ok := fields.byActualName[string(name)]
 				if !ok {
-					for _, i2 := range fieldsByFoldedName[string(foldName(name))] {
-						if fields[i2].nocase || uo.MatchCaseInsensitiveNames {
+					for _, i2 := range fields.byFoldedName[string(foldName(name))] {
+						if fields.flattened[i2].nocase || uo.MatchCaseInsensitiveNames {
 							i, ok = i2, true
 							break
 						}
@@ -638,7 +579,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						continue
 					}
 				}
-				f := fields[i]
+				f := fields.flattened[i]
 
 				// Process the object member value.
 				unmarshal := f.fncs.unmarshal // TODO: Handle custom arshalers.

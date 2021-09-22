@@ -17,6 +17,73 @@ import (
 
 var errIgnoredField = errors.New("ignored field")
 
+type structFields struct {
+	flattened    []structField
+	byActualName map[string]int   // index into flattened slice
+	byFoldedName map[string][]int // index into flattened slice for all fold-equal fields
+}
+
+type structField struct {
+	index int // index into reflect.StructField.Field
+	fncs  *arshaler
+	fieldOptions
+}
+
+func makeStructFields(t reflect.Type) (structFields, *SemanticError) {
+	var fs structFields
+	fs.byActualName = make(map[string]int, t.NumField())
+	fs.byFoldedName = make(map[string][]int, t.NumField())
+
+	var hasAnyJSONTag bool
+	for i := 0; i < t.NumField(); i++ {
+		sf := t.Field(i)
+		_, hasTag := sf.Tag.Lookup("json")
+		hasAnyJSONTag = hasAnyJSONTag || hasTag
+		options, err := parseFieldOptions(sf)
+		if err != nil {
+			if err == errIgnoredField {
+				continue
+			}
+			return fs, &SemanticError{GoType: t, Err: err}
+		}
+
+		// Process the JSON object name.
+		if !utf8.ValidString(options.name) {
+			err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, options.name)
+			return fs, &SemanticError{GoType: t, Err: err}
+		}
+		if j, ok := fs.byActualName[options.name]; ok {
+			err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
+			return fs, &SemanticError{GoType: t, Err: err}
+		}
+		fs.byActualName[options.name] = len(fs.flattened)
+		foldedName := string(foldName([]byte(options.name)))
+		fs.byFoldedName[foldedName] = append(fs.byFoldedName[foldedName], len(fs.flattened)) // may have conflicts
+
+		fs.flattened = append(fs.flattened, structField{
+			index:        i,
+			fncs:         lookupArshaler(sf.Type),
+			fieldOptions: options,
+		})
+	}
+
+	// NOTE: New users to the json package are occasionally surprised that
+	// unexported fields are ignored. This occurs by necessity due to our
+	// inability to directly introspect such fields with Go reflection
+	// without the use of unsafe.
+	//
+	// To reduce friction here, refuse to serialize any Go struct that
+	// has no JSON serializable fields, has at least one Go struct field,
+	// and does not have any `json` tags present. For example,
+	// errors returned by errors.New would fail to serialize.
+	if len(fs.flattened) == 0 && t.NumField() > 0 && !hasAnyJSONTag {
+		err := errors.New("Go struct kind has no exported fields")
+		return fs, &SemanticError{GoType: t, Err: err}
+	}
+
+	return fs, nil
+}
+
 type fieldOptions struct {
 	name      string
 	nocase    bool
