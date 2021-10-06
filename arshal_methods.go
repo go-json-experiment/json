@@ -82,6 +82,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	// Handle custom marshaler.
 	switch which, needAddr := implementsWhich(t, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which {
 	case jsonMarshalerV2Type:
+		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			prevDepth, prevLength := enc.tokens.depthLength()
 			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalNextJSON(enc, mo)
@@ -96,6 +97,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return nil
 		}
 	case jsonMarshalerV1Type:
+		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			marshaler := va.addrWhen(needAddr).Interface().(MarshalerV1)
 			val, err := marshaler.MarshalJSON()
@@ -110,6 +112,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return nil
 		}
 	case textMarshalerType:
+		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			marshaler := va.addrWhen(needAddr).Interface().(encoding.TextMarshaler)
 			s, err := marshaler.MarshalText()
@@ -133,6 +136,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	// Handle custom unmarshaler.
 	switch which, needAddr := implementsWhich(t, jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType); which {
 	case jsonUnmarshalerV2Type:
+		fncs.nonDefault = true
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			prevDepth, prevLength := dec.tokens.depthLength()
 			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalNextJSON(dec, uo)
@@ -147,6 +151,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return nil
 		}
 	case jsonUnmarshalerV1Type:
+		fncs.nonDefault = true
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			val, err := dec.ReadValue()
 			if err != nil {
@@ -160,6 +165,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return nil
 		}
 	case textUnmarshalerType:
+		fncs.nonDefault = true
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			val, err := dec.ReadValue()
 			if err != nil {

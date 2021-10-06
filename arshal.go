@@ -215,8 +215,9 @@ type (
 )
 
 type arshaler struct {
-	marshal   marshaler
-	unmarshal unmarshaler
+	marshal    marshaler
+	unmarshal  unmarshaler
+	nonDefault bool
 }
 
 var lookupArshalerCache sync.Map // map[reflect.Type]*arshaler

@@ -63,14 +63,9 @@ func makeStructFields(t reflect.Type) (structFields, *SemanticError) {
 
 		// Provide a function that can determine for certain that the value
 		// would serialize as an empty JSON value.
-		isEmpty := func(addressableValue) bool { return false }
+		var isEmpty func(addressableValue) bool
 		switch sf.Type.Kind() {
 		case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
-			// If there is a custom marshal method, we cannot determine
-			// upfront whether it will write an empty JSON value.
-			if which, _ := implementsWhich(sf.Type, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which != nil {
-				break
-			}
 			isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
 		case reflect.Ptr, reflect.Interface:
 			isEmpty = func(va addressableValue) bool { return va.IsNil() }

@@ -672,13 +672,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				continue
 			}
 
-			hasCustomMarshal := false
 			marshal := f.fncs.marshal // TODO: Handle custom arshalers.
+			nonDefault := f.fncs.nonDefault
 
 			// OmitEmpty skips the field if the marshaled JSON value is empty,
 			// which we can know up front if there are no custom marshalers,
 			// otherwise we must marshal the value and unwrite it if empty.
-			if f.omitempty && !hasCustomMarshal && f.isEmpty(v) {
+			if f.omitempty && !nonDefault && f.isEmpty != nil && f.isEmpty(v) {
 				continue // fast path for omitempty
 			}
 
