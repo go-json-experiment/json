@@ -225,6 +225,17 @@ type (
 		Array     [1]string         `json:",omitzero,format:invalid"`
 		Interface interface{}       `json:",omitzero,format:invalid"`
 	}
+	structInlined struct {
+		X             structInlinedL1 `json:",inline"`
+		*StructEmbed2                 // implicit inline
+	}
+	structInlinedL1 struct {
+		X            *structInlinedL2 `json:",inline"`
+		StructEmbed1 `json:",inline"`
+	}
+	structInlinedL2 struct{ A, B, C string }
+	StructEmbed1    struct{ C, D, E string }
+	StructEmbed2    struct{ E, F, G string }
 
 	allMethods struct {
 		method string // the method that was called
@@ -1409,6 +1420,30 @@ func TestMarshal(t *testing.T) {
 		in:      structFormatInvalid{Interface: "anything"},
 		want:    `{"Interface"`,
 		wantErr: &SemanticError{action: "marshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name: "Structs/Inline/Zero",
+		in:   structInlined{},
+		want: `{"D":""}`,
+	}, {
+		name: "Structs/Inline/Alloc",
+		in: structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{},
+				StructEmbed1: StructEmbed1{},
+			},
+			StructEmbed2: &StructEmbed2{},
+		},
+		want: `{"E":"","F":"","G":"","A":"","B":"","D":""}`,
+	}, {
+		name: "Structs/Inline/NonZero",
+		in: structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{A: "A1", B: "B1", C: "C1"},
+				StructEmbed1: StructEmbed1{C: "C2", D: "D2", E: "E2"},
+			},
+			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
+		},
+		want: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
 	}, {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
@@ -3253,6 +3288,50 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"Interface": "anything"}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:  "Structs/Inline/Zero",
+		inBuf: `{"D":""}`,
+		inVal: new(structInlined),
+		want:  new(structInlined),
+	}, {
+		name:  "Structs/Inline/Alloc",
+		inBuf: `{"E":"","F":"","G":"","A":"","B":"","D":""}`,
+		inVal: new(structInlined),
+		want: addr(structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{},
+				StructEmbed1: StructEmbed1{},
+			},
+			StructEmbed2: &StructEmbed2{},
+		}),
+	}, {
+		name:  "Structs/Inline/NonZero",
+		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+		inVal: new(structInlined),
+		want: addr(structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{A: "A1", B: "B1" /* C: "C1" */},
+				StructEmbed1: StructEmbed1{ /* C: "C2" */ D: "D2" /* E: "E2" */},
+			},
+			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
+		}),
+	}, {
+		name:  "Structs/Inline/Merge",
+		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+		inVal: addr(structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{B: "##", C: "C1"},
+				StructEmbed1: StructEmbed1{C: "C2", E: "E2"},
+			},
+			StructEmbed2: &StructEmbed2{E: "##", G: "G3"},
+		}),
+		want: addr(structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{A: "A1", B: "B1", C: "C1"},
+				StructEmbed1: StructEmbed1{C: "C2", D: "D2", E: "E2"},
+			},
+			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
+		}),
 	}, {
 		name:  "Structs/UnknownIgnored",
 		uopts: UnmarshalOptions{RejectUnknownNames: false},

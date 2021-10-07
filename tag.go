@@ -17,86 +17,208 @@ import (
 
 var errIgnoredField = errors.New("ignored field")
 
+var rawValueType = reflect.TypeOf((*RawValue)(nil)).Elem()
+
 type structFields struct {
 	flattened    []structField
-	byActualName map[string]int   // index into flattened slice
-	byFoldedName map[string][]int // index into flattened slice for all fold-equal fields
+	byActualName map[string]*structField
+	byFoldedName map[string][]*structField
 }
 
 type structField struct {
-	index   int // index into reflect.StructField.Field
+	id      int   // unique numeric ID; index into structFields.flattened
+	index   []int // index into a struct according to reflect.Type.FieldByIndex
+	typ     reflect.Type
 	fncs    *arshaler
 	isEmpty func(addressableValue) bool
 	fieldOptions
 }
 
-func makeStructFields(t reflect.Type) (structFields, *SemanticError) {
+func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	var fs structFields
-	fs.byActualName = make(map[string]int, t.NumField())
-	fs.byFoldedName = make(map[string][]int, t.NumField())
+	fs.byActualName = make(map[string]*structField, root.NumField())
+	fs.byFoldedName = make(map[string][]*structField, root.NumField())
 
-	var hasAnyJSONTag bool
-	for i := 0; i < t.NumField(); i++ {
-		sf := t.Field(i)
-		_, hasTag := sf.Tag.Lookup("json")
-		hasAnyJSONTag = hasAnyJSONTag || hasTag
-		options, err := parseFieldOptions(sf)
-		if err != nil {
-			if err == errIgnoredField {
-				continue
+	// ambiguous is a sentinel value to indicate that at least two fields
+	// at the same depth have the same name, and thus cancel each other out.
+	// This follows the same rules as selecting a field on embedded structs
+	// where the shallowest field takes precedence. If more than one field
+	// exists at the shallowest depth, then the selection is illegal.
+	// See https://golang.org/ref/spec#Selectors.
+	ambiguous := new(structField)
+
+	// Setup a queue for a breath-first search.
+	var queueIndex int
+	type queueEntry struct {
+		typ   reflect.Type
+		index []int
+	}
+	queue := []queueEntry{{root, nil}}
+	seen := map[reflect.Type]bool{root: true}
+
+	// Perform a breadth-first search over all reachable fields.
+	// This ensures that len(f.index) will be monotonically increasing.
+	for queueIndex < len(queue) {
+		qe := queue[queueIndex]
+		queueIndex++
+
+		t := qe.typ
+		namesIndex := make(map[string]int) // index of each field with a given name in current struct
+		var hasAnyJSONTag bool             // whether any Go struct field has a `json` tag
+		var hasAnyJSONField bool           // whether any JSON serializable fields exist in current struct
+		for i := 0; i < t.NumField(); i++ {
+			sf := t.Field(i)
+			_, hasTag := sf.Tag.Lookup("json")
+			hasAnyJSONTag = hasAnyJSONTag || hasTag
+			options, err := parseFieldOptions(sf)
+			if err != nil {
+				if err == errIgnoredField {
+					continue
+				}
+				return structFields{}, &SemanticError{GoType: t, Err: err}
 			}
-			return fs, &SemanticError{GoType: t, Err: err}
+			hasAnyJSONField = true
+			f := structField{
+				// Allocate a new slice (len=N+1) to hold both
+				// the parent index (len=N) and the current index (len=1).
+				// Do this to avoid clobbering the memory of the parent index.
+				index:        append(append(make([]int, 0, len(qe.index)+1), qe.index...), i),
+				typ:          sf.Type,
+				fieldOptions: options,
+			}
+			if sf.Anonymous && !f.hasName {
+				f.inline = true // implied by use of Go embedding without an explicit name
+			}
+			if f.inline {
+				// Handle an inlined field that serializes to/from
+				// zero or more JSON object members.
+
+				switch f.fieldOptions {
+				case fieldOptions{name: f.name, inline: true}:
+				default:
+					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` specified", sf.Name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+
+				// Unwrap one level of pointer indirection similar to how Go
+				// only allows embedding either T or *T, but not **T.
+				tf := f.typ
+				if tf.Kind() == reflect.Ptr && tf.Name() == "" {
+					tf = tf.Elem()
+				}
+				// Reject any types with custom serialization otherwise
+				// it becomes impossible to know what sub-fields to inline.
+				if which, _ := implementsWhich(tf,
+					jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType,
+					jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
+				); which != nil && tf != rawValueType {
+					err := fmt.Errorf("inlined Go struct field %s of type %s must not implement JSON marshal or unmarshal methods", sf.Name, tf)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+
+				// Handle an inlined field that serializes to/from
+				// a finite number of JSON object members backed by a Go struct.
+				if tf.Kind() == reflect.Struct {
+					if !seen[tf] {
+						queue = append(queue, queueEntry{tf, f.index})
+					}
+					seen[tf] = true
+					continue
+				}
+
+				// TODO: Support Go map of string key or json.RawValue.
+				err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct", sf.Name, tf)
+				return structFields{}, &SemanticError{GoType: t, Err: err}
+			} else {
+				// Handle normal Go struct field that serializes to/from
+				// a single JSON object member.
+
+				// Provide a function that can determine for certain that
+				// the value would serialize as an empty JSON value.
+				var isEmpty func(addressableValue) bool
+				switch sf.Type.Kind() {
+				case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
+					isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
+				case reflect.Ptr, reflect.Interface:
+					isEmpty = func(va addressableValue) bool { return va.IsNil() }
+				}
+
+				f.id = len(fs.flattened)
+				f.fncs = lookupArshaler(sf.Type)
+				f.isEmpty = isEmpty
+				fs.flattened = append(fs.flattened, f)
+
+				// Reject user-specified names with invalid UTF-8.
+				if !utf8.ValidString(f.name) {
+					err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, f.name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+				// Reject multiple fields with same name within the same struct.
+				if j, ok := namesIndex[f.name]; ok {
+					err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, sf.Name, f.name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+				namesIndex[f.name] = i
+
+				// Multiple fields of the same name across different structs
+				// follow the same precedence rules as Go struct embedding.
+				if f2 := fs.byActualName[f.name]; f2 == nil {
+					fs.byActualName[f.name] = &fs.flattened[len(fs.flattened)-1] // store first occurrence at lowest depth
+				} else if len(f2.index) == len(f.index) {
+					fs.byActualName[f.name] = ambiguous // at least two occurrences at same depth
+				}
+			}
 		}
 
-		// Process the JSON object name.
-		if !utf8.ValidString(options.name) {
-			err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, options.name)
-			return fs, &SemanticError{GoType: t, Err: err}
+		// NOTE: New users to the json package are occasionally surprised that
+		// unexported fields are ignored. This occurs by necessity due to our
+		// inability to directly introspect such fields with Go reflection
+		// without the use of unsafe.
+		//
+		// To reduce friction here, refuse to serialize any Go struct that
+		// has no JSON serializable fields, has at least one Go struct field,
+		// and does not have any `json` tags present. For example,
+		// errors returned by errors.New would fail to serialize.
+		isEmptyStruct := t.NumField() == 0
+		if !isEmptyStruct && !hasAnyJSONTag && !hasAnyJSONField {
+			err := errors.New("Go struct kind has no exported fields")
+			return structFields{}, &SemanticError{GoType: t, Err: err}
 		}
-		if j, ok := fs.byActualName[options.name]; ok {
-			err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, t.Field(i).Name, options.name)
-			return fs, &SemanticError{GoType: t, Err: err}
-		}
-		fs.byActualName[options.name] = len(fs.flattened)
-		foldedName := string(foldName([]byte(options.name)))
-		fs.byFoldedName[foldedName] = append(fs.byFoldedName[foldedName], len(fs.flattened)) // may have conflicts
-
-		// Provide a function that can determine for certain that the value
-		// would serialize as an empty JSON value.
-		var isEmpty func(addressableValue) bool
-		switch sf.Type.Kind() {
-		case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
-			isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
-		case reflect.Ptr, reflect.Interface:
-			isEmpty = func(va addressableValue) bool { return va.IsNil() }
-		}
-
-		fs.flattened = append(fs.flattened, structField{
-			index:        i,
-			fncs:         lookupArshaler(sf.Type),
-			isEmpty:      isEmpty,
-			fieldOptions: options,
-		})
 	}
 
-	// NOTE: New users to the json package are occasionally surprised that
-	// unexported fields are ignored. This occurs by necessity due to our
-	// inability to directly introspect such fields with Go reflection
-	// without the use of unsafe.
-	//
-	// To reduce friction here, refuse to serialize any Go struct that
-	// has no JSON serializable fields, has at least one Go struct field,
-	// and does not have any `json` tags present. For example,
-	// errors returned by errors.New would fail to serialize.
-	if len(fs.flattened) == 0 && t.NumField() > 0 && !hasAnyJSONTag {
-		err := errors.New("Go struct kind has no exported fields")
-		return fs, &SemanticError{GoType: t, Err: err}
+	// Remove all fields that are duplicates.
+	// This may move elements forward to fill the holes from removed fields.
+	var n int
+	for _, f := range fs.flattened {
+		switch f2 := fs.byActualName[f.name]; {
+		case f2 == ambiguous:
+			delete(fs.byActualName, f.name)
+		case f2 == nil:
+			continue // may be nil due to previous delete
+		// TODO(https://golang.org/issue/45955): Use slices.Equal.
+		case reflect.DeepEqual(f.index, f2.index):
+			f.id = n
+			fs.flattened[n] = f
+			fs.byActualName[f.name] = &fs.flattened[n] // fix pointer to new location
+			n++
+		}
+	}
+	fs.flattened = fs.flattened[:n]
+	if len(fs.flattened) != len(fs.byActualName) {
+		panic(fmt.Sprintf("BUG: flattened list of fields mismatches fields mapped by name: %d != %d", len(fs.flattened), len(fs.byActualName)))
+	}
+
+	// Pre-fold all names so that we can lookup folded names quickly.
+	for i, f := range fs.flattened {
+		foldedName := string(foldName([]byte(f.name)))
+		fs.byFoldedName[foldedName] = append(fs.byFoldedName[foldedName], &fs.flattened[i])
 	}
 
 	return fs, nil
 }
 
 type fieldOptions struct {
+	hasName   bool
 	name      string
 	nocase    bool
 	inline    bool
@@ -155,6 +277,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
 			}
 		}
+		out.hasName = true
 		out.name = opt
 		tag = tag[n:]
 	}
@@ -188,7 +311,6 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			out.inline = true
 		case "unknown":
 			out.unknown = true
-			out.inline = true // implied by "unknown"
 		case "omitzero":
 			out.omitzero = true
 		case "omitempty":

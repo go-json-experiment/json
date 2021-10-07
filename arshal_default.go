@@ -639,7 +639,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 }
 
 func makeStructArshaler(t reflect.Type) *arshaler {
-	// TODO: Support `inline`, `unknown`, and `format`.
+	// TODO: Support `unknown`.
 	// TODO: Support MarshalOptions.DiscardUnknownMembers.
 	var fncs arshaler
 	var (
@@ -664,7 +664,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			return &err
 		}
 		for _, f := range fields.flattened {
-			v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
+			v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
+			if len(f.index) > 1 {
+				v = v.fieldByIndex(f.index[1:], false)
+				if !v.IsValid() {
+					continue // implies a nil inlined field
+				}
+			}
 
 			// OmitZero skips the field if the Go value is zero,
 			// which we can determine up front without calling the marshaler.
@@ -730,15 +736,15 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					return err
 				}
 				name := unescapeSimpleString(val)
-				i, ok := fields.byActualName[string(name)]
-				if !ok {
-					for _, i2 := range fields.byFoldedName[string(foldName(name))] {
-						if fields.flattened[i2].nocase || uo.MatchCaseInsensitiveNames {
-							i, ok = i2, true
+				f := fields.byActualName[string(name)]
+				if f == nil {
+					for _, f2 := range fields.byFoldedName[string(foldName(name))] {
+						if f2.nocase || uo.MatchCaseInsensitiveNames {
+							f = f2
 							break
 						}
 					}
-					if !ok {
+					if f == nil {
 						if uo.RejectUnknownNames {
 							return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: ErrUnknownName}
 						}
@@ -750,14 +756,16 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						continue
 					}
 				}
-				f := fields.flattened[i]
 
 				// Process the object member value.
 				unmarshal := f.fncs.unmarshal // TODO: Handle custom arshalers.
 				uo2 := uo
 				uo2.StringifyNumbers = uo2.StringifyNumbers || f.string
-				uo2.format = f.format                    // TODO: Make this not deeply recursively.
-				v := addressableValue{va.Field(f.index)} // addressable if struct value is addressable
+				uo2.format = f.format                       // TODO: Make this not deeply recursively.
+				v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
+				if len(f.index) > 1 {
+					v = v.fieldByIndex(f.index[1:], true)
+				}
 				if err := unmarshal(uo2, dec, v); err != nil {
 					return err
 				}
@@ -770,6 +778,30 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 	}
 	return &fncs
+}
+
+func (va addressableValue) fieldByIndex(index []int, mayAlloc bool) addressableValue {
+	for _, i := range index {
+		va = va.indirect(mayAlloc)
+		if !va.IsValid() {
+			return va
+		}
+		va = addressableValue{va.Field(i)} // addressable if struct value is addressable
+	}
+	return va
+}
+
+func (va addressableValue) indirect(mayAlloc bool) addressableValue {
+	if va.Kind() == reflect.Ptr {
+		if va.IsNil() {
+			if !mayAlloc {
+				return addressableValue{}
+			}
+			va.Set(reflect.New(va.Type().Elem()))
+		}
+		va = addressableValue{va.Elem()} // dereferenced pointer is always addressable
+	}
+	return va
 }
 
 func makeSliceArshaler(t reflect.Type) *arshaler {
