@@ -295,7 +295,8 @@ func (e *Encoder) avoidFlush() bool {
 // unwriteEmptyObjectMember tries to unwrite the last object member
 // if the value is empty. It reports whether it successfully unwrote it.
 func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
-	if e := e.tokens.last(); !e.isObject() || !e.needObjectName() || e.length() == 0 {
+	last := e.tokens.last()
+	if !last.isObject() || !last.needObjectName() || last.length() == 0 {
 		panic("BUG: must be called on an object after writing a value")
 	}
 
@@ -325,15 +326,17 @@ func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 	e.buf = b // store back truncated unflushed buffer
 
 	// Undo state changes.
-	e.tokens.last().decrement() // for object member value
-	e.tokens.last().decrement() // for object member name
+	last.decrement() // for object member value
+	last.decrement() // for object member name
 	if !e.options.AllowDuplicateNames {
+		if last.isActiveNamespace() {
+			e.namespaces.last().removeLast()
+		}
 		e.names.clearLast()
 		if prevName != nil {
 			e.names.copyQuotedBuffer(e.buf) // required by objectNameStack.replaceLastUnquotedName
 			e.names.replaceLastUnquotedName(*prevName)
 		}
-		e.namespaces.last().removeLast()
 	}
 	return true
 }
@@ -416,8 +419,13 @@ func (e *Encoder) WriteToken(t Token) error {
 		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
 			break
 		}
-		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() {
-			if !e.namespaces.last().insertQuoted(b[n0:]) {
+		last := e.tokens.last()
+		if !e.options.AllowDuplicateNames && last.needObjectName() {
+			if !last.isValidNamespace() {
+				err = errInvalidNamespace
+				break
+			}
+			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}
@@ -516,8 +524,13 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	case 'n', 'f', 't':
 		err = e.tokens.appendLiteral()
 	case '"':
-		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() {
-			if !e.namespaces.last().insertQuoted(b[n0:]) {
+		last := e.tokens.last()
+		if !e.options.AllowDuplicateNames && last.needObjectName() {
+			if !last.isValidNamespace() {
+				err = errInvalidNamespace
+				break
+			}
+			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}

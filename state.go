@@ -17,16 +17,21 @@ var (
 	errMismatchDelim = &SyntacticError{str: "mismatching structural token for object or array"}
 )
 
+const errInvalidNamespace = jsonError("object namespace is in an invalid state")
+
 type state struct {
 	// tokens validates whether the next token kind is valid.
 	tokens stateMachine
 
 	// names is a stack of object names.
-	// Only used if AllowDuplicateNames is false.
+	// Not used if AllowDuplicateNames is true.
 	names objectNameStack
 
 	// namespaces is a stack of object namespaces.
-	// Only used if AllowDuplicateNames is false.
+	// For performance reasons, Encoder or Decoder may not update this
+	// if Marshal or Unmarshal is able to track names in a more efficient way.
+	// See makeMapArshaler and makeStructArshaler.
+	// Not used if AllowDuplicateNames is true.
 	namespaces objectNamespaceStack
 }
 
@@ -122,6 +127,8 @@ func (m stateMachine) appendLiteral() error {
 	switch e := m.last(); {
 	case e.needObjectName():
 		return errMissingName
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		e.increment()
 		return nil
@@ -132,6 +139,8 @@ func (m stateMachine) appendLiteral() error {
 // If an error is returned, the state is not mutated.
 func (m stateMachine) appendString() error {
 	switch e := m.last(); {
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		e.increment()
 		return nil
@@ -150,6 +159,8 @@ func (m *stateMachine) pushObject() error {
 	switch e := m.last(); {
 	case e.needObjectName():
 		return errMissingName
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		e.increment()
 		*m = append(*m, stateTypeObject)
@@ -165,6 +176,8 @@ func (m *stateMachine) popObject() error {
 		return errMismatchDelim
 	case e.needObjectValue():
 		return errMissingValue
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		*m = (*m)[:len(*m)-1]
 		return nil
@@ -177,6 +190,8 @@ func (m *stateMachine) pushArray() error {
 	switch e := m.last(); {
 	case e.needObjectName():
 		return errMissingName
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		e.increment()
 		*m = append(*m, stateTypeArray)
@@ -190,6 +205,8 @@ func (m *stateMachine) popArray() error {
 	switch e := m.last(); {
 	case !e.isArray() || len(*m) == 1: // forbid popping top-level virtual JSON array
 		return errMismatchDelim
+	case !e.isValidNamespace():
+		return errInvalidNamespace
 	default:
 		*m = (*m)[:len(*m)-1]
 		return nil
@@ -244,8 +261,24 @@ func (m stateMachine) checkDelim(delim byte, next Kind) error {
 	}
 }
 
+// invalidateDisabledNamespaces marks all disabled namespaces as invalid.
+//
+// For efficiency, Marshal and Unmarshal may disable namespaces since there are
+// more efficient ways to track duplicate names. However, if an error occurs,
+// the namespaces in Encoder or Decoder will be left in an inconsistent state.
+// Mark the namespaces as invalid so that future method calls on
+// Encoder or Decoder will return an error.
+func (m stateMachine) invalidateDisabledNamespaces() {
+	for i, e := range m {
+		if !e.isActiveNamespace() {
+			m[i].invalidateNamespace()
+		}
+	}
+}
+
 // stateEntry encodes several artifacts within a single unsigned integer:
-//	• whether this represents a JSON object or array and
+//	• whether this represents a JSON object or array,
+//	• whether this object should check for duplicate names, and
 //	• how many elements are in this JSON object or array.
 type stateEntry uint64
 
@@ -255,8 +288,15 @@ const (
 	stateTypeObject stateEntry = 0x8000_0000_0000_0000
 	stateTypeArray  stateEntry = 0x0000_0000_0000_0000
 
-	// The count mask (63 bits) records the number of elements.
-	stateCountMask    stateEntry = 0x7fff_ffff_ffff_ffff
+	// The name check mask (2 bit) records whether to update
+	// the namespaces for the current JSON object and
+	// whether the namespace is valid.
+	stateNamespaceMask    stateEntry = 0x6000_0000_0000_0000
+	stateDisableNamespace stateEntry = 0x4000_0000_0000_0000
+	stateInvalidNamespace stateEntry = 0x2000_0000_0000_0000
+
+	// The count mask (61 bits) records the number of elements.
+	stateCountMask    stateEntry = 0x1fff_ffff_ffff_ffff
 	stateCountLSBMask stateEntry = 0x0000_0000_0000_0001
 	stateCountOdd     stateEntry = 0x0000_0000_0000_0001
 	stateCountEven    stateEntry = 0x0000_0000_0000_0000
@@ -314,6 +354,28 @@ func (e *stateEntry) increment() {
 // It is the callers responsibility to ensure that e.length > 0.
 func (e *stateEntry) decrement() {
 	(*e)--
+}
+
+// disableNamespace disables the JSON object namespace such that the
+// Encoder or Decoder no longer updates the namespace.
+func (e *stateEntry) disableNamespace() {
+	*e |= stateDisableNamespace
+}
+
+// isActiveNamespace reports whether the JSON object namespace is actively
+// being updated and used for duplicate name checks.
+func (e stateEntry) isActiveNamespace() bool {
+	return e&(stateDisableNamespace) == 0
+}
+
+// invalidateNamespace marks the JSON object namespace as being invalid.
+func (e *stateEntry) invalidateNamespace() {
+	*e |= stateInvalidNamespace
+}
+
+// isValidNamespace reports whether the JSON object namespace is valid.
+func (e stateEntry) isValidNamespace() bool {
+	return e&(stateInvalidNamespace) == 0
 }
 
 // objectNameStack is a stack of names when descending into a JSON object.
@@ -597,5 +659,48 @@ func (ns *objectNamespace) removeLast() {
 	} else {
 		ns.endOffsets = ns.endOffsets[:ns.length()-1]
 		ns.allUnquotedNames = ns.allUnquotedNames[:ns.endOffsets[ns.length()-1]]
+	}
+}
+
+type uintSet64 uint64
+
+func (s uintSet64) has(i uint) bool { return s&(1<<i) > 0 }
+func (s *uintSet64) set(i uint)     { *s |= 1 << i }
+
+// uintSet is a set of unsigned integers.
+// It is optimized for most integers being close to zero.
+type uintSet struct {
+	lo uintSet64
+	hi []uintSet64
+}
+
+// has reports whether i is in the set.
+func (s *uintSet) has(i uint) bool {
+	if i < 64 {
+		return s.lo.has(i)
+	} else {
+		i -= 64
+		iHi, iLo := int(i/64), uint(i%64)
+		return iHi < len(s.hi) && s.hi[iHi].has(iLo)
+	}
+}
+
+// insert inserts i into the set and reports whether it was the first insertion.
+func (s *uintSet) insert(i uint) bool {
+	// TODO: Make this inlineable at least for the lower 64-bit case.
+	if i < 64 {
+		has := s.lo.has(i)
+		s.lo.set(i)
+		return !has
+	} else {
+		i -= 64
+		iHi, iLo := int(i/64), uint(i%64)
+		if iHi >= len(s.hi) {
+			s.hi = append(s.hi, make([]uintSet64, iHi+1-len(s.hi))...)
+			s.hi = s.hi[:cap(s.hi)]
+		}
+		has := s.hi[iHi].has(iLo)
+		s.hi[iHi].set(iLo)
+		return !has
 	}
 }

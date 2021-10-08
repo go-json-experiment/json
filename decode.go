@@ -454,8 +454,12 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() {
-			if !d.namespaces.last().insertQuoted(d.buf[pos-n : pos]) {
+		last := d.tokens.last()
+		if !d.options.AllowDuplicateNames && last.needObjectName() {
+			if !last.isValidNamespace() {
+				return Token{}, errInvalidNamespace
+			}
+			if last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos]) {
 				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 			}
@@ -589,8 +593,13 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 	case 'n', 't', 'f':
 		err = d.tokens.appendLiteral()
 	case '"':
-		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() {
-			if !d.namespaces.last().insertQuoted(d.buf[pos-n : pos]) {
+		last := d.tokens.last()
+		if !d.options.AllowDuplicateNames && last.needObjectName() {
+			if !last.isValidNamespace() {
+				err = errInvalidNamespace
+				break
+			}
+			if last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos]) {
 				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 				break
 			}

@@ -126,7 +126,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			if err := enc.WriteValue(val); err != nil {
-				// TODO: Avoid wrapping I/O errors.
+				// TODO: Avoid wrapping syntactic or I/O errors.
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			return nil

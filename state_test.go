@@ -334,3 +334,54 @@ func TestObjectNamespace(t *testing.T) {
 		}
 	}
 }
+
+func TestUintSet(t *testing.T) {
+	type operation interface{} // has | insert
+	type has struct {
+		in   uint
+		want bool
+	}
+	type insert struct {
+		in   uint
+		want bool
+	}
+
+	// Sequence of operations to perform (order matters).
+	ops := []operation{
+		has{0, false},
+		has{63, false},
+		has{64, false},
+		has{1234, false},
+		insert{3, true},
+		has{2, false},
+		has{3, true},
+		has{4, false},
+		has{63, false},
+		insert{3, false},
+		insert{63, true},
+		has{63, true},
+		insert{64, true},
+		insert{64, false},
+		has{64, true},
+		insert{3264, true},
+		has{3264, true},
+		insert{3, false},
+		has{3, true},
+	}
+
+	var us uintSet
+	for i, op := range ops {
+		switch op := op.(type) {
+		case has:
+			if got := us.has(op.in); got != op.want {
+				t.Fatalf("%d: uintSet.has(%v) = %v, want %v", i, op.in, got, op.want)
+			}
+		case insert:
+			if got := us.insert(op.in); got != op.want {
+				t.Fatalf("%d: uintSet.insert(%v) = %v, want %v", i, op.in, got, op.want)
+			}
+		default:
+			panic(fmt.Sprintf("unknown operation: %T", op))
+		}
+	}
+}

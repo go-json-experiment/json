@@ -16,13 +16,15 @@ import (
 	"sync"
 )
 
-// Most natural Go type that correspond with each JSON type.
 var (
+	// Most natural Go type that correspond with each JSON type.
 	boolType           = reflect.TypeOf((*bool)(nil)).Elem()                   // JSON bool
 	stringType         = reflect.TypeOf((*string)(nil)).Elem()                 // JSON string
 	float64Type        = reflect.TypeOf((*float64)(nil)).Elem()                // JSON number
 	mapStringIfaceType = reflect.TypeOf((*map[string]interface{})(nil)).Elem() // JSON object
 	sliceIfaceType     = reflect.TypeOf((*[]interface{})(nil)).Elem()          // JSON array
+
+	emptyStructType = reflect.TypeOf((*struct{})(nil)).Elem()
 )
 
 const startDetectingCyclesAfter = 1000
@@ -512,6 +514,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 }
 
 func makeMapArshaler(t reflect.Type) *arshaler {
+	// NOTE: The logic below disables namespaces for tracking duplicate names
+	// when handling map keys with a unique represention.
+
 	// NOTE: Values retrieved from a map are not addressable,
 	// so we shallow copy the values to make them addressable and
 	// store them back into the map afterwards.
@@ -557,10 +562,19 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 			once.Do(init)
 			// TODO: Handle custom arshalers.
+			nonDefaultKey := keyFncs.nonDefault
 			marshalKey := keyFncs.marshal
 			marshalVal := valFncs.marshal
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
+
+			// A Go map guarantees that each entry has a unique key.
+			// As such, disable the expensive duplicate name check if we know
+			// that every Go key will serialize as a unique JSON string.
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), enc.options.AllowInvalidUTF8) {
+				enc.tokens.last().disableNamespace()
+			}
+
 			// NOTE: Map entries are serialized in a non-deterministic order.
 			// Users that need stable output should call RawValue.Canonicalize.
 			for iter := va.MapRange(); iter.Next(); {
@@ -613,10 +627,31 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 			once.Do(init)
 			// TODO: Handle custom arshalers.
+			nonDefaultKey := keyFncs.nonDefault
 			unmarshalKey := keyFncs.unmarshal
 			unmarshalVal := valFncs.unmarshal
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
+
+			// Manually check for duplicate entries by virtue of whether the
+			// unmarshaled key already exists in the destination Go map.
+			// Consequently, syntactically different names (e.g., "0" and "-0")
+			// will be rejected as duplicates since they semantically refer
+			// to the same Go value. This is an unusual interaction
+			// between syntax and semantics, but is more correct.
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), dec.options.AllowInvalidUTF8) {
+				dec.tokens.last().disableNamespace()
+			}
+
+			// In the rare case where the map is not already empty,
+			// then we need to manually track which keys we already saw
+			// since existing presence alone is insufficient to indicate
+			// whether the input had a duplicate name.
+			var seen reflect.Value
+			if !dec.options.AllowDuplicateNames && va.Len() > 0 {
+				seen = reflect.MakeMap(reflect.MapOf(k.Type(), emptyStructType))
+			}
+
 			for dec.PeekKind() != '}' {
 				k.Set(reflect.Zero(t.Key()))
 				if err := unmarshalKey(uko, dec, k); err != nil {
@@ -628,12 +663,21 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 
 				if v2 := va.MapIndex(k.Value); v2.IsValid() {
+					if !dec.options.AllowDuplicateNames && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
+						// TODO: Unread the object name.
+						name := dec.previousBuffer()
+						err := &SyntacticError{str: "duplicate name " + string(name) + " in object"}
+						return err.withOffset(dec.InputOffset() - int64(len(name)))
+					}
 					v.Set(v2)
 				} else {
 					v.Set(reflect.Zero(v.Type()))
 				}
 				err := unmarshalVal(uo, dec, v)
 				va.SetMapIndex(k.Value, v.Value)
+				if seen.IsValid() {
+					seen.SetMapIndex(k.Value, reflect.Zero(emptyStructType))
+				}
 				if err != nil {
 					return err
 				}
@@ -648,7 +692,32 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 	return &fncs
 }
 
+// mapKeyWithUniqueRepresentation reports whether all possible values of k
+// marshal to a different JSON value, and whether all possible JSON values
+// that can unmarshal into k unmarshal to different Go values.
+// In other words, the representation must be a bijective.
+func mapKeyWithUniqueRepresentation(k reflect.Kind, allowInvalidUTF8 bool) bool {
+	switch k {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	case reflect.String:
+		// For strings, we have to be careful since names with invalid UTF-8
+		// maybe unescape to the same Go string value.
+		return !allowInvalidUTF8
+	default:
+		// Floating-point kinds are not listed above since NaNs
+		// can appear multiple times and all serialize as "NaN".
+		return false
+	}
+}
+
 func makeStructArshaler(t reflect.Type) *arshaler {
+	// NOTE: The logic below disables namespaces for tracking duplicate names
+	// and does the tracking locally with an efficient bit-set based on which
+	// Go struct fields were seen.
+
 	var fncs arshaler
 	var (
 		once    sync.Once
@@ -671,7 +740,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			err.action = "marshal"
 			return &err
 		}
+		var seenIdxs uintSet
 		prevIdx := -1
+		enc.tokens.last().disableNamespace() // we manually ensure unique names below
 		for _, f := range fields.flattened {
 			v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 			if len(f.index) > 1 {
@@ -725,10 +796,35 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			}
 
 			// Remember the previous written object member.
+			if !enc.options.AllowDuplicateNames {
+				seenIdxs.insert(uint(f.id))
+			}
 			prevIdx = f.id
 		}
 		if fields.inlinedFallback != nil && !(mo.DiscardUnknownMembers && fields.inlinedFallback.unknown) {
-			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback); err != nil {
+			var insertQuotedName func([]byte) bool
+			if !enc.options.AllowDuplicateNames {
+				insertQuotedName = func(quotedName []byte) bool {
+					// Check that the name from inlined fallback does not match
+					// one of the previously marshaled names from known fields.
+					name := unescapeStringMayCopy(quotedName)
+					if foldedFields := fields.byFoldedName[string(foldName(name))]; len(foldedFields) > 0 {
+						if f := fields.byActualName[string(name)]; f != nil {
+							return seenIdxs.insert(uint(f.id))
+						}
+						for _, f := range foldedFields {
+							if f.nocase {
+								return seenIdxs.insert(uint(f.id))
+							}
+						}
+					}
+
+					// Check that the name does not match any other name
+					// previously marshaled from the inlined fallback.
+					return enc.namespaces.last().insertQuoted(quotedName)
+				}
+			}
+			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback, insertQuotedName); err != nil {
 				return err
 			}
 		}
@@ -757,6 +853,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				err.action = "unmarshal"
 				return &err
 			}
+			var seenIdxs uintSet
+			dec.tokens.last().disableNamespace()
 			for dec.PeekKind() != '}' {
 				// Process the object member name.
 				val, err := dec.ReadValue()
@@ -776,6 +874,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						if uo.RejectUnknownNames && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
 							return &SemanticError{action: "unmarshal", GoType: t, Err: ErrUnknownName}
 						}
+						if !dec.options.AllowDuplicateNames && !dec.namespaces.last().insertQuoted(val) {
+							// TODO: Unread the object name.
+							err := &SyntacticError{str: "duplicate name " + string(val) + " in object"}
+							return err.withOffset(dec.InputOffset() - int64(len(val)))
+						}
 
 						if fields.inlinedFallback == nil {
 							// Skip unknown value since we have no place to store it.
@@ -790,6 +893,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						}
 						continue
 					}
+				}
+				if !dec.options.AllowDuplicateNames && !seenIdxs.insert(uint(f.id)) {
+					// TODO: Unread the object name.
+					err := &SyntacticError{str: "duplicate name " + string(val) + " in object"}
+					return err.withOffset(dec.InputOffset() - int64(len(val)))
 				}
 
 				// Process the object member value.

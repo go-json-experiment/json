@@ -100,7 +100,13 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in interface{}) error {
 	// Lookup and call the marshal function for this type.
 	marshal := lookupArshaler(t).marshal
 	// TODO: Handle custom marshalers.
-	return marshal(mo, out, va)
+	if err := marshal(mo, out, va); err != nil {
+		if !out.options.AllowDuplicateNames {
+			out.tokens.invalidateDisabledNamespaces()
+		}
+		return err
+	}
+	return nil
 }
 
 // UnmarshalOptions configures how JSON data is deserialized as Go data.
@@ -200,7 +206,13 @@ func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out interface{}) error {
 	// Lookup and call the unmarshal function for this type.
 	unmarshal := lookupArshaler(t).unmarshal
 	// TODO: Handle custom unmarshalers.
-	return unmarshal(uo, in, va)
+	if err := unmarshal(uo, in, va); err != nil {
+		if !in.options.AllowDuplicateNames {
+			in.tokens.invalidateDisabledNamespaces()
+		}
+		return err
+	}
+	return nil
 }
 
 // addressableValue is a reflect.Value that is guaranteed to be addressable

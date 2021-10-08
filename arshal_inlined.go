@@ -25,7 +25,7 @@ import (
 var rawValueType = reflect.TypeOf((*RawValue)(nil)).Elem()
 
 // marshalInlinedFallbackAll marshals all the members in an inlined fallback.
-func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableValue, f *structField) error {
+func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableValue, f *structField, insertQuotedName func([]byte) bool) error {
 	v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 	if len(f.index) > 1 {
 		v = v.fieldByIndex(f.index[1:], false)
@@ -60,6 +60,9 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			if err != nil {
 				return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
 			}
+			if dec.tokens.last().needObjectValue() && insertQuotedName != nil && !insertQuotedName(val) {
+				return &SyntacticError{str: "duplicate name " + string(val) + " in object"}
+			}
 			if err := enc.WriteValue(val); err != nil {
 				return err
 			}
@@ -76,11 +79,16 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			return nil
 		}
 		m := v
-		mk := newAddressableValue(m.Type().Key())
 		mv := newAddressableValue(m.Type().Elem())
 		for iter := m.MapRange(); iter.Next(); {
-			mk.Set(iter.Key())
-			if err := enc.WriteToken(String(mk.String())); err != nil {
+			b, err := appendString(enc.UnusedBuffer(), iter.Key().String(), !enc.options.AllowInvalidUTF8, nil)
+			if err != nil {
+				return err
+			}
+			if insertQuotedName != nil && !insertQuotedName(b) {
+				return &SyntacticError{str: "duplicate name " + string(b) + " in object"}
+			}
+			if err := enc.WriteValue(b); err != nil {
 				return err
 			}
 

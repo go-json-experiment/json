@@ -324,6 +324,20 @@ type (
 	structInlineMapStringInt struct {
 		X map[string]int `json:",inline"`
 	}
+	structNoCaseInlineRawValue struct {
+		AAA string   `json:",omitempty"`
+		AaA string   `json:",omitempty,nocase"`
+		AAa string   `json:",omitempty,nocase"`
+		Aaa string   `json:",omitempty"`
+		X   RawValue `json:",inline"`
+	}
+	structNoCaseInlineMapStringAny struct {
+		AAA string     `json:",omitempty"`
+		AaA string     `json:",omitempty,nocase"`
+		AAa string     `json:",omitempty,nocase"`
+		Aaa string     `json:",omitempty"`
+		X   jsonObject `json:",inline"`
+	}
 
 	allMethods struct {
 		method string // the method that was called
@@ -376,6 +390,8 @@ type (
 	unmarshalJSONv2Func func(*Decoder, UnmarshalOptions) error
 	unmarshalJSONv1Func func([]byte) error
 	unmarshalTextFunc   func([]byte) error
+
+	nocaseString string
 
 	stringMarshalEmpty    string
 	stringMarshalNonEmpty string
@@ -480,6 +496,14 @@ func (f unmarshalJSONv1Func) UnmarshalJSON(b []byte) error {
 }
 func (f unmarshalTextFunc) UnmarshalText(b []byte) error {
 	return f(b)
+}
+
+func (k nocaseString) MarshalText() ([]byte, error) {
+	return []byte(strings.ToLower(string(k))), nil
+}
+func (k *nocaseString) UnmarshalText(b []byte) error {
+	*k = nocaseString(strings.ToLower(string(b)))
+	return nil
 }
 
 func (stringMarshalEmpty) MarshalJSON() ([]byte, error)    { return []byte(`""`), nil }
@@ -760,6 +784,11 @@ func TestMarshal(t *testing.T) {
 		in:   map[float64]string{3.14159: "value"},
 		want: `{"3.14159":"value"}`,
 	}, {
+		name:    "Maps/InvalidKey/Float/NaN",
+		in:      map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: errors.New("invalid value: NaN")},
+	}, {
 		name: "Maps/ValidKey/Interface",
 		in: map[interface{}]interface{}{
 			"key":               "key",
@@ -769,6 +798,27 @@ func TestMarshal(t *testing.T) {
 		},
 		canonicalize: true,
 		want:         `{"-64":-32,"64":32,"64.64":32.32,"key":"key"}`,
+	}, {
+		name:  "Maps/DuplicateName/String/AllowInvalidUTF8+AllowDuplicateNames",
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		in:    map[string]string{"\x80": "", "\x81": ""},
+		want:  `{"�":"","�":""}`,
+	}, {
+		name:    "Maps/DuplicateName/String/AllowInvalidUTF8",
+		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		in:      map[string]string{"\x80": "", "\x81": ""},
+		want:    `{"�":""`,
+		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
+	}, {
+		name:  "Maps/DuplicateName/NoCaseString/AllowDuplicateNames",
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in:    map[nocaseString]string{"hello": "", "HELLO": ""},
+		want:  `{"hello":"","hello":""}`,
+	}, {
+		name:    "Maps/DuplicateName/NoCaseString",
+		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
+		want:    `{"hello":""`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: &SyntacticError{str: `duplicate name "hello" in object`}},
 	}, {
 		name: "Maps/InvalidValue/Channel",
 		in: map[string]chan string{
@@ -1806,6 +1856,113 @@ func TestMarshal(t *testing.T) {
 			B: 2,
 		},
 		want: `{"A":1,"B":2,"fizz":"buzz"}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/Other",
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"dupe":"","dupe":""}`),
+		},
+		want:    `{"dupe":""`,
+		wantErr: &SyntacticError{str: `duplicate name "dupe" in object`},
+	}, {
+		name:  "Structs/DuplicateName/NoCaseInlineRawValue/Other/AllowDuplicateNames",
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"dupe": "", "dupe": ""}`),
+		},
+		want: `{"dupe":"","dupe":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferent",
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"Aaa": "", "AaA": "", "AAa": "", "AAA": ""}`),
+		},
+		want: `{"Aaa":"","AaA":"","AAa":"","AAA":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict",
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"Aaa": "", "Aaa": ""}`),
+		},
+		want:    `{"Aaa":""`,
+		wantErr: &SyntacticError{str: `duplicate name "Aaa" in object`},
+	}, {
+		name:  "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict/AllowDuplicateNames",
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"Aaa": "", "Aaa": ""}`),
+		},
+		want: `{"Aaa":"","Aaa":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict",
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"Aaa": "", "AaA": "", "aaa": ""}`),
+		},
+		want:    `{"Aaa":"","AaA":""`,
+		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
+	}, {
+		name:  "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict/AllowDuplicateNames",
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in: structNoCaseInlineRawValue{
+			X: RawValue(`{"Aaa": "", "AaA": "", "aaa": ""}`),
+		},
+		want: `{"Aaa":"","AaA":"","aaa":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferentWithField",
+		in: structNoCaseInlineRawValue{
+			AAA: "x",
+			AaA: "x",
+			X:   RawValue(`{"Aaa": ""}`),
+		},
+		want: `{"AAA":"x","AaA":"x","Aaa":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflictWithField",
+		in: structNoCaseInlineRawValue{
+			AAA: "x",
+			AaA: "x",
+			X:   RawValue(`{"AAA": ""}`),
+		},
+		want:    `{"AAA":"x","AaA":"x"`,
+		wantErr: &SyntacticError{str: `duplicate name "AAA" in object`},
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflictWithField",
+		in: structNoCaseInlineRawValue{
+			AAA: "x",
+			AaA: "x",
+			X:   RawValue(`{"aaa": ""}`),
+		},
+		want:    `{"AAA":"x","AaA":"x"`,
+		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferent",
+		in: structNoCaseInlineMapStringAny{
+			X: jsonObject{"Aaa": "", "AaA": "", "AAa": "", "AAA": ""},
+		},
+		want:         `{"AAA":"","AAa":"","AaA":"","Aaa":""}`,
+		canonicalize: true,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferentWithField",
+		in: structNoCaseInlineMapStringAny{
+			AAA: "x",
+			AaA: "x",
+			X:   jsonObject{"Aaa": ""},
+		},
+		want: `{"AAA":"x","AaA":"x","Aaa":""}`,
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactConflictWithField",
+		in: structNoCaseInlineMapStringAny{
+			AAA: "x",
+			AaA: "x",
+			X:   jsonObject{"AAA": ""},
+		},
+		want:    `{"AAA":"x","AaA":"x"`,
+		wantErr: &SyntacticError{str: `duplicate name "AAA" in object`},
+	}, {
+		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/NoCaseConflictWithField",
+		in: structNoCaseInlineMapStringAny{
+			AAA: "x",
+			AaA: "x",
+			X:   jsonObject{"aaa": ""},
+		},
+		want:    `{"AAA":"x","AaA":"x"`,
+		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
 	}, {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
@@ -3163,13 +3320,6 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(map[int]int),
 		want:  addr(map[int]int{0: 0, -1: 1, 2: 2, -3: 3}),
 	}, {
-		// NOTE: For signed integers, the only possible way for duplicate keys
-		// with different representations is negative zero and zero.
-		name:  "Maps/ValidKey/Int/Duplicates",
-		inBuf: `{"0":1,"-0":-1}`,
-		inVal: new(map[int]int),
-		want:  addr(map[int]int{0: -1}), // latter takes precedence
-	}, {
 		name:  "Maps/ValidKey/NamedInt",
 		inBuf: `{"0":0,"-1":1,"2":2,"-3":3}`,
 		inVal: new(map[namedInt64]int),
@@ -3190,10 +3340,57 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(map[float64]float64),
 		want:  addr(map[float64]float64{1.234: 1.234, 12.34: 12.34, 123.4: 123.4}),
 	}, {
-		name:  "Maps/ValidKey/Float/Duplicates",
+		name:    "Maps/DuplicateName/Int",
+		inBuf:   `{"0":1,"-0":-1}`,
+		inVal:   new(map[int]int),
+		want:    addr(map[int]int{0: 1}),
+		wantErr: (&SyntacticError{str: `duplicate name "-0" in object`}).withOffset(int64(len(`{"0":1,`))),
+	}, {
+		name:  "Maps/DuplicateName/Int/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
+		inBuf: `{"0":1,"-0":-1}`,
+		inVal: new(map[int]int),
+		want:  addr(map[int]int{0: -1}), // latter takes precedence
+	}, {
+		name:  "Maps/DuplicateName/Int/OverwriteExisting",
+		inBuf: `{"-0":-1}`,
+		inVal: addr(map[int]int{0: 1}),
+		want:  addr(map[int]int{0: -1}),
+	}, {
+		name:    "Maps/DuplicateName/Float",
+		inBuf:   `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
+		inVal:   new(map[float64]string),
+		want:    addr(map[float64]string{1: "1.0"}),
+		wantErr: (&SyntacticError{str: `duplicate name "1" in object`}).withOffset(int64(len(`{"1.0":"1.0",`))),
+	}, {
+		name:  "Maps/DuplicateName/Float/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
 		inVal: new(map[float64]string),
 		want:  addr(map[float64]string{1: "1e0"}), // latter takes precedence
+	}, {
+		name:  "Maps/DuplicateName/Float/OverwriteExisting",
+		inBuf: `{"1.0":"1.0"}`,
+		inVal: addr(map[float64]string{1: "1"}),
+		want:  addr(map[float64]string{1: "1.0"}),
+	}, {
+		name:    "Maps/DuplicateName/NoCaseString",
+		inBuf:   `{"hello":"hello","HELLO":"HELLO"}`,
+		inVal:   new(map[nocaseString]string),
+		want:    addr(map[nocaseString]string{"hello": "hello"}),
+		wantErr: (&SyntacticError{str: `duplicate name "HELLO" in object`}).withOffset(int64(len(`{"hello":"hello",`))),
+	}, {
+		name:  "Maps/DuplicateName/NoCaseString/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
+		inBuf: `{"hello":"hello","HELLO":"HELLO"}`,
+		inVal: new(map[nocaseString]string),
+		want:  addr(map[nocaseString]string{"hello": "HELLO"}), // latter takes precedence
+	}, {
+		name:  "Maps/DuplicateName/NoCaseString/OverwriteExisting",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
+		inBuf: `{"HELLO":"HELLO"}`,
+		inVal: addr(map[nocaseString]string{"hello": "hello"}),
+		want:  addr(map[nocaseString]string{"hello": "HELLO"}),
 	}, {
 		name:  "Maps/ValidKey/Interface",
 		inBuf: `{"false":"false","true":"true","string":"string","0":"0","[]":"[]","{}":"{}"}`,
@@ -3941,11 +4138,20 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","a":3}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/CaseInsensitive",
+		name:  "Structs/InlinedFallback/RawValue/CaseInsensitive+AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 3, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/CaseInsensitive+RejectDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		uopts:   UnmarshalOptions{MatchCaseInsensitiveNames: true},
+		inBuf:   `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal:   new(structInlineRawValue),
+		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+		wantErr: (&SyntacticError{str: `duplicate name "a" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
 		name:    "Structs/InlinedFallback/RawValue/RejectDuplicateNames",
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
@@ -4063,11 +4269,20 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "a": 3.0}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/CaseInsensitive",
+		name:  "Structs/InlinedFallback/MapStringAny/CaseInsensitive+AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 3, X: jsonObject{"fizz": "buzz"}, B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/CaseInsensitive+RejectDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		uopts:   UnmarshalOptions{MatchCaseInsensitiveNames: true},
+		inBuf:   `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal:   new(structInlineMapStringAny),
+		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
+		wantErr: (&SyntacticError{str: `duplicate name "a" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
 		name:    "Structs/InlinedFallback/MapStringAny/RejectDuplicateNames",
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
@@ -4226,10 +4441,18 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"}),
 	}, {
-		name:  "Structs/NoCase/Merge",
+		name:  "Structs/NoCase/Merge/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"AaA":"AaA","aaa":"aaa","aAa":"aAa"}`,
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "aAa"}),
+	}, {
+		name:    "Structs/NoCase/Merge/RejectDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		inBuf:   `{"AaA":"AaA","aaa":"aaa"}`,
+		inVal:   new(structNoCase),
+		want:    addr(structNoCase{AaA: "AaA"}),
+		wantErr: (&SyntacticError{str: `duplicate name "aaa" in object`}).withOffset(int64(len(`{"AaA":"AaA",`))),
 	}, {
 		name:  "Structs/OptionCaseInsensitive",
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
@@ -4242,6 +4465,55 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
 		inVal: new(structScalars),
 		want:  addr(structScalars{}),
+	}, {
+		name:  "Structs/DuplicateName/NoCase/ExactDifferent",
+		inBuf: `{"AAA":"AAA","AaA":"AaA","AAa":"AAa","Aaa":"Aaa"}`,
+		inVal: addr(structNoCaseInlineRawValue{}),
+		want:  addr(structNoCaseInlineRawValue{AAA: "AAA", AaA: "AaA", AAa: "AAa", Aaa: "Aaa"}),
+	}, {
+		name:    "Structs/DuplicateName/NoCase/ExactConflict",
+		inBuf:   `{"AAA":"AAA","AAA":"AAA"}`,
+		inVal:   addr(structNoCaseInlineRawValue{}),
+		want:    addr(structNoCaseInlineRawValue{AAA: "AAA"}),
+		wantErr: (&SyntacticError{str: `duplicate name "AAA" in object`}).withOffset(int64(len(`{"AAA":"AAA",`))),
+	}, {
+		name:  "Structs/DuplicateName/NoCase/OverwriteExact",
+		inBuf: `{"AAA":"after"}`,
+		inVal: addr(structNoCaseInlineRawValue{AAA: "before"}),
+		want:  addr(structNoCaseInlineRawValue{AAA: "after"}),
+	}, {
+		name:    "Structs/DuplicateName/NoCase/NoCaseConflict",
+		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
+		inVal:   addr(structNoCaseInlineRawValue{}),
+		want:    addr(structNoCaseInlineRawValue{AaA: "aaa"}),
+		wantErr: (&SyntacticError{str: `duplicate name "aaA" in object`}).withOffset(int64(len(`{"aaa":"aaa",`))),
+	}, {
+		name:    "Structs/DuplicateName/NoCase/OverwriteNoCase",
+		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
+		inVal:   addr(structNoCaseInlineRawValue{}),
+		want:    addr(structNoCaseInlineRawValue{AaA: "aaa"}),
+		wantErr: (&SyntacticError{str: `duplicate name "aaA" in object`}).withOffset(int64(len(`{"aaa":"aaa",`))),
+	}, {
+		name:  "Structs/DuplicateName/Inline/Unknown",
+		inBuf: `{"unknown":""}`,
+		inVal: addr(structNoCaseInlineRawValue{}),
+		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":""}`)}),
+	}, {
+		name:  "Structs/DuplicateName/Inline/UnknownMerge",
+		inBuf: `{"unknown":""}`,
+		inVal: addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":""}`)}),
+		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":"","unknown":""}`)}),
+	}, {
+		name:  "Structs/DuplicateName/Inline/NoCaseOkay",
+		inBuf: `{"b":"","B":""}`,
+		inVal: addr(structNoCaseInlineRawValue{}),
+		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"b":"","B":""}`)}),
+	}, {
+		name:    "Structs/DuplicateName/Inline/ExactConflict",
+		inBuf:   `{"b":"","b":""}`,
+		inVal:   addr(structNoCaseInlineRawValue{}),
+		want:    addr(structNoCaseInlineRawValue{X: RawValue(`{"b":""}`)}),
+		wantErr: (&SyntacticError{str: `duplicate name "b" in object`}).withOffset(int64(len(`{"b":"",`))),
 	}, {
 		name:    "Structs/Invalid/ErrUnexpectedEOF",
 		inBuf:   ``,
@@ -5039,6 +5311,58 @@ func TestUnmarshal(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotErr, tt.wantErr) {
 				t.Errorf("Unmarshal error mismatch:\ngot  %v\nwant %v", gotErr, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestMarshalInvalidNamespace(t *testing.T) {
+	tests := []struct {
+		name string
+		val  interface{}
+	}{
+		{"Map", map[string]string{"X": "\xde\xad\xbe\xef"}},
+		{"Struct", struct{ X string }{"\xde\xad\xbe\xef"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			enc := NewEncoder(new(bytes.Buffer))
+			if err := (MarshalOptions{}).MarshalNext(enc, tt.val); err == nil {
+				t.Fatal("MarshalNext error is nil, want non-nil")
+			}
+			for _, tok := range []Token{Null, String(""), Int(0), ObjectStart, ObjectEnd, ArrayStart, ArrayEnd} {
+				if err := enc.WriteToken(tok); err == nil {
+					t.Error("WriteToken error is nil, want non-nil")
+				}
+			}
+			for _, val := range []string{`null`, `""`, `0`, `{}`, `[]`} {
+				if err := enc.WriteValue([]byte(val)); err == nil {
+					t.Error("WriteToken error is nil, want non-nil")
+				}
+			}
+		})
+	}
+}
+
+func TestUnmarshalInvalidNamespace(t *testing.T) {
+	tests := []struct {
+		name string
+		val  interface{}
+	}{
+		{"Map", addr(map[string]int{})},
+		{"Struct", addr(struct{ X int }{})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dec := NewDecoder(strings.NewReader(`{"X":""}`))
+			if err := (UnmarshalOptions{}).UnmarshalNext(dec, tt.val); err == nil {
+				t.Fatal("UnmarshalNext error is nil, want non-nil")
+			}
+			if _, err := dec.ReadToken(); err == nil {
+				t.Error("ReadToken error is nil, want non-nil")
+			}
+			if _, err := dec.ReadValue(); err == nil {
+				t.Error("ReadValue error is nil, want non-nil")
 			}
 		})
 	}
