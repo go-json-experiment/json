@@ -118,7 +118,11 @@ type encodeBuffer struct {
 	// relative to the start of io.Writer stream.
 	baseOffset int64
 
+	// If wr and bb are both nil, then buf is the entirety of the output.
+	// Otherwise, exactly either wr or bb is non-nil.
+	// If bb is non-nil, then buf aliases the internal buffer of bb.
 	wr io.Writer
+	bb *bytes.Buffer
 
 	// maxValue is the approximate maximum RawValue size passed to WriteValue.
 	maxValue int
@@ -135,6 +139,9 @@ func NewEncoder(w io.Writer) *Encoder {
 // configured with the provided options.
 // It flushes the internal buffer when the buffer is sufficiently full or
 // when a top-level value has been written.
+//
+// If w is a bytes.Buffer, then the encoder appends directly into the buffer
+// without copying the contents from an intermediate buffer.
 func (o EncodeOptions) NewEncoder(w io.Writer) *Encoder {
 	if w == nil {
 		panic("json: invalid nil io.Writer")
@@ -156,6 +163,11 @@ func (o EncodeOptions) newEncoder(w io.Writer, b []byte) *Encoder {
 	e.wr = w
 	e.buf = b
 	e.options = o
+	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
+		e.wr = nil
+		e.bb = bb
+		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
+	}
 	return e
 }
 
@@ -166,12 +178,34 @@ func (e *Encoder) needFlush() bool {
 	// Flush if less than 25% of the capacity remains.
 	// Flushing at some constant fraction ensures that the buffer stops growing
 	// so long as the largest Token or Value fits within that unused capacity.
-	return e.wr != nil && (e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4)
+	return e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4
 }
 
 // flush flushes the buffer to the underlying io.Writer.
 func (e *encodeBuffer) flush() error {
-	if e.wr == nil {
+	if e.wr == nil && e.bb == nil {
+		return nil
+	}
+
+	// Specialize bytes.Buffer for better performance.
+	if e.bb != nil {
+		// If e.buf already aliases the internal buffer of bb,
+		// then the Write call simply increments the internal offset,
+		// otherwise Write operates as expected.
+		// See https://golang.org/issue/42986.
+		n, _ := e.bb.Write(e.buf) // never fails
+		e.baseOffset += int64(n)
+
+		// If the internal buffer of bytes.Buffer is too small,
+		// append operations elsewhere in the Encoder may grow the buffer.
+		// This would be semantically correct, but hurts performance.
+		// As such, ensure 25% of the current length is always available
+		// to reduce the probability that other appends must allocate.
+		if avail := e.bb.Cap() - e.bb.Len(); avail < e.bb.Len()/4 {
+			e.bb.Grow(avail + 1)
+		}
+
+		e.buf = e.bb.Bytes()[e.bb.Len():] // alias the unused buffer of bb
 		return nil
 	}
 
@@ -730,6 +764,8 @@ func (e *Encoder) UnusedBuffer() []byte {
 	// need to take special care to avoid mangling the data while reformatting.
 	// WriteValue can't easily identify whether the input RawValue aliases e.buf
 	// without using unsafe.Pointer. Thus, we just return a different buffer.
+	// Should this ever alias e.buf, we need to consider how it operates with
+	// the specialized performance optimization for bytes.Buffer.
 	n := 1 << bits.Len(uint(e.maxValue|63)) // fast approximation for max length
 	if cap(e.unusedCache) < n {
 		e.unusedCache = make([]byte, 0, n)

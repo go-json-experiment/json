@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"math"
@@ -40,7 +41,7 @@ func TestDecoder(t *testing.T) {
 	}
 }
 func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
-	dec := NewDecoder(strings.NewReader(td.in))
+	dec := NewDecoder(bytes.NewBufferString(td.in))
 	switch typeName {
 	case "Token":
 		var tokens []Token
@@ -648,7 +649,7 @@ func TestDecoderErrors(t *testing.T) {
 	}
 }
 func testDecoderErrors(t *testing.T, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
-	src := strings.NewReader(in)
+	src := bytes.NewBufferString(in)
 	dec := opts.NewDecoder(src)
 	for i, call := range calls {
 		gotKind := dec.PeekKind()
@@ -716,6 +717,23 @@ var resumableDecoderTestdata = []string{
 	`"\ud800\udead"`,
 	"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"",
 	`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`,
+}
+
+// TestBufferDecoder tests that we detect misuses of bytes.Buffer with Decoder.
+func TestBufferDecoder(t *testing.T) {
+	bb := bytes.NewBufferString("[null, false, true]")
+	dec := NewDecoder(bb)
+	var err error
+	for {
+		if _, err = dec.ReadToken(); err != nil {
+			break
+		}
+		bb.WriteByte(' ') // not allowed to write to the buffer while reading
+	}
+	want := &ioError{action: "read", err: errBufferWriteAfterNext}
+	if !reflect.DeepEqual(err, want) {
+		t.Errorf("error mismatch: got %v, want %v", err, want)
+	}
 }
 
 // TestResumableDecoder tests that resume logic for parsing a

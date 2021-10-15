@@ -20,6 +20,10 @@ import (
 
 var benchV1 = os.Getenv("BENCHMARK_V1") != ""
 
+// bytesBuffer is identical to bytes.Buffer, but a different type
+// to avoid any optimizations for bytes.Buffer.
+type bytesBuffer struct{ *bytes.Buffer }
+
 var arshalTestdata = []struct {
 	name   string
 	raw    []byte
@@ -373,11 +377,9 @@ func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 	var enc *Encoder
 	switch modeName {
 	case "Streaming":
-		enc = NewEncoder(bytes.NewBuffer(buffer[:0]))
+		enc = NewEncoder(bytesBuffer{bytes.NewBuffer(buffer[:0])})
 	case "Buffered":
-		enc = NewEncoder((*bytes.Buffer)(nil))
-		enc.wr = nil
-		enc.buf = buffer[:0]
+		enc = NewEncoder(bytes.NewBuffer(buffer[:0]))
 	}
 	switch typeName {
 	case "Token":
@@ -421,11 +423,9 @@ func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 	var dec *Decoder
 	switch modeName {
 	case "Streaming":
-		dec = NewDecoder(bytes.NewReader(data))
+		dec = NewDecoder(bytesBuffer{bytes.NewBuffer(data)})
 	case "Buffered":
-		dec = NewDecoder((*bytes.Buffer)(nil))
-		dec.rd = nil
-		dec.buf = data
+		dec = NewDecoder(bytes.NewBuffer(data))
 	}
 	switch typeName {
 	case "Token":

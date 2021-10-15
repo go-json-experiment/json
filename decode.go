@@ -5,6 +5,8 @@
 package json
 
 import (
+	"bytes"
+	"errors"
 	"io"
 	"math"
 	"strconv"
@@ -118,10 +120,18 @@ type decodeBuffer struct {
 	// the absolute offset relative to the start of io.Reader stream.
 	baseOffset int64
 
+	// If rd and bb are both nil, then buf is the entirety of the input.
+	// Otherwise, exactly either rd or bb is non-nil.
+	// If bb is non-nil, then buf aliases the internal buffer of bb.
 	rd io.Reader
+	bb *bytes.Buffer
 }
 
 // NewDecoder constructs a new streaming decoder reading from r.
+//
+// If r is a bytes.Buffer, then the decoder parses directly from the buffer
+// without first copying the contents to an intermediate buffer.
+// Additional writes to the buffer must not occur while the decoder is in use.
 func NewDecoder(r io.Reader) *Decoder {
 	return DecodeOptions{}.NewDecoder(r)
 }
@@ -143,11 +153,37 @@ func (o DecodeOptions) newDecoder(r io.Reader, b []byte) *Decoder {
 	return d
 }
 
+var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")
+
 // fetch reads at least 1 byte from the underlying io.Reader.
 // It returns io.ErrUnexpectedEOF if zero bytes were read and io.EOF was seen.
 func (d *decodeBuffer) fetch() error {
-	if d.rd == nil {
+	if d.rd == nil && d.bb == nil {
 		return io.ErrUnexpectedEOF
+	}
+
+	// Specialize bytes.Buffer for better performance.
+	if bb, ok := d.rd.(*bytes.Buffer); ok && bb != nil {
+		d.rd, d.bb = nil, bb
+	}
+	if d.bb != nil {
+		switch {
+		case d.bb.Len() == 0:
+			return io.ErrUnexpectedEOF
+		case len(d.buf) == 0:
+			d.buf = d.bb.Next(d.bb.Len()) // "read" all data in the buffer
+			return nil
+		default:
+			// This only occurs if a partially filled bytes.Buffer was provided
+			// and more data is written to it while Decoder is reading from it.
+			// This practice will lead to data corruption since future writes
+			// may overwrite the contents of the current buffer.
+			//
+			// The user is trying to use a bytes.Buffer as a pipe,
+			// but a bytes.Buffer is poor implementation of a pipe,
+			// the purpose-built io.Pipe should be used instead.
+			return &ioError{action: "read", err: errBufferWriteAfterNext}
+		}
 	}
 
 	// Allocate initial buffer if empty.
