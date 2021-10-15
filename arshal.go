@@ -231,6 +231,7 @@ func lookupArshaler(t reflect.Type) *arshaler {
 
 	fncs := makeDefaultArshaler(t)
 	fncs = makeMethodArshaler(fncs, t)
+	fncs = makeTimeArshaler(fncs, t)
 
 	// Use the last stored so that duplicate arshalers can be garbage collected.
 	v, _ := lookupArshalerCache.LoadOrStore(t, fncs)

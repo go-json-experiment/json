@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 type (
@@ -224,6 +225,27 @@ type (
 		Slice     []string          `json:",omitzero,format:invalid"`
 		Array     [1]string         `json:",omitzero,format:invalid"`
 		Interface interface{}       `json:",omitzero,format:invalid"`
+	}
+	structTimeFormat struct {
+		T1  time.Time
+		T2  time.Time `json:",format:Layout"`
+		T3  time.Time `json:",format:ANSIC"`
+		T4  time.Time `json:",format:UnixDate"`
+		T5  time.Time `json:",format:RubyDate"`
+		T6  time.Time `json:",format:RFC822"`
+		T7  time.Time `json:",format:RFC822Z"`
+		T8  time.Time `json:",format:RFC850"`
+		T9  time.Time `json:",format:RFC1123"`
+		T10 time.Time `json:",format:RFC1123Z"`
+		T11 time.Time `json:",format:RFC3339"`
+		T12 time.Time `json:",format:RFC3339Nano"`
+		T13 time.Time `json:",format:Kitchen"`
+		T14 time.Time `json:",format:Stamp"`
+		T15 time.Time `json:",format:StampMilli"`
+		T16 time.Time `json:",format:StampMicro"`
+		T17 time.Time `json:",format:StampNano"`
+		T18 time.Time `json:",format:'2006-01-02'"`
+		T19 time.Time `json:",format:'\"weird\"2006'"`
 	}
 	structInlined struct {
 		X             structInlinedL1 `json:",inline"`
@@ -451,6 +473,14 @@ func addr(v interface{}) interface{} {
 	v2 := reflect.New(v1.Type())
 	v2.Elem().Set(v1)
 	return v2.Interface()
+}
+
+func mustParseTime(layout, value string) time.Time {
+	t, err := time.Parse(layout, value)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 func TestMarshal(t *testing.T) {
@@ -1723,6 +1753,133 @@ func TestMarshal(t *testing.T) {
 		},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName},
+	}, {
+		name: "Duration/Zero",
+		in: struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{0, 0},
+		want: `{"D1":"0s","D2":0}`,
+	}, {
+		name: "Duration/Positive",
+		in: struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{
+			123456789123456789,
+			123456789123456789,
+		},
+		want: `{"D1":"34293h33m9.123456789s","D2":123456789123456789}`,
+	}, {
+		name: "Duration/Negative",
+		in: struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{
+			-123456789123456789,
+			-123456789123456789,
+		},
+		want: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
+	}, {
+		name: "Duration/Format/Invalid",
+		in: struct {
+			D time.Duration `json:",format:invalid"`
+		}{},
+		want:    `{"D"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name: "Time/Zero",
+		in: struct {
+			T1 time.Time
+			T2 time.Time `json:",format:RFC822"`
+			T3 time.Time `json:",format:'2006-01-02'"`
+			T4 time.Time `json:",omitzero"`
+			T5 time.Time `json:",omitempty"`
+		}{
+			time.Time{},
+			time.Time{},
+			time.Time{},
+			// TODO: What is expected behavior?
+			// This is zero according to time.Time.IsZero,
+			// but non-zero according to reflect.Value.IsZero.
+			time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("UTC", 0)),
+			time.Time{},
+		},
+		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,
+	}, {
+		name:  "Time/Format",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structTimeFormat{
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+		},
+		want: `{
+	"T1": "1234-01-02T03:04:05.000000006Z",
+	"T2": "01/02 03:04:05AM '34 +0000",
+	"T3": "Mon Jan  2 03:04:05 1234",
+	"T4": "Mon Jan  2 03:04:05 UTC 1234",
+	"T5": "Mon Jan 02 03:04:05 +0000 1234",
+	"T6": "02 Jan 34 03:04 UTC",
+	"T7": "02 Jan 34 03:04 +0000",
+	"T8": "Monday, 02-Jan-34 03:04:05 UTC",
+	"T9": "Mon, 02 Jan 1234 03:04:05 UTC",
+	"T10": "Mon, 02 Jan 1234 03:04:05 +0000",
+	"T11": "1234-01-02T03:04:05Z",
+	"T12": "1234-01-02T03:04:05.000000006Z",
+	"T13": "3:04AM",
+	"T14": "Jan  2 03:04:05",
+	"T15": "Jan  2 03:04:05.000",
+	"T16": "Jan  2 03:04:05.000000",
+	"T17": "Jan  2 03:04:05.000000006",
+	"T18": "1234-01-02",
+	"T19": "\"weird\"1234"
+}`,
+	}, {
+		name: "Time/Format/Invalid",
+		in: struct {
+			T time.Time `json:",format:UndefinedConstant"`
+		}{},
+		want:    `{"T"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
+	}, {
+		name: "Time/Format/Overflow",
+		in: struct {
+			T1 time.Time
+			T2 time.Time
+		}{
+			time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second),
+			time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		want:    `{"T1":"9999-12-31T23:59:59Z","T2"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year 10000 outside of range [0,9999]`)},
+	}, {
+		name: "Time/Format/Underflow",
+		in: struct {
+			T1 time.Time
+			T2 time.Time
+		}{
+			time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second),
+		},
+		want:    `{"T1":"0000-01-01T00:00:00Z","T2"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year -1 outside of range [0,9999]`)},
 	}}
 
 	for _, tt := range tests {
@@ -3898,6 +4055,246 @@ func TestUnmarshal(t *testing.T) {
 			panic("should not be called")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalTextFuncType, Err: errors.New("JSON value must be string type")},
+	}, {
+		name:  "Duration/Null",
+		inBuf: `{"D1":null,"D2":null}`,
+		inVal: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{1, 1}),
+		want: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{0, 0}),
+	}, {
+		name:  "Duration/Zero",
+		inBuf: `{"D1":"0s","D2":0}`,
+		inVal: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{1, 1}),
+		want: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{0, 0}),
+	}, {
+		name:  "Duration/Positive",
+		inBuf: `{"D1":"34293h33m9.123456789s","D2":123456789123456789}`,
+		inVal: new(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}),
+		want: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{
+			123456789123456789,
+			123456789123456789,
+		}),
+	}, {
+		name:  "Duration/Negative",
+		inBuf: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
+		inVal: new(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}),
+		want: addr(struct {
+			D1 time.Duration
+			D2 time.Duration `json:",format:nanos"`
+		}{
+			-123456789123456789,
+			-123456789123456789,
+		}),
+	}, {
+		name:  "Duration/Nanos/Mismatch",
+		inBuf: `{"D":"34293h33m9.123456789s"}`,
+		inVal: addr(struct {
+			D time.Duration `json:",format:nanos"`
+		}{1}),
+		want: addr(struct {
+			D time.Duration `json:",format:nanos"`
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType},
+	}, {
+		name:  "Duration/Nanos/Invalid",
+		inBuf: `{"D":1.324}`,
+		inVal: addr(struct {
+			D time.Duration `json:",format:nanos"`
+		}{1}),
+		want: addr(struct {
+			D time.Duration `json:",format:nanos"`
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType, Err: func() error {
+			_, err := strconv.ParseInt("1.324", 10, 64)
+			return err
+		}()},
+	}, {
+		name:  "Duration/String/Mismatch",
+		inBuf: `{"D":-123456789123456789}`,
+		inVal: addr(struct {
+			D time.Duration
+		}{1}),
+		want: addr(struct {
+			D time.Duration
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType},
+	}, {
+		name:  "Duration/String/Invalid",
+		inBuf: `{"D":"5minkutes"}`,
+		inVal: addr(struct {
+			D time.Duration
+		}{1}),
+		want: addr(struct {
+			D time.Duration
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType, Err: func() error {
+			_, err := time.ParseDuration("5minkutes")
+			return err
+		}()},
+	}, {
+		name:  "Duration/Syntax/Invalid",
+		inBuf: `{"D":x}`,
+		inVal: addr(struct {
+			D time.Duration
+		}{1}),
+		want: addr(struct {
+			D time.Duration
+		}{1}),
+		wantErr: newInvalidCharacterError('x', "at start of value").withOffset(int64(len(`{"D":`))),
+	}, {
+		name:  "Duration/Format/Invalid",
+		inBuf: `{"D":"0s"}`,
+		inVal: addr(struct {
+			D time.Duration `json:",format:invalid"`
+		}{1}),
+		want: addr(struct {
+			D time.Duration `json:",format:invalid"`
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:  "Time/Zero",
+		inBuf: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,
+		inVal: new(struct {
+			T1 time.Time
+			T2 time.Time `json:",format:RFC822"`
+			T3 time.Time `json:",format:'2006-01-02'"`
+			T4 time.Time `json:",omitzero"`
+			T5 time.Time `json:",omitempty"`
+		}),
+		want: addr(struct {
+			T1 time.Time
+			T2 time.Time `json:",format:RFC822"`
+			T3 time.Time `json:",format:'2006-01-02'"`
+			T4 time.Time `json:",omitzero"`
+			T5 time.Time `json:",omitempty"`
+		}{
+			mustParseTime(time.RFC3339Nano, "0001-01-01T00:00:00Z"),
+			mustParseTime(time.RFC822, "01 Jan 01 00:00 UTC"),
+			mustParseTime("2006-01-02", "0001-01-01"),
+			mustParseTime(time.RFC3339Nano, "0001-01-01T00:00:00Z"),
+			mustParseTime(time.RFC3339Nano, "0001-01-01T00:00:00Z"),
+		}),
+	}, {
+		name: "Time/Format",
+		inBuf: `{
+			"T1": "1234-01-02T03:04:05.000000006Z",
+			"T2": "01/02 03:04:05AM '34 +0000",
+			"T3": "Mon Jan  2 03:04:05 1234",
+			"T4": "Mon Jan  2 03:04:05 UTC 1234",
+			"T5": "Mon Jan 02 03:04:05 +0000 1234",
+			"T6": "02 Jan 34 03:04 UTC",
+			"T7": "02 Jan 34 03:04 +0000",
+			"T8": "Monday, 02-Jan-34 03:04:05 UTC",
+			"T9": "Mon, 02 Jan 1234 03:04:05 UTC",
+			"T10": "Mon, 02 Jan 1234 03:04:05 +0000",
+			"T11": "1234-01-02T03:04:05Z",
+			"T12": "1234-01-02T03:04:05.000000006Z",
+			"T13": "3:04AM",
+			"T14": "Jan  2 03:04:05",
+			"T15": "Jan  2 03:04:05.000",
+			"T16": "Jan  2 03:04:05.000000",
+			"T17": "Jan  2 03:04:05.000000006",
+			"T18": "1234-01-02",
+			"T19": "\"weird\"1234"
+		}`,
+		inVal: new(structTimeFormat),
+		want: addr(structTimeFormat{
+			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
+			mustParseTime(time.Layout, "01/02 03:04:05AM '34 +0000"),
+			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
+			mustParseTime(time.UnixDate, "Mon Jan  2 03:04:05 UTC 1234"),
+			mustParseTime(time.RubyDate, "Mon Jan 02 03:04:05 +0000 1234"),
+			mustParseTime(time.RFC822, "02 Jan 34 03:04 UTC"),
+			mustParseTime(time.RFC822Z, "02 Jan 34 03:04 +0000"),
+			mustParseTime(time.RFC850, "Monday, 02-Jan-34 03:04:05 UTC"),
+			mustParseTime(time.RFC1123, "Mon, 02 Jan 1234 03:04:05 UTC"),
+			mustParseTime(time.RFC1123Z, "Mon, 02 Jan 1234 03:04:05 +0000"),
+			mustParseTime(time.RFC3339, "1234-01-02T03:04:05Z"),
+			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
+			mustParseTime(time.Kitchen, "3:04AM"),
+			mustParseTime(time.Stamp, "Jan  2 03:04:05"),
+			mustParseTime(time.StampMilli, "Jan  2 03:04:05.000"),
+			mustParseTime(time.StampMicro, "Jan  2 03:04:05.000000"),
+			mustParseTime(time.StampNano, "Jan  2 03:04:05.000000006"),
+			mustParseTime("2006-01-02", "1234-01-02"),
+			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
+		}),
+	}, {
+		name:  "Time/Format/Null",
+		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null,"T19": null}`,
+		inVal: addr(structTimeFormat{
+			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
+			mustParseTime(time.Layout, "01/02 03:04:05AM '34 +0000"),
+			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
+			mustParseTime(time.UnixDate, "Mon Jan  2 03:04:05 UTC 1234"),
+			mustParseTime(time.RubyDate, "Mon Jan 02 03:04:05 +0000 1234"),
+			mustParseTime(time.RFC822, "02 Jan 34 03:04 UTC"),
+			mustParseTime(time.RFC822Z, "02 Jan 34 03:04 +0000"),
+			mustParseTime(time.RFC850, "Monday, 02-Jan-34 03:04:05 UTC"),
+			mustParseTime(time.RFC1123, "Mon, 02 Jan 1234 03:04:05 UTC"),
+			mustParseTime(time.RFC1123Z, "Mon, 02 Jan 1234 03:04:05 +0000"),
+			mustParseTime(time.RFC3339, "1234-01-02T03:04:05Z"),
+			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
+			mustParseTime(time.Kitchen, "3:04AM"),
+			mustParseTime(time.Stamp, "Jan  2 03:04:05"),
+			mustParseTime(time.StampMilli, "Jan  2 03:04:05.000"),
+			mustParseTime(time.StampMicro, "Jan  2 03:04:05.000000"),
+			mustParseTime(time.StampNano, "Jan  2 03:04:05.000000006"),
+			mustParseTime("2006-01-02", "1234-01-02"),
+			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
+		}),
+		want: new(structTimeFormat),
+	}, {
+		name:  "Time/RFC3339/Mismatch",
+		inBuf: `{"T":1234}`,
+		inVal: new(struct {
+			T time.Time
+		}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeTimeType},
+	}, {
+		name:  "Time/RFC3339/Mismatch",
+		inBuf: `{"T":"2021-09-29T12:44:52"}`,
+		inVal: new(struct {
+			T time.Time
+		}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: func() error {
+			_, err := time.Parse(time.RFC3339Nano, "2021-09-29T12:44:52")
+			return err
+		}()},
+	}, {
+		name:  "Time/Format/Invalid",
+		inBuf: `{"T":""}`,
+		inVal: new(struct {
+			T time.Time `json:",format:UndefinedConstant"`
+		}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
+	}, {
+		name:  "Time/Syntax/Invalid",
+		inBuf: `{"T":x}`,
+		inVal: new(struct {
+			T time.Time
+		}),
+		wantErr: newInvalidCharacterError('x', "at start of value").withOffset(int64(len(`{"D":`))),
 	}}
 
 	for _, tt := range tests {
