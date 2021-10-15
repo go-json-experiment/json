@@ -312,39 +312,26 @@ func (d *Decoder) PeekKind() Kind {
 // the result except that memory is not wasted trying to hold the entire result.
 func (d *Decoder) skipValue() error {
 	switch d.PeekKind() {
-	case '{':
-		if _, err := d.ReadToken(); err != nil {
-			return err
-		}
-		for d.PeekKind() != '}' {
-			if _, err := d.ReadValue(); err != nil {
+	case '{', '[':
+		// For JSON objects and arrays, keep skipping all tokens
+		// until the depth matches the starting depth.
+		depth := d.tokens.depth()
+		for {
+			if _, err := d.ReadToken(); err != nil {
 				return err
 			}
-			if err := d.skipValue(); err != nil {
-				return err
+			if depth >= d.tokens.depth() {
+				return nil
 			}
-		}
-		if _, err := d.ReadToken(); err != nil {
-			return err
-		}
-	case '[':
-		if _, err := d.ReadToken(); err != nil {
-			return err
-		}
-		for d.PeekKind() != ']' {
-			if err := d.skipValue(); err != nil {
-				return err
-			}
-		}
-		if _, err := d.ReadToken(); err != nil {
-			return err
 		}
 	default:
+		// Trying to skip a value when the next token is a '}' or ']'
+		// will result in an error being returned here.
 		if _, err := d.ReadValue(); err != nil {
 			return err
 		}
+		return nil
 	}
-	return nil
 }
 
 // ReadToken reads the next Token, advancing the read offset.
