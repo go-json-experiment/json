@@ -139,18 +139,33 @@ func NewDecoder(r io.Reader) *Decoder {
 // NewDecoder constructs a new streaming decoder reading from r
 // configured with the provided options.
 func (o DecodeOptions) NewDecoder(r io.Reader) *Decoder {
+	d := new(Decoder)
+	o.ResetDecoder(d, r)
+	return d
+}
+
+// ResetDecoder resets a decoder such that it is reading afresh from r and
+// configured with the provided options.
+func (o DecodeOptions) ResetDecoder(d *Decoder, r io.Reader) {
+	if d == nil {
+		panic("json: invalid nil Decoder")
+	}
 	if r == nil {
 		panic("json: invalid nil io.Reader")
 	}
-	return o.newDecoder(r, nil)
+	d.init(nil, r, o)
 }
-func (o DecodeOptions) newDecoder(r io.Reader, b []byte) *Decoder {
-	d := new(Decoder)
+
+func (d *Decoder) init(b []byte, r io.Reader, o DecodeOptions) {
 	d.state.init()
-	d.rd = r
-	d.buf = b
+	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
 	d.options = o
-	return d
+}
+
+// Reset resets a decoder such that it is reading afresh from r but
+// keep any pre-existing decoder options.
+func (d *Decoder) Reset(r io.Reader) {
+	d.options.ResetDecoder(d, r)
 }
 
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")

@@ -16,16 +16,13 @@ type state struct {
 	// tokens validates whether the next token kind is valid.
 	tokens stateMachine
 
-	// tokensBootstrap allows the tokens slice to not incur an extra
-	// allocation for values with relatively small depth.
-	tokensBootstrap [8]stateEntry
-
 	// namespaces is a stack of object namespaces.
 	namespaces objectNamespaceStack
 }
 
 func (s *state) init() {
-	s.tokens.init(s.tokensBootstrap[:0])
+	s.tokens.init()
+	s.namespaces.init()
 }
 
 // stateMachine is a push-down automaton that validates whether
@@ -44,8 +41,11 @@ type stateMachine []stateEntry
 
 // init initializes the state machine.
 // The machine always starts with a minimum depth of 1.
-func (m *stateMachine) init(bootstrap []stateEntry) {
-	*m = append(bootstrap, stateTypeArray)
+func (m *stateMachine) init() {
+	if cap(*m) > 1<<10 {
+		*m = nil
+	}
+	*m = append((*m)[:0], stateTypeArray)
 }
 
 // depth is the current nested depth of JSON objects and arrays.
@@ -268,6 +268,14 @@ func (e *stateEntry) decrement() {
 // objectNamespaceStack is a stack of object namespaces.
 // This data structure assists in detecting duplicate names.
 type objectNamespaceStack []objectNamespace
+
+// init initializes the object namespace stack.
+func (nss *objectNamespaceStack) init() {
+	if cap(*nss) > 1<<10 {
+		*nss = nil
+	}
+	*nss = (*nss)[:0]
+}
 
 // push starts a new namespace for a nested JSON object.
 func (nss *objectNamespaceStack) push() {

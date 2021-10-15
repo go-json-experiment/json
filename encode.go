@@ -143,12 +143,24 @@ func NewEncoder(w io.Writer) *Encoder {
 // If w is a bytes.Buffer, then the encoder appends directly into the buffer
 // without copying the contents from an intermediate buffer.
 func (o EncodeOptions) NewEncoder(w io.Writer) *Encoder {
+	e := new(Encoder)
+	o.ResetEncoder(e, w)
+	return e
+}
+
+// ResetEncoder resets an encoder such that it is writing afresh to w and
+// configured with the provided options.
+func (o EncodeOptions) ResetEncoder(e *Encoder, w io.Writer) {
+	if e == nil {
+		panic("json: invalid nil Encoder")
+	}
 	if w == nil {
 		panic("json: invalid nil io.Writer")
 	}
-	return o.newEncoder(w, nil)
+	e.init(nil, w, o)
 }
-func (o EncodeOptions) newEncoder(w io.Writer, b []byte) *Encoder {
+
+func (e *Encoder) init(b []byte, w io.Writer, o EncodeOptions) {
 	if len(o.Indent) > 0 {
 		o.multiline = true
 		if s := strings.Trim(o.IndentPrefix, " \t"); len(s) > 0 {
@@ -158,17 +170,20 @@ func (o EncodeOptions) newEncoder(w io.Writer, b []byte) *Encoder {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
 		}
 	}
-	e := new(Encoder)
 	e.state.init()
-	e.wr = w
-	e.buf = b
+	e.encodeBuffer = encodeBuffer{buf: b, wr: w}
 	e.options = o
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
 		e.wr = nil
 		e.bb = bb
 		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 	}
-	return e
+}
+
+// Reset resets a encoder such that it is writing afresh to r but
+// keep any pre-existing encoder options.
+func (e *Encoder) Reset(r io.Writer) {
+	e.options.ResetEncoder(e, r)
 }
 
 // needFlush determines whether to flush at this point.
