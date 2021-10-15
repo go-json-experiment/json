@@ -57,7 +57,7 @@ func MarshalFull(out io.Writer, in interface{}) error {
 // See MarshalNext for details about the conversion of a Go value into JSON.
 func (mo MarshalOptions) Marshal(eo EncodeOptions, in interface{}) (out []byte, err error) {
 	enc := new(Encoder) // TODO: Pool this.
-	enc.init(nil, nil, eo)
+	enc.reset(nil, nil, eo)
 	enc.options.omitTopLevelNewline = true
 	err = mo.MarshalNext(enc, in)
 	return enc.buf, err
@@ -146,7 +146,7 @@ func UnmarshalFull(in io.Reader, out interface{}) error {
 // See UnmarshalNext for details about the conversion of JSON into a Go value.
 func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out interface{}) error {
 	dec := new(Decoder) // TODO: Pool this.
-	dec.init(in, nil, do)
+	dec.reset(in, nil, do)
 	return uo.unmarshalFull(dec, out)
 }
 

@@ -20,9 +20,9 @@ type state struct {
 	namespaces objectNamespaceStack
 }
 
-func (s *state) init() {
-	s.tokens.init()
-	s.namespaces.init()
+func (s *state) reset() {
+	s.tokens.reset()
+	s.namespaces.reset()
 }
 
 // stateMachine is a push-down automaton that validates whether
@@ -36,12 +36,12 @@ func (s *state) init() {
 // between each JSON value.
 //
 // For performance, most methods are carefully written to be inlineable.
-// The zero value is not a valid state machine; call init first.
+// The zero value is not a valid state machine; call reset first.
 type stateMachine []stateEntry
 
-// init initializes the state machine.
+// reset resets the state machine.
 // The machine always starts with a minimum depth of 1.
-func (m *stateMachine) init() {
+func (m *stateMachine) reset() {
 	if cap(*m) > 1<<10 {
 		*m = nil
 	}
@@ -269,8 +269,8 @@ func (e *stateEntry) decrement() {
 // This data structure assists in detecting duplicate names.
 type objectNamespaceStack []objectNamespace
 
-// init initializes the object namespace stack.
-func (nss *objectNamespaceStack) init() {
+// reset resets the object namespace stack.
+func (nss *objectNamespaceStack) reset() {
 	if cap(*nss) > 1<<10 {
 		*nss = nil
 	}

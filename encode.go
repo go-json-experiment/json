@@ -157,10 +157,10 @@ func (o EncodeOptions) ResetEncoder(e *Encoder, w io.Writer) {
 	if w == nil {
 		panic("json: invalid nil io.Writer")
 	}
-	e.init(nil, w, o)
+	e.reset(nil, w, o)
 }
 
-func (e *Encoder) init(b []byte, w io.Writer, o EncodeOptions) {
+func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
 	if len(o.Indent) > 0 {
 		o.multiline = true
 		if s := strings.Trim(o.IndentPrefix, " \t"); len(s) > 0 {
@@ -170,7 +170,7 @@ func (e *Encoder) init(b []byte, w io.Writer, o EncodeOptions) {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
 		}
 	}
-	e.state.init()
+	e.state.reset()
 	e.encodeBuffer = encodeBuffer{buf: b, wr: w}
 	e.options = o
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {

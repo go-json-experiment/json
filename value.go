@@ -53,7 +53,7 @@ func (v RawValue) String() string {
 // of any common numeric type (e.g., float64, int64, or uint64).
 func (v RawValue) IsValid() bool {
 	d := new(Decoder) // TODO: Pool this.
-	d.state.init()
+	d.state.reset()
 	d.buf = v
 	_, errVal := d.ReadValue()
 	_, errEOF := d.ReadToken()
@@ -139,7 +139,7 @@ func (v RawValue) Kind() Kind {
 
 func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) error {
 	e := new(Encoder) // TODO: Pool this.
-	e.state.init()
+	e.state.reset()
 
 	if canonical {
 		e.options.AllowInvalidUTF8 = false    // per RFC 8785, section 3.2.4
@@ -198,7 +198,7 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 func (v RawValue) reorderObjects(d *Decoder) {
 	if d == nil {
 		d = new(Decoder) // TODO: Pool this.
-		d.state.init()
+		d.state.reset()
 		d.buf = v
 	}
 

@@ -151,7 +151,7 @@ func TestStateMachine(t *testing.T) {
 
 			// Append each token to the state machine and check the output.
 			var state stateMachine
-			state.init()
+			state.reset()
 			var sequence []Kind
 			for _, op := range ops {
 				switch op := op.(type) {

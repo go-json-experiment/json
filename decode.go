@@ -153,11 +153,11 @@ func (o DecodeOptions) ResetDecoder(d *Decoder, r io.Reader) {
 	if r == nil {
 		panic("json: invalid nil io.Reader")
 	}
-	d.init(nil, r, o)
+	d.reset(nil, r, o)
 }
 
-func (d *Decoder) init(b []byte, r io.Reader, o DecodeOptions) {
-	d.state.init()
+func (d *Decoder) reset(b []byte, r io.Reader, o DecodeOptions) {
+	d.state.reset()
 	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
 	d.options = o
 }

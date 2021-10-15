@@ -44,7 +44,7 @@ func TestInline(t *testing.T) {
 			"stateMachine.appendNumber",
 			"stateMachine.appendString",
 			"stateMachine.depth",
-			"stateMachine.init",
+			"stateMachine.reset",
 			"stateMachine.last",
 			"stateMachine.needDelim",
 			"stateMachine.popArray",
