@@ -2,14 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// NOTE: This file relies on experimental fuzzing support in the Go toolchain
-// provided by a build of the "go" command from the "dev.fuzz" branch.
-//
-// To manually run the fuzzer:
-//	go test -tags=dev.fuzz -fuzz=Coder
-//
-//go:build dev.fuzz
-// +build dev.fuzz
+//go:build go1.18
+// +build go1.18
 
 package json
 
@@ -19,7 +13,6 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
-	"strings"
 	"testing"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -274,7 +267,7 @@ func FuzzLessUTF16(f *testing.F) {
 
 func FuzzEqualFold(f *testing.F) {
 	for _, tt := range equalFoldTestdata {
-		f.Add(tt.in1, tt.in2)
+		f.Add([]byte(tt.in1), []byte(tt.in2))
 	}
 
 	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
