@@ -163,8 +163,6 @@ func checkTimeFormat(format string) (string, error) {
 	// will always started with uppercase ASCII.
 	if len(format) > 0 && 'A' <= format[0] && format[0] <= 'Z' {
 		switch format {
-		case "Layout":
-			return time.Layout, nil
 		case "ANSIC":
 			return time.ANSIC, nil
 		case "UnixDate":

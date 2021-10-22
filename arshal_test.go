@@ -228,24 +228,23 @@ type (
 	}
 	structTimeFormat struct {
 		T1  time.Time
-		T2  time.Time `json:",format:Layout"`
-		T3  time.Time `json:",format:ANSIC"`
-		T4  time.Time `json:",format:UnixDate"`
-		T5  time.Time `json:",format:RubyDate"`
-		T6  time.Time `json:",format:RFC822"`
-		T7  time.Time `json:",format:RFC822Z"`
-		T8  time.Time `json:",format:RFC850"`
-		T9  time.Time `json:",format:RFC1123"`
-		T10 time.Time `json:",format:RFC1123Z"`
-		T11 time.Time `json:",format:RFC3339"`
-		T12 time.Time `json:",format:RFC3339Nano"`
-		T13 time.Time `json:",format:Kitchen"`
-		T14 time.Time `json:",format:Stamp"`
-		T15 time.Time `json:",format:StampMilli"`
-		T16 time.Time `json:",format:StampMicro"`
-		T17 time.Time `json:",format:StampNano"`
-		T18 time.Time `json:",format:'2006-01-02'"`
-		T19 time.Time `json:",format:'\"weird\"2006'"`
+		T2  time.Time `json:",format:ANSIC"`
+		T3  time.Time `json:",format:UnixDate"`
+		T4  time.Time `json:",format:RubyDate"`
+		T5  time.Time `json:",format:RFC822"`
+		T6  time.Time `json:",format:RFC822Z"`
+		T7  time.Time `json:",format:RFC850"`
+		T8  time.Time `json:",format:RFC1123"`
+		T9  time.Time `json:",format:RFC1123Z"`
+		T10 time.Time `json:",format:RFC3339"`
+		T11 time.Time `json:",format:RFC3339Nano"`
+		T12 time.Time `json:",format:Kitchen"`
+		T13 time.Time `json:",format:Stamp"`
+		T14 time.Time `json:",format:StampMilli"`
+		T15 time.Time `json:",format:StampMicro"`
+		T16 time.Time `json:",format:StampNano"`
+		T17 time.Time `json:",format:'2006-01-02'"`
+		T18 time.Time `json:",format:'\"weird\"2006'"`
 	}
 	structInlined struct {
 		X             structInlinedL1 `json:",inline"`
@@ -1828,28 +1827,26 @@ func TestMarshal(t *testing.T) {
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
-			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 		},
 		want: `{
 	"T1": "1234-01-02T03:04:05.000000006Z",
-	"T2": "01/02 03:04:05AM '34 +0000",
-	"T3": "Mon Jan  2 03:04:05 1234",
-	"T4": "Mon Jan  2 03:04:05 UTC 1234",
-	"T5": "Mon Jan 02 03:04:05 +0000 1234",
-	"T6": "02 Jan 34 03:04 UTC",
-	"T7": "02 Jan 34 03:04 +0000",
-	"T8": "Monday, 02-Jan-34 03:04:05 UTC",
-	"T9": "Mon, 02 Jan 1234 03:04:05 UTC",
-	"T10": "Mon, 02 Jan 1234 03:04:05 +0000",
-	"T11": "1234-01-02T03:04:05Z",
-	"T12": "1234-01-02T03:04:05.000000006Z",
-	"T13": "3:04AM",
-	"T14": "Jan  2 03:04:05",
-	"T15": "Jan  2 03:04:05.000",
-	"T16": "Jan  2 03:04:05.000000",
-	"T17": "Jan  2 03:04:05.000000006",
-	"T18": "1234-01-02",
-	"T19": "\"weird\"1234"
+	"T2": "Mon Jan  2 03:04:05 1234",
+	"T3": "Mon Jan  2 03:04:05 UTC 1234",
+	"T4": "Mon Jan 02 03:04:05 +0000 1234",
+	"T5": "02 Jan 34 03:04 UTC",
+	"T6": "02 Jan 34 03:04 +0000",
+	"T7": "Monday, 02-Jan-34 03:04:05 UTC",
+	"T8": "Mon, 02 Jan 1234 03:04:05 UTC",
+	"T9": "Mon, 02 Jan 1234 03:04:05 +0000",
+	"T10": "1234-01-02T03:04:05Z",
+	"T11": "1234-01-02T03:04:05.000000006Z",
+	"T12": "3:04AM",
+	"T13": "Jan  2 03:04:05",
+	"T14": "Jan  2 03:04:05.000",
+	"T15": "Jan  2 03:04:05.000000",
+	"T16": "Jan  2 03:04:05.000000006",
+	"T17": "1234-01-02",
+	"T18": "\"weird\"1234"
 }`,
 	}, {
 		name: "Time/Format/Invalid",
@@ -4198,29 +4195,27 @@ func TestUnmarshal(t *testing.T) {
 		name: "Time/Format",
 		inBuf: `{
 			"T1": "1234-01-02T03:04:05.000000006Z",
-			"T2": "01/02 03:04:05AM '34 +0000",
-			"T3": "Mon Jan  2 03:04:05 1234",
-			"T4": "Mon Jan  2 03:04:05 UTC 1234",
-			"T5": "Mon Jan 02 03:04:05 +0000 1234",
-			"T6": "02 Jan 34 03:04 UTC",
-			"T7": "02 Jan 34 03:04 +0000",
-			"T8": "Monday, 02-Jan-34 03:04:05 UTC",
-			"T9": "Mon, 02 Jan 1234 03:04:05 UTC",
-			"T10": "Mon, 02 Jan 1234 03:04:05 +0000",
-			"T11": "1234-01-02T03:04:05Z",
-			"T12": "1234-01-02T03:04:05.000000006Z",
-			"T13": "3:04AM",
-			"T14": "Jan  2 03:04:05",
-			"T15": "Jan  2 03:04:05.000",
-			"T16": "Jan  2 03:04:05.000000",
-			"T17": "Jan  2 03:04:05.000000006",
-			"T18": "1234-01-02",
-			"T19": "\"weird\"1234"
+			"T2": "Mon Jan  2 03:04:05 1234",
+			"T3": "Mon Jan  2 03:04:05 UTC 1234",
+			"T4": "Mon Jan 02 03:04:05 +0000 1234",
+			"T5": "02 Jan 34 03:04 UTC",
+			"T6": "02 Jan 34 03:04 +0000",
+			"T7": "Monday, 02-Jan-34 03:04:05 UTC",
+			"T8": "Mon, 02 Jan 1234 03:04:05 UTC",
+			"T9": "Mon, 02 Jan 1234 03:04:05 +0000",
+			"T10": "1234-01-02T03:04:05Z",
+			"T11": "1234-01-02T03:04:05.000000006Z",
+			"T12": "3:04AM",
+			"T13": "Jan  2 03:04:05",
+			"T14": "Jan  2 03:04:05.000",
+			"T15": "Jan  2 03:04:05.000000",
+			"T16": "Jan  2 03:04:05.000000006",
+			"T17": "1234-01-02",
+			"T18": "\"weird\"1234"
 		}`,
 		inVal: new(structTimeFormat),
 		want: addr(structTimeFormat{
 			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
-			mustParseTime(time.Layout, "01/02 03:04:05AM '34 +0000"),
 			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
 			mustParseTime(time.UnixDate, "Mon Jan  2 03:04:05 UTC 1234"),
 			mustParseTime(time.RubyDate, "Mon Jan 02 03:04:05 +0000 1234"),
@@ -4241,10 +4236,9 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name:  "Time/Format/Null",
-		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null,"T19": null}`,
+		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null}`,
 		inVal: addr(structTimeFormat{
 			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
-			mustParseTime(time.Layout, "01/02 03:04:05AM '34 +0000"),
 			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
 			mustParseTime(time.UnixDate, "Mon Jan  2 03:04:05 UTC 1234"),
 			mustParseTime(time.RubyDate, "Mon Jan 02 03:04:05 +0000 1234"),
