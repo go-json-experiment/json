@@ -639,8 +639,6 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 }
 
 func makeStructArshaler(t reflect.Type) *arshaler {
-	// TODO: Support `unknown`.
-	// TODO: Support MarshalOptions.DiscardUnknownMembers.
 	var fncs arshaler
 	var (
 		once    sync.Once
@@ -704,6 +702,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				enc.unwriteEmptyObjectMember()
 			}
 		}
+		if fields.inlinedFallback != nil && !(mo.DiscardUnknownMembers && fields.inlinedFallback.unknown) {
+			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback); err != nil {
+				return err
+			}
+		}
 		if err := enc.WriteToken(ObjectEnd); err != nil {
 			return err
 		}
@@ -745,13 +748,20 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						}
 					}
 					if f == nil {
-						if uo.RejectUnknownNames {
-							return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: ErrUnknownName}
+						if uo.RejectUnknownNames && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
+							return &SemanticError{action: "unmarshal", GoType: t, Err: ErrUnknownName}
 						}
 
-						// Consume unknown object member.
-						if err := dec.skipValue(); err != nil {
-							return err
+						if fields.inlinedFallback == nil {
+							// Skip unknown value since we have no place to store it.
+							if err := dec.skipValue(); err != nil {
+								return err
+							}
+						} else {
+							// Marshal into value capable of storing arbitrary object members.
+							if err := unmarshalInlinedFallbackNext(uo, dec, va, fields.inlinedFallback, val); err != nil {
+								return err
+							}
 						}
 						continue
 					}

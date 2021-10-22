@@ -34,6 +34,11 @@ type MarshalOptions struct {
 	// Escaping JSON numbers as a JSON string preserves the exact precision.
 	StringifyNumbers bool
 
+	// DiscardUnknownMembers specifies that marshaling should ignore any
+	// JSON object members stored in Go struct fields dedicated to storing
+	// unknown JSON object members.
+	DiscardUnknownMembers bool
+
 	// format is custom formatting for the top-level type.
 	format string
 
@@ -117,7 +122,8 @@ type UnmarshalOptions struct {
 	MatchCaseInsensitiveNames bool
 
 	// RejectUnknownNames specifies that unknown names should be rejected
-	// when unmarshaling a JSON object. When an unknown name is encountered,
+	// when unmarshaling a JSON object, regardless of whether there is a field
+	// to store unknown members. When an unknown name is encountered,
 	// an unmarshal implementation should return an error that matches
 	// ErrUnknownName according to errors.Is.
 	RejectUnknownNames bool

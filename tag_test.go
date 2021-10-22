@@ -22,6 +22,7 @@ func TestMakeStructFields(t *testing.T) {
 		*Recursive `json:",inline"`
 		B          string
 	}
+	type MapStringAny map[string]interface{}
 	tests := []struct {
 		name    string
 		in      interface{}
@@ -139,6 +140,31 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
+		name: "InlinedFallback/Cancelation",
+		in: struct {
+			X1 struct {
+				X RawValue `json:",inline"`
+			} `json:",inline"`
+			X2 struct {
+				X map[string]interface{} `json:",unknown"`
+			} `json:",inline"`
+		}{},
+		want: structFields{},
+	}, {
+		name: "InlinedFallback/Precedence",
+		in: struct {
+			X1 struct {
+				X RawValue `json:",inline"`
+			} `json:",inline"`
+			X2 struct {
+				X map[string]interface{} `json:",unknown"`
+			} `json:",inline"`
+			X map[string]RawValue `json:",unknown"`
+		}{},
+		want: structFields{
+			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeOf(map[string]RawValue(nil)), fieldOptions: fieldOptions{name: "X", unknown: true}},
+		},
+	}, {
 		name: "InvalidUTF8",
 		in: struct {
 			Name string `json:"'\\xde\\xad\\xbe\\xef'"`
@@ -152,11 +178,23 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`Go struct fields A and B conflict over JSON object name "same"`),
 	}, {
+		name: "BothInlineAndUnknown",
+		in: struct {
+			A struct{} `json:",inline,unknown"`
+		}{},
+		wantErr: errors.New("Go struct field A cannot have both `inline` and `unknown` specified"),
+	}, {
 		name: "InlineWithOptions",
 		in: struct {
 			A struct{} `json:",inline,omitempty"`
 		}{},
-		wantErr: errors.New("Go struct field A cannot have any options other than `inline` specified"),
+		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
+	}, {
+		name: "UnknownWithOptions",
+		in: struct {
+			A map[string]interface{} `json:",inline,omitempty"`
+		}{},
+		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
 	}, {
 		name: "InlineTextMarshaler",
 		in: struct {
@@ -164,17 +202,75 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement JSON marshal or unmarshal methods`),
 	}, {
+		name: "UnknownJSONMarshalerV1",
+		in: struct {
+			A struct{ MarshalerV1 } `json:",unknown"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV1 } must not implement JSON marshal or unmarshal methods`),
+	}, {
 		name: "InlineJSONMarshalerV2",
 		in: struct {
 			A struct{ MarshalerV2 } `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV2 } must not implement JSON marshal or unmarshal methods`),
 	}, {
+		name: "UnknownTextUnmarshaler",
+		in: struct {
+			A *struct{ encoding.TextUnmarshaler } `json:",unknown"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextUnmarshaler } must not implement JSON marshal or unmarshal methods`),
+	}, {
 		name: "InlineJSONUnmarshalerV1",
 		in: struct {
 			A *struct{ UnmarshalerV1 } `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV1 } must not implement JSON marshal or unmarshal methods`),
+	}, {
+		name: "UnknownJSONUnmarshalerV2",
+		in: struct {
+			A struct{ UnmarshalerV2 } `json:",unknown"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV2 } must not implement JSON marshal or unmarshal methods`),
+	}, {
+		name: "UnknownStruct",
+		in: struct {
+			A struct {
+				X, Y, Z string
+			} `json:",unknown"`
+		}{},
+		wantErr: errors.New("inlined Go struct field A of type struct { X string; Y string; Z string } with `unknown` tag must be a Go map of string key or a json.RawValue"),
+	}, {
+		name: "InlineUnsupported/MapIntKey",
+		in: struct {
+			A map[int]interface{} `json:",unknown"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type map[int]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
+	}, {
+		name: "InlineUnsupported/MapNamedStringKey",
+		in: struct {
+			A map[namedString]interface{} `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type map[json.namedString]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
+	}, {
+		name: "InlineUnsupported/DoublePointer",
+		in: struct {
+			A **struct{} `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type *struct {} must be a Go struct, Go map of string key, or json.RawValue`),
+	}, {
+		name: "DuplicateInline",
+		in: struct {
+			A map[string]interface{} `json:",inline"`
+			B RawValue               `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined Go struct fields A and B cannot both be a Go map or json.RawValue`),
+	}, {
+		name: "DuplicateEmbedInline",
+		in: struct {
+			MapStringAny
+			B RawValue `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined Go struct fields MapStringAny and B cannot both be a Go map or json.RawValue`),
 	}}
 
 	for _, tt := range tests {
@@ -203,6 +299,10 @@ func TestMakeStructFields(t *testing.T) {
 			for i := range got.flattened {
 				got.flattened[i].fncs = nil
 				got.flattened[i].isEmpty = nil
+			}
+			if got.inlinedFallback != nil {
+				got.inlinedFallback.fncs = nil
+				got.inlinedFallback.isEmpty = nil
 			}
 
 			// Reproduce maps in want.
@@ -524,7 +624,7 @@ func TestParseTagOptions(t *testing.T) {
 		}{},
 		wantErr: errors.New("Go struct field FieldName has malformed `json` tag: invalid character ' ' at start of option (expecting Unicode letter or single quote)"),
 	}, {
-		name: "UnknownOption",
+		name: "UnknownTagOption",
 		in: struct {
 			FieldName int `json:",inline,whoknows,string"`
 		}{},

@@ -22,6 +22,9 @@ import (
 )
 
 type (
+	jsonObject = map[string]interface{}
+	jsonArray  = []interface{}
+
 	namedBool    bool
 	namedString  string
 	namedBytes   []byte
@@ -254,9 +257,59 @@ type (
 		X            *structInlinedL2 `json:",inline"`
 		StructEmbed1 `json:",inline"`
 	}
-	structInlinedL2 struct{ A, B, C string }
-	StructEmbed1    struct{ C, D, E string }
-	StructEmbed2    struct{ E, F, G string }
+	structInlinedL2       struct{ A, B, C string }
+	StructEmbed1          struct{ C, D, E string }
+	StructEmbed2          struct{ E, F, G string }
+	structUnknownRawValue struct {
+		A int      `json:",omitzero"`
+		X RawValue `json:",unknown"`
+		B int      `json:",omitzero"`
+	}
+	structInlineRawValue struct {
+		A int      `json:",omitzero"`
+		X RawValue `json:",inline"`
+		B int      `json:",omitzero"`
+	}
+	structInlinePointerRawValue struct {
+		A int       `json:",omitzero"`
+		X *RawValue `json:",inline"`
+		B int       `json:",omitzero"`
+	}
+	structInlinePointerInlineRawValue struct {
+		X *struct {
+			A int
+			X RawValue `json:",inline"`
+		} `json:",inline"`
+	}
+	structInlineInlinePointerRawValue struct {
+		X struct {
+			X *RawValue `json:",inline"`
+		} `json:",inline"`
+	}
+	structInlineMapStringAny struct {
+		A int        `json:",omitzero"`
+		X jsonObject `json:",inline"`
+		B int        `json:",omitzero"`
+	}
+	structInlinePointerMapStringAny struct {
+		A int         `json:",omitzero"`
+		X *jsonObject `json:",inline"`
+		B int         `json:",omitzero"`
+	}
+	structInlinePointerInlineMapStringAny struct {
+		X *struct {
+			A int
+			X jsonObject `json:",inline"`
+		} `json:",inline"`
+	}
+	structInlineInlinePointerMapStringAny struct {
+		X struct {
+			X *jsonObject `json:",inline"`
+		} `json:",inline"`
+	}
+	structInlineMapStringInt struct {
+		X map[string]int `json:",inline"`
+	}
 
 	allMethods struct {
 		method string // the method that was called
@@ -446,6 +499,7 @@ var (
 	structMalformedTagType       = reflect.TypeOf((*structMalformedTag)(nil)).Elem()
 	structUnexportedTagType      = reflect.TypeOf((*structUnexportedTag)(nil)).Elem()
 	structUnexportedEmbeddedType = reflect.TypeOf((*structUnexportedEmbedded)(nil)).Elem()
+	structUnknownRawValueType    = reflect.TypeOf((*structUnknownRawValue)(nil)).Elem()
 	allMethodsType               = reflect.TypeOf((*allMethods)(nil)).Elem()
 	allMethodsExceptJSONv2Type   = reflect.TypeOf((*allMethodsExceptJSONv2)(nil)).Elem()
 	allMethodsExceptJSONv1Type   = reflect.TypeOf((*allMethodsExceptJSONv1)(nil)).Elem()
@@ -1473,6 +1527,195 @@ func TestMarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		},
 		want: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+	}, {
+		name: "Structs/InlinedFallback/RawValue/Nil",
+		in:   structInlineRawValue{X: RawValue(nil)},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/RawValue/Empty",
+		in:   structInlineRawValue{X: RawValue("")},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/RawValue/NonEmptyN1",
+		in:   structInlineRawValue{X: RawValue(` { "fizz" : "buzz" } `)},
+		want: `{"fizz":"buzz"}`,
+	}, {
+		name: "Structs/InlinedFallback/RawValue/NonEmptyN2",
+		in:   structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "foo" : "bar" } `)},
+		want: `{"fizz":"buzz","foo":"bar"}`,
+	}, {
+		name: "Structs/InlinedFallback/RawValue/NonEmptyWithOthers",
+		in: structInlineRawValue{
+			A: 1,
+			X: RawValue(` { "fizz" : "buzz" , "foo" : "bar" } `),
+			B: 2,
+		},
+		// NOTE: Inlined fallback fields are always serialized last.
+		want: `{"A":1,"B":2,"fizz":"buzz","foo":"bar"}`,
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/RejectDuplicateNames",
+		eopts:   EncodeOptions{AllowDuplicateNames: false},
+		in:      structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
+		want:    `{"fizz":"buzz"`,
+		wantErr: &SyntacticError{str: `duplicate name "fizz" in object`},
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/AllowDuplicateNames",
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in:    structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
+		want:  `{"fizz":"buzz","fizz":"buzz"}`,
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/RejectInvalidUTF8",
+		eopts:   EncodeOptions{AllowInvalidUTF8: false},
+		in:      structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
+		want:    `{`,
+		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/AllowInvalidUTF8",
+		eopts: EncodeOptions{AllowInvalidUTF8: true},
+		in:    structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
+		want:  `{"ޭ��":"value"}`,
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/InvalidWhitespace",
+		in:      structInlineRawValue{X: RawValue("\n\r\t ")},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: io.EOF},
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/InvalidObject",
+		in:      structInlineRawValue{X: RawValue(` true `)},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: 't', GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/InvalidObjectName",
+		in:      structInlineRawValue{X: RawValue(` { true : false } `)},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: errMissingName.withOffset(int64(len(" { ")))},
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/InvalidObjectEnd",
+		in:      structInlineRawValue{X: RawValue(` { "name" : false , } `)},
+		want:    `{"name":false`,
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError(',', "before next token").withOffset(int64(len(` { "name" : false `)))},
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/InvalidDualObject",
+		in:      structInlineRawValue{X: RawValue(`{}{}`)},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError('{', "after top-level value")},
+	}, {
+		name: "Structs/InlinedFallback/RawValue/Nested/Nil",
+		in:   structInlinePointerInlineRawValue{},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerRawValue/Nil",
+		in:   structInlinePointerRawValue{},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerRawValue/NonEmpty",
+		in:   structInlinePointerRawValue{X: addr(RawValue(` { "fizz" : "buzz" } `)).(*RawValue)},
+		want: `{"fizz":"buzz"}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
+		in:   structInlineInlinePointerRawValue{},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/MapStringAny/Nil",
+		in:   structInlineMapStringAny{X: nil},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/MapStringAny/Empty",
+		in:   structInlineMapStringAny{X: make(jsonObject)},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/MapStringAny/NonEmptyN1",
+		in:   structInlineMapStringAny{X: jsonObject{"fizz": nil}},
+		want: `{"fizz":null}`,
+	}, {
+		name:         "Structs/InlinedFallback/MapStringAny/NonEmptyN2",
+		in:           structInlineMapStringAny{X: jsonObject{"fizz": time.Time{}, "buzz": math.Pi}},
+		want:         `{"buzz":3.141592653589793,"fizz":"0001-01-01T00:00:00Z"}`,
+		canonicalize: true,
+	}, {
+		name: "Structs/InlinedFallback/MapStringAny/NonEmptyWithOthers",
+		in: structInlineMapStringAny{
+			A: 1,
+			X: jsonObject{"fizz": nil},
+			B: 2,
+		},
+		// NOTE: Inlined fallback fields are always serialized last.
+		want: `{"A":1,"B":2,"fizz":null}`,
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/RejectInvalidUTF8",
+		eopts:   EncodeOptions{AllowInvalidUTF8: false},
+		in:      structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
+		want:    `{`,
+		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8",
+		eopts: EncodeOptions{AllowInvalidUTF8: true},
+		in:    structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
+		want:  `{"ޭ��":null}`,
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/InvalidValue",
+		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		in:      structInlineMapStringAny{X: jsonObject{"name": make(chan string)}},
+		want:    `{"name"`,
+		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
+	}, {
+		name: "Structs/InlinedFallback/MapStringAny/Nested/Nil",
+		in:   structInlinePointerInlineMapStringAny{},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerMapStringAny/Nil",
+		in:   structInlinePointerMapStringAny{X: nil},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerMapStringAny/NonEmpty",
+		in:   structInlinePointerMapStringAny{X: addr(jsonObject{"name": "value"}).(*jsonObject)},
+		want: `{"name":"value"}`,
+	}, {
+		name: "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
+		in:   structInlineInlinePointerMapStringAny{},
+		want: `{}`,
+	}, {
+		name: "Structs/InlinedFallback/MapStringInt",
+		in: structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		},
+		want:         `{"one":1,"two":2,"zero":0}`,
+		canonicalize: true,
+	}, {
+		name:  "Structs/InlinedFallback/MapStringInt/StringifiedNumbers",
+		mopts: MarshalOptions{StringifyNumbers: true},
+		in: structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		},
+		want:         `{"one":"1","two":"2","zero":"0"}`,
+		canonicalize: true,
+	}, {
+		name:  "Structs/InlinedFallback/DiscardUnknownMembers",
+		mopts: MarshalOptions{DiscardUnknownMembers: true},
+		in: structInlineRawValue{
+			A: 1,
+			X: RawValue(` { "fizz" : "buzz" } `),
+			B: 2,
+		},
+		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
+		want: `{"A":1,"B":2,"fizz":"buzz"}`,
+	}, {
+		name:  "Structs/UnknownFallback/DiscardUnknownMembers",
+		mopts: MarshalOptions{DiscardUnknownMembers: true},
+		in: structUnknownRawValue{
+			A: 1,
+			X: RawValue(` { "fizz" : "buzz" } `),
+			B: 2,
+		},
+		want: `{"A":1,"B":2}`,
+	}, {
+		name: "Structs/UnknownFallback",
+		in: structUnknownRawValue{
+			A: 1,
+			X: RawValue(` { "fizz" : "buzz" } `),
+			B: 2,
+		},
+		want: `{"A":1,"B":2,"fizz":"buzz"}`,
 	}, {
 		name:    "Structs/Invalid/Conflicting",
 		in:      structConflicting{},
@@ -3487,18 +3730,325 @@ func TestUnmarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		}),
 	}, {
+		name:  "Structs/InlinedFallback/RawValue/Noop",
+		inBuf: `{"A":1,"B":2}`,
+		inVal: new(structInlineRawValue),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(nil), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/MergeN1/Nil",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structInlineRawValue),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/MergeN1/Empty",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: addr(structInlineRawValue{X: RawValue{}}),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/MergeN1/Whitespace",
+		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
+		inVal:   addr(structInlineRawValue{X: RawValue("\n\r\t ")}),
+		want:    addr(structInlineRawValue{A: 1, X: RawValue("")}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/MergeN1/Null",
+		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
+		inVal:   addr(structInlineRawValue{X: RawValue("null")}),
+		want:    addr(structInlineRawValue{A: 1, X: RawValue("null")}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/MergeN1/ObjectN0",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: addr(structInlineRawValue{X: RawValue(` { } `)}),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(` {"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/MergeN2/ObjectN1",
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"foo": [ 1 , 2 , 3 ]}`,
+		inVal: addr(structInlineRawValue{X: RawValue(` { "fizz" : "buzz" } `)}),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(` { "fizz" : "buzz","fizz":"buzz","foo":[ 1 , 2 , 3 ]}`), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/Merge/ObjectEnd",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: addr(structInlineRawValue{X: RawValue(` } `)}),
+		// NOTE: This produces invalid output,
+		// but the value being merged into is already invalid.
+		want: addr(structInlineRawValue{A: 1, X: RawValue(`,"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/MergeInvalidValue",
+		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
+		inVal:   new(structInlineRawValue),
+		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":`)}),
+		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/CaseSensitive",
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal: new(structInlineRawValue),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","a":3}`), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/CaseInsensitive",
+		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal: new(structInlineRawValue),
+		want:  addr(structInlineRawValue{A: 3, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/RawValue/RejectDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
+		inVal:   new(structInlineRawValue),
+		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
+		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
+		inVal: new(structInlineRawValue),
+		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","fizz":"buzz"}`), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/Nested/Noop",
+		inBuf: `{}`,
+		inVal: new(structInlinePointerInlineRawValue),
+		want:  new(structInlinePointerInlineRawValue),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/Nested/Alloc",
+		inBuf: `{"A":1,"fizz":"buzz"}`,
+		inVal: new(structInlinePointerInlineRawValue),
+		want: addr(structInlinePointerInlineRawValue{
+			X: &struct {
+				A int
+				X RawValue `json:",inline"`
+			}{A: 1, X: RawValue(`{"fizz":"buzz"}`)},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/RawValue/Nested/Merge",
+		inBuf: `{"fizz":"buzz"}`,
+		inVal: addr(structInlinePointerInlineRawValue{
+			X: &struct {
+				A int
+				X RawValue `json:",inline"`
+			}{A: 1},
+		}),
+		want: addr(structInlinePointerInlineRawValue{
+			X: &struct {
+				A int
+				X RawValue `json:",inline"`
+			}{A: 1, X: RawValue(`{"fizz":"buzz"}`)},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerRawValue/Noop",
+		inBuf: `{"A":1,"B":2}`,
+		inVal: new(structInlinePointerRawValue),
+		want:  addr(structInlinePointerRawValue{A: 1, X: nil, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerRawValue/Alloc",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structInlinePointerRawValue),
+		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerRawValue/Merge",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: addr(structInlinePointerRawValue{X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue)}),
+		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz","fizz":"buzz"}`)).(*RawValue), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
+		inBuf: `{"fizz":"buzz"}`,
+		inVal: new(structInlineInlinePointerRawValue),
+		want: addr(structInlineInlinePointerRawValue{
+			X: struct {
+				X *RawValue `json:",inline"`
+			}{X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue)},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/Noop",
+		inBuf: `{"A":1,"B":2}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{A: 1, X: nil, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/Nil",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/Empty",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: addr(structInlineMapStringAny{X: jsonObject{}}),
+		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/ObjectN1",
+		inBuf: `{"A":1,"fizz":{"charlie":"DELTA","echo":"foxtrot"},"B":2}`,
+		inVal: addr(structInlineMapStringAny{X: jsonObject{"fizz": jsonObject{
+			"alpha":   "bravo",
+			"charlie": "delta",
+		}}}),
+		want: addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": jsonObject{
+			"alpha":   "bravo",
+			"charlie": "DELTA",
+			"echo":    "foxtrot",
+		}}, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/MergeN2/ObjectN1",
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"foo": [ 1 , 2 , 3 ]}`,
+		inVal: addr(structInlineMapStringAny{X: jsonObject{"fizz": "wuzz"}}),
+		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "foo": jsonArray{1.0, 2.0, 3.0}}, B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/MergeInvalidValue",
+		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
+		inVal:   new(structInlineMapStringAny),
+		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": nil}}),
+		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing",
+		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
+		inVal:   addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
+		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
+		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/CaseSensitive",
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "a": 3.0}, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/CaseInsensitive",
+		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
+		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{A: 3, X: jsonObject{"fizz": "buzz"}, B: 2}),
+	}, {
+		name:    "Structs/InlinedFallback/MapStringAny/RejectDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
+		inVal:   new(structInlineMapStringAny),
+		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
+		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/AllowDuplicateNames",
+		dopts: DecodeOptions{AllowDuplicateNames: true},
+		inBuf: `{"A":1,"fizz":{"one":1,"two":-2},"B":2,"fizz":{"two":2,"three":3}}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": jsonObject{"one": 1.0, "two": 2.0, "three": 3.0}}, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/Nested/Noop",
+		inBuf: `{}`,
+		inVal: new(structInlinePointerInlineMapStringAny),
+		want:  new(structInlinePointerInlineMapStringAny),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/Nested/Alloc",
+		inBuf: `{"A":1,"fizz":"buzz"}`,
+		inVal: new(structInlinePointerInlineMapStringAny),
+		want: addr(structInlinePointerInlineMapStringAny{
+			X: &struct {
+				A int
+				X jsonObject `json:",inline"`
+			}{A: 1, X: jsonObject{"fizz": "buzz"}},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringAny/Nested/Merge",
+		inBuf: `{"fizz":"buzz"}`,
+		inVal: addr(structInlinePointerInlineMapStringAny{
+			X: &struct {
+				A int
+				X jsonObject `json:",inline"`
+			}{A: 1},
+		}),
+		want: addr(structInlinePointerInlineMapStringAny{
+			X: &struct {
+				A int
+				X jsonObject `json:",inline"`
+			}{A: 1, X: jsonObject{"fizz": "buzz"}},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerMapStringAny/Noop",
+		inBuf: `{"A":1,"B":2}`,
+		inVal: new(structInlinePointerMapStringAny),
+		want:  addr(structInlinePointerMapStringAny{A: 1, X: nil, B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerMapStringAny/Alloc",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structInlinePointerMapStringAny),
+		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerMapStringAny/Merge",
+		inBuf: `{"A":1,"fizz":"wuzz","B":2}`,
+		inVal: addr(structInlinePointerMapStringAny{X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject)}),
+		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "wuzz"}).(*jsonObject), B: 2}),
+	}, {
+		name:  "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
+		inBuf: `{"fizz":"buzz"}`,
+		inVal: new(structInlineInlinePointerMapStringAny),
+		want: addr(structInlineInlinePointerMapStringAny{
+			X: struct {
+				X *jsonObject `json:",inline"`
+			}{X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject)},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringInt",
+		inBuf: `{"zero": 0, "one": 1, "two": 2}`,
+		inVal: new(structInlineMapStringInt),
+		want: addr(structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringInt/Null",
+		inBuf: `{"zero": 0, "one": null, "two": 2}`,
+		inVal: new(structInlineMapStringInt),
+		want: addr(structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 0, "two": 2},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/MapStringInt/Invalid",
+		inBuf: `{"zero": 0, "one": {}, "two": 2}`,
+		inVal: new(structInlineMapStringInt),
+		want: addr(structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 0},
+		}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: intType},
+	}, {
+		name:  "Structs/InlinedFallback/MapStringInt/StringifiedNumbers",
+		uopts: UnmarshalOptions{StringifyNumbers: true},
+		inBuf: `{"zero": 0, "one": "1", "two": 2}`,
+		inVal: new(structInlineMapStringInt),
+		want: addr(structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		}),
+	}, {
+		name:  "Structs/InlinedFallback/RejectUnknownNames",
+		uopts: UnmarshalOptions{RejectUnknownNames: true},
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structInlineRawValue),
+		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
+		want: addr(structInlineRawValue{
+			A: 1,
+			X: RawValue(`{"fizz":"buzz"}`),
+			B: 2,
+		}),
+	}, {
+		name:    "Structs/UnknownFallback/RejectUnknownNames",
+		uopts:   UnmarshalOptions{RejectUnknownNames: true},
+		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
+		inVal:   new(structUnknownRawValue),
+		want:    addr(structUnknownRawValue{A: 1}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnknownRawValueType, Err: ErrUnknownName},
+	}, {
+		name:  "Structs/UnknownFallback",
+		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
+		inVal: new(structUnknownRawValue),
+		want: addr(structUnknownRawValue{
+			A: 1,
+			X: RawValue(`{"fizz":"buzz"}`),
+			B: 2,
+		}),
+	}, {
 		name:  "Structs/UnknownIgnored",
 		uopts: UnmarshalOptions{RejectUnknownNames: false},
 		inBuf: `{"unknown":"fizzbuzz"}`,
 		inVal: new(structAll),
 		want:  new(structAll),
 	}, {
-		name:    "Structs/UnknownRejected",
+		name:    "Structs/RejectUnknownNames",
 		uopts:   UnmarshalOptions{RejectUnknownNames: true},
 		inBuf:   `{"unknown":"fizzbuzz"}`,
 		inVal:   new(structAll),
 		want:    new(structAll),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: structAllType, Err: ErrUnknownName},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: ErrUnknownName},
 	}, {
 		name:  "Structs/UnexportedIgnored",
 		inBuf: `{"ignored":"unused"}`,

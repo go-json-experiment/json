@@ -17,12 +17,11 @@ import (
 
 var errIgnoredField = errors.New("ignored field")
 
-var rawValueType = reflect.TypeOf((*RawValue)(nil)).Elem()
-
 type structFields struct {
-	flattened    []structField
-	byActualName map[string]*structField
-	byFoldedName map[string][]*structField
+	flattened       []structField
+	byActualName    map[string]*structField
+	byFoldedName    map[string][]*structField
+	inlinedFallback *structField
 }
 
 type structField struct {
@@ -63,6 +62,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		queueIndex++
 
 		t := qe.typ
+		inlinedFallbackIndex := -1         // index of last inlined fallback field in current struct
 		namesIndex := make(map[string]int) // index of each field with a given name in current struct
 		var hasAnyJSONTag bool             // whether any Go struct field has a `json` tag
 		var hasAnyJSONField bool           // whether any JSON serializable fields exist in current struct
@@ -89,14 +89,19 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 			if sf.Anonymous && !f.hasName {
 				f.inline = true // implied by use of Go embedding without an explicit name
 			}
-			if f.inline {
+			if f.inline || f.unknown {
 				// Handle an inlined field that serializes to/from
 				// zero or more JSON object members.
 
+				if f.inline && f.unknown {
+					err := fmt.Errorf("Go struct field %s cannot have both `inline` and `unknown` specified", sf.Name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
 				switch f.fieldOptions {
 				case fieldOptions{name: f.name, inline: true}:
+				case fieldOptions{name: f.name, unknown: true}:
 				default:
-					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` specified", sf.Name)
+					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 
@@ -119,6 +124,10 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// Handle an inlined field that serializes to/from
 				// a finite number of JSON object members backed by a Go struct.
 				if tf.Kind() == reflect.Struct {
+					if f.unknown {
+						err := fmt.Errorf("inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a json.RawValue", sf.Name, tf)
+						return structFields{}, &SemanticError{GoType: t, Err: err}
+					}
 					if !seen[tf] {
 						queue = append(queue, queueEntry{tf, f.index})
 					}
@@ -126,9 +135,32 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 					continue
 				}
 
-				// TODO: Support Go map of string key or json.RawValue.
-				err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct", sf.Name, tf)
-				return structFields{}, &SemanticError{GoType: t, Err: err}
+				// Handle an inlined field that serializes to/from any number of
+				// JSON object members back by a Go map or RawValue.
+				switch {
+				case tf == rawValueType:
+					f.fncs = nil // manually handled in arshal_inlined.go
+				case tf.Kind() == reflect.Map && tf.Key() == stringType:
+					f.fncs = lookupArshaler(tf.Elem())
+				default:
+					err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or json.RawValue", sf.Name, tf)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+
+				// Reject multiple inlined fallback fields within the same struct.
+				if inlinedFallbackIndex >= 0 {
+					err := fmt.Errorf("inlined Go struct fields %s and %s cannot both be a Go map or json.RawValue", t.Field(inlinedFallbackIndex).Name, sf.Name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
+				}
+				inlinedFallbackIndex = i
+
+				// Multiple inlined fallback fields across different structs
+				// follow the same precedence rules as Go struct embedding.
+				if fs.inlinedFallback == nil {
+					fs.inlinedFallback = &f // store first occurrence at lowest depth
+				} else if len(fs.inlinedFallback.index) == len(f.index) {
+					fs.inlinedFallback = ambiguous // at least two occurrences at same depth
+				}
 			} else {
 				// Handle normal Go struct field that serializes to/from
 				// a single JSON object member.
@@ -204,6 +236,9 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		}
 	}
 	fs.flattened = fs.flattened[:n]
+	if fs.inlinedFallback == ambiguous {
+		fs.inlinedFallback = nil
+	}
 	if len(fs.flattened) != len(fs.byActualName) {
 		panic(fmt.Sprintf("BUG: flattened list of fields mismatches fields mapped by name: %d != %d", len(fs.flattened), len(fs.byActualName)))
 	}

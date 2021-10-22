@@ -40,6 +40,10 @@ func TestInline(t *testing.T) {
 			"consumeString", // thin wrapper over consumeStringResumable
 			"consumeSimpleNumber",
 			"consumeNumber", // thin wrapper over consumeNumberResumable
+			"hasSuffixByte",
+			"trimSuffixByte",
+			"trimSuffixString",
+			"trimSuffixWhitespace",
 			"stateMachine.appendLiteral",
 			"stateMachine.appendNumber",
 			"stateMachine.appendString",

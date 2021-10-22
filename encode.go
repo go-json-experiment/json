@@ -353,6 +353,11 @@ func trimSuffixString(b []byte) []byte {
 	return b
 }
 
+func hasSuffixByte(b []byte, c byte) bool {
+	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	return len(b) > 0 && b[len(b)-1] == c
+}
+
 func trimSuffixByte(b []byte, c byte) []byte {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
 	if len(b) > 0 && b[len(b)-1] == c {
