@@ -10,7 +10,8 @@ import (
 )
 
 // foldName returns a folded string such that foldName(x) == foldName(y)
-// is equivalent to strings.EqualFold(x, y).
+// is similar to strings.EqualFold(x, y), but ignores underscore and dashes.
+// This allows foldName to match common naming conventions.
 func foldName(in []byte) []byte {
 	// This is inlinable to take advantage of "function outlining".
 	// See https://blog.filippo.io/efficient-go-apis-with-the-inliner/
@@ -21,10 +22,12 @@ func appendFoldedName(out, in []byte) []byte {
 	for i := 0; i < len(in); {
 		// Handle ASCII.
 		if c := in[i]; c < utf8.RuneSelf {
-			if 'a' <= c && c <= 'z' {
-				c -= 'a' - 'A'
+			if c != '_' && c != '-' {
+				if 'a' <= c && c <= 'z' {
+					c -= 'a' - 'A'
+				}
+				out = append(out, c)
 			}
-			out = append(out, c)
 			i++
 			continue
 		}

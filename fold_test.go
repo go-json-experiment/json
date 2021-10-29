@@ -21,6 +21,7 @@ var equalFoldTestdata = []struct {
 	{"abc", "abc", true},
 	{"ABcd", "ABcd", true},
 	{"123abc", "123ABC", true},
+	{"_1_2_-_3__--a-_-b-c-", "123ABC", true},
 	{"αβδ", "ΑΒΔ", true},
 	{"abc", "xyz", false},
 	{"abc", "XYZ", false},
@@ -41,6 +42,19 @@ var equalFoldTestdata = []struct {
 	{"γειά, κόσμε!", "ΛΕΙΆ, ΚΌΣΜΕ!", false},
 	{"AESKey", "aesKey", true},
 	{"γειά, κόσμε!", "Γ\xce_\xb5ιά, Κόσμε!", false},
+	{"aeskey", "AESKEY", true},
+	{"AESKEY", "aes_key", true},
+	{"aes_key", "AES_KEY", true},
+	{"AES_KEY", "aes-key", true},
+	{"aes-key", "AES-KEY", true},
+	{"AES-KEY", "aesKey", true},
+	{"aesKey", "AesKey", true},
+	{"AesKey", "AESKey", true},
+	{"AESKey", "aeskey", true},
+	{"DESKey", "aeskey", false},
+	{"AES Key", "aeskey", false},
+	{"aes﹏key", "aeskey", false}, // Unicode underscore not handled
+	{"aes〰key", "aeskey", false}, // Unicode dash not handled
 }
 
 func TestEqualFold(t *testing.T) {
