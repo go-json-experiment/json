@@ -17,6 +17,12 @@ import (
 
 var errIgnoredField = errors.New("ignored field")
 
+type isZeroer interface {
+	IsZero() bool
+}
+
+var isZeroerType = reflect.TypeOf((*isZeroer)(nil)).Elem()
+
 type structFields struct {
 	flattened       []structField
 	byActualName    map[string]*structField
@@ -29,6 +35,7 @@ type structField struct {
 	index   []int // index into a struct according to reflect.Type.FieldByIndex
 	typ     reflect.Type
 	fncs    *arshaler
+	isZero  func(addressableValue) bool
 	isEmpty func(addressableValue) bool
 	fieldOptions
 }
@@ -165,19 +172,25 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// Handle normal Go struct field that serializes to/from
 				// a single JSON object member.
 
-				// Provide a function that can determine for certain that
-				// the value would serialize as an empty JSON value.
-				var isEmpty func(addressableValue) bool
+				// Provide a function that uses a type's IsZero method.
+				switch {
+				case sf.Type.Implements(isZeroerType):
+					f.isZero = func(va addressableValue) bool { return va.Interface().(isZeroer).IsZero() }
+				case reflect.PtrTo(sf.Type).Implements(isZeroerType):
+					f.isZero = func(va addressableValue) bool { return va.Addr().Interface().(isZeroer).IsZero() }
+				}
+
+				// Provide a function that can determine whether the value would
+				// serialize as an empty JSON value.
 				switch sf.Type.Kind() {
 				case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
-					isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
+					f.isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
 				case reflect.Ptr, reflect.Interface:
-					isEmpty = func(va addressableValue) bool { return va.IsNil() }
+					f.isEmpty = func(va addressableValue) bool { return va.IsNil() }
 				}
 
 				f.id = len(fs.flattened)
 				f.fncs = lookupArshaler(sf.Type)
-				f.isEmpty = isEmpty
 				fs.flattened = append(fs.flattened, f)
 
 				// Reject user-specified names with invalid UTF-8.

@@ -151,6 +151,20 @@ type (
 		Ptr           *structOmitZeroAll `json:",omitzero"`
 		Interface     interface{}        `json:",omitzero"`
 	}
+	structOmitZeroMethodAll struct {
+		ValAlwaysZero       valueAlwaysZero     `json:",omitzero"`
+		ValNeverZero        valueNeverZero      `json:",omitzero"`
+		PtrAlwaysZero       pointerAlwaysZero   `json:",omitzero"`
+		PtrNeverZero        pointerNeverZero    `json:",omitzero"`
+		PtrValAlwaysZero    *valueAlwaysZero    `json:",omitzero"`
+		PtrValNeverZero     *valueNeverZero     `json:",omitzero"`
+		PtrPtrAlwaysZero    *pointerAlwaysZero  `json:",omitzero"`
+		PtrPtrNeverZero     *pointerNeverZero   `json:",omitzero"`
+		PtrPtrValAlwaysZero **valueAlwaysZero   `json:",omitzero"`
+		PtrPtrValNeverZero  **valueNeverZero    `json:",omitzero"`
+		PtrPtrPtrAlwaysZero **pointerAlwaysZero `json:",omitzero"`
+		PtrPtrPtrNeverZero  **pointerNeverZero  `json:",omitzero"`
+	}
 	structOmitEmptyAll struct {
 		Bool              bool                    `json:",omitempty"`
 		PtrBool           *bool                   `json:",omitempty"`
@@ -371,6 +385,11 @@ type (
 	mapMarshalNonEmpty    map[string]string
 	sliceMarshalEmpty     []string
 	sliceMarshalNonEmpty  []string
+
+	valueAlwaysZero   string
+	valueNeverZero    string
+	pointerAlwaysZero string
+	pointerNeverZero  string
 )
 
 func (p *allMethods) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
@@ -471,6 +490,11 @@ func (mapMarshalEmpty) MarshalJSON() ([]byte, error)       { return []byte(`{}`)
 func (mapMarshalNonEmpty) MarshalJSON() ([]byte, error)    { return []byte(`{"key":"value"}`), nil }
 func (sliceMarshalEmpty) MarshalJSON() ([]byte, error)     { return []byte(`[]`), nil }
 func (sliceMarshalNonEmpty) MarshalJSON() ([]byte, error)  { return []byte(`["value"]`), nil }
+
+func (valueAlwaysZero) IsZero() bool    { return true }
+func (valueNeverZero) IsZero() bool     { return false }
+func (*pointerAlwaysZero) IsZero() bool { return true }
+func (*pointerNeverZero) IsZero() bool  { return false }
 
 var (
 	emptyInterfaceType           = reflect.TypeOf((*interface{})(nil)).Elem()
@@ -1115,6 +1139,37 @@ func TestMarshal(t *testing.T) {
 	],
 	"Ptr": {},
 	"Interface": null
+}`,
+	}, {
+		name: "Structs/OmitZeroMethod/Zero",
+		in:   structOmitZeroMethodAll{},
+		want: `{}`,
+	}, {
+		name:  "Structs/OmitZeroMethod/NonZero",
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structOmitZeroMethodAll{
+			ValAlwaysZero:       valueAlwaysZero("nonzero"),
+			ValNeverZero:        valueNeverZero("nonzero"),
+			PtrAlwaysZero:       pointerAlwaysZero("nonzero"),
+			PtrNeverZero:        pointerNeverZero("nonzero"),
+			PtrValAlwaysZero:    addr(valueAlwaysZero("nonzero")).(*valueAlwaysZero),
+			PtrValNeverZero:     addr(valueNeverZero("nonzero")).(*valueNeverZero),
+			PtrPtrAlwaysZero:    addr(pointerAlwaysZero("nonzero")).(*pointerAlwaysZero),
+			PtrPtrNeverZero:     addr(pointerNeverZero("nonzero")).(*pointerNeverZero),
+			PtrPtrValAlwaysZero: addr(addr(valueAlwaysZero("nonzero"))).(**valueAlwaysZero), // marshaled since **valueAlwaysZero does not implement IsZero
+			PtrPtrValNeverZero:  addr(addr(valueNeverZero("nonzero"))).(**valueNeverZero),
+			PtrPtrPtrAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))).(**pointerAlwaysZero), // marshaled since **pointerAlwaysZero does not implement IsZero
+			PtrPtrPtrNeverZero:  addr(addr(pointerNeverZero("nonzero"))).(**pointerNeverZero),
+		},
+		want: `{
+	"ValNeverZero": "nonzero",
+	"PtrNeverZero": "nonzero",
+	"PtrValNeverZero": "nonzero",
+	"PtrPtrNeverZero": "nonzero",
+	"PtrPtrValAlwaysZero": "nonzero",
+	"PtrPtrValNeverZero": "nonzero",
+	"PtrPtrPtrAlwaysZero": "nonzero",
+	"PtrPtrPtrNeverZero": "nonzero"
 }`,
 	}, {
 		name:  "Structs/OmitEmpty/Zero",
@@ -2041,13 +2096,12 @@ func TestMarshal(t *testing.T) {
 			time.Time{},
 			time.Time{},
 			time.Time{},
-			// TODO: What is expected behavior?
 			// This is zero according to time.Time.IsZero,
 			// but non-zero according to reflect.Value.IsZero.
 			time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("UTC", 0)),
 			time.Time{},
 		},
-		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,
+		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T5":"0001-01-01T00:00:00Z"}`,
 	}, {
 		name:  "Time/Format",
 		eopts: EncodeOptions{Indent: "\t"},
