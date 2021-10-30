@@ -25,6 +25,9 @@ type MarshalOptions struct {
 	// Marshalers is a list of type-specific marshalers to use.
 	Marshalers *Marshalers
 
+	// format is custom formatting for the top-level type.
+	format string
+
 	// StringifyNumbers specifies that numeric Go types should be serialized
 	// as a JSON string containing the equivalent JSON number value.
 	//
@@ -38,9 +41,6 @@ type MarshalOptions struct {
 	// JSON object members stored in Go struct fields dedicated to storing
 	// unknown JSON object members.
 	DiscardUnknownMembers bool
-
-	// format is custom formatting for the top-level type.
-	format string
 
 	// TODO: Add other options.
 }
@@ -112,6 +112,9 @@ type UnmarshalOptions struct {
 	// Unmarshalers is a list of type-specific unmarshalers to use.
 	Unmarshalers *Unmarshalers
 
+	// format is custom formatting for the top-level type.
+	format string
+
 	// StringifyNumbers specifies that numeric Go types can be deserialized
 	// from either a JSON number or a JSON string containing a JSON number.
 	StringifyNumbers bool
@@ -127,9 +130,6 @@ type UnmarshalOptions struct {
 	// an unmarshal implementation should return an error that matches
 	// ErrUnknownName according to errors.Is.
 	RejectUnknownNames bool
-
-	// format is custom formatting for the top-level type.
-	format string
 
 	// TODO: Add other options.
 }

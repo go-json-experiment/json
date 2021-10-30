@@ -97,8 +97,8 @@ type DecodeOptions struct {
 // For example, it is probably more common to call ReadToken to obtain a
 // string token for object names.
 type Decoder struct {
-	state
 	decodeBuffer
+	state
 	options DecodeOptions
 }
 
@@ -112,6 +112,12 @@ type Decoder struct {
 // Invariants:
 //	0 ≤ prevStart ≤ prevEnd ≤ len(buf) ≤ cap(buf)
 type decodeBuffer struct {
+	// If rd and bb are both nil, then buf is the entirety of the input.
+	// Otherwise, exactly either rd or bb is non-nil.
+	// If bb is non-nil, then buf aliases the internal buffer of bb.
+	rd io.Reader
+	bb *bytes.Buffer
+
 	buf       []byte
 	prevStart int
 	prevEnd   int
@@ -119,12 +125,6 @@ type decodeBuffer struct {
 	// baseOffset can be added to prevStart and prevEnd to obtain
 	// the absolute offset relative to the start of io.Reader stream.
 	baseOffset int64
-
-	// If rd and bb are both nil, then buf is the entirety of the input.
-	// Otherwise, exactly either rd or bb is non-nil.
-	// If bb is non-nil, then buf aliases the internal buffer of bb.
-	rd io.Reader
-	bb *bytes.Buffer
 }
 
 // NewDecoder constructs a new streaming decoder reading from r.

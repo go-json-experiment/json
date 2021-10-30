@@ -24,20 +24,20 @@ type isZeroer interface {
 var isZeroerType = reflect.TypeOf((*isZeroer)(nil)).Elem()
 
 type structFields struct {
-	flattened       []structField
 	byActualName    map[string]*structField
 	byFoldedName    map[string][]*structField
 	inlinedFallback *structField
+	flattened       []structField
 }
 
 type structField struct {
-	id      int   // unique numeric ID; index into structFields.flattened
-	index   []int // index into a struct according to reflect.Type.FieldByIndex
 	typ     reflect.Type
 	fncs    *arshaler
 	isZero  func(addressableValue) bool
 	isEmpty func(addressableValue) bool
 	fieldOptions
+	index []int // index into a struct according to reflect.Type.FieldByIndex
+	id    int   // unique numeric ID; index into structFields.flattened
 }
 
 func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
@@ -266,15 +266,15 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 }
 
 type fieldOptions struct {
-	hasName   bool
 	name      string
-	nocase    bool
+	format    string
+	hasName   bool
 	inline    bool
 	unknown   bool
 	omitzero  bool
 	omitempty bool
 	string    bool
-	format    string
+	nocase    bool
 }
 
 // parseFieldOptions parses the `json` tag in a Go struct field as

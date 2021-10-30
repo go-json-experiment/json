@@ -303,14 +303,14 @@ func (nss *objectNamespaceStack) pop() {
 //
 // The zero value is an empty namespace ready for use.
 type objectNamespace struct {
+	// mapNames is a Go map containing every name in the namespace.
+	// Only valid if non-nil.
+	mapNames map[string]struct{}
 	// endOffsets is a list of offsets to the end of each name in buffers.
 	// The length of offsets is the number of names in the namespace.
 	endOffsets []uint
 	// allNames is a back-to-back concatenation of every name in the namespace.
 	allNames []byte
-	// mapNames is a Go map containing every name in the namespace.
-	// Only valid if non-nil.
-	mapNames map[string]struct{}
 }
 
 // reset resets the namespace to be empty.

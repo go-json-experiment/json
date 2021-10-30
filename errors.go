@@ -26,8 +26,8 @@ func (e jsonError) Is(target error) bool {
 }
 
 type ioError struct {
-	action string // either "read" or "write"
 	err    error
+	action string // either "read" or "write"
 }
 
 func (e *ioError) Error() string {
@@ -45,24 +45,26 @@ func (e *ioError) Is(target error) bool {
 //
 // The contents of this error as produced by this package may change over time.
 type SemanticError struct {
-	requireKeyedLiterals
 	nonComparable
+	requireKeyedLiterals
+
+	// GoType is the Go type that could not be handled.
+	GoType reflect.Type
+
+	// Err is the underlying error.
+	Err error // may be nil
 
 	action string // either "marshal" or "unmarshal"
 
-	// ByteOffset indicates that an error occurred after this byte offset.
-	ByteOffset int64
 	// JSONPointer indicates that an error occurred within this JSON value
 	// as indicated using the JSON Pointer notation (see RFC 6901).
 	JSONPointer string
 
-	// JSONKind is the JSON kind that could not be handled.
-	JSONKind Kind // may be zero if unknown
-	// GoType is the Go type that could not be handled.
-	GoType reflect.Type // may be nil if unknown
+	// ByteOffset indicates that an error occurred after this byte offset.
+	ByteOffset int64
 
-	// Err is the underlying error.
-	Err error // may be nil
+	// JSONKind is the JSON kind that could not be handled.
+	JSONKind Kind
 }
 
 func (e *SemanticError) Error() string {
@@ -150,12 +152,12 @@ func (e *SemanticError) Unwrap() error {
 //
 // The contents of this error as produced by this package may change over time.
 type SyntacticError struct {
-	requireKeyedLiterals
 	nonComparable
+	requireKeyedLiterals
+	str string
 
 	// ByteOffset indicates that an error occurred after this byte offset.
 	ByteOffset int64
-	str        string
 }
 
 func (e *SyntacticError) Error() string {

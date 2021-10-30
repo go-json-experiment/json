@@ -21,32 +21,8 @@ import (
 // which is compliant with both RFC 7493 and RFC 8259.
 type EncodeOptions struct {
 	// TODO: Rename as MarshalOptions?
-	requireKeyedLiterals
 	nonComparable
-
-	// multiline specifies whether to the encoder should emit multiline output.
-	multiline bool
-
-	// omitTopLevelNewline specifies whether to omit the newline
-	// that is typically appended after every top-level JSON value.
-	omitTopLevelNewline bool
-
-	// AllowDuplicateNames specifies that JSON objects may contain
-	// duplicate member names. Disabling the duplicate name check may provide
-	// computational and performance benefits, but breaks compliance with
-	// RFC 7493, section 2.3. The output will still be compliant with RFC 8259,
-	// which leaves the handling of duplicate names as unspecified behavior.
-	AllowDuplicateNames bool
-
-	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
-	// which will be mangled as the Unicode replacement character, U+FFFD.
-	// This causes the encoder to break compliance with
-	// RFC 7493, section 2.1, and RFC 8259, section 8.1.
-	AllowInvalidUTF8 bool
-
-	preserveRawStrings bool
-
-	canonicalizeNumbers bool
+	requireKeyedLiterals
 
 	// EscapeRune reports whether the provided character should be escaped
 	// as a hexadecimal Unicode codepoint (e.g., \ufffd).
@@ -67,6 +43,30 @@ type EncodeOptions struct {
 	// It may only be composed of space or tab characters.
 	// It is ignored if Indent is empty.
 	IndentPrefix string
+
+	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
+	// which will be mangled as the Unicode replacement character, U+FFFD.
+	// This causes the encoder to break compliance with
+	// RFC 7493, section 2.1, and RFC 8259, section 8.1.
+	AllowInvalidUTF8 bool
+
+	preserveRawStrings bool
+
+	canonicalizeNumbers bool
+
+	// multiline specifies whether to the encoder should emit multiline output.
+	multiline bool
+
+	// omitTopLevelNewline specifies whether to omit the newline
+	// that is typically appended after every top-level JSON value.
+	omitTopLevelNewline bool
+
+	// AllowDuplicateNames specifies that JSON objects may contain
+	// duplicate member names. Disabling the duplicate name check may provide
+	// computational and performance benefits, but breaks compliance with
+	// RFC 7493, section 2.3. The output will still be compliant with RFC 8259,
+	// which leaves the handling of duplicate names as unspecified behavior.
+	AllowDuplicateNames bool
 }
 
 // Encoder is a streaming encoder from raw JSON values and tokens.
@@ -99,11 +99,11 @@ type EncodeOptions struct {
 // For example, it is probably more common to call WriteToken with a string
 // for object names.
 type Encoder struct {
-	state
-	encodeBuffer
-	options EncodeOptions
-
 	seenPointers seenPointers // only used when marshaling
+
+	options EncodeOptions
+	encodeBuffer
+	state
 }
 
 // encodeBuffer is a buffer split into 2 segments:
@@ -112,22 +112,23 @@ type Encoder struct {
 //	• buf[len(buf):cap(buf)] // unused portion of the buffer
 //
 type encodeBuffer struct {
-	buf []byte
-
-	// baseOffset can be added to len(buf) to obtain the absolute offset
-	// relative to the start of io.Writer stream.
-	baseOffset int64
-
 	// If wr and bb are both nil, then buf is the entirety of the output.
 	// Otherwise, exactly either wr or bb is non-nil.
 	// If bb is non-nil, then buf aliases the internal buffer of bb.
 	wr io.Writer
 	bb *bytes.Buffer
 
-	// maxValue is the approximate maximum RawValue size passed to WriteValue.
-	maxValue int
+	buf []byte
+
 	// unusedCache is the buffer returned by the UnusedBuffer method.
 	unusedCache []byte
+
+	// baseOffset can be added to len(buf) to obtain the absolute offset
+	// relative to the start of io.Writer stream.
+	baseOffset int64
+
+	// maxValue is the approximate maximum RawValue size passed to WriteValue.
+	maxValue int
 }
 
 // NewEncoder constructs a new streaming encoder writing to w.
