@@ -21,9 +21,6 @@ jobs:
       run: diff -u <(echo -n) <(gofmt -d .)
   # Test on a large matrix of Go versions and operating systems.
   test-all:
-    # TODO: GitHub actions are not free on private repositories.
-    # When this is made public, remove this conditional.
-    if: github.repository == 'go-json-experiment/json'
     strategy:
       matrix:
         go-version: [1.13.x, 1.14.x, 1.15.x, 1.16.x, 1.17.x]
