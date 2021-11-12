@@ -60,10 +60,17 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 
 	switch typeName {
 	case "Token":
+		var pointers []string
 		for _, tok := range td.tokens {
 			if err := enc.WriteToken(tok); err != nil {
 				t.Fatalf("Encoder.WriteToken error: %v", err)
 			}
+			if td.pointers != nil {
+				pointers = append(pointers, enc.StackPointer())
+			}
+		}
+		if !reflect.DeepEqual(pointers, td.pointers) {
+			t.Fatalf("pointers mismatch:\ngot  %q\nwant %q", pointers, td.pointers)
 		}
 	case "Value":
 		if err := enc.WriteValue(RawValue(td.in)); err != nil {

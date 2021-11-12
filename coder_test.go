@@ -31,6 +31,7 @@ type coderTestdataEntry struct {
 	outIndented      string // outCompacted if empty; uses "  " for indent prefix and "\t" for indent
 	outCanonicalized string // outCompacted if empty
 	tokens           []Token
+	pointers         []string
 }
 
 var coderTestdata = []coderTestdataEntry{{
@@ -38,6 +39,7 @@ var coderTestdata = []coderTestdataEntry{{
 	in:           ` null `,
 	outCompacted: `null`,
 	tokens:       []Token{Null},
+	pointers:     []string{""},
 }, {
 	name:         "False",
 	in:           ` false `,
@@ -148,11 +150,15 @@ var coderTestdata = []coderTestdataEntry{{
 		Int(minInt64), Int(maxInt64), Uint(minUint64), Uint(maxUint64),
 		ArrayEnd,
 	},
+	pointers: []string{
+		"", "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10", "/11", "/12", "/13", "/14", "/15", "/16", "/17", "",
+	},
 }, {
 	name:         "ObjectN0",
 	in:           ` { } `,
 	outCompacted: `{}`,
 	tokens:       []Token{ObjectStart, ObjectEnd},
+	pointers:     []string{"", ""},
 }, {
 	name:         "ObjectN1",
 	in:           ` { "0" : 0 } `,
@@ -161,7 +167,8 @@ var coderTestdata = []coderTestdataEntry{{
 	outIndented: `{
 	    "0": 0
 	}`,
-	tokens: []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
+	tokens:   []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
+	pointers: []string{"", "/0", "/0", ""},
 }, {
 	name:         "ObjectN2",
 	in:           ` { "0" : 0 , "1" : 1 } `,
@@ -171,7 +178,8 @@ var coderTestdata = []coderTestdataEntry{{
 	    "0": 0,
 	    "1": 1
 	}`,
-	tokens: []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
+	tokens:   []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
+	pointers: []string{"", "/0", "/0", "/1", "/1", ""},
 }, {
 	name:         "ObjectNested",
 	in:           ` { "0" : { "1" : { "2" : { "3" : { "4" : {  } } } } } } `,
@@ -189,6 +197,20 @@ var coderTestdata = []coderTestdataEntry{{
 	    }
 	}`,
 	tokens: []Token{ObjectStart, String("0"), ObjectStart, String("1"), ObjectStart, String("2"), ObjectStart, String("3"), ObjectStart, String("4"), ObjectStart, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd},
+	pointers: []string{
+		"",
+		"/0", "/0",
+		"/0/1", "/0/1",
+		"/0/1/2", "/0/1/2",
+		"/0/1/2/3", "/0/1/2/3",
+		"/0/1/2/3/4", "/0/1/2/3/4",
+		"/0/1/2/3/4",
+		"/0/1/2/3",
+		"/0/1/2",
+		"/0/1",
+		"/0",
+		"",
+	},
 }, {
 	name: "ObjectSuperNested",
 	in: `{"": {
@@ -239,11 +261,28 @@ var coderTestdata = []coderTestdataEntry{{
 		ObjectEnd,
 		ObjectEnd,
 	},
+	pointers: []string{
+		"",
+		"/", "/",
+		"//44444", "//44444",
+		"//44444/6666666", "//44444/6666666",
+		"//44444/77777777", "//44444/77777777",
+		"//44444/555555", "//44444/555555",
+		"//44444",
+		"//0", "//0",
+		"//0/3333", "//0/3333",
+		"//0/11", "//0/11",
+		"//0/222", "//0/222",
+		"//0",
+		"/",
+		"",
+	},
 }, {
 	name:         "ArrayN0",
 	in:           ` [ ] `,
 	outCompacted: `[]`,
 	tokens:       []Token{ArrayStart, ArrayEnd},
+	pointers:     []string{"", ""},
 }, {
 	name:         "ArrayN1",
 	in:           ` [ 0 ] `,
@@ -251,7 +290,8 @@ var coderTestdata = []coderTestdataEntry{{
 	outIndented: `[
 	    0
 	]`,
-	tokens: []Token{ArrayStart, Uint(0), ArrayEnd},
+	tokens:   []Token{ArrayStart, Uint(0), ArrayEnd},
+	pointers: []string{"", "/0", ""},
 }, {
 	name:         "ArrayN2",
 	in:           ` [ 0 , 1 ] `,
@@ -275,6 +315,18 @@ var coderTestdata = []coderTestdataEntry{{
 	    ]
 	]`,
 	tokens: []Token{ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd},
+	pointers: []string{
+		"",
+		"/0",
+		"/0/0",
+		"/0/0/0",
+		"/0/0/0/0",
+		"/0/0/0/0",
+		"/0/0/0",
+		"/0/0",
+		"/0",
+		"",
+	},
 }, {
 	name: "Everything",
 	in: ` {
@@ -328,6 +380,33 @@ var coderTestdata = []coderTestdataEntry{{
 		String("objectN1"), ObjectStart, String("0"), Uint(0), ObjectEnd,
 		String("objectN2"), ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd,
 		ObjectEnd,
+	},
+	pointers: []string{
+		"",
+		"/literals", "/literals",
+		"/literals/0",
+		"/literals/1",
+		"/literals/2",
+		"/literals",
+		"/string", "/string",
+		"/number", "/number",
+		"/arrayN0", "/arrayN0", "/arrayN0",
+		"/arrayN1", "/arrayN1",
+		"/arrayN1/0",
+		"/arrayN1",
+		"/arrayN2", "/arrayN2",
+		"/arrayN2/0",
+		"/arrayN2/1",
+		"/arrayN2",
+		"/objectN0", "/objectN0", "/objectN0",
+		"/objectN1", "/objectN1",
+		"/objectN1/0", "/objectN1/0",
+		"/objectN1",
+		"/objectN2", "/objectN2",
+		"/objectN2/0", "/objectN2/0",
+		"/objectN2/1", "/objectN2/1",
+		"/objectN2",
+		"",
 	},
 }}
 
@@ -402,6 +481,100 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 	want := td.outCompacted + "\n"
 	if got != want {
 		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
+	}
+}
+
+func TestCoderStackPointer(t *testing.T) {
+	tests := []struct {
+		token                        Token
+		wantWithRejectDuplicateNames string
+		wantWithAllowDuplicateNames  string
+	}{
+		{Null, "", ""},
+
+		{ArrayStart, "", ""},
+		{ArrayEnd, "", ""},
+
+		{ArrayStart, "", ""},
+		{Bool(true), "/0", "/0"},
+		{ArrayEnd, "", ""},
+
+		{ArrayStart, "", ""},
+		{String("hello"), "/0", "/0"},
+		{String("goodbye"), "/1", "/1"},
+		{ArrayEnd, "", ""},
+
+		{ObjectStart, "", ""},
+		{ObjectEnd, "", ""},
+
+		{ObjectStart, "", ""},
+		{String("hello"), "/hello", "/0"},
+		{String("goodbye"), "/hello", "/0"},
+		{ObjectEnd, "", ""},
+
+		{ObjectStart, "", ""},
+		{String(""), "/", "/0"},
+		{Null, "/", "/0"},
+		{String("0"), "/0", "/1"},
+		{Null, "/0", "/1"},
+		{String("~"), "/~0", "/2"},
+		{Null, "/~0", "/2"},
+		{String("/"), "/~1", "/3"},
+		{Null, "/~1", "/3"},
+		{String("a//b~/c/~d~~e"), "/a~1~1b~0~1c~1~0d~0~0e", "/4"},
+		{Null, "/a~1~1b~0~1c~1~0d~0~0e", "/4"},
+		{String(" \r\n\t"), "/ \r\n\t", "/5"},
+		{Null, "/ \r\n\t", "/5"},
+		{ObjectEnd, "", ""},
+
+		{ArrayStart, "", ""},
+		{ObjectStart, "/0", "/0"},
+		{String(""), "/0/", "/0/0"},
+		{ArrayStart, "/0/", "/0/0"},
+		{ObjectStart, "/0//0", "/0/0/0"},
+		{String("#"), "/0//0/#", "/0/0/0/0"},
+		{Null, "/0//0/#", "/0/0/0/0"},
+		{ObjectEnd, "/0//0", "/0/0/0"},
+		{ArrayEnd, "/0/", "/0/0"},
+		{ObjectEnd, "/0", "/0"},
+		{ArrayEnd, "", ""},
+	}
+
+	for _, allowDupes := range []bool{false, true} {
+		var name string
+		var want func(i int) string
+		switch allowDupes {
+		case false:
+			name = "RejectDuplicateNames"
+			want = func(i int) string { return tests[i].wantWithRejectDuplicateNames }
+		case true:
+			name = "AllowDuplicateNames"
+			want = func(i int) string { return tests[i].wantWithAllowDuplicateNames }
+		}
+
+		t.Run(name, func(t *testing.T) {
+			bb := new(bytes.Buffer)
+
+			enc := EncodeOptions{AllowDuplicateNames: allowDupes}.NewEncoder(bb)
+			for i, tt := range tests {
+				if err := enc.WriteToken(tt.token); err != nil {
+					t.Fatalf("%d: Encoder.WriteToken error: %v", i, err)
+				}
+				if got := enc.StackPointer(); got != want(i) {
+					t.Fatalf("%d: Encoder.StackPointer = %v, want %v", i, got, want(i))
+				}
+			}
+
+			dec := DecodeOptions{AllowDuplicateNames: allowDupes}.NewDecoder(bb)
+			for i, _ := range tests {
+				if _, err := dec.ReadToken(); err != nil {
+					t.Fatalf("%d: Decoder.ReadToken error: %v", i, err)
+				}
+				if got := dec.StackPointer(); got != want(i) {
+					t.Fatalf("%d: Decoder.StackPointer = %v, want %v", i, got, want(i))
+				}
+			}
+		})
 	}
 }
 

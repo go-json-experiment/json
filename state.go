@@ -4,6 +4,8 @@
 
 package json
 
+import "strconv"
+
 var (
 	errMissingName   = &SyntacticError{str: "missing string for object name"}
 	errMissingColon  = &SyntacticError{str: "missing character ':' after object name"}
@@ -23,6 +25,44 @@ type state struct {
 func (s *state) reset() {
 	s.tokens.reset()
 	s.namespaces.reset()
+}
+
+// appendStackPointer appends to b a pointer (RFC 6901) to the current value.
+// The returned pointer is only accurate if s.namespaces is populated,
+// otherwise it uses the numeric index as the object member name.
+func (s state) appendStackPointer(b []byte) []byte {
+	var objectDepth int
+	for _, e := range s.tokens[1:] {
+		if e.length() == 0 {
+			break // empty object or array
+		}
+		b = append(b, '/')
+		switch {
+		case e.isObject():
+			if objectDepth < len(s.namespaces) {
+				for _, c := range s.namespaces[objectDepth].last() {
+					// Per RFC 6901, section 3, escape '~' and '/' characters.
+					switch c {
+					case '~':
+						b = append(b, "~0"...)
+					case '/':
+						b = append(b, "~1"...)
+					default:
+						b = append(b, c)
+					}
+				}
+			} else {
+				// Since the names stack is unpopulated, the name is unknown.
+				// As a best-effort replacement, use the numeric member index.
+				// While inaccurate, it produces a syntactically valid pointer.
+				b = strconv.AppendUint(b, uint64((e.length()-1)/2), 10)
+			}
+			objectDepth++
+		case e.isArray():
+			b = strconv.AppendUint(b, uint64(e.length()-1), 10)
+		}
+	}
+	return b
 }
 
 // stateMachine is a push-down automaton that validates whether

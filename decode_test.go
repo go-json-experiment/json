@@ -45,6 +45,7 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 	switch typeName {
 	case "Token":
 		var tokens []Token
+		var pointers []string
 		for {
 			tok, err := dec.ReadToken()
 			if err != nil {
@@ -54,9 +55,15 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
 			tokens = append(tokens, tok.Clone())
+			if td.pointers != nil {
+				pointers = append(pointers, dec.StackPointer())
+			}
 		}
 		if !equalTokens(tokens, td.tokens) {
 			t.Fatalf("tokens mismatch:\ngot  %v\nwant %v", tokens, td.tokens)
+		}
+		if !reflect.DeepEqual(pointers, td.pointers) {
+			t.Fatalf("pointers mismatch:\ngot  %q\nwant %q", pointers, td.pointers)
 		}
 	case "Value":
 		val, err := dec.ReadValue()

@@ -827,6 +827,13 @@ func (e *Encoder) StackIndex(i int) (Kind, int) {
 	}
 }
 
+// StackPointer returns a pointer (RFC 6901) to the most recently written value.
+// Object names are only present if AllowDuplicateNames is false, otherwise
+// object members are represented using their index within the object.
+func (e *Encoder) StackPointer() string {
+	return string(e.appendStackPointer(nil))
+}
+
 // appendString appends s to dst as a JSON string per RFC 7159, section 7.
 //
 // If validateUTF8 is specified, this rejects input that contains invalid UTF-8

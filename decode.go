@@ -966,6 +966,13 @@ func (d *Decoder) StackIndex(i int) (Kind, int) {
 	}
 }
 
+// StackPointer returns a pointer (RFC 6901) to the most recently read value.
+// Object names are only present if AllowDuplicateNames is false, otherwise
+// object members are represented using their index within the object.
+func (d *Decoder) StackPointer() string {
+	return string(d.appendStackPointer(nil))
+}
+
 // consumeWhitespace consumes leading JSON whitespace per RFC 7159, section 2.
 func consumeWhitespace(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
