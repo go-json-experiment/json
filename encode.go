@@ -448,11 +448,11 @@ func (e *Encoder) WriteToken(t Token) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
-		b = append(b, '\n')
-	}
 	e.buf = b
 	if e.needFlush() && !e.avoidFlush() {
+		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
+			e.buf = append(e.buf, '\n')
+		}
 		return e.flush()
 	}
 	return nil
@@ -530,11 +530,11 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
-		b = append(b, '\n')
-	}
 	e.buf = b
 	if e.needFlush() && !e.avoidFlush() {
+		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
+			e.buf = append(e.buf, '\n')
+		}
 		return e.flush()
 	}
 	return nil
