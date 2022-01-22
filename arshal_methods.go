@@ -175,7 +175,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				err = errors.New("JSON value must be string type")
 				return &SemanticError{action: "unmarshal", JSONKind: val.Kind(), GoType: t, Err: err}
 			}
-			s := unescapeSimpleString(val)
+			s := unescapeStringMayCopy(val)
 			unmarshaler := va.addrWhen(needAddr).Interface().(encoding.TextUnmarshaler)
 			if err := unmarshaler.UnmarshalText(s); err != nil {
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.

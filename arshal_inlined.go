@@ -131,7 +131,7 @@ func unmarshalInlinedFallbackNext(uo UnmarshalOptions, dec *Decoder, va addressa
 		*b = append(*b, '}')
 		return nil
 	} else {
-		name := string(unescapeSimpleString(rawName)) // TODO: Intern this?
+		name := string(unescapeStringMayCopy(rawName)) // TODO: Intern this?
 
 		m := v
 		if m.IsNil() {

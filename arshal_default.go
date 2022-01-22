@@ -249,7 +249,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			va.Set(reflect.Zero(t))
 			return nil
 		case '"':
-			val = unescapeSimpleString(val)
+			val = unescapeStringMayCopy(val)
 
 			// For base64 and base32, decodedLen computes the maximum output size
 			// when given the original input size. To compute the exact size,
@@ -322,7 +322,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			if !uo.StringifyNumbers {
 				break
 			}
-			val = unescapeSimpleString(val)
+			val = unescapeStringMayCopy(val)
 			fallthrough
 		case '0':
 			var negOffset int
@@ -389,7 +389,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			if !uo.StringifyNumbers {
 				break
 			}
-			val = unescapeSimpleString(val)
+			val = unescapeStringMayCopy(val)
 			fallthrough
 		case '0':
 			n, ok := parseDecUint(val)
@@ -469,7 +469,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			va.SetFloat(0)
 			return nil
 		case '"':
-			val = unescapeSimpleString(val)
+			val = unescapeStringMayCopy(val)
 			if allowNonFinite {
 				switch string(val) {
 				case "NaN":
@@ -738,7 +738,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				if err != nil {
 					return err
 				}
-				name := unescapeSimpleString(val)
+				name := unescapeStringMayCopy(val)
 				f := fields.byActualName[string(name)]
 				if f == nil {
 					for _, f2 := range fields.byFoldedName[string(foldName(name))] {

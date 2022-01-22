@@ -1226,11 +1226,11 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 	return dst, false // truncated input
 }
 
-// unescapeSimpleString returns the unescaped form of src.
+// unescapeStringMayCopy returns the unescaped form of src.
 // If there are no escaped characters, the output is simply a subslice of
 // the input with the surrounding quotes removed.
 // Otherwise, a new buffer is allocated for the output.
-func unescapeSimpleString(src []byte) []byte {
+func unescapeStringMayCopy(src []byte) []byte {
 	if consumeSimpleString(src) == len(src) {
 		return src[len(`"`) : len(src)-len(`"`)]
 	}

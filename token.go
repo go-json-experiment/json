@@ -243,7 +243,7 @@ func (t Token) string() (string, []byte) {
 		}
 		buf := raw.previousBuffer()
 		if buf[0] == '"' {
-			return "", unescapeSimpleString(buf)
+			return "", unescapeStringMayCopy(buf)
 		}
 		// Handle tokens that are not JSON strings for fmt.Stringer.
 		return "", buf

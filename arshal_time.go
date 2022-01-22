@@ -73,7 +73,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*td = time.Duration(0)
 				return nil
 			case k == '"' && !nanos:
-				val = unescapeSimpleString(val)
+				val = unescapeStringMayCopy(val)
 				td2, err := time.ParseDuration(string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
@@ -143,7 +143,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*tt = time.Time{}
 				return nil
 			case '"':
-				val = unescapeSimpleString(val)
+				val = unescapeStringMayCopy(val)
 				tt2, err := time.Parse(format, string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
