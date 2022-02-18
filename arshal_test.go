@@ -589,6 +589,11 @@ func TestMarshal(t *testing.T) {
 		in:    []bool{false, true},
 		want:  `[false,true]`,
 	}, {
+		name:  "Bools/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    true,
+		want:  `true`,
+	}, {
 		name: "Strings",
 		in:   []string{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
@@ -596,6 +601,11 @@ func TestMarshal(t *testing.T) {
 		name: "Strings/Named",
 		in:   []namedString{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
+	}, {
+		name:  "Strings/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    "string",
+		want:  `"string"`,
 	}, {
 		name: "Bytes",
 		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
@@ -632,6 +642,11 @@ func TestMarshal(t *testing.T) {
 		in:   [5]namedByte{'h', 'e', 'l', 'l', 'o'},
 		want: `[104,101,108,108,111]`,
 	}, {
+		name:  "Bytes/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    []byte("hello"),
+		want:  `"aGVsbG8="`,
+	}, {
 		name: "Ints",
 		in: []interface{}{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
@@ -645,6 +660,11 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `["0","-128","-32768","-2147483648","-9223372036854775808","-6464"]`,
 	}, {
+		name:  "Ints/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    int(0),
+		want:  `0`,
+	}, {
 		name: "Uints",
 		in: []interface{}{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
@@ -657,6 +677,11 @@ func TestMarshal(t *testing.T) {
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `["0","255","65535","4294967295","18446744073709551615","6464"]`,
+	}, {
+		name:  "Uints/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    uint(0),
+		want:  `0`,
 	}, {
 		name: "Floats",
 		in: []interface{}{
@@ -685,6 +710,11 @@ func TestMarshal(t *testing.T) {
 		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.Inf(-1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
+	}, {
+		name:  "Floats/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    float64(0),
+		want:  `0`,
 	}, {
 		name:    "Maps/InvalidKey/Bool",
 		in:      map[bool]string{false: "value"},
@@ -766,6 +796,11 @@ func TestMarshal(t *testing.T) {
 		}(),
 		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveMap{}), Err: errors.New("encountered a cycle")},
+	}, {
+		name:  "Maps/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    map[string]string{},
+		want:  `{}`,
 	}, {
 		name: "Structs/Empty",
 		in:   structEmpty{},
@@ -1797,6 +1832,11 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
+		name:  "Structs/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    struct{}{},
+		want:  `{}`,
+	}, {
 		name: "Slices/Interface",
 		in: []interface{}{
 			false, true,
@@ -1830,6 +1870,11 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveSlice{}), Err: errors.New("encountered a cycle")},
 	}, {
+		name:  "Slices/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    []string{"hello", "goodbye"},
+		want:  `["hello","goodbye"]`,
+	}, {
 		name: "Arrays/Empty",
 		in:   [0]struct{}{},
 		want: `[]`,
@@ -1862,6 +1907,11 @@ func TestMarshal(t *testing.T) {
 		in:      new([1]chan string),
 		want:    `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
+	}, {
+		name:  "Arrays/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    [2]string{"hello", "goodbye"},
+		want:  `["hello","goodbye"]`,
 	}, {
 		name: "Pointers/NilL0",
 		in:   (*int)(nil),
@@ -1904,6 +1954,11 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePtr)(nil)), Err: errors.New("encountered a cycle")},
 	}, {
+		name:  "Pointers/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    addr(addr(bool(true))),
+		want:  `true`,
+	}, {
 		name: "Interfaces/Nil/Empty",
 		in:   [1]interface{}{nil},
 		want: `[null]`,
@@ -1911,6 +1966,11 @@ func TestMarshal(t *testing.T) {
 		name: "Interfaces/Nil/NonEmpty",
 		in:   [1]io.Reader{nil},
 		want: `[null]`,
+	}, {
+		name:  "Interfaces/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    [1]io.Reader{nil},
+		want:  `[null]`,
 	}, {
 		name: "Methods/NilPointer",
 		in:   struct{ X *allMethods }{X: (*allMethods)(nil)}, // method should not be called
@@ -2285,6 +2345,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: boolType},
 	}, {
+		name:  "Bools/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `false`,
+		inVal: addr(true),
+		want:  addr(false),
+	}, {
 		name:  "Strings/Null",
 		inBuf: `null`,
 		inVal: addr("something"),
@@ -2328,6 +2394,12 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: stringType},
+	}, {
+		name:  "Strings/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `"hello"`,
+		inVal: addr("goodbye"),
+		want:  addr("hello"),
 	}, {
 		name:  "Bytes/Null",
 		inBuf: `null`,
@@ -2566,6 +2638,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr([]byte("nochange")),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
 	}, {
+		name:  "Bytes/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `"aGVsbG8="`,
+		inVal: new([]byte),
+		want:  addr([]byte("hello")),
+	}, {
 		name:  "Ints/Null",
 		inBuf: `null`,
 		inVal: addr(int(1)),
@@ -2756,6 +2834,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: intType},
 	}, {
+		name:  "Ints/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `1`,
+		inVal: addr(int(0)),
+		want:  addr(int(1)),
+	}, {
 		name:  "Uints/Null",
 		inBuf: `null`,
 		inVal: addr(uint(1)),
@@ -2929,6 +3013,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: uintType},
 	}, {
+		name:  "Uints/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `1`,
+		inVal: addr(uint(0)),
+		want:  addr(uint(1)),
+	}, {
 		name:  "Floats/Null",
 		inBuf: `null`,
 		inVal: addr(float64(64.64)),
@@ -3032,6 +3122,12 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: float64Type},
+	}, {
+		name:  "Floats/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `1`,
+		inVal: addr(float64(0)),
+		want:  addr(float64(1)),
 	}, {
 		name:  "Maps/Null",
 		inBuf: `null`,
@@ -3167,6 +3263,12 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: mapStringStringType},
+	}, {
+		name:  "Maps/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `{"hello":"goodbye"}`,
+		inVal: addr(map[string]string{}),
+		want:  addr(map[string]string{"hello": "goodbye"}),
 	}, {
 		name:  "Structs/Null",
 		inBuf: `null`,
@@ -4198,6 +4300,12 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{}{}),
 		want:  addr(struct{}{}),
 	}, {
+		name:  "Structs/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `{"Field":"Value"}`,
+		inVal: addr(struct{ Field string }{}),
+		want:  addr(struct{ Field string }{"Value"}),
+	}, {
 		name:  "Slices/Null",
 		inBuf: `null`,
 		inVal: addr([]string{"something"}),
@@ -4280,6 +4388,12 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: sliceStringType},
+	}, {
+		name:  "Slices/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `[false,true]`,
+		inVal: addr([]bool{true, false}),
+		want:  addr([]bool{false, true}),
 	}, {
 		name:  "Arrays/Null",
 		inBuf: `null`,
@@ -4365,6 +4479,12 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr([1]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: array1StringType},
 	}, {
+		name:  "Arrays/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `[false,true]`,
+		inVal: addr([2]bool{true, false}),
+		want:  addr([2]bool{false, true}),
+	}, {
 		name:  "Pointers/NullL0",
 		inBuf: `null`,
 		inVal: new(*string),
@@ -4409,6 +4529,12 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"hello"`,
 		inVal: addr((*string)(nil)),
 		want:  addr(addr("hello")),
+	}, {
+		name:  "Points/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `true`,
+		inVal: addr(new(bool)),
+		want:  addr(addr(true)),
 	}, {
 		name:  "Interfaces/Empty/Null",
 		inBuf: `null`,
@@ -4508,6 +4634,15 @@ func TestUnmarshal(t *testing.T) {
 		}(),
 		want: func() interface{} {
 			var vi interface{} = namedInt64(+64)
+			return &vi
+		}(),
+	}, {
+		name:  "Interfaces/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `true`,
+		inVal: new(interface{}),
+		want: func() interface{} {
+			var vi interface{} = true
 			return &vi
 		}(),
 	}, {

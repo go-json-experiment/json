@@ -39,10 +39,10 @@ type MarshalOptions struct {
 	// unknown JSON object members.
 	DiscardUnknownMembers bool
 
-	// format is custom formatting for the top-level type.
+	// formatDepth is the depth at which we respect the format flag.
+	formatDepth int
+	// format is custom formatting for the value at the specified depth.
 	format string
-
-	// TODO: Add other options.
 }
 
 // Marshal serializes a Go value as a []byte with default options.
@@ -128,10 +128,10 @@ type UnmarshalOptions struct {
 	// ErrUnknownName according to errors.Is.
 	RejectUnknownNames bool
 
-	// format is custom formatting for the top-level type.
+	// formatDepth is the depth at which we respect the format flag.
+	formatDepth int
+	// format is custom formatting for the value at the specified depth.
 	format string
-
-	// TODO: Add other options.
 }
 
 // Unmarshal deserializes a Go value from a []byte with default options.

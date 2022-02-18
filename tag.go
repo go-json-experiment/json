@@ -266,8 +266,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 }
 
 type fieldOptions struct {
-	hasName   bool
 	name      string
+	hasName   bool
 	nocase    bool
 	inline    bool
 	unknown   bool
