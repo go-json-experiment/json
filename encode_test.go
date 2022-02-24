@@ -146,8 +146,9 @@ func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
 }
 
 type encoderMethodCall struct {
-	in      tokOrVal
-	wantErr error
+	in          tokOrVal
+	wantErr     error
+	wantPointer string
 }
 
 var encoderErrorTestdata = []struct {
@@ -158,249 +159,251 @@ var encoderErrorTestdata = []struct {
 }{{
 	name: "InvalidToken",
 	calls: []encoderMethodCall{
-		{zeroToken, &SyntacticError{str: "invalid json.Token"}},
+		{zeroToken, &SyntacticError{str: "invalid json.Token"}, ""},
 	},
 }, {
 	name: "InvalidValue",
 	calls: []encoderMethodCall{
-		{RawValue(`#`), newInvalidCharacterError('#', "at start of value")},
+		{RawValue(`#`), newInvalidCharacterError('#', "at start of value"), ""},
 	},
 }, {
 	name: "InvalidValue/DoubleZero",
 	calls: []encoderMethodCall{
-		{RawValue(`00`), newInvalidCharacterError('0', "after top-level value")},
+		{RawValue(`00`), newInvalidCharacterError('0', "after top-level value"), ""},
 	},
 }, {
 	name: "TruncatedValue",
 	calls: []encoderMethodCall{
-		{zeroValue, io.ErrUnexpectedEOF},
+		{zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedNull",
 	calls: []encoderMethodCall{
-		{RawValue(`nul`), io.ErrUnexpectedEOF},
+		{RawValue(`nul`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidNull",
 	calls: []encoderMethodCall{
-		{RawValue(`nulL`), newInvalidCharacterError('L', "within literal null (expecting 'l')")},
+		{RawValue(`nulL`), newInvalidCharacterError('L', "within literal null (expecting 'l')"), ""},
 	},
 }, {
 	name: "TruncatedFalse",
 	calls: []encoderMethodCall{
-		{RawValue(`fals`), io.ErrUnexpectedEOF},
+		{RawValue(`fals`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidFalse",
 	calls: []encoderMethodCall{
-		{RawValue(`falsE`), newInvalidCharacterError('E', "within literal false (expecting 'e')")},
+		{RawValue(`falsE`), newInvalidCharacterError('E', "within literal false (expecting 'e')"), ""},
 	},
 }, {
 	name: "TruncatedTrue",
 	calls: []encoderMethodCall{
-		{RawValue(`tru`), io.ErrUnexpectedEOF},
+		{RawValue(`tru`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidTrue",
 	calls: []encoderMethodCall{
-		{RawValue(`truE`), newInvalidCharacterError('E', "within literal true (expecting 'e')")},
+		{RawValue(`truE`), newInvalidCharacterError('E', "within literal true (expecting 'e')"), ""},
 	},
 }, {
 	name: "TruncatedString",
 	calls: []encoderMethodCall{
-		{RawValue(`"star`), io.ErrUnexpectedEOF},
+		{RawValue(`"star`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidString",
 	calls: []encoderMethodCall{
-		{RawValue(`"ok` + "\x00"), newInvalidCharacterError('\x00', `within string (expecting non-control character)`)},
+		{RawValue(`"ok` + "\x00"), newInvalidCharacterError('\x00', `within string (expecting non-control character)`), ""},
 	},
 }, {
 	name: "ValidString/AllowInvalidUTF8/Token",
 	opts: EncodeOptions{AllowInvalidUTF8: true},
 	calls: []encoderMethodCall{
-		{String("living\xde\xad\xbe\xef"), nil},
+		{String("living\xde\xad\xbe\xef"), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: "ValidString/AllowInvalidUTF8/Value",
 	opts: EncodeOptions{AllowInvalidUTF8: true},
 	calls: []encoderMethodCall{
-		{RawValue("\"living\xde\xad\xbe\xef\""), nil},
+		{RawValue("\"living\xde\xad\xbe\xef\""), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: "InvalidString/RejectInvalidUTF8",
 	opts: EncodeOptions{AllowInvalidUTF8: false},
 	calls: []encoderMethodCall{
-		{String("living\xde\xad\xbe\xef"), &SyntacticError{str: "invalid UTF-8 within string"}},
-		{RawValue("\"living\xde\xad\xbe\xef\""), &SyntacticError{str: "invalid UTF-8 within string"}},
+		{String("living\xde\xad\xbe\xef"), &SyntacticError{str: "invalid UTF-8 within string"}, ""},
+		{RawValue("\"living\xde\xad\xbe\xef\""), &SyntacticError{str: "invalid UTF-8 within string"}, ""},
 	},
 }, {
 	name: "TruncatedNumber",
 	calls: []encoderMethodCall{
-		{RawValue(`0.`), io.ErrUnexpectedEOF},
+		{RawValue(`0.`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidNumber",
 	calls: []encoderMethodCall{
-		{RawValue(`0.e`), newInvalidCharacterError('e', "within number (expecting digit)")},
+		{RawValue(`0.e`), newInvalidCharacterError('e', "within number (expecting digit)"), ""},
 	},
 }, {
 	name: "TruncatedObject/AfterStart",
 	calls: []encoderMethodCall{
-		{RawValue(`{`), io.ErrUnexpectedEOF},
+		{RawValue(`{`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedObject/AfterName",
 	calls: []encoderMethodCall{
-		{RawValue(`{"0"`), io.ErrUnexpectedEOF},
+		{RawValue(`{"0"`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedObject/AfterColon",
 	calls: []encoderMethodCall{
-		{RawValue(`{"0":`), io.ErrUnexpectedEOF},
+		{RawValue(`{"0":`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedObject/AfterValue",
 	calls: []encoderMethodCall{
-		{RawValue(`{"0":0`), io.ErrUnexpectedEOF},
+		{RawValue(`{"0":0`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedObject/AfterComma",
 	calls: []encoderMethodCall{
-		{RawValue(`{"0":0,`), io.ErrUnexpectedEOF},
+		{RawValue(`{"0":0,`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "InvalidObject/MissingColon",
 	calls: []encoderMethodCall{
-		{RawValue(` { "fizz" "buzz" } `), newInvalidCharacterError('"', "after object name (expecting ':')")},
-		{RawValue(` { "fizz" , "buzz" } `), newInvalidCharacterError(',', "after object name (expecting ':')")},
+		{RawValue(` { "fizz" "buzz" } `), newInvalidCharacterError('"', "after object name (expecting ':')"), ""},
+		{RawValue(` { "fizz" , "buzz" } `), newInvalidCharacterError(',', "after object name (expecting ':')"), ""},
 	},
 }, {
 	name: "InvalidObject/MissingComma",
 	calls: []encoderMethodCall{
-		{RawValue(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError('"', "after object value (expecting ',' or '}')")},
-		{RawValue(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError(':', "after object value (expecting ',' or '}')")},
+		{RawValue(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError('"', "after object value (expecting ',' or '}')"), ""},
+		{RawValue(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError(':', "after object value (expecting ',' or '}')"), ""},
 	},
 }, {
 	name: "InvalidObject/ExtraComma",
 	calls: []encoderMethodCall{
-		{RawValue(` { , } `), newInvalidCharacterError(',', `at start of string (expecting '"')`)},
-		{RawValue(` { "fizz" : "buzz" , } `), newInvalidCharacterError('}', `at start of string (expecting '"')`)},
+		{RawValue(` { , } `), newInvalidCharacterError(',', `at start of string (expecting '"')`), ""},
+		{RawValue(` { "fizz" : "buzz" , } `), newInvalidCharacterError('}', `at start of string (expecting '"')`), ""},
 	},
 }, {
 	name: "InvalidObject/InvalidName",
 	calls: []encoderMethodCall{
-		{RawValue(`{ null }`), newInvalidCharacterError('n', `at start of string (expecting '"')`)},
-		{RawValue(`{ false }`), newInvalidCharacterError('f', `at start of string (expecting '"')`)},
-		{RawValue(`{ true }`), newInvalidCharacterError('t', `at start of string (expecting '"')`)},
-		{RawValue(`{ 0 }`), newInvalidCharacterError('0', `at start of string (expecting '"')`)},
-		{RawValue(`{ {} }`), newInvalidCharacterError('{', `at start of string (expecting '"')`)},
-		{RawValue(`{ [] }`), newInvalidCharacterError('[', `at start of string (expecting '"')`)},
-		{ObjectStart, nil},
-		{Null, errMissingName},
-		{RawValue(`null`), errMissingName},
-		{False, errMissingName},
-		{RawValue(`false`), errMissingName},
-		{True, errMissingName},
-		{RawValue(`true`), errMissingName},
-		{Uint(0), errMissingName},
-		{RawValue(`0`), errMissingName},
-		{ObjectStart, errMissingName},
-		{RawValue(`{}`), errMissingName},
-		{ArrayStart, errMissingName},
-		{RawValue(`[]`), errMissingName},
-		{ObjectEnd, nil},
+		{RawValue(`{ null }`), newInvalidCharacterError('n', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ false }`), newInvalidCharacterError('f', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ true }`), newInvalidCharacterError('t', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ 0 }`), newInvalidCharacterError('0', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ {} }`), newInvalidCharacterError('{', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ [] }`), newInvalidCharacterError('[', `at start of string (expecting '"')`), ""},
+		{ObjectStart, nil, ""},
+		{Null, errMissingName, ""},
+		{RawValue(`null`), errMissingName, ""},
+		{False, errMissingName, ""},
+		{RawValue(`false`), errMissingName, ""},
+		{True, errMissingName, ""},
+		{RawValue(`true`), errMissingName, ""},
+		{Uint(0), errMissingName, ""},
+		{RawValue(`0`), errMissingName, ""},
+		{ObjectStart, errMissingName, ""},
+		{RawValue(`{}`), errMissingName, ""},
+		{ArrayStart, errMissingName, ""},
+		{RawValue(`[]`), errMissingName, ""},
+		{ObjectEnd, nil, ""},
 	},
 	wantOut: "{}\n",
 }, {
 	name: "InvalidObject/InvalidValue",
 	calls: []encoderMethodCall{
-		{RawValue(`{ "0": x }`), newInvalidCharacterError('x', `at start of value`)},
+		{RawValue(`{ "0": x }`), newInvalidCharacterError('x', `at start of value`), ""},
 	},
 }, {
 	name: "InvalidObject/MismatchingDelim",
 	calls: []encoderMethodCall{
-		{RawValue(` { ] `), newInvalidCharacterError(']', `at start of string (expecting '"')`)},
-		{RawValue(` { "0":0 ] `), newInvalidCharacterError(']', `after object value (expecting ',' or '}')`)},
-		{ObjectStart, nil},
-		{ArrayEnd, errMismatchDelim},
-		{RawValue(`]`), newInvalidCharacterError(']', "at start of value")},
-		{ObjectEnd, nil},
+		{RawValue(` { ] `), newInvalidCharacterError(']', `at start of string (expecting '"')`), ""},
+		{RawValue(` { "0":0 ] `), newInvalidCharacterError(']', `after object value (expecting ',' or '}')`), ""},
+		{ObjectStart, nil, ""},
+		{ArrayEnd, errMismatchDelim, ""},
+		{RawValue(`]`), newInvalidCharacterError(']', "at start of value"), ""},
+		{ObjectEnd, nil, ""},
 	},
 	wantOut: "{}\n",
 }, {
 	name: "ValidObject/UniqueNames",
 	calls: []encoderMethodCall{
-		{ObjectStart, nil},
-		{String("0"), nil},
-		{Uint(0), nil},
-		{String("1"), nil},
-		{Uint(1), nil},
-		{ObjectEnd, nil},
-		{RawValue(` { "0" : 0 , "1" : 1 } `), nil},
+		{ObjectStart, nil, ""},
+		{String("0"), nil, ""},
+		{Uint(0), nil, ""},
+		{String("1"), nil, ""},
+		{Uint(1), nil, ""},
+		{ObjectEnd, nil, ""},
+		{RawValue(` { "0" : 0 , "1" : 1 } `), nil, ""},
 	},
 	wantOut: `{"0":0,"1":1}` + "\n" + `{"0":0,"1":1}` + "\n",
 }, {
 	name: "ValidObject/DuplicateNames",
 	opts: EncodeOptions{AllowDuplicateNames: true},
 	calls: []encoderMethodCall{
-		{ObjectStart, nil},
-		{String("0"), nil},
-		{Uint(0), nil},
-		{String("0"), nil},
-		{Uint(0), nil},
-		{ObjectEnd, nil},
-		{RawValue(` { "0" : 0 , "0" : 0 } `), nil},
+		{ObjectStart, nil, ""},
+		{String("0"), nil, ""},
+		{Uint(0), nil, ""},
+		{String("0"), nil, ""},
+		{Uint(0), nil, ""},
+		{ObjectEnd, nil, ""},
+		{RawValue(` { "0" : 0 , "0" : 0 } `), nil, ""},
 	},
 	wantOut: `{"0":0,"0":0}` + "\n" + `{"0":0,"0":0}` + "\n",
 }, {
 	name: "InvalidObject/DuplicateNames",
 	calls: []encoderMethodCall{
-		{ObjectStart, nil},
-		{String("0"), nil},
-		{ObjectStart, nil},
-		{ObjectEnd, nil},
-		{String("0"), &SyntacticError{str: `duplicate name "0" in object`}},
-		{RawValue(`"0"`), &SyntacticError{str: `duplicate name "0" in object`}},
-		{String("1"), nil},
-		{ObjectStart, nil},
-		{ObjectEnd, nil},
-		{String("1"), &SyntacticError{str: `duplicate name "1" in object`}},
-		{RawValue(`"1"`), &SyntacticError{str: `duplicate name "1" in object`}},
-		{ObjectEnd, nil},
-		{RawValue(` { "0" : 0 , "1" : 1 , "0" : 0 } `), &SyntacticError{str: `duplicate name "0" in object`}},
+		{ObjectStart, nil, ""},
+		{String("0"), nil, ""},
+		{ObjectStart, nil, ""},
+		{ObjectEnd, nil, ""},
+		{String("0"), &SyntacticError{str: `duplicate name "0" in object`}, "/0"},
+		{RawValue(`"0"`), &SyntacticError{str: `duplicate name "0" in object`}, "/0"},
+		{String("1"), nil, ""},
+		{ObjectStart, nil, ""},
+		{ObjectEnd, nil, ""},
+		{String("0"), &SyntacticError{str: `duplicate name "0" in object`}, "/1"},
+		{RawValue(`"0"`), &SyntacticError{str: `duplicate name "0" in object`}, "/1"},
+		{String("1"), &SyntacticError{str: `duplicate name "1" in object`}, "/1"},
+		{RawValue(`"1"`), &SyntacticError{str: `duplicate name "1" in object`}, "/1"},
+		{ObjectEnd, nil, ""},
+		{RawValue(` { "0" : 0 , "1" : 1 , "0" : 0 } `), &SyntacticError{str: `duplicate name "0" in object`}, ""},
 	},
 	wantOut: `{"0":{},"1":{}}` + "\n",
 }, {
 	name: "TruncatedArray/AfterStart",
 	calls: []encoderMethodCall{
-		{RawValue(`[`), io.ErrUnexpectedEOF},
+		{RawValue(`[`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedArray/AfterValue",
 	calls: []encoderMethodCall{
-		{RawValue(`[0`), io.ErrUnexpectedEOF},
+		{RawValue(`[0`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedArray/AfterComma",
 	calls: []encoderMethodCall{
-		{RawValue(`[0,`), io.ErrUnexpectedEOF},
+		{RawValue(`[0,`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
 	name: "TruncatedArray/MissingComma",
 	calls: []encoderMethodCall{
-		{RawValue(` [ "fizz" "buzz" ] `), newInvalidCharacterError('"', "after array value (expecting ',' or ']')")},
+		{RawValue(` [ "fizz" "buzz" ] `), newInvalidCharacterError('"', "after array value (expecting ',' or ']')"), ""},
 	},
 }, {
 	name: "InvalidArray/MismatchingDelim",
 	calls: []encoderMethodCall{
-		{RawValue(` [ } `), newInvalidCharacterError('}', `at start of value`)},
-		{ArrayStart, nil},
-		{ObjectEnd, errMismatchDelim},
-		{RawValue(`}`), newInvalidCharacterError('}', "at start of value")},
-		{ArrayEnd, nil},
+		{RawValue(` [ } `), newInvalidCharacterError('}', `at start of value`), ""},
+		{ArrayStart, nil, ""},
+		{ObjectEnd, errMismatchDelim, ""},
+		{RawValue(`}`), newInvalidCharacterError('}', "at start of value"), ""},
+		{ArrayEnd, nil, ""},
 	},
 	wantOut: "[]\n",
 }}
@@ -427,6 +430,12 @@ func testEncoderErrors(t *testing.T, opts EncodeOptions, calls []encoderMethodCa
 		}
 		if !reflect.DeepEqual(gotErr, call.wantErr) {
 			t.Fatalf("%d: error mismatch: got %#v, want %#v", i, gotErr, call.wantErr)
+		}
+		if call.wantPointer != "" {
+			gotPointer := enc.StackPointer()
+			if gotPointer != call.wantPointer {
+				t.Fatalf("%d: Encoder.StackPointer = %s, want %s", i, gotPointer, call.wantPointer)
+			}
 		}
 	}
 	gotOut := dst.String() + string(enc.unflushedBuffer())

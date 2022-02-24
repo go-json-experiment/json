@@ -197,10 +197,13 @@ func (e *Encoder) needFlush() bool {
 }
 
 // flush flushes the buffer to the underlying io.Writer.
-func (e *encodeBuffer) flush() error {
+func (e *Encoder) flush() error {
 	if e.wr == nil && e.bb == nil {
 		return nil
 	}
+
+	// Inform objectNameStack that we are about to flush the buffer content.
+	e.names.copyQuotedBuffer(e.buf)
 
 	// Specialize bytes.Buffer for better performance.
 	if e.bb != nil {
@@ -291,7 +294,7 @@ func (e *Encoder) avoidFlush() bool {
 
 // unwriteEmptyObjectMember tries to unwrite the last object member
 // if the value is empty. It reports whether it successfully unwrote it.
-func (e *Encoder) unwriteEmptyObjectMember() bool {
+func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 	if e := e.tokens.last(); !e.isObject() || !e.needObjectName() || e.length() == 0 {
 		panic("BUG: must be called on an object after writing a value")
 	}
@@ -325,6 +328,11 @@ func (e *Encoder) unwriteEmptyObjectMember() bool {
 	e.tokens.last().decrement() // for object member value
 	e.tokens.last().decrement() // for object member name
 	if !e.options.AllowDuplicateNames {
+		e.names.clearLast()
+		if prevName != nil {
+			e.names.copyQuotedBuffer(e.buf) // required by objectNameStack.replaceLastUnquotedName
+			e.names.replaceLastUnquotedName(*prevName)
+		}
 		e.namespaces.last().removeLast()
 	}
 	return true
@@ -408,9 +416,12 @@ func (e *Encoder) WriteToken(t Token) error {
 		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
 			break
 		}
-		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
-			err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
-			break
+		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() {
+			if !e.namespaces.last().insertQuoted(b[n0:]) {
+				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+				break
+			}
+			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
 		err = e.tokens.appendString()
 	case '0':
@@ -424,6 +435,7 @@ func (e *Encoder) WriteToken(t Token) error {
 			break
 		}
 		if !e.options.AllowDuplicateNames {
+			e.names.push()
 			e.namespaces.push()
 		}
 	case '}':
@@ -432,6 +444,7 @@ func (e *Encoder) WriteToken(t Token) error {
 			break
 		}
 		if !e.options.AllowDuplicateNames {
+			e.names.pop()
 			e.namespaces.pop()
 		}
 	case '[':
@@ -503,9 +516,12 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	case 'n', 'f', 't':
 		err = e.tokens.appendLiteral()
 	case '"':
-		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() && !e.namespaces.last().insert(b[n0:]) {
-			err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
-			break
+		if !e.options.AllowDuplicateNames && e.tokens.last().needObjectName() {
+			if !e.namespaces.last().insertQuoted(b[n0:]) {
+				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+				break
+			}
+			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
 		err = e.tokens.appendString()
 	case '0':
@@ -651,7 +667,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 		if err != nil {
 			return b, v, err
 		}
-		if !e.options.AllowDuplicateNames && !names.insert(b[n0:]) {
+		if !e.options.AllowDuplicateNames && !names.insertQuoted(b[n0:]) {
 			return b, v, &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 		}
 
@@ -831,6 +847,7 @@ func (e *Encoder) StackIndex(i int) (Kind, int) {
 // Object names are only present if AllowDuplicateNames is false, otherwise
 // object members are represented using their index within the object.
 func (e *Encoder) StackPointer() string {
+	e.names.copyQuotedBuffer(e.buf)
 	return string(e.appendStackPointer(nil))
 }
 

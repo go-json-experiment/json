@@ -671,6 +671,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			err.action = "marshal"
 			return &err
 		}
+		prevIdx := -1
 		for _, f := range fields.flattened {
 			v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 			if len(f.index) > 1 {
@@ -714,8 +715,17 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 			// Try unwriting the member if empty (slow path for omitempty).
 			if f.omitempty {
-				enc.unwriteEmptyObjectMember()
+				var prevName *string
+				if prevIdx >= 0 {
+					prevName = &fields.flattened[prevIdx].name
+				}
+				if enc.unwriteEmptyObjectMember(prevName) {
+					continue
+				}
 			}
+
+			// Remember the previous written object member.
+			prevIdx = f.id
 		}
 		if fields.inlinedFallback != nil && !(mo.DiscardUnknownMembers && fields.inlinedFallback.unknown) {
 			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback); err != nil {

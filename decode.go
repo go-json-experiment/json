@@ -172,10 +172,13 @@ var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after 
 
 // fetch reads at least 1 byte from the underlying io.Reader.
 // It returns io.ErrUnexpectedEOF if zero bytes were read and io.EOF was seen.
-func (d *decodeBuffer) fetch() error {
+func (d *Decoder) fetch() error {
 	if d.rd == nil && d.bb == nil {
 		return io.ErrUnexpectedEOF
 	}
+
+	// Inform objectNameStack that we are about to fetch new buffer content.
+	d.names.copyQuotedBuffer(d.buf)
 
 	// Specialize bytes.Buffer for better performance.
 	if bb, ok := d.rd.(*bytes.Buffer); ok && bb != nil {
@@ -251,6 +254,8 @@ func (d *decodeBuffer) fetch() error {
 	}
 }
 
+const invalidateBufferByte = '#' // invalid starting character for JSON grammar
+
 // invalidatePreviousRead invalidates buffers returned by ReadValue calls
 // so that the first byte is an invalid character.
 // This Hyrum-proofs the API against faulty application code that assumes
@@ -259,7 +264,7 @@ func (d *decodeBuffer) invalidatePreviousRead() {
 	// Avoid mutating the buffer if d.rd is nil which implies that d.buf
 	// is provided by the user code and may not expect mutations.
 	if d.rd != nil && d.prevStart < d.prevEnd {
-		d.buf[d.prevStart] = '#' // invalid character outside of JSON string
+		d.buf[d.prevStart] = invalidateBufferByte
 		d.prevStart = d.prevEnd
 	}
 }
@@ -449,9 +454,12 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
-			err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
-			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
+		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() {
+			if !d.namespaces.last().insertQuoted(d.buf[pos-n : pos]) {
+				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
+			}
+			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
 		if err = d.tokens.appendString(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
@@ -484,6 +492,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		if !d.options.AllowDuplicateNames {
+			d.names.push()
 			d.namespaces.push()
 		}
 		pos += 1
@@ -495,6 +504,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		if !d.options.AllowDuplicateNames {
+			d.names.pop()
 			d.namespaces.pop()
 		}
 		pos += 1
@@ -579,9 +589,12 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 	case 'n', 't', 'f':
 		err = d.tokens.appendLiteral()
 	case '"':
-		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() && !d.namespaces.last().insert(d.buf[pos-n:pos]) {
-			err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
-			break
+		if !d.options.AllowDuplicateNames && d.tokens.last().needObjectName() {
+			if !d.namespaces.last().insertQuoted(d.buf[pos-n : pos]) {
+				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+				break
+			}
+			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
 		err = d.tokens.appendString()
 	case '0':
@@ -814,7 +827,7 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && !names.insert(d.buf[pos-n:pos]) {
+		if !d.options.AllowDuplicateNames && !names.insertQuoted(d.buf[pos-n:pos]) {
 			return pos - n, &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 		}
 
@@ -970,6 +983,7 @@ func (d *Decoder) StackIndex(i int) (Kind, int) {
 // Object names are only present if AllowDuplicateNames is false, otherwise
 // object members are represented using their index within the object.
 func (d *Decoder) StackPointer() string {
+	d.names.copyQuotedBuffer(d.buf)
 	return string(d.appendStackPointer(nil))
 }
 

@@ -293,7 +293,7 @@ func TestObjectNamespace(t *testing.T) {
 		for i, op := range ops {
 			switch op := op.(type) {
 			case insert:
-				gotInserted := ns.insert([]byte(op.name))
+				gotInserted := ns.insertQuoted([]byte(op.name))
 				if gotInserted != op.wantInserted {
 					t.Fatalf("%d: objectNamespace{%v}.insert(%v) = %v, want %v", i, strings.Join(wantNames, " "), op.name, gotInserted, op.wantInserted)
 				}
@@ -311,7 +311,7 @@ func TestObjectNamespace(t *testing.T) {
 			// Check that the namespace is consistent.
 			gotNames := []string{}
 			for i := 0; i < ns.length(); i++ {
-				gotNames = append(gotNames, string(ns.get(i)))
+				gotNames = append(gotNames, string(ns.getUnquoted(i)))
 			}
 			if !reflect.DeepEqual(gotNames, wantNames) {
 				t.Fatalf("%d: objectNamespace = {%v}, want {%v}", i, strings.Join(gotNames, " "), strings.Join(wantNames, " "))
@@ -325,7 +325,7 @@ func TestObjectNamespace(t *testing.T) {
 
 		// Insert a large number of names.
 		for i := 0; i < 64; i++ {
-			ns.insert([]byte(fmt.Sprintf(`"name%d"`, i)))
+			ns.insertQuoted([]byte(fmt.Sprintf(`"name%d"`, i)))
 		}
 
 		// Verify that we did switch to using a Go map.

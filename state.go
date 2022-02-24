@@ -4,7 +4,10 @@
 
 package json
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 var (
 	errMissingName   = &SyntacticError{str: "missing string for object name"}
@@ -18,18 +21,26 @@ type state struct {
 	// tokens validates whether the next token kind is valid.
 	tokens stateMachine
 
+	// names is a stack of object names.
+	// Only used if AllowDuplicateNames is false.
+	names objectNameStack
+
 	// namespaces is a stack of object namespaces.
+	// Only used if AllowDuplicateNames is false.
 	namespaces objectNamespaceStack
 }
 
 func (s *state) reset() {
 	s.tokens.reset()
+	s.names.reset()
 	s.namespaces.reset()
 }
 
 // appendStackPointer appends to b a pointer (RFC 6901) to the current value.
-// The returned pointer is only accurate if s.namespaces is populated,
+// The returned pointer is only accurate if s.names is populated,
 // otherwise it uses the numeric index as the object member name.
+//
+// Invariant: Must call s.names.copyQuotedBuffer beforehand.
 func (s state) appendStackPointer(b []byte) []byte {
 	var objectDepth int
 	for _, e := range s.tokens[1:] {
@@ -39,8 +50,8 @@ func (s state) appendStackPointer(b []byte) []byte {
 		b = append(b, '/')
 		switch {
 		case e.isObject():
-			if objectDepth < len(s.namespaces) {
-				for _, c := range s.namespaces[objectDepth].last() {
+			if objectDepth < s.names.length() {
+				for _, c := range s.names.getUnquoted(objectDepth) {
 					// Per RFC 6901, section 3, escape '~' and '/' characters.
 					switch c {
 					case '~':
@@ -305,6 +316,148 @@ func (e *stateEntry) decrement() {
 	(*e)--
 }
 
+// objectNameStack is a stack of names when descending into a JSON object.
+// In contrast to objectNamespaceStack, this only has to remember a single name
+// per JSON object.
+//
+// This data structure may contain offsets to encodeBuffer or decodeBuffer.
+// It violates clean abstraction of layers, but is significantly more efficient.
+// This ensures that popping and pushing in the common case is a trivial
+// push/pop of an offset integer.
+type objectNameStack struct {
+	// offsets is a stack of offsets for each name.
+	// A non-negative offset is the ending offset into the local names buffer.
+	// A negative offset is the bit-wise inverse of a starting offset into
+	// a remote buffer (e.g., encodeBuffer or decodeBuffer).
+	// A math.MinInt offset at the end implies that the last object is empty.
+	// Invariant: Positive offsets always occur before negative offsets.
+	offsets []int
+	// unquotedNames is a back-to-back concatenation of names.
+	unquotedNames []byte
+}
+
+func (ns *objectNameStack) reset() {
+	ns.offsets = ns.offsets[:0]
+	ns.unquotedNames = ns.unquotedNames[:0]
+	if cap(ns.offsets) > 1<<6 {
+		ns.offsets = nil // avoid pinning arbitrarily large amounts of memory
+	}
+	if cap(ns.unquotedNames) > 1<<10 {
+		ns.unquotedNames = nil // avoid pinning arbitrarily large amounts of memory
+	}
+}
+
+func (ns *objectNameStack) length() int {
+	return len(ns.offsets)
+}
+
+// getUnquoted retrieves the ith unquoted name in the namespace.
+// It returns an empty string if the last object is empty.
+//
+// Invariant: Must call copyQuotedBuffer beforehand.
+func (ns *objectNameStack) getUnquoted(i int) []byte {
+	ns.ensureCopiedBuffer()
+	if i == 0 {
+		return ns.unquotedNames[:ns.offsets[0]]
+	} else {
+		return ns.unquotedNames[ns.offsets[i-1]:ns.offsets[i-0]]
+	}
+}
+
+// invalidOffset indicates that the last JSON object currently has no name.
+const invalidOffset = math.MinInt
+
+// push descends into a nested JSON object.
+func (ns *objectNameStack) push() {
+	ns.offsets = append(ns.offsets, invalidOffset)
+}
+
+// replaceLastQuotedOffset replaces the last name with the starting offset
+// to the quoted name in some remote buffer. All offsets provided must be
+// relative to the same buffer until copyQuotedBuffer is called.
+func (ns *objectNameStack) replaceLastQuotedOffset(i int) {
+	// Use bit-wise inversion instead of naive multiplication by -1 to avoid
+	// ambiguity regarding zero (which is a valid offset into the names field).
+	// Bit-wise inversion is mathematically equivalent to -i-1,
+	// such that 0 becomes -1, 1 becomes -2, and so forth.
+	// This ensures that remote offsets are always negative.
+	ns.offsets[len(ns.offsets)-1] = ^i
+}
+
+// replaceLastUnquotedName replaces the last name with the provided name.
+//
+// Invariant: Must call copyQuotedBuffer beforehand.
+func (ns *objectNameStack) replaceLastUnquotedName(s string) {
+	ns.ensureCopiedBuffer()
+	var startOffset int
+	if len(ns.offsets) > 1 {
+		startOffset = ns.offsets[len(ns.offsets)-2]
+	}
+	ns.unquotedNames = append(ns.unquotedNames[:startOffset], s...)
+	ns.offsets[len(ns.offsets)-1] = len(ns.unquotedNames)
+}
+
+// clearLast removes any name in the last JSON object.
+// It is semantically equivalent to ns.push followed by ns.pop.
+func (ns *objectNameStack) clearLast() {
+	ns.offsets[len(ns.offsets)-1] = invalidOffset
+}
+
+// pop ascends out of a nested JSON object.
+func (ns *objectNameStack) pop() {
+	ns.offsets = ns.offsets[:len(ns.offsets)-1]
+}
+
+// copyQuotedBuffer copies names from the remote buffer into the local names
+// buffer so that there are no more offset references into the remote buffer.
+// The allows the remote buffer to change contents without affecting
+// the names that this data structure is trying to remember.
+func (ns *objectNameStack) copyQuotedBuffer(b []byte) {
+	// Find the first negative offset.
+	var i int
+	for i = len(ns.offsets) - 1; i >= 0 && ns.offsets[i] < 0; i-- {
+		continue
+	}
+
+	// Copy each name from the remote buffer into the local buffer.
+	for i = i + 1; i < len(ns.offsets); i++ {
+		if i == len(ns.offsets)-1 && ns.offsets[i] == invalidOffset {
+			if i == 0 {
+				ns.offsets[i] = 0
+			} else {
+				ns.offsets[i] = ns.offsets[i-1]
+			}
+			break // last JSON object had a push without any names
+		}
+
+		// As a form of Hyrum proofing, we write an invalid character into the
+		// buffer to make misuse of Decoder.ReadToken more obvious.
+		// We need to undo that mutation here.
+		quotedName := b[^ns.offsets[i]:]
+		if quotedName[0] == invalidateBufferByte {
+			quotedName[0] = '"'
+		}
+
+		// Append the unquoted name to the local buffer.
+		var startOffset int
+		if i > 0 {
+			startOffset = ns.offsets[i-1]
+		}
+		if n := consumeSimpleString(quotedName); n > 0 {
+			ns.unquotedNames = append(ns.unquotedNames[:startOffset], quotedName[len(`"`):n-len(`"`)]...)
+		} else {
+			ns.unquotedNames, _ = unescapeString(ns.unquotedNames[:startOffset], quotedName)
+		}
+		ns.offsets[i] = len(ns.unquotedNames)
+	}
+}
+
+func (ns *objectNameStack) ensureCopiedBuffer() {
+	if len(ns.offsets) > 0 && ns.offsets[len(ns.offsets)-1] < 0 {
+		panic("BUG: copyQuotedBuffer not called beforehand")
+	}
+}
+
 // objectNamespaceStack is a stack of object namespaces.
 // This data structure assists in detecting duplicate names.
 type objectNamespaceStack []objectNamespace
@@ -338,16 +491,19 @@ func (nss *objectNamespaceStack) pop() {
 }
 
 // objectNamespace is the namespace for a JSON object.
-// It relies on a linear search over all the names before switching
-// to use a Go map for direct lookup.
+// In contrast to objectNameStack, this needs to remember a all names
+// per JSON object.
 //
 // The zero value is an empty namespace ready for use.
 type objectNamespace struct {
+	// It relies on a linear search over all the names before switching
+	// to use a Go map for direct lookup.
+
 	// endOffsets is a list of offsets to the end of each name in buffers.
 	// The length of offsets is the number of names in the namespace.
 	endOffsets []uint
-	// allNames is a back-to-back concatenation of every name in the namespace.
-	allNames []byte
+	// allUnquotedNames is a back-to-back concatenation of every name in the namespace.
+	allUnquotedNames []byte
 	// mapNames is a Go map containing every name in the namespace.
 	// Only valid if non-nil.
 	mapNames map[string]struct{}
@@ -356,13 +512,13 @@ type objectNamespace struct {
 // reset resets the namespace to be empty.
 func (ns *objectNamespace) reset() {
 	ns.endOffsets = ns.endOffsets[:0]
-	ns.allNames = ns.allNames[:0]
+	ns.allUnquotedNames = ns.allUnquotedNames[:0]
 	ns.mapNames = nil
 	if cap(ns.endOffsets) > 1<<6 {
 		ns.endOffsets = nil // avoid pinning arbitrarily large amounts of memory
 	}
-	if cap(ns.allNames) > 1<<10 {
-		ns.allNames = nil // avoid pinning arbitrarily large amounts of memory
+	if cap(ns.allUnquotedNames) > 1<<10 {
+		ns.allUnquotedNames = nil // avoid pinning arbitrarily large amounts of memory
 	}
 }
 
@@ -371,36 +527,36 @@ func (ns *objectNamespace) length() int {
 	return len(ns.endOffsets)
 }
 
-// get retrieves the ith name in the namespace.
-func (ns *objectNamespace) get(i int) []byte {
+// getUnquoted retrieves the ith unquoted name in the namespace.
+func (ns *objectNamespace) getUnquoted(i int) []byte {
 	if i == 0 {
-		return ns.allNames[:ns.endOffsets[0]]
+		return ns.allUnquotedNames[:ns.endOffsets[0]]
 	} else {
-		return ns.allNames[ns.endOffsets[i-1]:ns.endOffsets[i-0]]
+		return ns.allUnquotedNames[ns.endOffsets[i-1]:ns.endOffsets[i-0]]
 	}
 }
 
-// last retrieves the last name in the namespace.
-func (ns *objectNamespace) last() []byte {
-	return ns.get(ns.length() - 1)
+// lastUnquoted retrieves the last name in the namespace.
+func (ns *objectNamespace) lastUnquoted() []byte {
+	return ns.getUnquoted(ns.length() - 1)
 }
 
-// insert inserts an escaped name and reports whether it was inserted,
+// insertQuoted inserts an escaped name and reports whether it was inserted,
 // which only occurs if name is not already in the namespace.
 // The provided name must be a valid JSON string.
-func (ns *objectNamespace) insert(b []byte) bool {
+func (ns *objectNamespace) insertQuoted(b []byte) bool {
 	// TODO: Consider making two variations of insert that operate on
 	// both escaped and unescaped strings.
-	allNames, _ := unescapeString(ns.allNames, b)
-	name := allNames[len(ns.allNames):]
+	allNames, _ := unescapeString(ns.allUnquotedNames, b)
+	name := allNames[len(ns.allUnquotedNames):]
 
 	// Switch to a map if the buffer is too large for linear search.
 	// This does not add the current name to the map.
-	if ns.mapNames == nil && (ns.length() > 64 || len(ns.allNames) > 1024) {
+	if ns.mapNames == nil && (ns.length() > 64 || len(ns.allUnquotedNames) > 1024) {
 		ns.mapNames = make(map[string]struct{})
 		var startOffset uint
 		for _, endOffset := range ns.endOffsets {
-			name := ns.allNames[startOffset:endOffset]
+			name := ns.allUnquotedNames[startOffset:endOffset]
 			ns.mapNames[string(name)] = struct{}{} // allocates a new string
 			startOffset = endOffset
 		}
@@ -411,7 +567,7 @@ func (ns *objectNamespace) insert(b []byte) bool {
 		// It provides O(n) lookup, but doesn't require any allocations.
 		var startOffset uint
 		for _, endOffset := range ns.endOffsets {
-			if string(ns.allNames[startOffset:endOffset]) == string(name) {
+			if string(ns.allUnquotedNames[startOffset:endOffset]) == string(name) {
 				return false
 			}
 			startOffset = endOffset
@@ -425,21 +581,21 @@ func (ns *objectNamespace) insert(b []byte) bool {
 		ns.mapNames[string(name)] = struct{}{} // allocates a new string
 	}
 
-	ns.allNames = allNames
-	ns.endOffsets = append(ns.endOffsets, uint(len(ns.allNames)))
+	ns.allUnquotedNames = allNames
+	ns.endOffsets = append(ns.endOffsets, uint(len(ns.allUnquotedNames)))
 	return true
 }
 
 // removeLast removes the last name in the namespace.
 func (ns *objectNamespace) removeLast() {
 	if ns.mapNames != nil {
-		delete(ns.mapNames, string(ns.last()))
+		delete(ns.mapNames, string(ns.lastUnquoted()))
 	}
 	if ns.length()-1 == 0 {
 		ns.endOffsets = ns.endOffsets[:0]
-		ns.allNames = ns.allNames[:0]
+		ns.allUnquotedNames = ns.allUnquotedNames[:0]
 	} else {
 		ns.endOffsets = ns.endOffsets[:ns.length()-1]
-		ns.allNames = ns.allNames[:ns.endOffsets[ns.length()-1]]
+		ns.allUnquotedNames = ns.allUnquotedNames[:ns.endOffsets[ns.length()-1]]
 	}
 }
