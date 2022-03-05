@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
-	"strings"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -164,10 +163,10 @@ func (o EncodeOptions) ResetEncoder(e *Encoder, w io.Writer) {
 func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
 	if len(o.Indent) > 0 {
 		o.multiline = true
-		if s := strings.Trim(o.IndentPrefix, " \t"); len(s) > 0 {
+		if s := trimLeftSpaceTab(o.IndentPrefix); len(s) > 0 {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent prefix")
 		}
-		if s := strings.Trim(o.Indent, " \t"); len(s) > 0 {
+		if s := trimLeftSpaceTab(o.Indent); len(s) > 0 {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
 		}
 	}

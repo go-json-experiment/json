@@ -9,7 +9,7 @@ import (
 	"errors"
 	"io"
 	"sort"
-	"strings"
+	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -52,9 +52,8 @@ func (v RawValue) String() string {
 // It does not verify whether numbers are representable within the limits
 // of any common numeric type (e.g., float64, int64, or uint64).
 func (v RawValue) IsValid() bool {
-	d := new(Decoder) // TODO: Pool this.
-	d.state.reset()
-	d.buf = v
+	d := getDecoder(v, nil, DecodeOptions{})
+	defer putDecoder(d)
 	_, errVal := d.ReadValue()
 	_, errEOF := d.ReadToken()
 	return errVal == nil && errEOF == io.EOF
@@ -138,39 +137,47 @@ func (v RawValue) Kind() Kind {
 }
 
 func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) error {
-	e := new(Encoder) // TODO: Pool this.
-	e.state.reset()
-
+	var eo EncodeOptions
 	if canonical {
-		e.options.AllowInvalidUTF8 = false    // per RFC 8785, section 3.2.4
-		e.options.AllowDuplicateNames = false // per RFC 8785, section 3.1
-		e.options.canonicalizeNumbers = true  // per RFC 8785, section 3.2.2.3
-		e.options.EscapeRune = nil            // per RFC 8785, section 3.2.2.2
-		e.options.multiline = false           // per RFC 8785, section 3.2.1
+		eo.AllowInvalidUTF8 = false    // per RFC 8785, section 3.2.4
+		eo.AllowDuplicateNames = false // per RFC 8785, section 3.1
+		eo.canonicalizeNumbers = true  // per RFC 8785, section 3.2.2.3
+		eo.EscapeRune = nil            // per RFC 8785, section 3.2.2.2
+		eo.multiline = false           // per RFC 8785, section 3.2.1
 	} else {
-		if s := strings.Trim(prefix, " \t"); len(s) > 0 {
+		if s := trimLeftSpaceTab(prefix); len(s) > 0 {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent prefix")
 		}
-		if s := strings.Trim(indent, " \t"); len(s) > 0 {
+		if s := trimLeftSpaceTab(indent); len(s) > 0 {
 			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
 		}
-		e.options.AllowInvalidUTF8 = true
-		e.options.AllowDuplicateNames = true
-		e.options.preserveRawStrings = true
-		e.options.multiline = multiline // in case indent is empty
-		e.options.IndentPrefix = prefix
-		e.options.Indent = indent
+		eo.AllowInvalidUTF8 = true
+		eo.AllowDuplicateNames = true
+		eo.preserveRawStrings = true
+		eo.multiline = multiline // in case indent is empty
+		eo.IndentPrefix = prefix
+		eo.Indent = indent
 	}
-	e.options.omitTopLevelNewline = true
+	eo.omitTopLevelNewline = true
 
 	// Write the entire value to reformat all tokens and whitespace.
+	b := getBuffer()
+	defer putBuffer(b)
+	e := getEncoder(b.buf, nil, eo)
+	defer putEncoder(e)
 	if err := e.WriteValue(*v); err != nil {
 		return err
 	}
+	b.buf = e.buf // update buffer if we grew it
 
-	// For canonical output, may need to reorder object members.
+	// For canonical output, we may need to reorder object members.
 	if canonical {
-		RawValue(e.buf).reorderObjects(nil) // per RFC 8785, section 3.2.3
+		// Disable redundant checks performed earlier during encoding.
+		b := getBuffer() // used by reorderObjects as a scratch buffer for reordering
+		defer putBuffer(b)
+		d := getDecoder(e.buf, nil, DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true})
+		defer putDecoder(d)
+		reorderObjects(d, &b.buf) // per RFC 8785, section 3.2.3
 	}
 
 	// Store the result back into the value if different.
@@ -180,13 +187,54 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 	return nil
 }
 
+func trimLeftSpaceTab(s string) string {
+	for i, r := range s {
+		switch r {
+		case ' ', '\t':
+		default:
+			return s[i:]
+		}
+	}
+	return ""
+}
+
+type memberName struct {
+	// name is the unescaped name.
+	name []byte
+	// before and after are byte offsets into Decoder.buf that represents
+	// the entire name/value pair. It may contain leading commas.
+	before, after int64
+}
+
+var memberNamePool = sync.Pool{New: func() interface{} { return new(memberNames) }}
+
+func getMemberNames() *memberNames {
+	ns := memberNamePool.Get().(*memberNames)
+	*ns = (*ns)[:0]
+	return ns
+}
+func putMemberNames(ns *memberNames) {
+	if cap(*ns) < 1<<10 {
+		for i := range *ns {
+			(*ns)[i] = memberName{} // avoid pinning name
+		}
+		memberNamePool.Put(ns)
+	}
+}
+
+type memberNames []memberName
+
+func (m *memberNames) Len() int           { return len(*m) }
+func (m *memberNames) Less(i, j int) bool { return lessUTF16((*m)[i].name, (*m)[j].name) }
+func (m *memberNames) Swap(i, j int)      { (*m)[i], (*m)[j] = (*m)[j], (*m)[i] }
+
 // reorderObjects recursively reorders all object members in place
 // according to the ordering specified in RFC 8785, section 3.2.3.
 //
 // Pre-conditions:
 //	• The value is valid (i.e., no decoder errors should ever occur).
 //	• The value is compact (i.e., no whitespace is present).
-//	• Initial call is provided a nil Decoder.
+//	• Initial call is provided a Decoder reading from the start of v.
 //
 // Post-conditions:
 //	• Exactly one JSON value is read from the Decoder.
@@ -195,24 +243,12 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 //
 // The runtime is approximately O(n·log(n)) + O(m·log(m)),
 // where n is len(v) and m is the total number of object members.
-func (v RawValue) reorderObjects(d *Decoder) {
-	if d == nil {
-		d = new(Decoder) // TODO: Pool this.
-		d.state.reset()
-		d.buf = v
-	}
-
+func reorderObjects(d *Decoder, scratch *[]byte) {
 	switch tok, _ := d.ReadToken(); tok.Kind() {
 	case '{':
 		// Iterate and collect the name and offsets for every object member.
-		type member struct {
-			// name is the unescaped name.
-			name []byte
-			// before and after are byte offsets into v that represents
-			// the entire name/value pair. It may contain leading commas.
-			before, after int64
-		}
-		var members []member // TODO: Pool this.
+		members := getMemberNames()
+		defer putMemberNames(members)
 		var prevName []byte
 		isSorted := true
 
@@ -220,14 +256,14 @@ func (v RawValue) reorderObjects(d *Decoder) {
 		for d.PeekKind() != '}' {
 			beforeName := d.InputOffset()
 			name, _ := d.ReadValue()
-			name, _ = unescapeString(nil, name) // TODO: Pool the needed buffer?
-			v.reorderObjects(d)
+			name = unescapeStringMayCopy(name)
+			reorderObjects(d, scratch)
 			afterValue := d.InputOffset()
 
-			if isSorted && len(members) > 0 {
+			if isSorted && len(*members) > 0 {
 				isSorted = lessUTF16(prevName, name)
 			}
-			members = append(members, member{name, beforeName, afterValue})
+			*members = append(*members, memberName{name, beforeName, afterValue})
 			prevName = name
 		}
 		afterBody := d.InputOffset() // offset before '}'
@@ -237,9 +273,7 @@ func (v RawValue) reorderObjects(d *Decoder) {
 		if isSorted {
 			return
 		}
-		sort.Slice(members, func(i, j int) bool {
-			return lessUTF16(members[i].name, members[j].name)
-		})
+		sort.Sort(members)
 
 		// Append the reordered members to a new buffer,
 		// then copy the reordered members back over the original members.
@@ -249,23 +283,28 @@ func (v RawValue) reorderObjects(d *Decoder) {
 		//
 		// The following invariant must hold:
 		//	sum([m.after-m.before for m in members]) == afterBody-beforeBody
-		sorted := make([]byte, 0, afterBody-beforeBody) // TODO: Pool this.
-		for i, member := range members {
-			if v[member.before] == ',' {
+		sorted := (*scratch)[:0]
+		for i, member := range *members {
+			if d.buf[member.before] == ',' {
 				member.before++ // trim leading comma
 			}
-			sorted = append(sorted, v[member.before:member.after]...)
-			if i < len(members)-1 {
+			sorted = append(sorted, d.buf[member.before:member.after]...)
+			if i < len(*members)-1 {
 				sorted = append(sorted, ',') // append trailing comma
 			}
 		}
 		if int(afterBody-beforeBody) != len(sorted) {
 			panic("BUG: length invariant violated")
 		}
-		copy(v[beforeBody:afterBody], sorted)
+		copy(d.buf[beforeBody:afterBody], sorted)
+
+		// Update scratch buffer if we grew it.
+		if cap(sorted) > cap(*scratch) {
+			*scratch = sorted
+		}
 	case '[':
 		for d.PeekKind() != ']' {
-			v.reorderObjects(d)
+			reorderObjects(d, scratch)
 		}
 		d.ReadToken()
 	}
