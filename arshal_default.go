@@ -743,7 +743,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		var seenIdxs uintSet
 		prevIdx := -1
 		enc.tokens.last().disableNamespace() // we manually ensure unique names below
-		for _, f := range fields.flattened {
+		for i := range fields.flattened {
+			f := &fields.flattened[i]
 			v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 			if len(f.index) > 1 {
 				v = v.fieldByIndex(f.index[1:], false)
