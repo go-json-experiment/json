@@ -989,7 +989,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 		once.Do(init)
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
-		for i := 0; i < va.Len(); i++ {
+		for i, n := 0, va.Len(); i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
@@ -1073,7 +1073,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		}
 		once.Do(init)
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
-		for i := 0; i < t.Len(); i++ {
+		for i, n := 0, t.Len(); i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
