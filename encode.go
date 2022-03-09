@@ -881,10 +881,15 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 		// Optimize for long sequences of unescaped characters.
 		if escapeRune == nil {
 			var n int
-			for len(s) > n && (' ' <= s[n] && s[n] != '\\' && s[n] != '"' && s[n] <= unicode.MaxASCII) {
-				n++
+			for len(s) > n {
+				if c := s[n]; ' ' <= c && c != '\\' && c != '"' && c <= unicode.MaxASCII {
+					dst = append(dst, c)
+					n++
+					continue
+				}
+				break
 			}
-			dst, s = append(dst, s[:n]...), s[n:]
+			s = s[n:]
 			if len(s) == 0 {
 				break
 			}
