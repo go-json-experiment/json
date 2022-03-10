@@ -769,10 +769,40 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				continue // fast path for omitempty
 			}
 
-			// Write the object member name and value.
-			if err := enc.WriteToken(String(f.name)); err != nil {
-				return err
+			// Write the object member name.
+			//
+			// The logic below is semantically equivalent to:
+			//	enc.WriteToken(String(f.name))
+			// but specialized and simplified because:
+			//	1. The Encoder must be expecting an object name.
+			//	2. The object namespaces is guaranteed to be disabled.
+			//	3. The object name is guaranteed to be valid and pre-escaped.
+			//	4. There is no need to flush the buffer (for unwrite purposes).
+			//	5. There is no possibility of an error occuring.
+			{
+				// Append any delimiters or optional whitespace.
+				last := enc.tokens.last()
+				if last.length() > 0 {
+					enc.buf = append(enc.buf, ',')
+				}
+				if enc.options.multiline {
+					enc.buf = enc.appendIndent(enc.buf, enc.tokens.needIndent('"'))
+				}
+
+				// Append the token to the output and to the state machine.
+				n0 := len(enc.buf) // buffer size before appending the string
+				if enc.options.EscapeRune == nil {
+					enc.buf = append(enc.buf, f.quotedName...)
+				} else {
+					enc.buf, _ = appendString(enc.buf, f.name, false, enc.options.EscapeRune)
+				}
+				if !enc.options.AllowDuplicateNames {
+					enc.names.replaceLastQuotedOffset(n0)
+				}
+				last.increment()
 			}
+
+			// Write the object member value.
 			mo2 := mo
 			if f.string {
 				mo2.StringifyNumbers = true

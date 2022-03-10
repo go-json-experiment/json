@@ -105,8 +105,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 				switch f.fieldOptions {
-				case fieldOptions{name: f.name, inline: true}:
-				case fieldOptions{name: f.name, unknown: true}:
+				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true}:
+				case fieldOptions{name: f.name, quotedName: f.quotedName, unknown: true}:
 				default:
 					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
@@ -195,7 +195,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 
 				// Reject user-specified names with invalid UTF-8.
 				if !utf8.ValidString(f.name) {
-					err := fmt.Errorf("Go struct fields %s has JSON object name %q with invalid UTF-8", sf.Name, f.name)
+					err := fmt.Errorf("Go struct field %s has JSON object name %q with invalid UTF-8", sf.Name, f.name)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 				// Reject multiple fields with same name within the same struct.
@@ -266,15 +266,16 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 }
 
 type fieldOptions struct {
-	name      string
-	hasName   bool
-	nocase    bool
-	inline    bool
-	unknown   bool
-	omitzero  bool
-	omitempty bool
-	string    bool
-	format    string
+	name       string
+	quotedName string // quoted name per RFC 8785, section 3.2.2.2.
+	hasName    bool
+	nocase     bool
+	inline     bool
+	unknown    bool
+	omitzero   bool
+	omitempty  bool
+	string     bool
+	format     string
 }
 
 // parseFieldOptions parses the `json` tag in a Go struct field as
@@ -329,6 +330,8 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		out.name = opt
 		tag = tag[n:]
 	}
+	b, _ := appendString(nil, out.name, false, nil)
+	out.quotedName = string(b)
 
 	// Handle any additional tag options (if any).
 	seenOpts := make(map[string]bool)

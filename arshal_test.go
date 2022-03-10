@@ -868,6 +868,11 @@ func TestMarshal(t *testing.T) {
 		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
 		want: `{"":"empty",",":"comma","\"":"quote"}`,
 	}, {
+		name:  "Structs/EscapedNames",
+		eopts: EncodeOptions{EscapeRune: func(rune) bool { return true }},
+		in:    structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
+		want:  `{"":"\u0065\u006d\u0070\u0074\u0079","\u002c":"\u0063\u006f\u006d\u006d\u0061","\u0022":"\u0071\u0075\u006f\u0074\u0065"}`,
+	}, {
 		name: "Structs/NoCase",
 		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
 		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,

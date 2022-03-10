@@ -39,9 +39,9 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "F1"}},
-				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "json_name", hasName: true}},
-				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", hasName: true, nocase: true}},
+				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "F1", quotedName: `"F1"`}},
+				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "json_name", quotedName: `"json_name"`, hasName: true}},
+				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", quotedName: `"json_name_nocase"`, hasName: true, nocase: true}},
 			},
 		},
 	}, {
@@ -67,15 +67,15 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "L1A"}},
-				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "L1C"}},
-				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "L1E"}},
-				{id: 3, index: []int{1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2A"}},
-				{id: 4, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2C"}},
-				{id: 5, index: []int{3, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2D"}},
-				{id: 6, index: []int{3, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2F"}},
-				{id: 7, index: []int{1, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3A"}},
-				{id: 8, index: []int{3, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3B"}},
+				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "L1A", quotedName: `"L1A"`}},
+				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "L1C", quotedName: `"L1C"`}},
+				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "L1E", quotedName: `"L1E"`}},
+				{id: 3, index: []int{1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2A", quotedName: `"L2A"`}},
+				{id: 4, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2C", quotedName: `"L2C"`}},
+				{id: 5, index: []int{3, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2D", quotedName: `"L2D"`}},
+				{id: 6, index: []int{3, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2F", quotedName: `"L2F"`}},
+				{id: 7, index: []int{1, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3A", quotedName: `"L3A"`}},
+				{id: 8, index: []int{3, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3B", quotedName: `"L3B"`}},
 			},
 		},
 	}, {
@@ -100,9 +100,9 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "A"}},
-				{id: 1, index: []int{3}, typ: stringType, fieldOptions: fieldOptions{name: "D"}},
-				{id: 2, index: []int{1, 0, 1}, typ: stringType, fieldOptions: fieldOptions{name: "C"}},
+				{id: 0, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "A", quotedName: `"A"`}},
+				{id: 1, index: []int{3}, typ: stringType, fieldOptions: fieldOptions{name: "D", quotedName: `"D"`}},
+				{id: 2, index: []int{1, 0, 1}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
 			},
 		},
 	}, {
@@ -112,7 +112,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0, 0}, typ: stringType, fieldOptions: fieldOptions{name: "Foo"}},
+				{id: 0, index: []int{0, 0}, typ: stringType, fieldOptions: fieldOptions{name: "Foo", quotedName: `"Foo"`}},
 			},
 		},
 	}, {
@@ -122,7 +122,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0, 0}, typ: stringType, fieldOptions: fieldOptions{name: "Foo"}},
+				{id: 0, index: []int{0, 0}, typ: stringType, fieldOptions: fieldOptions{name: "Foo", quotedName: `"Foo"`}},
 			},
 		},
 	}, {
@@ -134,9 +134,9 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "A"}},
-				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "C"}},
-				{id: 2, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "B"}},
+				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "A", quotedName: `"A"`}},
+				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
+				{id: 2, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "B", quotedName: `"B"`}},
 			},
 		},
 	}, {
@@ -162,14 +162,14 @@ func TestMakeStructFields(t *testing.T) {
 			X map[string]RawValue `json:",unknown"`
 		}{},
 		want: structFields{
-			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeOf(map[string]RawValue(nil)), fieldOptions: fieldOptions{name: "X", unknown: true}},
+			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeOf(map[string]RawValue(nil)), fieldOptions: fieldOptions{name: "X", quotedName: `"X"`, unknown: true}},
 		},
 	}, {
 		name: "InvalidUTF8",
 		in: struct {
 			Name string `json:"'\\xde\\xad\\xbe\\xef'"`
 		}{},
-		wantErr: errors.New(`Go struct fields Name has JSON object name "ޭ\xbe\xef" with invalid UTF-8`),
+		wantErr: errors.New(`Go struct field Name has JSON object name "ޭ\xbe\xef" with invalid UTF-8`),
 	}, {
 		name: "DuplicateName",
 		in: struct {
@@ -343,19 +343,19 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int
 		}{},
-		wantOpts: fieldOptions{name: "FieldName"},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 	}, {
 		name: "GoNameWithOptions",
 		in: struct {
 			FieldName int `json:",inline"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", inline: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true},
 	}, {
 		name: "Empty",
 		in: struct {
 			V int `json:""`
 		}{},
-		wantOpts: fieldOptions{name: "V"},
+		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
 	}, {
 		name: "Unexported",
 		in: struct {
@@ -397,109 +397,109 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"'-'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "-"},
+		wantOpts: fieldOptions{hasName: true, name: "-", quotedName: `"-"`},
 	}, {
 		name: "LatinPunctuationName",
 		in: struct {
 			V int `json:"$%-/"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "$%-/"},
+		wantOpts: fieldOptions{hasName: true, name: "$%-/", quotedName: `"$%-/"`},
 	}, {
 		name: "QuotedLatinPunctuationName",
 		in: struct {
 			V int `json:"'$%-/'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "$%-/"},
+		wantOpts: fieldOptions{hasName: true, name: "$%-/", quotedName: `"$%-/"`},
 	}, {
 		name: "LatinDigitsName",
 		in: struct {
 			V int `json:"0123456789"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "0123456789"},
+		wantOpts: fieldOptions{hasName: true, name: "0123456789", quotedName: `"0123456789"`},
 	}, {
 		name: "QuotedLatinDigitsName",
 		in: struct {
 			V int `json:"'0123456789'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "0123456789"},
+		wantOpts: fieldOptions{hasName: true, name: "0123456789", quotedName: `"0123456789"`},
 	}, {
 		name: "LatinUppercaseName",
 		in: struct {
 			V int `json:"ABCDEFGHIJKLMOPQRSTUVWXYZ"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "ABCDEFGHIJKLMOPQRSTUVWXYZ"},
+		wantOpts: fieldOptions{hasName: true, name: "ABCDEFGHIJKLMOPQRSTUVWXYZ", quotedName: `"ABCDEFGHIJKLMOPQRSTUVWXYZ"`},
 	}, {
 		name: "LatinLowercaseName",
 		in: struct {
 			V int `json:"abcdefghijklmnopqrstuvwxyz_"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "abcdefghijklmnopqrstuvwxyz_"},
+		wantOpts: fieldOptions{hasName: true, name: "abcdefghijklmnopqrstuvwxyz_", quotedName: `"abcdefghijklmnopqrstuvwxyz_"`},
 	}, {
 		name: "GreekName",
 		in: struct {
 			V string `json:"Ελλάδα"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα"},
+		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα", quotedName: `"Ελλάδα"`},
 	}, {
 		name: "QuotedGreekName",
 		in: struct {
 			V string `json:"'Ελλάδα'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα"},
+		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα", quotedName: `"Ελλάδα"`},
 	}, {
 		name: "ChineseName",
 		in: struct {
 			V string `json:"世界"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "世界"},
+		wantOpts: fieldOptions{hasName: true, name: "世界", quotedName: `"世界"`},
 	}, {
 		name: "QuotedChineseName",
 		in: struct {
 			V string `json:"'世界'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "世界"},
+		wantOpts: fieldOptions{hasName: true, name: "世界", quotedName: `"世界"`},
 	}, {
 		name: "PercentSlashName",
 		in: struct {
 			V int `json:"text/html%"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "text/html%"},
+		wantOpts: fieldOptions{hasName: true, name: "text/html%", quotedName: `"text/html%"`},
 	}, {
 		name: "QuotedPercentSlashName",
 		in: struct {
 			V int `json:"'text/html%'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "text/html%"},
+		wantOpts: fieldOptions{hasName: true, name: "text/html%", quotedName: `"text/html%"`},
 	}, {
 		name: "PunctuationName",
 		in: struct {
 			V string `json:"!#$%&()*+-./:;<=>?@[]^_{|}~ "`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ "},
+		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
 	}, {
 		name: "QuotedPunctuationName",
 		in: struct {
 			V string `json:"'!#$%&()*+-./:;<=>?@[]^_{|}~ '"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ "},
+		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
 	}, {
 		name: "EmptyName",
 		in: struct {
 			V int `json:"''"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: ""},
+		wantOpts: fieldOptions{hasName: true, name: "", quotedName: `""`},
 	}, {
 		name: "SpaceName",
 		in: struct {
 			V int `json:"' '"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: " "},
+		wantOpts: fieldOptions{hasName: true, name: " ", quotedName: `" "`},
 	}, {
 		name: "CommaQuotes",
 		in: struct {
 			V int `json:"',\\'\"\\\"'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: `,'""`},
+		wantOpts: fieldOptions{hasName: true, name: `,'""`, quotedName: `",'\"\""`},
 	}, {
 		name: "SingleComma",
 		in: struct {
@@ -517,43 +517,37 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",nocase"`
 		}{},
-		wantOpts: fieldOptions{
-			name:   "FieldName",
-			nocase: true,
-		},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, nocase: true},
 	}, {
 		name: "InlineOption",
 		in: struct {
 			FieldName int `json:",inline"`
 		}{},
-		wantOpts: fieldOptions{
-			name:   "FieldName",
-			inline: true,
-		},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true},
 	}, {
 		name: "UnknownOption",
 		in: struct {
 			FieldName int `json:",unknown"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", unknown: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, unknown: true},
 	}, {
 		name: "OmitZeroOption",
 		in: struct {
 			FieldName int `json:",omitzero"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", omitzero: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, omitzero: true},
 	}, {
 		name: "OmitEmptyOption",
 		in: struct {
 			FieldName int `json:",omitempty"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", omitempty: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, omitempty: true},
 	}, {
 		name: "StringOption",
 		in: struct {
 			FieldName int `json:",string"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", string: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, string: true},
 	}, {
 		name: "FormatOptionEqual",
 		in: struct {
@@ -565,19 +559,13 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",format:fizzbuzz"`
 		}{},
-		wantOpts: fieldOptions{
-			name:   "FieldName",
-			format: "fizzbuzz",
-		},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, format: "fizzbuzz"},
 	}, {
 		name: "FormatOptionQuoted",
 		in: struct {
 			FieldName int `json:",format:'2006-01-02'"`
 		}{},
-		wantOpts: fieldOptions{
-			name:   "FieldName",
-			format: "2006-01-02",
-		},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, format: "2006-01-02"},
 	}, {
 		name: "FormatOptionInvalid",
 		in: struct {
@@ -596,14 +584,15 @@ func TestParseTagOptions(t *testing.T) {
 			FieldName int `json:",nocase,inline,unknown,omitzero,omitempty,string,format:format"`
 		}{},
 		wantOpts: fieldOptions{
-			name:      "FieldName",
-			nocase:    true,
-			inline:    true,
-			unknown:   true,
-			omitzero:  true,
-			omitempty: true,
-			string:    true,
-			format:    "format",
+			name:       "FieldName",
+			quotedName: `"FieldName"`,
+			nocase:     true,
+			inline:     true,
+			unknown:    true,
+			omitzero:   true,
+			omitempty:  true,
+			string:     true,
+			format:     "format",
 		},
 	}, {
 		name: "AllOptionsQuoted",
@@ -628,11 +617,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",inline,whoknows,string"`
 		}{},
-		wantOpts: fieldOptions{
-			name:   "FieldName",
-			inline: true,
-			string: true,
-		},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true, string: true},
 	}, {
 		name: "MalformedQuotedString/MissingQuote",
 		in: struct {
@@ -656,9 +641,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `jsom:"Misnamed"`
 		}{},
-		wantOpts: fieldOptions{
-			name: "V",
-		},
+		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
 	}}
 
 	for _, tt := range tests {
