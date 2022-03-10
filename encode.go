@@ -479,6 +479,91 @@ func (e *Encoder) WriteToken(t Token) error {
 	return nil
 }
 
+const (
+	rawIntNumber  = -1
+	rawUintNumber = -2
+)
+
+// writeNumber is specialized version of WriteToken, but optimized for numbers.
+// As a special-case, if bits is -1 or -2, it will treat v as
+// the raw-encoded bits of an int64 or uint64, respectively.
+// It is only called from arshal_default.go.
+func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
+	b := e.buf // use local variable to avoid mutating e in case of error
+
+	// Append any delimiters or optional whitespace.
+	c := e.tokens.needDelim('0')
+	if c != 0 {
+		b = append(b, c)
+	}
+	if e.options.multiline {
+		if c == ':' {
+			b = append(b, ' ')
+		} else {
+			b = e.appendIndent(b, e.tokens.needIndent('0'))
+		}
+	}
+
+	if quote {
+		// Append the value to the output.
+		n0 := len(b) // buffer size before appending the number
+		b = append(b, '"')
+		switch bits {
+		case rawIntNumber:
+			b = strconv.AppendInt(b, int64(math.Float64bits(v)), 10)
+		case rawUintNumber:
+			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
+		default:
+			b = appendNumber(b, v, bits)
+		}
+		b = append(b, '"')
+
+		// Escape the string if necessary.
+		if e.options.EscapeRune != nil {
+			b2 := append(e.unusedCache, b[n0+len(`"`):len(b)-len(`"`)]...)
+			b, _ = appendString(b[:n0], string(b2), false, e.options.EscapeRune)
+			e.unusedCache = b2[:0]
+		}
+
+		// Update the state machine.
+		last := e.tokens.last()
+		if !e.options.AllowDuplicateNames && last.needObjectName() {
+			if !last.isValidNamespace() {
+				return errInvalidNamespace
+			}
+			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+				return &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+			}
+			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+		}
+		if err := e.tokens.appendString(); err != nil {
+			return err
+		}
+	} else {
+		switch bits {
+		case rawIntNumber:
+			b = strconv.AppendInt(b, int64(math.Float64bits(v)), 10)
+		case rawUintNumber:
+			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
+		default:
+			b = appendNumber(b, v, bits)
+		}
+		if err := e.tokens.appendNumber(); err != nil {
+			return err
+		}
+	}
+
+	// Finish off the buffer and store it back into e.
+	e.buf = b
+	if e.needFlush() && !e.avoidFlush() {
+		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
+			e.buf = append(e.buf, '\n')
+		}
+		return e.flush()
+	}
+	return nil
+}
+
 // WriteValue writes the next raw value and advances the internal write offset.
 // The Encoder does not simply copy the provided value verbatim, but
 // parses it to ensure that it is syntactically valid and reformats it

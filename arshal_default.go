@@ -299,15 +299,8 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
-		val := enc.UnusedBuffer()
-		if mo.StringifyNumbers {
-			val = append(val, '"')
-		}
-		val = strconv.AppendInt(val, va.Int(), 10)
-		if mo.StringifyNumbers {
-			val = append(val, '"')
-		}
-		return enc.WriteValue(val)
+		x := math.Float64frombits(uint64(va.Int()))
+		return enc.writeNumber(x, rawIntNumber, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
@@ -366,15 +359,8 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
-		val := enc.UnusedBuffer()
-		if mo.StringifyNumbers {
-			val = append(val, '"')
-		}
-		val = strconv.AppendUint(val, va.Uint(), 10)
-		if mo.StringifyNumbers {
-			val = append(val, '"')
-		}
-		return enc.WriteValue(val)
+		x := math.Float64frombits(uint64(va.Uint()))
+		return enc.writeNumber(x, rawUintNumber, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
@@ -433,27 +419,19 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 		}
 		fv := va.Float()
-		val := enc.UnusedBuffer()
 		switch {
 		case !allowNonFinite && (math.IsNaN(fv) || math.IsInf(fv, 0)):
 			err := fmt.Errorf("invalid value: %v", fv)
 			return &SemanticError{action: "marshal", GoType: t, Err: err}
 		case math.IsNaN(fv):
-			val = append(val, `"NaN"`...)
+			return enc.WriteToken(String("NaN"))
 		case math.IsInf(fv, +1):
-			val = append(val, `"Infinity"`...)
+			return enc.WriteToken(String("Infinity"))
 		case math.IsInf(fv, -1):
-			val = append(val, `"-Infinity"`...)
+			return enc.WriteToken(String("-Infinity"))
 		default:
-			if mo.StringifyNumbers {
-				val = append(val, '"')
-			}
-			val = appendNumber(val, fv, t.Bits())
-			if mo.StringifyNumbers {
-				val = append(val, '"')
-			}
+			return enc.writeNumber(fv, t.Bits(), mo.StringifyNumbers)
 		}
-		return enc.WriteValue(val)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		var allowNonFinite bool
