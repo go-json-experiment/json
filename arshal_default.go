@@ -805,7 +805,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			}
 
 			// Remember the previous written object member.
-			if !enc.options.AllowDuplicateNames {
+			// The set of seen fields only needs to be updated to detect
+			// duplicate names with those from the inlined fallback.
+			if !enc.options.AllowDuplicateNames && fields.inlinedFallback != nil {
 				seenIdxs.insert(uint(f.id))
 			}
 			prevIdx = f.id
