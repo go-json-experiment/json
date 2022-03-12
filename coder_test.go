@@ -566,7 +566,7 @@ func TestCoderStackPointer(t *testing.T) {
 			}
 
 			dec := DecodeOptions{AllowDuplicateNames: allowDupes}.NewDecoder(bb)
-			for i, _ := range tests {
+			for i := range tests {
 				if _, err := dec.ReadToken(); err != nil {
 					t.Fatalf("%d: Decoder.ReadToken error: %v", i, err)
 				}
