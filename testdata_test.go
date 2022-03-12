@@ -43,7 +43,7 @@ func jsonTestdata() []jsonTestdataEntry {
 			// Skip large files for a short test run.
 			if testing.Short() {
 				fi, err := os.Stat(filepath.Join("testdata", fi.Name()))
-				if err == nil && fi.Size() > 1e5 {
+				if err == nil && fi.Size() > 1e3 {
 					continue
 				}
 			}
@@ -72,6 +72,10 @@ func jsonTestdata() []jsonTestdataEntry {
 			// Check whether there is a concrete type for this data.
 			var newFn func() interface{}
 			switch name {
+			case "CanadaGeometry":
+				newFn = func() interface{} { return new(canadaRoot) }
+			case "CitmCatalog":
+				newFn = func() interface{} { return new(citmRoot) }
 			case "GolangSource":
 				newFn = func() interface{} { return new(golangRoot) }
 			case "StringEscaped":
@@ -80,6 +84,8 @@ func jsonTestdata() []jsonTestdataEntry {
 				newFn = func() interface{} { return new(stringRoot) }
 			case "SyntheaFhir":
 				newFn = func() interface{} { return new(syntheaRoot) }
+			case "TwitterStatus":
+				newFn = func() interface{} { return new(twitterRoot) }
 			}
 
 			jsonTestdataLazy = append(jsonTestdataLazy, jsonTestdataEntry{name, data, newFn})
@@ -87,6 +93,67 @@ func jsonTestdata() []jsonTestdataEntry {
 	})
 	return jsonTestdataLazy
 }
+
+type (
+	canadaRoot struct {
+		Type     string `json:"type"`
+		Features []struct {
+			Type       string `json:"type"`
+			Properties struct {
+				Name string `json:"name"`
+			} `json:"properties"`
+			Geometry struct {
+				Type        string         `json:"type"`
+				Coordinates [][][2]float64 `json:"coordinates"`
+			} `json:"geometry"`
+		} `json:"features"`
+	}
+)
+
+type (
+	citmRoot struct {
+		AreaNames                map[int64]string `json:"areaNames"`
+		AudienceSubCategoryNames map[int64]string `json:"audienceSubCategoryNames"`
+		BlockNames               map[int64]string `json:"blockNames"`
+		Events                   map[int64]struct {
+			Description string      `json:"description"`
+			ID          int         `json:"id"`
+			Logo        string      `json:"logo"`
+			Name        string      `json:"name"`
+			SubTopicIds []int       `json:"subTopicIds"`
+			SubjectCode interface{} `json:"subjectCode"`
+			Subtitle    interface{} `json:"subtitle"`
+			TopicIds    []int       `json:"topicIds"`
+		} `json:"events"`
+		Performances []struct {
+			EventID int         `json:"eventId"`
+			ID      int         `json:"id"`
+			Logo    interface{} `json:"logo"`
+			Name    interface{} `json:"name"`
+			Prices  []struct {
+				Amount                int   `json:"amount"`
+				AudienceSubCategoryID int64 `json:"audienceSubCategoryId"`
+				SeatCategoryID        int64 `json:"seatCategoryId"`
+			} `json:"prices"`
+			SeatCategories []struct {
+				Areas []struct {
+					AreaID   int           `json:"areaId"`
+					BlockIds []interface{} `json:"blockIds"`
+				} `json:"areas"`
+				SeatCategoryID int `json:"seatCategoryId"`
+			} `json:"seatCategories"`
+			SeatMapImage interface{} `json:"seatMapImage"`
+			Start        int64       `json:"start"`
+			VenueCode    string      `json:"venueCode"`
+		} `json:"performances"`
+		SeatCategoryNames map[uint64]string   `json:"seatCategoryNames"`
+		SubTopicNames     map[uint64]string   `json:"subTopicNames"`
+		SubjectNames      map[uint64]string   `json:"subjectNames"`
+		TopicNames        map[uint64]string   `json:"topicNames"`
+		TopicSubTopics    map[uint64][]uint64 `json:"topicSubTopics"`
+		VenueNames        map[string]string   `json:"venueNames"`
+	}
+)
 
 type (
 	golangRoot struct {
@@ -396,5 +463,135 @@ type (
 	syntheaCurrency struct {
 		Currency string  `json:"currency"`
 		Value    float64 `json:"value"`
+	}
+)
+
+type (
+	twitterRoot struct {
+		Statuses       []twitterStatus `json:"statuses"`
+		SearchMetadata struct {
+			CompletedIn float64 `json:"completed_in"`
+			MaxID       int64   `json:"max_id"`
+			MaxIDStr    int64   `json:"max_id_str,string"`
+			NextResults string  `json:"next_results"`
+			Query       string  `json:"query"`
+			RefreshURL  string  `json:"refresh_url"`
+			Count       int     `json:"count"`
+			SinceID     int     `json:"since_id"`
+			SinceIDStr  int     `json:"since_id_str,string"`
+		} `json:"search_metadata"`
+	}
+	twitterStatus struct {
+		Metadata struct {
+			ResultType      string `json:"result_type"`
+			IsoLanguageCode string `json:"iso_language_code"`
+		} `json:"metadata"`
+		CreatedAt            string          `json:"created_at"`
+		ID                   int64           `json:"id"`
+		IDStr                int64           `json:"id_str,string"`
+		Text                 string          `json:"text"`
+		Source               string          `json:"source"`
+		Truncated            bool            `json:"truncated"`
+		InReplyToStatusID    int64           `json:"in_reply_to_status_id"`
+		InReplyToStatusIDStr int64           `json:"in_reply_to_status_id_str,string"`
+		InReplyToUserID      int64           `json:"in_reply_to_user_id"`
+		InReplyToUserIDStr   int64           `json:"in_reply_to_user_id_str,string"`
+		InReplyToScreenName  string          `json:"in_reply_to_screen_name"`
+		User                 twitterUser     `json:"user,omitempty"`
+		Geo                  interface{}     `json:"geo"`
+		Coordinates          interface{}     `json:"coordinates"`
+		Place                interface{}     `json:"place"`
+		Contributors         interface{}     `json:"contributors"`
+		RetweeetedStatus     *twitterStatus  `json:"retweeted_status"`
+		RetweetCount         int             `json:"retweet_count"`
+		FavoriteCount        int             `json:"favorite_count"`
+		Entities             twitterEntities `json:"entities,omitempty"`
+		Favorited            bool            `json:"favorited"`
+		Retweeted            bool            `json:"retweeted"`
+		PossiblySensitive    bool            `json:"possibly_sensitive"`
+		Lang                 string          `json:"lang"`
+	}
+	twitterUser struct {
+		ID                             int             `json:"id"`
+		IDStr                          string          `json:"id_str"`
+		Name                           string          `json:"name"`
+		ScreenName                     string          `json:"screen_name"`
+		Location                       string          `json:"location"`
+		Description                    string          `json:"description"`
+		URL                            interface{}     `json:"url"`
+		Entities                       twitterEntities `json:"entities"`
+		Protected                      bool            `json:"protected"`
+		FollowersCount                 int             `json:"followers_count"`
+		FriendsCount                   int             `json:"friends_count"`
+		ListedCount                    int             `json:"listed_count"`
+		CreatedAt                      string          `json:"created_at"`
+		FavouritesCount                int             `json:"favourites_count"`
+		UtcOffset                      int             `json:"utc_offset"`
+		TimeZone                       string          `json:"time_zone"`
+		GeoEnabled                     bool            `json:"geo_enabled"`
+		Verified                       bool            `json:"verified"`
+		StatusesCount                  int             `json:"statuses_count"`
+		Lang                           string          `json:"lang"`
+		ContributorsEnabled            bool            `json:"contributors_enabled"`
+		IsTranslator                   bool            `json:"is_translator"`
+		IsTranslationEnabled           bool            `json:"is_translation_enabled"`
+		ProfileBackgroundColor         string          `json:"profile_background_color"`
+		ProfileBackgroundImageURL      string          `json:"profile_background_image_url"`
+		ProfileBackgroundImageURLHTTPS string          `json:"profile_background_image_url_https"`
+		ProfileBackgroundTile          bool            `json:"profile_background_tile"`
+		ProfileImageURL                string          `json:"profile_image_url"`
+		ProfileImageURLHTTPS           string          `json:"profile_image_url_https"`
+		ProfileBannerURL               string          `json:"profile_banner_url"`
+		ProfileLinkColor               string          `json:"profile_link_color"`
+		ProfileSidebarBorderColor      string          `json:"profile_sidebar_border_color"`
+		ProfileSidebarFillColor        string          `json:"profile_sidebar_fill_color"`
+		ProfileTextColor               string          `json:"profile_text_color"`
+		ProfileUseBackgroundImage      bool            `json:"profile_use_background_image"`
+		DefaultProfile                 bool            `json:"default_profile"`
+		DefaultProfileImage            bool            `json:"default_profile_image"`
+		Following                      bool            `json:"following"`
+		FollowRequestSent              bool            `json:"follow_request_sent"`
+		Notifications                  bool            `json:"notifications"`
+	}
+	twitterEntities struct {
+		Hashtags     []interface{} `json:"hashtags"`
+		Symbols      []interface{} `json:"symbols"`
+		URL          *twitterURL   `json:"url"`
+		URLs         []twitterURL  `json:"urls"`
+		UserMentions []struct {
+			ScreenName string `json:"screen_name"`
+			Name       string `json:"name"`
+			ID         int64  `json:"id"`
+			IDStr      int64  `json:"id_str,string"`
+			Indices    []int  `json:"indices"`
+		} `json:"user_mentions"`
+		Description struct {
+			URLs []twitterURL `json:"urls"`
+		} `json:"description"`
+		Media []struct {
+			ID            int64  `json:"id"`
+			IDStr         string `json:"id_str"`
+			Indices       []int  `json:"indices"`
+			MediaURL      string `json:"media_url"`
+			MediaURLHTTPS string `json:"media_url_https"`
+			URL           string `json:"url"`
+			DisplayURL    string `json:"display_url"`
+			ExpandedURL   string `json:"expanded_url"`
+			Type          string `json:"type"`
+			Sizes         map[string]struct {
+				W      int    `json:"w"`
+				H      int    `json:"h"`
+				Resize string `json:"resize"`
+			} `json:"sizes"`
+			SourceStatusID    int64 `json:"source_status_id"`
+			SourceStatusIDStr int64 `json:"source_status_id_str,string"`
+		} `json:"media"`
+	}
+	twitterURL struct {
+		URL         string       `json:"url"`
+		URLs        []twitterURL `json:"urls"`
+		ExpandedURL string       `json:"expanded_url"`
+		DisplayURL  string       `json:"display_url"`
+		Indices     []int        `json:"indices"`
 	}
 )
