@@ -18,7 +18,7 @@ jobs:
       run: go test -v -run=TestInline
       env: {TEST_INLINE: true}
     - name: Format
-      run: diff -u <(echo -n) <(gofmt -d .)
+      run: diff -u <(echo -n) <(gofmt -s -d .)
   # Test on a large matrix of Go versions and operating systems.
   test-all:
     # TODO: GitHub actions are not free on private repositories.
