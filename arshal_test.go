@@ -751,7 +751,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: errMissingName,
 	}, {
 		name:    "Maps/InvalidKey/Array",
-		in:      map[[1]string]string{[1]string{"key"}: "value"},
+		in:      map[[1]string]string{{"key"}: "value"},
 		want:    `{`,
 		wantErr: errMissingName,
 	}, {
@@ -898,7 +898,7 @@ func TestMarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},
 				MapUint:   map[string]uint64{"": +64},
 				MapFloat:  map[string]float64{"": 3.14159},
@@ -906,7 +906,7 @@ func TestMarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},
 				SliceUint:   []uint64{+64},
 				SliceFloat:  []float64{3.14159},
@@ -1044,7 +1044,7 @@ func TestMarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},       // should be stringified
 				MapUint:   map[string]uint64{"": +64},      // should be stringified
 				MapFloat:  map[string]float64{"": 3.14159}, // should be stringified
@@ -1052,7 +1052,7 @@ func TestMarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},       // should be stringified
 				SliceUint:   []uint64{+64},      // should be stringified
 				SliceFloat:  []float64{3.14159}, // should be stringified
@@ -3598,7 +3598,7 @@ func TestUnmarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},
 				MapUint:   map[string]uint64{"": +64},
 				MapFloat:  map[string]float64{"": 3.14159},
@@ -3606,7 +3606,7 @@ func TestUnmarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},
 				SliceUint:   []uint64{+64},
 				SliceFloat:  []float64{3.14159},
@@ -3663,7 +3663,7 @@ func TestUnmarshal(t *testing.T) {
 			},
 			StructMaps: structMaps{
 				MapBool:  map[string]bool{"": false},
-				MapBytes: map[string][]byte{"": []byte{}},
+				MapBytes: map[string][]byte{"": {}},
 				MapInt:   map[string]int64{"": 123},
 				MapFloat: map[string]float64{"": math.Inf(+1)},
 			},
@@ -3698,7 +3698,7 @@ func TestUnmarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},
 				MapUint:   map[string]uint64{"": +64},
 				MapFloat:  map[string]float64{"": 3.14159},
@@ -3706,7 +3706,7 @@ func TestUnmarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},
 				SliceUint:   []uint64{+64},
 				SliceFloat:  []float64{3.14159},
@@ -3775,7 +3775,7 @@ func TestUnmarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},       // may be stringified
 				MapUint:   map[string]uint64{"": +64},      // may be stringified
 				MapFloat:  map[string]float64{"": 3.14159}, // may be stringified
@@ -3783,7 +3783,7 @@ func TestUnmarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},       // may be stringified
 				SliceUint:   []uint64{+64},      // may be stringified
 				SliceFloat:  []float64{3.14159}, // may be stringified
@@ -3851,7 +3851,7 @@ func TestUnmarshal(t *testing.T) {
 			StructMaps: structMaps{
 				MapBool:   map[string]bool{"": true},
 				MapString: map[string]string{"": "hello"},
-				MapBytes:  map[string][]byte{"": []byte{1, 2, 3}},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
 				MapInt:    map[string]int64{"": -64},       // may be stringified
 				MapUint:   map[string]uint64{"": +64},      // may be stringified
 				MapFloat:  map[string]float64{"": 3.14159}, // may be stringified
@@ -3859,7 +3859,7 @@ func TestUnmarshal(t *testing.T) {
 			StructSlices: structSlices{
 				SliceBool:   []bool{true},
 				SliceString: []string{"hello"},
-				SliceBytes:  [][]byte{[]byte{1, 2, 3}},
+				SliceBytes:  [][]byte{{1, 2, 3}},
 				SliceInt:    []int64{-64},       // may be stringified
 				SliceUint:   []uint64{+64},      // may be stringified
 				SliceFloat:  []float64{3.14159}, // may be stringified
