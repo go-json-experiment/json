@@ -961,27 +961,25 @@ func (e *Encoder) StackPointer() string {
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
 func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
+	var i, n int
 	dst = append(dst, '"')
-	for len(s) > 0 {
+	for len(s) > n {
 		// Optimize for long sequences of unescaped characters.
 		if escapeRune == nil {
-			var n int
-			for len(s) > n {
-				if c := s[n]; ' ' <= c && c != '\\' && c != '"' && c <= unicode.MaxASCII {
-					dst = append(dst, c)
-					n++
-					continue
-				}
-				break
+			noEscape := func(c byte) bool {
+				return ' ' <= c && c != '\\' && c != '"' && c <= unicode.MaxASCII
 			}
-			s = s[n:]
-			if len(s) == 0 {
+			for len(s) > n && noEscape(s[n]) {
+				n++
+			}
+			if len(s) == n {
 				break
 			}
 		}
 
-		switch r, rn := utf8.DecodeRuneInString(s); {
+		switch r, rn := utf8.DecodeRuneInString(s[n:]); {
 		case r == utf8.RuneError && rn == 1:
+			dst = append(dst, s[i:n]...)
 			if validateUTF8 {
 				return dst, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
@@ -990,8 +988,10 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 			} else {
 				dst = append(dst, "\ufffd"...)
 			}
-			s = s[1:]
+			n += rn
+			i = n
 		case escapeRune != nil && escapeRune(r):
+			dst = append(dst, s[i:n]...)
 			if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
 				dst = append(dst, "\\u"...)
 				dst = appendHexUint16(dst, uint16(r1))
@@ -1001,8 +1001,10 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 				dst = append(dst, "\\u"...)
 				dst = appendHexUint16(dst, uint16(r))
 			}
-			s = s[rn:]
+			n += rn
+			i = n
 		case r < ' ' || r == '"' || r == '\\':
+			dst = append(dst, s[i:n]...)
 			switch r {
 			case '"', '\\':
 				dst = append(dst, '\\', byte(r))
@@ -1020,11 +1022,13 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 				dst = append(dst, "\\u"...)
 				dst = appendHexUint16(dst, uint16(r))
 			}
-			s = s[rn:]
+			n += rn
+			i = n
 		default:
-			dst, s = append(dst, s[:rn]...), s[rn:]
+			n += rn
 		}
 	}
+	dst = append(dst, s[i:n]...)
 	dst = append(dst, '"')
 	return dst, nil
 }
