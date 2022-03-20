@@ -1064,6 +1064,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 	init := func() {
 		valFncs = lookupArshaler(t.Elem())
 	}
+	n := t.Len()
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
@@ -1073,7 +1074,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		}
 		once.Do(init)
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
-		for i, n := 0, t.Len(); i < n; i++ {
+		for i := 0; i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
