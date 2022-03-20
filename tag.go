@@ -291,8 +291,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	}
 
 	// Check whether this field is unexported.
-	// TODO(https://golang.org/issue/41563): Use reflect.StructField.IsExported.
-	if sf.PkgPath != "" {
+	if !sf.IsExported() {
 		// In contrast to v1, v2 no longer forwards exported fields from
 		// embedded fields of unexported types since Go reflection does not
 		// allow the same set of operations that are available in normal cases
