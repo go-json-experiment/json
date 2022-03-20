@@ -82,8 +82,8 @@ func makeDefaultArshaler(t reflect.Type) *arshaler {
 			return makeBytesArshaler(t, fncs)
 		}
 		return fncs
-	case reflect.Ptr:
-		return makePtrArshaler(t)
+	case reflect.Pointer:
+		return makePointerArshaler(t)
 	case reflect.Interface:
 		return makeInterfaceArshaler(t)
 	default:
@@ -488,7 +488,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 }
 
 var mapIterPool = sync.Pool{
-	New: func() interface{} { return new(reflect.MapIter) },
+	New: func() any { return new(reflect.MapIter) },
 }
 
 func getMapIter(mv reflect.Value) *reflect.MapIter {
@@ -963,7 +963,7 @@ func (va addressableValue) fieldByIndex(index []int, mayAlloc bool) addressableV
 }
 
 func (va addressableValue) indirect(mayAlloc bool) addressableValue {
-	if va.Kind() == reflect.Ptr {
+	if va.Kind() == reflect.Pointer {
 		if va.IsNil() {
 			if !mayAlloc {
 				return addressableValue{}
@@ -1150,7 +1150,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 	return &fncs
 }
 
-func makePtrArshaler(t reflect.Type) *arshaler {
+func makePointerArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	var (
 		once    sync.Once

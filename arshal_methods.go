@@ -75,7 +75,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	// Avoid injecting method arshaler on the pointer or interface version
 	// to avoid ever calling the method on a nil pointer or interface receiver.
 	// Let it be injected on the value receiver (which is always addressable).
-	if t.Kind() == reflect.Ptr || t.Kind() == reflect.Interface {
+	if t.Kind() == reflect.Pointer || t.Kind() == reflect.Interface {
 		return fncs
 	}
 
@@ -191,7 +191,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 }
 
 // implementsWhich is like t.Implements(ifaceType) for a list of interfaces,
-// but checks whether either t or reflect.PtrTo(t) implements the interface.
+// but checks whether either t or reflect.PointerTo(t) implements the interface.
 // It returns the first interface type that matches and whether a value of t
 // needs to be addressed first before it implements the interface.
 func implementsWhich(t reflect.Type, ifaceTypes ...reflect.Type) (which reflect.Type, needAddr bool) {
@@ -199,7 +199,7 @@ func implementsWhich(t reflect.Type, ifaceTypes ...reflect.Type) (which reflect.
 		switch {
 		case t.Implements(ifaceType):
 			return ifaceType, false
-		case reflect.PtrTo(t).Implements(ifaceType):
+		case reflect.PointerTo(t).Implements(ifaceType):
 			return ifaceType, true
 		}
 	}

@@ -33,9 +33,9 @@ type (
 	namedFloat64 float64
 	namedByte    byte
 
-	recursiveMap   map[string]recursiveMap
-	recursiveSlice []recursiveSlice
-	recursivePtr   struct{ P *recursivePtr }
+	recursiveMap     map[string]recursiveMap
+	recursiveSlice   []recursiveSlice
+	recursivePointer struct{ P *recursivePointer }
 
 	structEmpty       struct{}
 	structConflicting struct {
@@ -116,7 +116,7 @@ type (
 		StructSlices  structSlices
 		Slice         []string
 		Array         [1]string
-		Ptr           *structAll
+		Pointer       *structAll
 		Interface     any
 	}
 	structStringifiedAll struct {
@@ -132,7 +132,7 @@ type (
 		StructSlices  structSlices          `json:",string"`
 		Slice         []string              `json:",string"`
 		Array         [1]string             `json:",string"`
-		Ptr           *structStringifiedAll `json:",string"`
+		Pointer       *structStringifiedAll `json:",string"`
 		Interface     any                   `json:",string"`
 	}
 	structOmitZeroAll struct {
@@ -148,54 +148,54 @@ type (
 		StructSlices  structSlices       `json:",omitzero"`
 		Slice         []string           `json:",omitzero"`
 		Array         [1]string          `json:",omitzero"`
-		Ptr           *structOmitZeroAll `json:",omitzero"`
+		Pointer       *structOmitZeroAll `json:",omitzero"`
 		Interface     any                `json:",omitzero"`
 	}
 	structOmitZeroMethodAll struct {
-		ValAlwaysZero       valueAlwaysZero     `json:",omitzero"`
-		ValNeverZero        valueNeverZero      `json:",omitzero"`
-		PtrAlwaysZero       pointerAlwaysZero   `json:",omitzero"`
-		PtrNeverZero        pointerNeverZero    `json:",omitzero"`
-		PtrValAlwaysZero    *valueAlwaysZero    `json:",omitzero"`
-		PtrValNeverZero     *valueNeverZero     `json:",omitzero"`
-		PtrPtrAlwaysZero    *pointerAlwaysZero  `json:",omitzero"`
-		PtrPtrNeverZero     *pointerNeverZero   `json:",omitzero"`
-		PtrPtrValAlwaysZero **valueAlwaysZero   `json:",omitzero"`
-		PtrPtrValNeverZero  **valueNeverZero    `json:",omitzero"`
-		PtrPtrPtrAlwaysZero **pointerAlwaysZero `json:",omitzero"`
-		PtrPtrPtrNeverZero  **pointerNeverZero  `json:",omitzero"`
+		ValAlwaysZero                   valueAlwaysZero     `json:",omitzero"`
+		ValNeverZero                    valueNeverZero      `json:",omitzero"`
+		PointerAlwaysZero               pointerAlwaysZero   `json:",omitzero"`
+		PointerNeverZero                pointerNeverZero    `json:",omitzero"`
+		PointerValAlwaysZero            *valueAlwaysZero    `json:",omitzero"`
+		PointerValNeverZero             *valueNeverZero     `json:",omitzero"`
+		PointerPointerAlwaysZero        *pointerAlwaysZero  `json:",omitzero"`
+		PointerPointerNeverZero         *pointerNeverZero   `json:",omitzero"`
+		PointerPointerValAlwaysZero     **valueAlwaysZero   `json:",omitzero"`
+		PointerPointerValNeverZero      **valueNeverZero    `json:",omitzero"`
+		PointerPointerPointerAlwaysZero **pointerAlwaysZero `json:",omitzero"`
+		PointerPointerPointerNeverZero  **pointerNeverZero  `json:",omitzero"`
 	}
 	structOmitEmptyAll struct {
-		Bool              bool                    `json:",omitempty"`
-		PtrBool           *bool                   `json:",omitempty"`
-		String            string                  `json:",omitempty"`
-		StringEmpty       stringMarshalEmpty      `json:",omitempty"`
-		StringNonEmpty    stringMarshalNonEmpty   `json:",omitempty"`
-		PtrString         *string                 `json:",omitempty"`
-		PtrStringEmpty    *stringMarshalEmpty     `json:",omitempty"`
-		PtrStringNonEmpty *stringMarshalNonEmpty  `json:",omitempty"`
-		Bytes             []byte                  `json:",omitempty"`
-		BytesEmpty        bytesMarshalEmpty       `json:",omitempty"`
-		BytesNonEmpty     bytesMarshalNonEmpty    `json:",omitempty"`
-		PtrBytes          *[]byte                 `json:",omitempty"`
-		PtrBytesEmpty     *bytesMarshalEmpty      `json:",omitempty"`
-		PtrBytesNonEmpty  *bytesMarshalNonEmpty   `json:",omitempty"`
-		Float             float64                 `json:",omitempty"`
-		PtrFloat          *float64                `json:",omitempty"`
-		Map               map[string]string       `json:",omitempty"`
-		MapEmpty          mapMarshalEmpty         `json:",omitempty"`
-		MapNonEmpty       mapMarshalNonEmpty      `json:",omitempty"`
-		PtrMap            *map[string]string      `json:",omitempty"`
-		PtrMapEmpty       *mapMarshalEmpty        `json:",omitempty"`
-		PtrMapNonEmpty    *mapMarshalNonEmpty     `json:",omitempty"`
-		Slice             []string                `json:",omitempty"`
-		SliceEmpty        sliceMarshalEmpty       `json:",omitempty"`
-		SliceNonEmpty     sliceMarshalNonEmpty    `json:",omitempty"`
-		PtrSlice          *[]string               `json:",omitempty"`
-		PtrSliceEmpty     *sliceMarshalEmpty      `json:",omitempty"`
-		PtrSliceNonEmpty  *sliceMarshalNonEmpty   `json:",omitempty"`
-		Ptr               *structOmitZeroEmptyAll `json:",omitempty"`
-		Interface         any                     `json:",omitempty"`
+		Bool                  bool                    `json:",omitempty"`
+		PointerBool           *bool                   `json:",omitempty"`
+		String                string                  `json:",omitempty"`
+		StringEmpty           stringMarshalEmpty      `json:",omitempty"`
+		StringNonEmpty        stringMarshalNonEmpty   `json:",omitempty"`
+		PointerString         *string                 `json:",omitempty"`
+		PointerStringEmpty    *stringMarshalEmpty     `json:",omitempty"`
+		PointerStringNonEmpty *stringMarshalNonEmpty  `json:",omitempty"`
+		Bytes                 []byte                  `json:",omitempty"`
+		BytesEmpty            bytesMarshalEmpty       `json:",omitempty"`
+		BytesNonEmpty         bytesMarshalNonEmpty    `json:",omitempty"`
+		PointerBytes          *[]byte                 `json:",omitempty"`
+		PointerBytesEmpty     *bytesMarshalEmpty      `json:",omitempty"`
+		PointerBytesNonEmpty  *bytesMarshalNonEmpty   `json:",omitempty"`
+		Float                 float64                 `json:",omitempty"`
+		PointerFloat          *float64                `json:",omitempty"`
+		Map                   map[string]string       `json:",omitempty"`
+		MapEmpty              mapMarshalEmpty         `json:",omitempty"`
+		MapNonEmpty           mapMarshalNonEmpty      `json:",omitempty"`
+		PointerMap            *map[string]string      `json:",omitempty"`
+		PointerMapEmpty       *mapMarshalEmpty        `json:",omitempty"`
+		PointerMapNonEmpty    *mapMarshalNonEmpty     `json:",omitempty"`
+		Slice                 []string                `json:",omitempty"`
+		SliceEmpty            sliceMarshalEmpty       `json:",omitempty"`
+		SliceNonEmpty         sliceMarshalNonEmpty    `json:",omitempty"`
+		PointerSlice          *[]string               `json:",omitempty"`
+		PointerSliceEmpty     *sliceMarshalEmpty      `json:",omitempty"`
+		PointerSliceNonEmpty  *sliceMarshalNonEmpty   `json:",omitempty"`
+		Pointer               *structOmitZeroEmptyAll `json:",omitempty"`
+		Interface             any                     `json:",omitempty"`
 	}
 	structOmitZeroEmptyAll struct {
 		Bool      bool                    `json:",omitzero,omitempty"`
@@ -207,7 +207,7 @@ type (
 		Map       map[string]string       `json:",omitzero,omitempty"`
 		Slice     []string                `json:",omitzero,omitempty"`
 		Array     [1]string               `json:",omitzero,omitempty"`
-		Ptr       *structOmitZeroEmptyAll `json:",omitzero,omitempty"`
+		Pointer   *structOmitZeroEmptyAll `json:",omitzero,omitempty"`
 		Interface any                     `json:",omitzero,omitempty"`
 	}
 	structFormatBytes struct {
@@ -219,16 +219,16 @@ type (
 		UintArray []byte `json:",format:uintarray"`
 	}
 	structFormatFloats struct {
-		NonFinite    float64  `json:",format:nonfinite"`
-		PtrNonFinite *float64 `json:",format:nonfinite"`
+		NonFinite        float64  `json:",format:nonfinite"`
+		PointerNonFinite *float64 `json:",format:nonfinite"`
 	}
 	structFormatMaps struct {
-		EmitNull    map[string]string  `json:",format:emitnull"`
-		PtrEmitNull *map[string]string `json:",format:emitnull"`
+		EmitNull        map[string]string  `json:",format:emitnull"`
+		PointerEmitNull *map[string]string `json:",format:emitnull"`
 	}
 	structFormatSlices struct {
-		EmitNull    []string  `json:",format:emitnull"`
-		PtrEmitNull *[]string `json:",format:emitnull"`
+		EmitNull        []string  `json:",format:emitnull"`
+		PointerEmitNull *[]string `json:",format:emitnull"`
 	}
 	structFormatInvalid struct {
 		Bool      bool              `json:",omitzero,format:invalid"`
@@ -913,7 +913,7 @@ func TestMarshal(t *testing.T) {
 			},
 			Slice:     []string{"fizz", "buzz"},
 			Array:     [1]string{"goodbye"},
-			Ptr:       new(structAll),
+			Pointer:   new(structAll),
 			Interface: (*structAll)(nil),
 		},
 		want: `{
@@ -981,7 +981,7 @@ func TestMarshal(t *testing.T) {
 	"Array": [
 		"goodbye"
 	],
-	"Ptr": {
+	"Pointer": {
 		"Bool": false,
 		"String": "",
 		"Bytes": "",
@@ -1017,7 +1017,7 @@ func TestMarshal(t *testing.T) {
 		"Array": [
 			""
 		],
-		"Ptr": null,
+		"Pointer": null,
 		"Interface": null
 	},
 	"Interface": null
@@ -1059,7 +1059,7 @@ func TestMarshal(t *testing.T) {
 			},
 			Slice:     []string{"fizz", "buzz"},
 			Array:     [1]string{"goodbye"},
-			Ptr:       new(structStringifiedAll), // should be stringified
+			Pointer:   new(structStringifiedAll), // should be stringified
 			Interface: (*structStringifiedAll)(nil),
 		},
 		want: `{
@@ -1127,7 +1127,7 @@ func TestMarshal(t *testing.T) {
 	"Array": [
 		"goodbye"
 	],
-	"Ptr": {
+	"Pointer": {
 		"Bool": false,
 		"String": "",
 		"Bytes": "",
@@ -1163,7 +1163,7 @@ func TestMarshal(t *testing.T) {
 		"Array": [
 			""
 		],
-		"Ptr": null,
+		"Pointer": null,
 		"Interface": null
 	},
 	"Interface": null
@@ -1215,7 +1215,7 @@ func TestMarshal(t *testing.T) {
 	"\u0041\u0072\u0072\u0061\u0079": [
 		""
 	],
-	"\u0050\u0074\u0072": null,
+	"\u0050\u006f\u0069\u006e\u0074\u0065\u0072": null,
 	"\u0049\u006e\u0074\u0065\u0072\u0066\u0061\u0063\u0065": null
 }`,
 	}, {
@@ -1238,7 +1238,7 @@ func TestMarshal(t *testing.T) {
 			StructMaps:    structMaps{MapBool: map[string]bool{}}, // not omitted since MapBool is non-zero
 			Slice:         []string{},                             // not omitted since allocated slice is non-zero
 			Array:         [1]string{" "},                         // not omitted since single array element is non-zero
-			Ptr:           new(structOmitZeroAll),                 // not omitted since pointer is non-zero (even if all fields of the struct value are zero)
+			Pointer:       new(structOmitZeroAll),                 // not omitted since pointer is non-zero (even if all fields of the struct value are zero)
 			Interface:     (*structOmitZeroAll)(nil),              // not omitted since interface value is non-zero (even if interface value is a nil pointer)
 		},
 		want: `{
@@ -1277,7 +1277,7 @@ func TestMarshal(t *testing.T) {
 	"Array": [
 		" "
 	],
-	"Ptr": {},
+	"Pointer": {},
 	"Interface": null
 }`,
 	}, {
@@ -1288,28 +1288,28 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/OmitZeroMethod/NonZero",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitZeroMethodAll{
-			ValAlwaysZero:       valueAlwaysZero("nonzero"),
-			ValNeverZero:        valueNeverZero("nonzero"),
-			PtrAlwaysZero:       pointerAlwaysZero("nonzero"),
-			PtrNeverZero:        pointerNeverZero("nonzero"),
-			PtrValAlwaysZero:    addr(valueAlwaysZero("nonzero")).(*valueAlwaysZero),
-			PtrValNeverZero:     addr(valueNeverZero("nonzero")).(*valueNeverZero),
-			PtrPtrAlwaysZero:    addr(pointerAlwaysZero("nonzero")).(*pointerAlwaysZero),
-			PtrPtrNeverZero:     addr(pointerNeverZero("nonzero")).(*pointerNeverZero),
-			PtrPtrValAlwaysZero: addr(addr(valueAlwaysZero("nonzero"))).(**valueAlwaysZero), // marshaled since **valueAlwaysZero does not implement IsZero
-			PtrPtrValNeverZero:  addr(addr(valueNeverZero("nonzero"))).(**valueNeverZero),
-			PtrPtrPtrAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))).(**pointerAlwaysZero), // marshaled since **pointerAlwaysZero does not implement IsZero
-			PtrPtrPtrNeverZero:  addr(addr(pointerNeverZero("nonzero"))).(**pointerNeverZero),
+			ValAlwaysZero:                   valueAlwaysZero("nonzero"),
+			ValNeverZero:                    valueNeverZero("nonzero"),
+			PointerAlwaysZero:               pointerAlwaysZero("nonzero"),
+			PointerNeverZero:                pointerNeverZero("nonzero"),
+			PointerValAlwaysZero:            addr(valueAlwaysZero("nonzero")).(*valueAlwaysZero),
+			PointerValNeverZero:             addr(valueNeverZero("nonzero")).(*valueNeverZero),
+			PointerPointerAlwaysZero:        addr(pointerAlwaysZero("nonzero")).(*pointerAlwaysZero),
+			PointerPointerNeverZero:         addr(pointerNeverZero("nonzero")).(*pointerNeverZero),
+			PointerPointerValAlwaysZero:     addr(addr(valueAlwaysZero("nonzero"))).(**valueAlwaysZero), // marshaled since **valueAlwaysZero does not implement IsZero
+			PointerPointerValNeverZero:      addr(addr(valueNeverZero("nonzero"))).(**valueNeverZero),
+			PointerPointerPointerAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))).(**pointerAlwaysZero), // marshaled since **pointerAlwaysZero does not implement IsZero
+			PointerPointerPointerNeverZero:  addr(addr(pointerNeverZero("nonzero"))).(**pointerNeverZero),
 		},
 		want: `{
 	"ValNeverZero": "nonzero",
-	"PtrNeverZero": "nonzero",
-	"PtrValNeverZero": "nonzero",
-	"PtrPtrNeverZero": "nonzero",
-	"PtrPtrValAlwaysZero": "nonzero",
-	"PtrPtrValNeverZero": "nonzero",
-	"PtrPtrPtrAlwaysZero": "nonzero",
-	"PtrPtrPtrNeverZero": "nonzero"
+	"PointerNeverZero": "nonzero",
+	"PointerValNeverZero": "nonzero",
+	"PointerPointerNeverZero": "nonzero",
+	"PointerPointerValAlwaysZero": "nonzero",
+	"PointerPointerValNeverZero": "nonzero",
+	"PointerPointerPointerAlwaysZero": "nonzero",
+	"PointerPointerPointerNeverZero": "nonzero"
 }`,
 	}, {
 		name:  "Structs/OmitEmpty/Zero",
@@ -1333,54 +1333,54 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/OmitEmpty/EmptyNonZero",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitEmptyAll{
-			String:            string(""),
-			StringEmpty:       stringMarshalEmpty(""),
-			StringNonEmpty:    stringMarshalNonEmpty(""),
-			PtrString:         addr(string("")).(*string),
-			PtrStringEmpty:    addr(stringMarshalEmpty("")).(*stringMarshalEmpty),
-			PtrStringNonEmpty: addr(stringMarshalNonEmpty("")).(*stringMarshalNonEmpty),
-			Bytes:             []byte(""),
-			BytesEmpty:        bytesMarshalEmpty([]byte("")),
-			BytesNonEmpty:     bytesMarshalNonEmpty([]byte("")),
-			PtrBytes:          addr([]byte("")).(*[]byte),
-			PtrBytesEmpty:     addr(bytesMarshalEmpty([]byte(""))).(*bytesMarshalEmpty),
-			PtrBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte(""))).(*bytesMarshalNonEmpty),
-			Map:               map[string]string{},
-			MapEmpty:          mapMarshalEmpty{},
-			MapNonEmpty:       mapMarshalNonEmpty{},
-			PtrMap:            addr(map[string]string{}).(*map[string]string),
-			PtrMapEmpty:       addr(mapMarshalEmpty{}).(*mapMarshalEmpty),
-			PtrMapNonEmpty:    addr(mapMarshalNonEmpty{}).(*mapMarshalNonEmpty),
-			Slice:             []string{},
-			SliceEmpty:        sliceMarshalEmpty{},
-			SliceNonEmpty:     sliceMarshalNonEmpty{},
-			PtrSlice:          addr([]string{}).(*[]string),
-			PtrSliceEmpty:     addr(sliceMarshalEmpty{}).(*sliceMarshalEmpty),
-			PtrSliceNonEmpty:  addr(sliceMarshalNonEmpty{}).(*sliceMarshalNonEmpty),
-			Ptr:               &structOmitZeroEmptyAll{},
-			Interface:         []string{},
+			String:                string(""),
+			StringEmpty:           stringMarshalEmpty(""),
+			StringNonEmpty:        stringMarshalNonEmpty(""),
+			PointerString:         addr(string("")).(*string),
+			PointerStringEmpty:    addr(stringMarshalEmpty("")).(*stringMarshalEmpty),
+			PointerStringNonEmpty: addr(stringMarshalNonEmpty("")).(*stringMarshalNonEmpty),
+			Bytes:                 []byte(""),
+			BytesEmpty:            bytesMarshalEmpty([]byte("")),
+			BytesNonEmpty:         bytesMarshalNonEmpty([]byte("")),
+			PointerBytes:          addr([]byte("")).(*[]byte),
+			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte(""))).(*bytesMarshalEmpty),
+			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte(""))).(*bytesMarshalNonEmpty),
+			Map:                   map[string]string{},
+			MapEmpty:              mapMarshalEmpty{},
+			MapNonEmpty:           mapMarshalNonEmpty{},
+			PointerMap:            addr(map[string]string{}).(*map[string]string),
+			PointerMapEmpty:       addr(mapMarshalEmpty{}).(*mapMarshalEmpty),
+			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{}).(*mapMarshalNonEmpty),
+			Slice:                 []string{},
+			SliceEmpty:            sliceMarshalEmpty{},
+			SliceNonEmpty:         sliceMarshalNonEmpty{},
+			PointerSlice:          addr([]string{}).(*[]string),
+			PointerSliceEmpty:     addr(sliceMarshalEmpty{}).(*sliceMarshalEmpty),
+			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{}).(*sliceMarshalNonEmpty),
+			Pointer:               &structOmitZeroEmptyAll{},
+			Interface:             []string{},
 		},
 		want: `{
 	"Bool": false,
 	"StringNonEmpty": "value",
-	"PtrStringNonEmpty": "value",
+	"PointerStringNonEmpty": "value",
 	"BytesNonEmpty": [
 		"value"
 	],
-	"PtrBytesNonEmpty": [
+	"PointerBytesNonEmpty": [
 		"value"
 	],
 	"Float": 0,
 	"MapNonEmpty": {
 		"key": "value"
 	},
-	"PtrMapNonEmpty": {
+	"PointerMapNonEmpty": {
 		"key": "value"
 	},
 	"SliceNonEmpty": [
 		"value"
 	],
-	"PtrSliceNonEmpty": [
+	"PointerSliceNonEmpty": [
 		"value"
 	]
 }`,
@@ -1388,64 +1388,64 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/OmitEmpty/NonEmpty",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitEmptyAll{
-			Bool:              true,
-			PtrBool:           addr(true).(*bool),
-			String:            string("value"),
-			StringEmpty:       stringMarshalEmpty("value"),
-			StringNonEmpty:    stringMarshalNonEmpty("value"),
-			PtrString:         addr(string("value")).(*string),
-			PtrStringEmpty:    addr(stringMarshalEmpty("value")).(*stringMarshalEmpty),
-			PtrStringNonEmpty: addr(stringMarshalNonEmpty("value")).(*stringMarshalNonEmpty),
-			Bytes:             []byte("value"),
-			BytesEmpty:        bytesMarshalEmpty([]byte("value")),
-			BytesNonEmpty:     bytesMarshalNonEmpty([]byte("value")),
-			PtrBytes:          addr([]byte("value")).(*[]byte),
-			PtrBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))).(*bytesMarshalEmpty),
-			PtrBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))).(*bytesMarshalNonEmpty),
-			Float:             math.Copysign(0, -1),
-			PtrFloat:          addr(math.Copysign(0, -1)).(*float64),
-			Map:               map[string]string{"": ""},
-			MapEmpty:          mapMarshalEmpty{"key": "value"},
-			MapNonEmpty:       mapMarshalNonEmpty{"key": "value"},
-			PtrMap:            addr(map[string]string{"": ""}).(*map[string]string),
-			PtrMapEmpty:       addr(mapMarshalEmpty{"key": "value"}).(*mapMarshalEmpty),
-			PtrMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}).(*mapMarshalNonEmpty),
-			Slice:             []string{""},
-			SliceEmpty:        sliceMarshalEmpty{"value"},
-			SliceNonEmpty:     sliceMarshalNonEmpty{"value"},
-			PtrSlice:          addr([]string{""}).(*[]string),
-			PtrSliceEmpty:     addr(sliceMarshalEmpty{"value"}).(*sliceMarshalEmpty),
-			PtrSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}).(*sliceMarshalNonEmpty),
-			Ptr:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
-			Interface:         []string{""},
+			Bool:                  true,
+			PointerBool:           addr(true).(*bool),
+			String:                string("value"),
+			StringEmpty:           stringMarshalEmpty("value"),
+			StringNonEmpty:        stringMarshalNonEmpty("value"),
+			PointerString:         addr(string("value")).(*string),
+			PointerStringEmpty:    addr(stringMarshalEmpty("value")).(*stringMarshalEmpty),
+			PointerStringNonEmpty: addr(stringMarshalNonEmpty("value")).(*stringMarshalNonEmpty),
+			Bytes:                 []byte("value"),
+			BytesEmpty:            bytesMarshalEmpty([]byte("value")),
+			BytesNonEmpty:         bytesMarshalNonEmpty([]byte("value")),
+			PointerBytes:          addr([]byte("value")).(*[]byte),
+			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))).(*bytesMarshalEmpty),
+			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))).(*bytesMarshalNonEmpty),
+			Float:                 math.Copysign(0, -1),
+			PointerFloat:          addr(math.Copysign(0, -1)).(*float64),
+			Map:                   map[string]string{"": ""},
+			MapEmpty:              mapMarshalEmpty{"key": "value"},
+			MapNonEmpty:           mapMarshalNonEmpty{"key": "value"},
+			PointerMap:            addr(map[string]string{"": ""}).(*map[string]string),
+			PointerMapEmpty:       addr(mapMarshalEmpty{"key": "value"}).(*mapMarshalEmpty),
+			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}).(*mapMarshalNonEmpty),
+			Slice:                 []string{""},
+			SliceEmpty:            sliceMarshalEmpty{"value"},
+			SliceNonEmpty:         sliceMarshalNonEmpty{"value"},
+			PointerSlice:          addr([]string{""}).(*[]string),
+			PointerSliceEmpty:     addr(sliceMarshalEmpty{"value"}).(*sliceMarshalEmpty),
+			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}).(*sliceMarshalNonEmpty),
+			Pointer:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
+			Interface:             []string{""},
 		},
 		want: `{
 	"Bool": true,
-	"PtrBool": true,
+	"PointerBool": true,
 	"String": "value",
 	"StringNonEmpty": "value",
-	"PtrString": "value",
-	"PtrStringNonEmpty": "value",
+	"PointerString": "value",
+	"PointerStringNonEmpty": "value",
 	"Bytes": "dmFsdWU=",
 	"BytesNonEmpty": [
 		"value"
 	],
-	"PtrBytes": "dmFsdWU=",
-	"PtrBytesNonEmpty": [
+	"PointerBytes": "dmFsdWU=",
+	"PointerBytesNonEmpty": [
 		"value"
 	],
 	"Float": -0,
-	"PtrFloat": -0,
+	"PointerFloat": -0,
 	"Map": {
 		"": ""
 	},
 	"MapNonEmpty": {
 		"key": "value"
 	},
-	"PtrMap": {
+	"PointerMap": {
 		"": ""
 	},
-	"PtrMapNonEmpty": {
+	"PointerMapNonEmpty": {
 		"key": "value"
 	},
 	"Slice": [
@@ -1454,13 +1454,13 @@ func TestMarshal(t *testing.T) {
 	"SliceNonEmpty": [
 		"value"
 	],
-	"PtrSlice": [
+	"PointerSlice": [
 		""
 	],
-	"PtrSliceNonEmpty": [
+	"PointerSliceNonEmpty": [
 		"value"
 	],
-	"Ptr": {
+	"Pointer": {
 		"Float": -0
 	},
 	"Interface": [
@@ -1477,7 +1477,7 @@ func TestMarshal(t *testing.T) {
 			Bytes:     []byte{},
 			Map:       map[string]string{},
 			Slice:     []string{},
-			Ptr:       &structOmitZeroEmptyAll{},
+			Pointer:   &structOmitZeroEmptyAll{},
 			Interface: []string{},
 		},
 		want: `{}`,
@@ -1536,10 +1536,10 @@ func TestMarshal(t *testing.T) {
 			Bytes:     []byte("value"),
 			Map:       map[string]string{"": ""},
 			Slice:     []string{""},
-			Ptr:       &structOmitZeroEmptyAll{Bool: true},
+			Pointer:   &structOmitZeroEmptyAll{Bool: true},
 			Interface: []string{""},
 		},
-		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Ptr":{"Bool":true},"Interface":[""]}`,
+		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Pointer":{"Bool":true},"Interface":[""]}`,
 	}, {
 		name:  "Structs/Format/Bytes",
 		eopts: EncodeOptions{Indent: "\t"},
@@ -1568,51 +1568,51 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/Format/Floats",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatFloats{
-			{NonFinite: math.Pi, PtrNonFinite: addr(math.Pi).(*float64)},
-			{NonFinite: math.NaN(), PtrNonFinite: addr(math.NaN()).(*float64)},
-			{NonFinite: math.Inf(-1), PtrNonFinite: addr(math.Inf(-1)).(*float64)},
-			{NonFinite: math.Inf(+1), PtrNonFinite: addr(math.Inf(+1)).(*float64)},
+			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi).(*float64)},
+			{NonFinite: math.NaN(), PointerNonFinite: addr(math.NaN()).(*float64)},
+			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1)).(*float64)},
+			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1)).(*float64)},
 		},
 		want: `[
 	{
 		"NonFinite": 3.141592653589793,
-		"PtrNonFinite": 3.141592653589793
+		"PointerNonFinite": 3.141592653589793
 	},
 	{
 		"NonFinite": "NaN",
-		"PtrNonFinite": "NaN"
+		"PointerNonFinite": "NaN"
 	},
 	{
 		"NonFinite": "-Infinity",
-		"PtrNonFinite": "-Infinity"
+		"PointerNonFinite": "-Infinity"
 	},
 	{
 		"NonFinite": "Infinity",
-		"PtrNonFinite": "Infinity"
+		"PointerNonFinite": "Infinity"
 	}
 ]`,
 	}, {
 		name:  "Structs/Format/Maps",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatMaps{
-			{EmitNull: nil, PtrEmitNull: new(map[string]string)},
-			{EmitNull: map[string]string{}, PtrEmitNull: addr(map[string]string{}).(*map[string]string)},
-			{EmitNull: map[string]string{"k": "v"}, PtrEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+			{EmitNull: nil, PointerEmitNull: new(map[string]string)},
+			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}).(*map[string]string)},
+			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
 		},
 		want: `[
 	{
 		"EmitNull": null,
-		"PtrEmitNull": null
+		"PointerEmitNull": null
 	},
 	{
 		"EmitNull": {},
-		"PtrEmitNull": {}
+		"PointerEmitNull": {}
 	},
 	{
 		"EmitNull": {
 			"k": "v"
 		},
-		"PtrEmitNull": {
+		"PointerEmitNull": {
 			"k": "v"
 		}
 	}
@@ -1621,24 +1621,24 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/Format/Slices",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatSlices{
-			{EmitNull: nil, PtrEmitNull: new([]string)},
-			{EmitNull: []string{}, PtrEmitNull: addr([]string{}).(*[]string)},
-			{EmitNull: []string{"v"}, PtrEmitNull: addr([]string{"v"}).(*[]string)},
+			{EmitNull: nil, PointerEmitNull: new([]string)},
+			{EmitNull: []string{}, PointerEmitNull: addr([]string{}).(*[]string)},
+			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}).(*[]string)},
 		},
 		want: `[
 	{
 		"EmitNull": null,
-		"PtrEmitNull": null
+		"PointerEmitNull": null
 	},
 	{
 		"EmitNull": [],
-		"PtrEmitNull": []
+		"PointerEmitNull": []
 	},
 	{
 		"EmitNull": [
 			"v"
 		],
-		"PtrEmitNull": [
+		"PointerEmitNull": [
 			"v"
 		]
 	}
@@ -2158,13 +2158,13 @@ func TestMarshal(t *testing.T) {
 		want: `3.14159`,
 	}, {
 		name: "Pointers/CyclicPointer",
-		in: func() *recursivePtr {
-			p := new(recursivePtr)
+		in: func() *recursivePointer {
+			p := new(recursivePointer)
 			p.P = p
 			return p
 		}(),
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
-		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePtr)(nil)), Err: errors.New("encountered a cycle")},
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePointer)(nil)), Err: errors.New("encountered a cycle")},
 	}, {
 		name:  "Pointers/IgnoreInvalidFormat",
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
@@ -3575,7 +3575,7 @@ func TestUnmarshal(t *testing.T) {
 	},
 	"Slice": ["fizz","buzz"],
 	"Array": ["goodbye"],
-	"Ptr": {},
+	"Pointer": {},
 	"Interface": null
 }`,
 		inVal: new(structAll),
@@ -3611,9 +3611,9 @@ func TestUnmarshal(t *testing.T) {
 				SliceUint:   []uint64{+64},
 				SliceFloat:  []float64{3.14159},
 			},
-			Slice: []string{"fizz", "buzz"},
-			Array: [1]string{"goodbye"},
-			Ptr:   new(structAll),
+			Slice:   []string{"fizz", "buzz"},
+			Array:   [1]string{"goodbye"},
+			Pointer: new(structAll),
 		}),
 	}, {
 		name: "Structs/Merge",
@@ -3645,7 +3645,7 @@ func TestUnmarshal(t *testing.T) {
 	},
 	"Slice": ["fizz","buzz"],
 	"Array": ["goodbye"],
-	"Ptr": {},
+	"Pointer": {},
 	"Interface": {"k2":"v2"}
 }`,
 		inVal: addr(structAll{
@@ -3676,7 +3676,7 @@ func TestUnmarshal(t *testing.T) {
 			},
 			Slice:     []string{"buzz", "fizz", "gizz"},
 			Array:     [1]string{"hello"},
-			Ptr:       new(structAll),
+			Pointer:   new(structAll),
 			Interface: map[string]string{"k1": "v1"},
 		}),
 		want: addr(structAll{
@@ -3713,7 +3713,7 @@ func TestUnmarshal(t *testing.T) {
 			},
 			Slice:     []string{"fizz", "buzz"},
 			Array:     [1]string{"goodbye"},
-			Ptr:       new(structAll),
+			Pointer:   new(structAll),
 			Interface: map[string]string{"k1": "v1", "k2": "v2"},
 		}),
 	}, {
@@ -3752,7 +3752,7 @@ func TestUnmarshal(t *testing.T) {
 	},
 	"Slice": ["fizz","buzz"],
 	"Array": ["goodbye"],
-	"Ptr": {},
+	"Pointer": {},
 	"Interface": null
 }`,
 		inVal: new(structStringifiedAll),
@@ -3788,9 +3788,9 @@ func TestUnmarshal(t *testing.T) {
 				SliceUint:   []uint64{+64},      // may be stringified
 				SliceFloat:  []float64{3.14159}, // may be stringified
 			},
-			Slice: []string{"fizz", "buzz"},
-			Array: [1]string{"goodbye"},
-			Ptr:   new(structStringifiedAll), // may be stringified
+			Slice:   []string{"fizz", "buzz"},
+			Array:   [1]string{"goodbye"},
+			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
 		name: "Structs/Stringified/String",
@@ -3828,7 +3828,7 @@ func TestUnmarshal(t *testing.T) {
 	},
 	"Slice": ["fizz","buzz"],
 	"Array": ["goodbye"],
-	"Ptr": {},
+	"Pointer": {},
 	"Interface": null
 }`,
 		inVal: new(structStringifiedAll),
@@ -3864,9 +3864,9 @@ func TestUnmarshal(t *testing.T) {
 				SliceUint:   []uint64{+64},      // may be stringified
 				SliceFloat:  []float64{3.14159}, // may be stringified
 			},
-			Slice: []string{"fizz", "buzz"},
-			Array: [1]string{"goodbye"},
-			Ptr:   new(structStringifiedAll), // may be stringified
+			Slice:   []string{"fizz", "buzz"},
+			Array:   [1]string{"goodbye"},
+			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
 		name: "Structs/Format/Bytes",
@@ -3982,15 +3982,15 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: "Structs/Format/Floats",
 		inBuf: `[
-	{"NonFinite": 3.141592653589793, "PtrNonFinite": 3.141592653589793},
-	{"NonFinite": "-Infinity", "PtrNonFinite": "-Infinity"},
-	{"NonFinite": "Infinity", "PtrNonFinite": "Infinity"}
+	{"NonFinite": 3.141592653589793, "PointerNonFinite": 3.141592653589793},
+	{"NonFinite": "-Infinity", "PointerNonFinite": "-Infinity"},
+	{"NonFinite": "Infinity", "PointerNonFinite": "Infinity"}
 ]`,
 		inVal: new([]structFormatFloats),
 		want: addr([]structFormatFloats{
-			{NonFinite: math.Pi, PtrNonFinite: addr(math.Pi).(*float64)},
-			{NonFinite: math.Inf(-1), PtrNonFinite: addr(math.Inf(-1)).(*float64)},
-			{NonFinite: math.Inf(+1), PtrNonFinite: addr(math.Inf(+1)).(*float64)},
+			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi).(*float64)},
+			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1)).(*float64)},
+			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1)).(*float64)},
 		}),
 	}, {
 		name:  "Structs/Format/Floats/NaN",
@@ -4015,28 +4015,28 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: "Structs/Format/Maps",
 		inBuf: `[
-	{"EmitNull": null, "PtrEmitNull": null},
-	{"EmitNull": {}, "PtrEmitNull": {}},
-	{"EmitNull": {"k": "v"}, "PtrEmitNull": {"k": "v"}}
+	{"EmitNull": null, "PointerEmitNull": null},
+	{"EmitNull": {}, "PointerEmitNull": {}},
+	{"EmitNull": {"k": "v"}, "PointerEmitNull": {"k": "v"}}
 ]`,
 		inVal: new([]structFormatMaps),
 		want: addr([]structFormatMaps{
-			{EmitNull: nil, PtrEmitNull: nil},
-			{EmitNull: map[string]string{}, PtrEmitNull: addr(map[string]string{}).(*map[string]string)},
-			{EmitNull: map[string]string{"k": "v"}, PtrEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+			{EmitNull: nil, PointerEmitNull: nil},
+			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}).(*map[string]string)},
+			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
 		}),
 	}, {
 		name: "Structs/Format/Slices",
 		inBuf: `[
-	{"EmitNull": null, "PtrEmitNull": null},
-	{"EmitNull": [], "PtrEmitNull": []},
-	{"EmitNull": ["v"], "PtrEmitNull": ["v"]}
+	{"EmitNull": null, "PointerEmitNull": null},
+	{"EmitNull": [], "PointerEmitNull": []},
+	{"EmitNull": ["v"], "PointerEmitNull": ["v"]}
 ]`,
 		inVal: new([]structFormatSlices),
 		want: addr([]structFormatSlices{
-			{EmitNull: nil, PtrEmitNull: nil},
-			{EmitNull: []string{}, PtrEmitNull: addr([]string{}).(*[]string)},
-			{EmitNull: []string{"v"}, PtrEmitNull: addr([]string{"v"}).(*[]string)},
+			{EmitNull: nil, PointerEmitNull: nil},
+			{EmitNull: []string{}, PointerEmitNull: addr([]string{}).(*[]string)},
+			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}).(*[]string)},
 		}),
 	}, {
 		name:    "Structs/Format/Invalid/Bool",
@@ -4577,9 +4577,9 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: io.ErrUnexpectedEOF,
 	}, {
 		name:    "Structs/Invalid/NestedErrUnexpectedEOF",
-		inBuf:   `{"Ptr":`,
+		inBuf:   `{"Pointer":`,
 		inVal:   addr(structAll{}),
-		want:    addr(structAll{Ptr: new(structAll)}),
+		want:    addr(structAll{Pointer: new(structAll)}),
 		wantErr: io.ErrUnexpectedEOF,
 	}, {
 		name:    "Structs/Invalid/Conflicting",

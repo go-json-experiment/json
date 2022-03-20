@@ -278,18 +278,18 @@ func TestMakeStructFields(t *testing.T) {
 			got, err := makeStructFields(reflect.TypeOf(tt.in))
 
 			// Sanity check that pointers are consistent.
-			ptrs := make(map[*structField]bool)
+			pointers := make(map[*structField]bool)
 			for i := range got.flattened {
-				ptrs[&got.flattened[i]] = true
+				pointers[&got.flattened[i]] = true
 			}
 			for _, f := range got.byActualName {
-				if !ptrs[f] {
+				if !pointers[f] {
 					t.Error("byActualName pointer not in flattened")
 				}
 			}
 			for _, fs := range got.byFoldedName {
 				for _, f := range fs {
-					if !ptrs[f] {
+					if !pointers[f] {
 						t.Error("byFoldedName pointer not in flattened")
 					}
 				}

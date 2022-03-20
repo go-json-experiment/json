@@ -115,7 +115,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// Unwrap one level of pointer indirection similar to how Go
 				// only allows embedding either T or *T, but not **T.
 				tf := f.typ
-				if tf.Kind() == reflect.Ptr && tf.Name() == "" {
+				if tf.Kind() == reflect.Pointer && tf.Name() == "" {
 					tf = tf.Elem()
 				}
 				// Reject any types with custom serialization otherwise
@@ -176,7 +176,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				switch {
 				case sf.Type.Implements(isZeroerType):
 					f.isZero = func(va addressableValue) bool { return va.Interface().(isZeroer).IsZero() }
-				case reflect.PtrTo(sf.Type).Implements(isZeroerType):
+				case reflect.PointerTo(sf.Type).Implements(isZeroerType):
 					f.isZero = func(va addressableValue) bool { return va.Addr().Interface().(isZeroer).IsZero() }
 				}
 
@@ -185,7 +185,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				switch sf.Type.Kind() {
 				case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
 					f.isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
-				case reflect.Ptr, reflect.Interface:
+				case reflect.Pointer, reflect.Interface:
 					f.isEmpty = func(va addressableValue) bool { return va.IsNil() }
 				}
 

@@ -90,12 +90,12 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 // TODO: Document details for all types are marshaled.
 func (mo MarshalOptions) MarshalNext(out *Encoder, in any) error {
 	v := reflect.ValueOf(in)
-	if !v.IsValid() || (v.Kind() == reflect.Ptr && v.IsNil()) {
+	if !v.IsValid() || (v.Kind() == reflect.Pointer && v.IsNil()) {
 		return out.WriteToken(Null)
 	}
 	// Shallow copy non-pointer values to obtain an addressable value.
 	// It is beneficial to performance to always pass pointers to avoid this.
-	if v.Kind() != reflect.Ptr {
+	if v.Kind() != reflect.Pointer {
 		v2 := reflect.New(v.Type())
 		v2.Elem().Set(v)
 		v = v2
@@ -196,11 +196,11 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 // TODO: Document details for all types are unmarshaled.
 func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out any) error {
 	v := reflect.ValueOf(out)
-	if !v.IsValid() || (v.Kind() != reflect.Ptr || v.IsNil()) {
+	if !v.IsValid() || (v.Kind() != reflect.Pointer || v.IsNil()) {
 		var t reflect.Type
 		if v.IsValid() {
 			t = v.Type()
-			if t.Kind() == reflect.Ptr {
+			if t.Kind() == reflect.Pointer {
 				t = t.Elem()
 			}
 		}
