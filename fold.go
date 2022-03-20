@@ -32,10 +32,8 @@ func appendFoldedName(out, in []byte) []byte {
 			continue
 		}
 		// Handle multi-byte Unicode.
-		// TODO(https://golang.org/issue/47609): Use utf8.AppendRune.
-		var arr [utf8.UTFMax]byte
 		r, n := utf8.DecodeRune(in[i:])
-		out = append(out, arr[:utf8.EncodeRune(arr[:], foldRune(r))]...)
+		out = utf8.AppendRune(out, foldRune(r))
 		i += n
 	}
 	return out
