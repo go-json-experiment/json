@@ -2357,6 +2357,11 @@ func TestMarshal(t *testing.T) {
 		want:    `{"D"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
+		name:  "Duration/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    time.Duration(0),
+		want:  `"0s"`,
+	}, {
 		name: "Time/Zero",
 		in: struct {
 			T1 time.Time
@@ -2446,6 +2451,11 @@ func TestMarshal(t *testing.T) {
 		},
 		want:    `{"T1":"0000-01-01T00:00:00Z","T2"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year -1 outside of range [0,9999]`)},
+	}, {
+		name:  "Time/IgnoreInvalidFormat",
+		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
+		in:    time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+		want:  `"2000-01-01T00:00:00Z"`,
 	}}
 
 	for _, tt := range tests {
@@ -5235,6 +5245,12 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
+		name:  "Duration/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `"1s"`,
+		inVal: addr(time.Duration(0)),
+		want:  addr(time.Duration(time.Second)),
+	}, {
 		name:  "Time/Zero",
 		inBuf: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,
 		inVal: new(struct {
@@ -5355,6 +5371,12 @@ func TestUnmarshal(t *testing.T) {
 			T time.Time
 		}),
 		wantErr: newInvalidCharacterError('x', "at start of value").withOffset(int64(len(`{"D":`))),
+	}, {
+		name:  "Time/IgnoreInvalidFormat",
+		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		inBuf: `"2000-01-01T00:00:00Z"`,
+		inVal: addr(time.Time{}),
+		want:  addr(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
 	}}
 
 	for _, tt := range tests {

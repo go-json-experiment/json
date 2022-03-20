@@ -94,13 +94,13 @@ func makeDefaultArshaler(t reflect.Type) *arshaler {
 func makeBoolArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		return enc.WriteToken(Bool(va.Bool()))
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		tok, err := dec.ReadToken()
@@ -124,13 +124,13 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 func makeStringArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		return enc.WriteToken(String(va.String()))
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		tok, err := dec.ReadToken()
@@ -179,9 +179,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	marshalDefault := fncs.marshal
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		encode, encodedLen := encodeBase64, encodedLenBase64
-		if mo.formatDepth == enc.tokens.depth() {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			switch mo.format {
-			case "base64", "":
+			case "base64":
 				encode, encodedLen = encodeBase64, encodedLenBase64
 			case "base64url":
 				encode, encodedLen = encodeBase64URL, encodedLenBase64URL
@@ -220,9 +220,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	unmarshalDefault := fncs.unmarshal
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		decode, decodedLen := decodeBase64, decodedLenBase64
-		if uo.formatDepth == dec.tokens.depth() {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			switch uo.format {
-			case "base64", "":
+			case "base64":
 				decode, decodedLen = decodeBase64, decodedLenBase64
 			case "base64url":
 				decode, decodedLen = decodeBase64URL, decodedLenBase64URL
@@ -292,14 +292,14 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 func makeIntArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		x := math.Float64frombits(uint64(va.Int()))
 		return enc.writeNumber(x, rawIntNumber, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		val, err := dec.ReadValue()
@@ -352,14 +352,14 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 func makeUintArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		x := math.Float64frombits(uint64(va.Uint()))
 		return enc.writeNumber(x, rawUintNumber, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		val, err := dec.ReadValue()
@@ -404,13 +404,10 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		var allowNonFinite bool
-		if mo.formatDepth == enc.tokens.depth() {
-			switch mo.format {
-			case "":
-				break
-			case "nonfinite":
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
+			if mo.format == "nonfinite" {
 				allowNonFinite = true
-			default:
+			} else {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
@@ -426,13 +423,10 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		var allowNonFinite bool
-		if uo.formatDepth == dec.tokens.depth() {
-			switch uo.format {
-			case "":
-				break
-			case "nonfinite":
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
+			if uo.format == "nonfinite" {
 				allowNonFinite = true
-			default:
+			} else {
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
@@ -522,16 +516,13 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			defer enc.seenPointers.leave(va.Value)
 		}
 
-		if mo.formatDepth == enc.tokens.depth() {
-			switch mo.format {
-			case "":
-				break
-			case "emitnull":
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
+			if mo.format == "emitnull" {
 				if va.IsNil() {
 					return enc.WriteToken(Null)
 				}
 				mo.format = ""
-			default:
+			} else {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
@@ -582,13 +573,10 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		return nil
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() {
-			switch uo.format {
-			case "":
-				break
-			case "emitnull":
-				uo.format = ""
-			default:
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
+			if uo.format == "emitnull" {
+				uo.format = "" // only relevant for marshaling
+			} else {
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
@@ -713,7 +701,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		fields, errInit = makeStructFields(t)
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		if err := enc.WriteToken(ObjectStart); err != nil {
@@ -852,7 +840,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		return nil
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		tok, err := dec.ReadToken()
@@ -988,16 +976,13 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			defer enc.seenPointers.leave(va.Value)
 		}
 
-		if mo.formatDepth == enc.tokens.depth() {
-			switch mo.format {
-			case "":
-				break
-			case "emitnull":
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
+			if mo.format == "emitnull" {
 				if va.IsNil() {
 					return enc.WriteToken(Null)
 				}
 				mo.format = ""
-			default:
+			} else {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
@@ -1019,13 +1004,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		return nil
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() {
-			switch uo.format {
-			case "":
-				break
-			case "emitnull":
-				uo.format = ""
-			default:
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
+			if uo.format == "emitnull" {
+				uo.format = "" // only relevant for marshaling
+			} else {
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
@@ -1083,7 +1065,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		valFncs = lookupArshaler(t.Elem())
 	}
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		if err := enc.WriteToken(ArrayStart); err != nil {
@@ -1103,7 +1085,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		return nil
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		tok, err := dec.ReadToken()
@@ -1198,7 +1180,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 	// store them back into the interface afterwards.
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-		if mo.formatDepth == enc.tokens.depth() && mo.format != "" {
+		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
 		if va.IsNil() {
@@ -1210,7 +1192,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		return marshal(mo, enc, v)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		if uo.formatDepth == dec.tokens.depth() && uo.format != "" {
+		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
 		if dec.PeekKind() == 'n' {

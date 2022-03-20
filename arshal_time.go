@@ -31,12 +31,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			var nanos bool
-			switch mo.format {
-			case "":
-			case "nanos":
-				nanos = true
-			default:
-				return newInvalidFormatError("marshal", t, mo.format)
+			if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
+				if mo.format == "nanos" {
+					nanos = true
+				} else {
+					return newInvalidFormatError("marshal", t, mo.format)
+				}
 			}
 
 			td := va.Interface().(time.Duration)
@@ -54,12 +54,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			// TODO: Should there be a flag that specifies that we can unmarshal
 			// from either form since there would be no ambiguity?
 			var nanos bool
-			switch uo.format {
-			case "":
-			case "nanos":
-				nanos = true
-			default:
-				return newInvalidFormatError("unmarshal", t, uo.format)
+			if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
+				if uo.format == "nanos" {
+					nanos = true
+				} else {
+					return newInvalidFormatError("unmarshal", t, uo.format)
+				}
 			}
 
 			td := va.Addr().Interface().(*time.Duration)
@@ -95,7 +95,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.nonDefault = true
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			format := time.RFC3339Nano
-			if mo.format != "" {
+			if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 				var err error
 				format, err = checkTimeFormat(mo.format)
 				if err != nil {
@@ -124,7 +124,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			format := time.RFC3339Nano
-			if uo.format != "" {
+			if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 				var err error
 				format, err = checkTimeFormat(uo.format)
 				if err != nil {
