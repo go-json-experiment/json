@@ -160,8 +160,8 @@ func FuzzRawValueReformat(f *testing.F) {
 		return out
 	}
 
-	// unmarshal unmarshals the input into an interface{}.
-	unmarshal := func(in []byte) (out interface{}) {
+	// unmarshal unmarshals the input into an any.
+	unmarshal := func(in []byte) (out any) {
 		if err := Unmarshal(in, &out); err != nil {
 			return nil // ignore invalid input
 		}

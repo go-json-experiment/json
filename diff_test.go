@@ -20,8 +20,8 @@ import (
 
 var jsonPackages = []struct {
 	Version   string
-	Marshal   func(interface{}) ([]byte, error)
-	Unmarshal func([]byte, interface{}) error
+	Marshal   func(any) ([]byte, error)
+	Unmarshal func([]byte, any) error
 }{
 	{"v1", jsonv1.Marshal, jsonv1.Unmarshal},
 	{"v2", jsonv2.Marshal, jsonv2.Unmarshal},
@@ -172,7 +172,7 @@ func TestPointerReceiver(t *testing.T) {
 		S []CallCheck
 		M map[string]CallCheck
 		V CallCheck
-		I interface{}
+		I any
 	}
 
 	for _, json := range jsonPackages {

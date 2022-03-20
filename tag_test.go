@@ -22,10 +22,10 @@ func TestMakeStructFields(t *testing.T) {
 		*Recursive `json:",inline"`
 		B          string
 	}
-	type MapStringAny map[string]interface{}
+	type MapStringAny map[string]any
 	tests := []struct {
 		name    string
-		in      interface{}
+		in      any
 		want    structFields
 		wantErr error
 	}{{
@@ -146,7 +146,7 @@ func TestMakeStructFields(t *testing.T) {
 				X RawValue `json:",inline"`
 			} `json:",inline"`
 			X2 struct {
-				X map[string]interface{} `json:",unknown"`
+				X map[string]any `json:",unknown"`
 			} `json:",inline"`
 		}{},
 		want: structFields{},
@@ -157,7 +157,7 @@ func TestMakeStructFields(t *testing.T) {
 				X RawValue `json:",inline"`
 			} `json:",inline"`
 			X2 struct {
-				X map[string]interface{} `json:",unknown"`
+				X map[string]any `json:",unknown"`
 			} `json:",inline"`
 			X map[string]RawValue `json:",unknown"`
 		}{},
@@ -192,7 +192,7 @@ func TestMakeStructFields(t *testing.T) {
 	}, {
 		name: "UnknownWithOptions",
 		in: struct {
-			A map[string]interface{} `json:",inline,omitempty"`
+			A map[string]any `json:",inline,omitempty"`
 		}{},
 		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
 	}, {
@@ -242,13 +242,13 @@ func TestMakeStructFields(t *testing.T) {
 	}, {
 		name: "InlineUnsupported/MapIntKey",
 		in: struct {
-			A map[int]interface{} `json:",unknown"`
+			A map[int]any `json:",unknown"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type map[int]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
 	}, {
 		name: "InlineUnsupported/MapNamedStringKey",
 		in: struct {
-			A map[namedString]interface{} `json:",inline"`
+			A map[namedString]any `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type map[json.namedString]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
 	}, {
@@ -260,8 +260,8 @@ func TestMakeStructFields(t *testing.T) {
 	}, {
 		name: "DuplicateInline",
 		in: struct {
-			A map[string]interface{} `json:",inline"`
-			B RawValue               `json:",inline"`
+			A map[string]any `json:",inline"`
+			B RawValue       `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct fields A and B cannot both be a Go map or json.RawValue`),
 	}, {
@@ -335,7 +335,7 @@ func TestMakeStructFields(t *testing.T) {
 func TestParseTagOptions(t *testing.T) {
 	tests := []struct {
 		name     string
-		in       interface{} // must be a struct with a single field
+		in       any // must be a struct with a single field
 		wantOpts fieldOptions
 		wantErr  error
 	}{{

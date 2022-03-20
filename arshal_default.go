@@ -18,11 +18,11 @@ import (
 
 var (
 	// Most natural Go type that correspond with each JSON type.
-	boolType           = reflect.TypeOf((*bool)(nil)).Elem()                   // JSON bool
-	stringType         = reflect.TypeOf((*string)(nil)).Elem()                 // JSON string
-	float64Type        = reflect.TypeOf((*float64)(nil)).Elem()                // JSON number
-	mapStringIfaceType = reflect.TypeOf((*map[string]interface{})(nil)).Elem() // JSON object
-	sliceIfaceType     = reflect.TypeOf((*[]interface{})(nil)).Elem()          // JSON array
+	boolType         = reflect.TypeOf((*bool)(nil)).Elem()           // JSON bool
+	stringType       = reflect.TypeOf((*string)(nil)).Elem()         // JSON string
+	float64Type      = reflect.TypeOf((*float64)(nil)).Elem()        // JSON number
+	mapStringAnyType = reflect.TypeOf((*map[string]any)(nil)).Elem() // JSON object
+	sliceAnyType     = reflect.TypeOf((*[]any)(nil)).Elem()          // JSON array
 
 	emptyStructType = reflect.TypeOf((*struct{})(nil)).Elem()
 )
@@ -1244,9 +1244,9 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			case '0':
 				v = newAddressableValue(float64Type)
 			case '{':
-				v = newAddressableValue(mapStringIfaceType)
+				v = newAddressableValue(mapStringAnyType)
 			case '[':
-				v = newAddressableValue(sliceIfaceType)
+				v = newAddressableValue(sliceAnyType)
 			default:
 				// TODO: This could also be due to an I/O error.
 				return &SyntacticError{ByteOffset: dec.InputOffset(), str: "invalid JSON token"}

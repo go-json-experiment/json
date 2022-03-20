@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-var encoderPool = sync.Pool{New: func() interface{} { return new(Encoder) }}
+var encoderPool = sync.Pool{New: func() any { return new(Encoder) }}
 
 func getEncoder(b []byte, w io.Writer, o EncodeOptions) *Encoder {
 	e := encoderPool.Get().(*Encoder)
@@ -30,7 +30,7 @@ func putEncoder(e *Encoder) {
 	encoderPool.Put(e)
 }
 
-var decoderPool = sync.Pool{New: func() interface{} { return new(Decoder) }}
+var decoderPool = sync.Pool{New: func() any { return new(Decoder) }}
 
 func getDecoder(b []byte, r io.Reader, o DecodeOptions) *Decoder {
 	d := decoderPool.Get().(*Decoder)
@@ -63,7 +63,7 @@ func putDecoder(d *Decoder) {
 // statistics on the utilization of the buffer to avoid
 // pinning arbitrarily large buffers on the heap forever.
 var bufferPool = sync.Pool{
-	New: func() interface{} { return new(pooledBuffer) },
+	New: func() any { return new(pooledBuffer) },
 }
 
 type pooledBuffer struct {

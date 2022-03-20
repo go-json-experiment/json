@@ -20,7 +20,7 @@ import (
 type jsonTestdataEntry struct {
 	name string
 	data []byte
-	new  func() interface{} // nil if there is no concrete type for this
+	new  func() any // nil if there is no concrete type for this
 }
 
 var (
@@ -70,22 +70,22 @@ func jsonTestdata() []jsonTestdataEntry {
 			}
 
 			// Check whether there is a concrete type for this data.
-			var newFn func() interface{}
+			var newFn func() any
 			switch name {
 			case "CanadaGeometry":
-				newFn = func() interface{} { return new(canadaRoot) }
+				newFn = func() any { return new(canadaRoot) }
 			case "CitmCatalog":
-				newFn = func() interface{} { return new(citmRoot) }
+				newFn = func() any { return new(citmRoot) }
 			case "GolangSource":
-				newFn = func() interface{} { return new(golangRoot) }
+				newFn = func() any { return new(golangRoot) }
 			case "StringEscaped":
-				newFn = func() interface{} { return new(stringRoot) }
+				newFn = func() any { return new(stringRoot) }
 			case "StringUnicode":
-				newFn = func() interface{} { return new(stringRoot) }
+				newFn = func() any { return new(stringRoot) }
 			case "SyntheaFhir":
-				newFn = func() interface{} { return new(syntheaRoot) }
+				newFn = func() any { return new(syntheaRoot) }
 			case "TwitterStatus":
-				newFn = func() interface{} { return new(twitterRoot) }
+				newFn = func() any { return new(twitterRoot) }
 			}
 
 			jsonTestdataLazy = append(jsonTestdataLazy, jsonTestdataEntry{name, data, newFn})
@@ -116,20 +116,20 @@ type (
 		AudienceSubCategoryNames map[int64]string `json:"audienceSubCategoryNames"`
 		BlockNames               map[int64]string `json:"blockNames"`
 		Events                   map[int64]struct {
-			Description string      `json:"description"`
-			ID          int         `json:"id"`
-			Logo        string      `json:"logo"`
-			Name        string      `json:"name"`
-			SubTopicIds []int       `json:"subTopicIds"`
-			SubjectCode interface{} `json:"subjectCode"`
-			Subtitle    interface{} `json:"subtitle"`
-			TopicIds    []int       `json:"topicIds"`
+			Description string `json:"description"`
+			ID          int    `json:"id"`
+			Logo        string `json:"logo"`
+			Name        string `json:"name"`
+			SubTopicIds []int  `json:"subTopicIds"`
+			SubjectCode any    `json:"subjectCode"`
+			Subtitle    any    `json:"subtitle"`
+			TopicIds    []int  `json:"topicIds"`
 		} `json:"events"`
 		Performances []struct {
-			EventID int         `json:"eventId"`
-			ID      int         `json:"id"`
-			Logo    interface{} `json:"logo"`
-			Name    interface{} `json:"name"`
+			EventID int `json:"eventId"`
+			ID      int `json:"id"`
+			Logo    any `json:"logo"`
+			Name    any `json:"name"`
 			Prices  []struct {
 				Amount                int   `json:"amount"`
 				AudienceSubCategoryID int64 `json:"audienceSubCategoryId"`
@@ -137,14 +137,14 @@ type (
 			} `json:"prices"`
 			SeatCategories []struct {
 				Areas []struct {
-					AreaID   int           `json:"areaId"`
-					BlockIds []interface{} `json:"blockIds"`
+					AreaID   int   `json:"areaId"`
+					BlockIds []any `json:"blockIds"`
 				} `json:"areas"`
 				SeatCategoryID int `json:"seatCategoryId"`
 			} `json:"seatCategories"`
-			SeatMapImage interface{} `json:"seatMapImage"`
-			Start        int64       `json:"start"`
-			VenueCode    string      `json:"venueCode"`
+			SeatMapImage any    `json:"seatMapImage"`
+			Start        int64  `json:"start"`
+			VenueCode    string `json:"venueCode"`
 		} `json:"performances"`
 		SeatCategoryNames map[uint64]string   `json:"seatCategoryNames"`
 		SubTopicNames     map[uint64]string   `json:"subTopicNames"`
@@ -498,10 +498,10 @@ type (
 		InReplyToUserIDStr   int64           `json:"in_reply_to_user_id_str,string"`
 		InReplyToScreenName  string          `json:"in_reply_to_screen_name"`
 		User                 twitterUser     `json:"user,omitempty"`
-		Geo                  interface{}     `json:"geo"`
-		Coordinates          interface{}     `json:"coordinates"`
-		Place                interface{}     `json:"place"`
-		Contributors         interface{}     `json:"contributors"`
+		Geo                  any             `json:"geo"`
+		Coordinates          any             `json:"coordinates"`
+		Place                any             `json:"place"`
+		Contributors         any             `json:"contributors"`
 		RetweeetedStatus     *twitterStatus  `json:"retweeted_status"`
 		RetweetCount         int             `json:"retweet_count"`
 		FavoriteCount        int             `json:"favorite_count"`
@@ -518,7 +518,7 @@ type (
 		ScreenName                     string          `json:"screen_name"`
 		Location                       string          `json:"location"`
 		Description                    string          `json:"description"`
-		URL                            interface{}     `json:"url"`
+		URL                            any             `json:"url"`
 		Entities                       twitterEntities `json:"entities"`
 		Protected                      bool            `json:"protected"`
 		FollowersCount                 int             `json:"followers_count"`
@@ -554,10 +554,10 @@ type (
 		Notifications                  bool            `json:"notifications"`
 	}
 	twitterEntities struct {
-		Hashtags     []interface{} `json:"hashtags"`
-		Symbols      []interface{} `json:"symbols"`
-		URL          *twitterURL   `json:"url"`
-		URLs         []twitterURL  `json:"urls"`
+		Hashtags     []any        `json:"hashtags"`
+		Symbols      []any        `json:"symbols"`
+		URL          *twitterURL  `json:"url"`
+		URLs         []twitterURL `json:"urls"`
 		UserMentions []struct {
 			ScreenName string `json:"screen_name"`
 			Name       string `json:"name"`

@@ -206,7 +206,7 @@ type memberName struct {
 	before, after int64
 }
 
-var memberNamePool = sync.Pool{New: func() interface{} { return new(memberNames) }}
+var memberNamePool = sync.Pool{New: func() any { return new(memberNames) }}
 
 func getMemberNames() *memberNames {
 	ns := memberNamePool.Get().(*memberNames)

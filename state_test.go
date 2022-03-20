@@ -17,7 +17,7 @@ func TestStateMachine(t *testing.T) {
 	// The operation type is a union type of various possible operations,
 	// which either call mutating methods on the state machine or
 	// call accessor methods on state machine and verify the results.
-	type operation interface{}
+	type operation any
 	type (
 		// stackLengths checks the results of stateEntry.length accessors.
 		stackLengths []int
@@ -208,7 +208,7 @@ func (s *stateMachine) append(k Kind) error {
 }
 
 func TestObjectNamespace(t *testing.T) {
-	type operation interface{}
+	type operation any
 	type (
 		insert struct {
 			name         string
@@ -336,7 +336,7 @@ func TestObjectNamespace(t *testing.T) {
 }
 
 func TestUintSet(t *testing.T) {
-	type operation interface{} // has | insert
+	type operation any // has | insert
 	type has struct {
 		in   uint
 		want bool

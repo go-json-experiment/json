@@ -22,8 +22,8 @@ import (
 )
 
 type (
-	jsonObject = map[string]interface{}
-	jsonArray  = []interface{}
+	jsonObject = map[string]any
+	jsonArray  = []any
 
 	namedBool    bool
 	namedString  string
@@ -117,7 +117,7 @@ type (
 		Slice         []string
 		Array         [1]string
 		Ptr           *structAll
-		Interface     interface{}
+		Interface     any
 	}
 	structStringifiedAll struct {
 		Bool          bool                  `json:",string"`
@@ -133,7 +133,7 @@ type (
 		Slice         []string              `json:",string"`
 		Array         [1]string             `json:",string"`
 		Ptr           *structStringifiedAll `json:",string"`
-		Interface     interface{}           `json:",string"`
+		Interface     any                   `json:",string"`
 	}
 	structOmitZeroAll struct {
 		Bool          bool               `json:",omitzero"`
@@ -149,7 +149,7 @@ type (
 		Slice         []string           `json:",omitzero"`
 		Array         [1]string          `json:",omitzero"`
 		Ptr           *structOmitZeroAll `json:",omitzero"`
-		Interface     interface{}        `json:",omitzero"`
+		Interface     any                `json:",omitzero"`
 	}
 	structOmitZeroMethodAll struct {
 		ValAlwaysZero       valueAlwaysZero     `json:",omitzero"`
@@ -195,7 +195,7 @@ type (
 		PtrSliceEmpty     *sliceMarshalEmpty      `json:",omitempty"`
 		PtrSliceNonEmpty  *sliceMarshalNonEmpty   `json:",omitempty"`
 		Ptr               *structOmitZeroEmptyAll `json:",omitempty"`
-		Interface         interface{}             `json:",omitempty"`
+		Interface         any                     `json:",omitempty"`
 	}
 	structOmitZeroEmptyAll struct {
 		Bool      bool                    `json:",omitzero,omitempty"`
@@ -208,7 +208,7 @@ type (
 		Slice     []string                `json:",omitzero,omitempty"`
 		Array     [1]string               `json:",omitzero,omitempty"`
 		Ptr       *structOmitZeroEmptyAll `json:",omitzero,omitempty"`
-		Interface interface{}             `json:",omitzero,omitempty"`
+		Interface any                     `json:",omitzero,omitempty"`
 	}
 	structFormatBytes struct {
 		Base16    []byte `json:",format:base16"`
@@ -241,7 +241,7 @@ type (
 		Struct    structAll         `json:",omitzero,format:invalid"`
 		Slice     []string          `json:",omitzero,format:invalid"`
 		Array     [1]string         `json:",omitzero,format:invalid"`
-		Interface interface{}       `json:",omitzero,format:invalid"`
+		Interface any               `json:",omitzero,format:invalid"`
 	}
 	structTimeFormat struct {
 		T1  time.Time
@@ -521,7 +521,7 @@ func (*pointerAlwaysZero) IsZero() bool { return true }
 func (*pointerNeverZero) IsZero() bool  { return false }
 
 var (
-	emptyInterfaceType           = reflect.TypeOf((*interface{})(nil)).Elem()
+	anyType                      = reflect.TypeOf((*any)(nil)).Elem()
 	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
 	intType                      = reflect.TypeOf((*int)(nil)).Elem()
 	int8Type                     = reflect.TypeOf((*int8)(nil)).Elem()
@@ -568,7 +568,7 @@ var (
 	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
 )
 
-func addr(v interface{}) interface{} {
+func addr(v any) any {
 	// TODO: Make this generic.
 	v1 := reflect.ValueOf(v)
 	v2 := reflect.New(v1.Type())
@@ -589,7 +589,7 @@ func TestMarshal(t *testing.T) {
 		name    string
 		mopts   MarshalOptions
 		eopts   EncodeOptions
-		in      interface{}
+		in      any
 		want    string
 		wantErr error
 
@@ -672,14 +672,14 @@ func TestMarshal(t *testing.T) {
 		want:  `"aGVsbG8="`,
 	}, {
 		name: "Ints",
-		in: []interface{}{
+		in: []any{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
 		want: `[0,-128,-32768,-2147483648,-9223372036854775808,-6464]`,
 	}, {
 		name:  "Ints/Stringified",
 		mopts: MarshalOptions{StringifyNumbers: true},
-		in: []interface{}{
+		in: []any{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
 		want: `["0","-128","-32768","-2147483648","-9223372036854775808","-6464"]`,
@@ -690,14 +690,14 @@ func TestMarshal(t *testing.T) {
 		want:  `0`,
 	}, {
 		name: "Uints",
-		in: []interface{}{
+		in: []any{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `[0,255,65535,4294967295,18446744073709551615,6464]`,
 	}, {
 		name:  "Uints/Stringified",
 		mopts: MarshalOptions{StringifyNumbers: true},
-		in: []interface{}{
+		in: []any{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `["0","255","65535","4294967295","18446744073709551615","6464"]`,
@@ -708,14 +708,14 @@ func TestMarshal(t *testing.T) {
 		want:  `0`,
 	}, {
 		name: "Floats",
-		in: []interface{}{
+		in: []any{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `[3.4028235e+38,1.7976931348623157e+308,64.64]`,
 	}, {
 		name:  "Floats/Stringified",
 		mopts: MarshalOptions{StringifyNumbers: true},
-		in: []interface{}{
+		in: []any{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `["3.4028235e+38","1.7976931348623157e+308","64.64"]`,
@@ -790,7 +790,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: errors.New("invalid value: NaN")},
 	}, {
 		name: "Maps/ValidKey/Interface",
-		in: map[interface{}]interface{}{
+		in: map[any]any{
 			"key":               "key",
 			namedInt64(-64):     int32(-32),
 			namedUint64(+64):    uint32(+32),
@@ -1483,7 +1483,7 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: "Structs/OmitEmpty/PathologicalDepth",
-		in: func() interface{} {
+		in: func() any {
 			type X struct {
 				X *X `json:",omitempty"`
 			}
@@ -1500,7 +1500,7 @@ func TestMarshal(t *testing.T) {
 		useWriter: true,
 	}, {
 		name: "Structs/OmitEmpty/PathologicalBreadth",
-		in: func() interface{} {
+		in: func() any {
 			var fields []reflect.StructField
 			for i := 0; i < 100; i++ {
 				fields = append(fields, reflect.StructField{
@@ -1515,7 +1515,7 @@ func TestMarshal(t *testing.T) {
 		useWriter: true,
 	}, {
 		name: "Structs/OmitEmpty/PathologicalTree",
-		in: func() interface{} {
+		in: func() any {
 			type X struct {
 				XL, XR *X `json:",omitempty"`
 			}
@@ -1697,7 +1697,7 @@ func TestMarshal(t *testing.T) {
 		name:    "Structs/Format/Invalid/Interface",
 		in:      structFormatInvalid{Interface: "anything"},
 		want:    `{"Interface"`,
-		wantErr: &SemanticError{action: "marshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
+		wantErr: &SemanticError{action: "marshal", GoType: anyType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
 		name: "Structs/Inline/Zero",
 		in:   structInlined{},
@@ -2050,7 +2050,7 @@ func TestMarshal(t *testing.T) {
 		want:  `{}`,
 	}, {
 		name: "Slices/Interface",
-		in: []interface{}{
+		in: []any{
 			false, true,
 			"hello", []byte("world"),
 			int32(-32), namedInt64(-64),
@@ -2172,7 +2172,7 @@ func TestMarshal(t *testing.T) {
 		want:  `true`,
 	}, {
 		name: "Interfaces/Nil/Empty",
-		in:   [1]interface{}{nil},
+		in:   [1]any{nil},
 		want: `[null]`,
 	}, {
 		name: "Interfaces/Nil/NonEmpty",
@@ -2235,7 +2235,7 @@ func TestMarshal(t *testing.T) {
 		in: struct {
 			V allMethods
 			M map[string]allMethods
-			I interface{}
+			I any
 		}{
 			V: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)},
 			M: map[string]allMethods{"K": {method: "MarshalNextJSON", value: []byte(`"hello"`)}},
@@ -2306,7 +2306,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntacticError{str: "invalid UTF-8 within string"}},
 	}, {
 		name: "Methods/Invalid/MapKey/JSONv2/Syntax",
-		in: map[interface{}]string{
+		in: map[any]string{
 			addr(marshalJSONv2Func(func(enc *Encoder, mo MarshalOptions) error {
 				return enc.WriteToken(Null)
 			})): "invalid",
@@ -2315,7 +2315,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errMissingName},
 	}, {
 		name: "Methods/Invalid/MapKey/JSONv1/Syntax",
-		in: map[interface{}]string{
+		in: map[any]string{
 			addr(marshalJSONv1Func(func() ([]byte, error) {
 				return []byte(`null`), nil
 			})): "invalid",
@@ -2478,8 +2478,8 @@ func TestUnmarshal(t *testing.T) {
 		dopts   DecodeOptions
 		uopts   UnmarshalOptions
 		inBuf   string
-		inVal   interface{}
-		want    interface{}
+		inVal   any
+		want    any
 		wantErr error
 	}{{
 		name:    "Nil",
@@ -3449,8 +3449,8 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  "Maps/ValidKey/Interface",
 		inBuf: `{"false":"false","true":"true","string":"string","0":"0","[]":"[]","{}":"{}"}`,
-		inVal: new(map[interface{}]string),
-		want: addr(map[interface{}]string{
+		inVal: new(map[any]string),
+		want: addr(map[any]string{
 			"false":  "false",
 			"true":   "true",
 			"string": "string",
@@ -4092,7 +4092,7 @@ func TestUnmarshal(t *testing.T) {
 		name:    "Structs/Format/Invalid/Interface",
 		inBuf:   `{"Interface": "anything"}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: &SemanticError{action: "unmarshal", GoType: emptyInterfaceType, Err: errors.New(`invalid format flag: "invalid"`)},
+		wantErr: &SemanticError{action: "unmarshal", GoType: anyType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
 		name:  "Structs/Inline/Zero",
 		inBuf: `{"D":""}`,
@@ -4865,8 +4865,8 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  "Interfaces/Empty/Null",
 		inBuf: `null`,
-		inVal: new(interface{}),
-		want:  new(interface{}),
+		inVal: new(any),
+		want:  new(any),
 	}, {
 		name:  "Interfaces/NonEmpty/Null",
 		inBuf: `null`,
@@ -4881,49 +4881,49 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  "Interfaces/Empty/False",
 		inBuf: `false`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = false
+		inVal: new(any),
+		want: func() any {
+			var vi any = false
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Empty/True",
 		inBuf: `true`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = true
+		inVal: new(any),
+		want: func() any {
+			var vi any = true
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Empty/String",
 		inBuf: `"string"`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = "string"
+		inVal: new(any),
+		want: func() any {
+			var vi any = "string"
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Empty/Number",
 		inBuf: `3.14159`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = 3.14159
+		inVal: new(any),
+		want: func() any {
+			var vi any = 3.14159
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Empty/Object",
 		inBuf: `{"k":"v"}`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = map[string]interface{}{"k": "v"}
+		inVal: new(any),
+		want: func() any {
+			var vi any = map[string]any{"k": "v"}
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Empty/Array",
 		inBuf: `["v"]`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = []interface{}{"v"}
+		inVal: new(any),
+		want: func() any {
+			var vi any = []any{"v"}
 			return &vi
 		}(),
 	}, {
@@ -4933,43 +4933,43 @@ func TestUnmarshal(t *testing.T) {
 		// See https://golang.org/issue/33993.
 		name:  "Interfaces/Merge/Map",
 		inBuf: `{"k2":"v2"}`,
-		inVal: func() interface{} {
-			var vi interface{} = map[string]string{"k1": "v1"}
+		inVal: func() any {
+			var vi any = map[string]string{"k1": "v1"}
 			return &vi
 		}(),
-		want: func() interface{} {
-			var vi interface{} = map[string]string{"k1": "v1", "k2": "v2"}
+		want: func() any {
+			var vi any = map[string]string{"k1": "v1", "k2": "v2"}
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Merge/Struct",
 		inBuf: `{"Array":["goodbye"]}`,
-		inVal: func() interface{} {
-			var vi interface{} = structAll{String: "hello"}
+		inVal: func() any {
+			var vi any = structAll{String: "hello"}
 			return &vi
 		}(),
-		want: func() interface{} {
-			var vi interface{} = structAll{String: "hello", Array: [1]string{"goodbye"}}
+		want: func() any {
+			var vi any = structAll{String: "hello", Array: [1]string{"goodbye"}}
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/Merge/NamedInt",
 		inBuf: `64`,
-		inVal: func() interface{} {
-			var vi interface{} = namedInt64(-64)
+		inVal: func() any {
+			var vi any = namedInt64(-64)
 			return &vi
 		}(),
-		want: func() interface{} {
-			var vi interface{} = namedInt64(+64)
+		want: func() any {
+			var vi any = namedInt64(+64)
 			return &vi
 		}(),
 	}, {
 		name:  "Interfaces/IgnoreInvalidFormat",
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `true`,
-		inVal: new(interface{}),
-		want: func() interface{} {
-			var vi interface{} = true
+		inVal: new(any),
+		want: func() any {
+			var vi any = true
 			return &vi
 		}(),
 	}, {
@@ -5045,14 +5045,14 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct {
 			V allMethods
 			M map[string]allMethods
-			I interface{}
+			I any
 		}{
 			I: allMethods{}, // need to initialize with concrete value
 		}),
 		want: addr(struct {
 			V allMethods
 			M map[string]allMethods
-			I interface{}
+			I any
 		}{
 			V: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
 			M: map[string]allMethods{"K": {method: "UnmarshalNextJSON", value: []byte(`"hello"`)}},
@@ -5374,7 +5374,7 @@ func TestUnmarshal(t *testing.T) {
 func TestMarshalInvalidNamespace(t *testing.T) {
 	tests := []struct {
 		name string
-		val  interface{}
+		val  any
 	}{
 		{"Map", map[string]string{"X": "\xde\xad\xbe\xef"}},
 		{"Struct", struct{ X string }{"\xde\xad\xbe\xef"}},
@@ -5402,7 +5402,7 @@ func TestMarshalInvalidNamespace(t *testing.T) {
 func TestUnmarshalInvalidNamespace(t *testing.T) {
 	tests := []struct {
 		name string
-		val  interface{}
+		val  any
 	}{
 		{"Map", addr(map[string]int{})},
 		{"Struct", addr(struct{ X int }{})},

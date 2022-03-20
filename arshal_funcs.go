@@ -44,7 +44,7 @@ type Marshalers struct{}
 //
 // The input may also include *Marshalers values, which is equivalent to
 // inlining the list of marshal functions used to construct it.
-func NewMarshalers(fns ...interface{}) *Marshalers {
+func NewMarshalers(fns ...any) *Marshalers {
 	// TODO: Document what T may be and the guarantees
 	// for the values passed to custom marshalers.
 	panic("not implemented")
@@ -68,7 +68,7 @@ type Unmarshalers struct{}
 //
 // The input may also include *Unmarshalers values, which is equivalent to
 // inlining the list of unmarshal functions used to construct it.
-func NewUnmarshalers(fns ...interface{}) *Unmarshalers {
+func NewUnmarshalers(fns ...any) *Unmarshalers {
 	// TODO: Document what T may be and the guarantees
 	// for the values passed to custom unmarshalers.
 	panic("not implemented")
