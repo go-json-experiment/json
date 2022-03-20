@@ -568,12 +568,8 @@ var (
 	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
 )
 
-func addr(v any) any {
-	// TODO: Make this generic.
-	v1 := reflect.ValueOf(v)
-	v2 := reflect.New(v1.Type())
-	v2.Elem().Set(v1)
-	return v2.Interface()
+func addr[T any](v T) *T {
+	return &v
 }
 
 func mustParseTime(layout, value string) time.Time {
@@ -1292,14 +1288,14 @@ func TestMarshal(t *testing.T) {
 			ValNeverZero:                    valueNeverZero("nonzero"),
 			PointerAlwaysZero:               pointerAlwaysZero("nonzero"),
 			PointerNeverZero:                pointerNeverZero("nonzero"),
-			PointerValAlwaysZero:            addr(valueAlwaysZero("nonzero")).(*valueAlwaysZero),
-			PointerValNeverZero:             addr(valueNeverZero("nonzero")).(*valueNeverZero),
-			PointerPointerAlwaysZero:        addr(pointerAlwaysZero("nonzero")).(*pointerAlwaysZero),
-			PointerPointerNeverZero:         addr(pointerNeverZero("nonzero")).(*pointerNeverZero),
-			PointerPointerValAlwaysZero:     addr(addr(valueAlwaysZero("nonzero"))).(**valueAlwaysZero), // marshaled since **valueAlwaysZero does not implement IsZero
-			PointerPointerValNeverZero:      addr(addr(valueNeverZero("nonzero"))).(**valueNeverZero),
-			PointerPointerPointerAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))).(**pointerAlwaysZero), // marshaled since **pointerAlwaysZero does not implement IsZero
-			PointerPointerPointerNeverZero:  addr(addr(pointerNeverZero("nonzero"))).(**pointerNeverZero),
+			PointerValAlwaysZero:            addr(valueAlwaysZero("nonzero")),
+			PointerValNeverZero:             addr(valueNeverZero("nonzero")),
+			PointerPointerAlwaysZero:        addr(pointerAlwaysZero("nonzero")),
+			PointerPointerNeverZero:         addr(pointerNeverZero("nonzero")),
+			PointerPointerValAlwaysZero:     addr(addr(valueAlwaysZero("nonzero"))), // marshaled since **valueAlwaysZero does not implement IsZero
+			PointerPointerValNeverZero:      addr(addr(valueNeverZero("nonzero"))),
+			PointerPointerPointerAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))), // marshaled since **pointerAlwaysZero does not implement IsZero
+			PointerPointerPointerNeverZero:  addr(addr(pointerNeverZero("nonzero"))),
 		},
 		want: `{
 	"ValNeverZero": "nonzero",
@@ -1336,27 +1332,27 @@ func TestMarshal(t *testing.T) {
 			String:                string(""),
 			StringEmpty:           stringMarshalEmpty(""),
 			StringNonEmpty:        stringMarshalNonEmpty(""),
-			PointerString:         addr(string("")).(*string),
-			PointerStringEmpty:    addr(stringMarshalEmpty("")).(*stringMarshalEmpty),
-			PointerStringNonEmpty: addr(stringMarshalNonEmpty("")).(*stringMarshalNonEmpty),
+			PointerString:         addr(string("")),
+			PointerStringEmpty:    addr(stringMarshalEmpty("")),
+			PointerStringNonEmpty: addr(stringMarshalNonEmpty("")),
 			Bytes:                 []byte(""),
 			BytesEmpty:            bytesMarshalEmpty([]byte("")),
 			BytesNonEmpty:         bytesMarshalNonEmpty([]byte("")),
-			PointerBytes:          addr([]byte("")).(*[]byte),
-			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte(""))).(*bytesMarshalEmpty),
-			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte(""))).(*bytesMarshalNonEmpty),
+			PointerBytes:          addr([]byte("")),
+			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte(""))),
+			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte(""))),
 			Map:                   map[string]string{},
 			MapEmpty:              mapMarshalEmpty{},
 			MapNonEmpty:           mapMarshalNonEmpty{},
-			PointerMap:            addr(map[string]string{}).(*map[string]string),
-			PointerMapEmpty:       addr(mapMarshalEmpty{}).(*mapMarshalEmpty),
-			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{}).(*mapMarshalNonEmpty),
+			PointerMap:            addr(map[string]string{}),
+			PointerMapEmpty:       addr(mapMarshalEmpty{}),
+			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{}),
 			Slice:                 []string{},
 			SliceEmpty:            sliceMarshalEmpty{},
 			SliceNonEmpty:         sliceMarshalNonEmpty{},
-			PointerSlice:          addr([]string{}).(*[]string),
-			PointerSliceEmpty:     addr(sliceMarshalEmpty{}).(*sliceMarshalEmpty),
-			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{}).(*sliceMarshalNonEmpty),
+			PointerSlice:          addr([]string{}),
+			PointerSliceEmpty:     addr(sliceMarshalEmpty{}),
+			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{}),
 			Pointer:               &structOmitZeroEmptyAll{},
 			Interface:             []string{},
 		},
@@ -1389,33 +1385,33 @@ func TestMarshal(t *testing.T) {
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitEmptyAll{
 			Bool:                  true,
-			PointerBool:           addr(true).(*bool),
+			PointerBool:           addr(true),
 			String:                string("value"),
 			StringEmpty:           stringMarshalEmpty("value"),
 			StringNonEmpty:        stringMarshalNonEmpty("value"),
-			PointerString:         addr(string("value")).(*string),
-			PointerStringEmpty:    addr(stringMarshalEmpty("value")).(*stringMarshalEmpty),
-			PointerStringNonEmpty: addr(stringMarshalNonEmpty("value")).(*stringMarshalNonEmpty),
+			PointerString:         addr(string("value")),
+			PointerStringEmpty:    addr(stringMarshalEmpty("value")),
+			PointerStringNonEmpty: addr(stringMarshalNonEmpty("value")),
 			Bytes:                 []byte("value"),
 			BytesEmpty:            bytesMarshalEmpty([]byte("value")),
 			BytesNonEmpty:         bytesMarshalNonEmpty([]byte("value")),
-			PointerBytes:          addr([]byte("value")).(*[]byte),
-			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))).(*bytesMarshalEmpty),
-			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))).(*bytesMarshalNonEmpty),
+			PointerBytes:          addr([]byte("value")),
+			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))),
+			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))),
 			Float:                 math.Copysign(0, -1),
-			PointerFloat:          addr(math.Copysign(0, -1)).(*float64),
+			PointerFloat:          addr(math.Copysign(0, -1)),
 			Map:                   map[string]string{"": ""},
 			MapEmpty:              mapMarshalEmpty{"key": "value"},
 			MapNonEmpty:           mapMarshalNonEmpty{"key": "value"},
-			PointerMap:            addr(map[string]string{"": ""}).(*map[string]string),
-			PointerMapEmpty:       addr(mapMarshalEmpty{"key": "value"}).(*mapMarshalEmpty),
-			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}).(*mapMarshalNonEmpty),
+			PointerMap:            addr(map[string]string{"": ""}),
+			PointerMapEmpty:       addr(mapMarshalEmpty{"key": "value"}),
+			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}),
 			Slice:                 []string{""},
 			SliceEmpty:            sliceMarshalEmpty{"value"},
 			SliceNonEmpty:         sliceMarshalNonEmpty{"value"},
-			PointerSlice:          addr([]string{""}).(*[]string),
-			PointerSliceEmpty:     addr(sliceMarshalEmpty{"value"}).(*sliceMarshalEmpty),
-			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}).(*sliceMarshalNonEmpty),
+			PointerSlice:          addr([]string{""}),
+			PointerSliceEmpty:     addr(sliceMarshalEmpty{"value"}),
+			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}),
 			Pointer:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
 			Interface:             []string{""},
 		},
@@ -1574,10 +1570,10 @@ func TestMarshal(t *testing.T) {
 		name:  "Structs/Format/Floats",
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatFloats{
-			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi).(*float64)},
-			{NonFinite: math.NaN(), PointerNonFinite: addr(math.NaN()).(*float64)},
-			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1)).(*float64)},
-			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1)).(*float64)},
+			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi)},
+			{NonFinite: math.NaN(), PointerNonFinite: addr(math.NaN())},
+			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1))},
+			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1))},
 		},
 		want: `[
 	{
@@ -1602,8 +1598,8 @@ func TestMarshal(t *testing.T) {
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatMaps{
 			{EmitNull: nil, PointerEmitNull: new(map[string]string)},
-			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}).(*map[string]string)},
-			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{})},
+			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"})},
 		},
 		want: `[
 	{
@@ -1628,8 +1624,8 @@ func TestMarshal(t *testing.T) {
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatSlices{
 			{EmitNull: nil, PointerEmitNull: new([]string)},
-			{EmitNull: []string{}, PointerEmitNull: addr([]string{}).(*[]string)},
-			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}).(*[]string)},
+			{EmitNull: []string{}, PointerEmitNull: addr([]string{})},
+			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"})},
 		},
 		want: `[
 	{
@@ -1810,7 +1806,7 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: "Structs/InlinedFallback/PointerRawValue/NonEmpty",
-		in:   structInlinePointerRawValue{X: addr(RawValue(` { "fizz" : "buzz" } `)).(*RawValue)},
+		in:   structInlinePointerRawValue{X: addr(RawValue(` { "fizz" : "buzz" } `))},
 		want: `{"fizz":"buzz"}`,
 	}, {
 		name: "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
@@ -1869,7 +1865,7 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: "Structs/InlinedFallback/PointerMapStringAny/NonEmpty",
-		in:   structInlinePointerMapStringAny{X: addr(jsonObject{"name": "value"}).(*jsonObject)},
+		in:   structInlinePointerMapStringAny{X: addr(jsonObject{"name": "value"})},
 		want: `{"name":"value"}`,
 	}, {
 		name: "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
@@ -4004,9 +4000,9 @@ func TestUnmarshal(t *testing.T) {
 ]`,
 		inVal: new([]structFormatFloats),
 		want: addr([]structFormatFloats{
-			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi).(*float64)},
-			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1)).(*float64)},
-			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1)).(*float64)},
+			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi)},
+			{NonFinite: math.Inf(-1), PointerNonFinite: addr(math.Inf(-1))},
+			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1))},
 		}),
 	}, {
 		name:  "Structs/Format/Floats/NaN",
@@ -4038,8 +4034,8 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new([]structFormatMaps),
 		want: addr([]structFormatMaps{
 			{EmitNull: nil, PointerEmitNull: nil},
-			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}).(*map[string]string)},
-			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}).(*map[string]string)},
+			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{})},
+			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"})},
 		}),
 	}, {
 		name: "Structs/Format/Slices",
@@ -4051,8 +4047,8 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new([]structFormatSlices),
 		want: addr([]structFormatSlices{
 			{EmitNull: nil, PointerEmitNull: nil},
-			{EmitNull: []string{}, PointerEmitNull: addr([]string{}).(*[]string)},
-			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}).(*[]string)},
+			{EmitNull: []string{}, PointerEmitNull: addr([]string{})},
+			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"})},
 		}),
 	}, {
 		name:    "Structs/Format/Invalid/Bool",
@@ -4275,12 +4271,12 @@ func TestUnmarshal(t *testing.T) {
 		name:  "Structs/InlinedFallback/PointerRawValue/Alloc",
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlinePointerRawValue),
-		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue), B: 2}),
+		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz"}`)), B: 2}),
 	}, {
 		name:  "Structs/InlinedFallback/PointerRawValue/Merge",
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
-		inVal: addr(structInlinePointerRawValue{X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue)}),
-		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz","fizz":"buzz"}`)).(*RawValue), B: 2}),
+		inVal: addr(structInlinePointerRawValue{X: addr(RawValue(`{"fizz":"buzz"}`))}),
+		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz","fizz":"buzz"}`)), B: 2}),
 	}, {
 		name:  "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
 		inBuf: `{"fizz":"buzz"}`,
@@ -4288,7 +4284,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(structInlineInlinePointerRawValue{
 			X: struct {
 				X *RawValue `json:",inline"`
-			}{X: addr(RawValue(`{"fizz":"buzz"}`)).(*RawValue)},
+			}{X: addr(RawValue(`{"fizz":"buzz"}`))},
 		}),
 	}, {
 		name:  "Structs/InlinedFallback/MapStringAny/Noop",
@@ -4406,12 +4402,12 @@ func TestUnmarshal(t *testing.T) {
 		name:  "Structs/InlinedFallback/PointerMapStringAny/Alloc",
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlinePointerMapStringAny),
-		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject), B: 2}),
+		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "buzz"}), B: 2}),
 	}, {
 		name:  "Structs/InlinedFallback/PointerMapStringAny/Merge",
 		inBuf: `{"A":1,"fizz":"wuzz","B":2}`,
-		inVal: addr(structInlinePointerMapStringAny{X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject)}),
-		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "wuzz"}).(*jsonObject), B: 2}),
+		inVal: addr(structInlinePointerMapStringAny{X: addr(jsonObject{"fizz": "buzz"})}),
+		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "wuzz"}), B: 2}),
 	}, {
 		name:  "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
 		inBuf: `{"fizz":"buzz"}`,
@@ -4419,7 +4415,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(structInlineInlinePointerMapStringAny{
 			X: struct {
 				X *jsonObject `json:",inline"`
-			}{X: addr(jsonObject{"fizz": "buzz"}).(*jsonObject)},
+			}{X: addr(jsonObject{"fizz": "buzz"})},
 		}),
 	}, {
 		name:  "Structs/InlinedFallback/MapStringInt",
@@ -5486,7 +5482,7 @@ func TestUnmarshalReuse(t *testing.T) {
 		}
 	})
 	t.Run("Pointers", func(t *testing.T) {
-		in := addr(addr(addr("hello"))).(***string)
+		in := addr(addr(addr("hello")))
 		want := **in
 		if err := Unmarshal([]byte(`"goodbye"`), &in); err != nil {
 			t.Fatalf("Unmarshal error: %v", err)
