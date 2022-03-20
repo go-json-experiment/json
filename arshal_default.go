@@ -487,6 +487,20 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 	return &fncs
 }
 
+var mapIterPool = sync.Pool{
+	New: func() interface{} { return new(reflect.MapIter) },
+}
+
+func getMapIter(mv reflect.Value) *reflect.MapIter {
+	iter := mapIterPool.Get().(*reflect.MapIter)
+	iter.Reset(mv)
+	return iter
+}
+func putMapIter(iter *reflect.MapIter) {
+	iter.Reset(reflect.Value{}) // allow underlying map to be garbage collected
+	mapIterPool.Put(iter)
+}
+
 func makeMapArshaler(t reflect.Type) *arshaler {
 	// NOTE: The logic below disables namespaces for tracking duplicate names
 	// when handling map keys with a unique represention.
@@ -551,15 +565,17 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 			// NOTE: Map entries are serialized in a non-deterministic order.
 			// Users that need stable output should call RawValue.Canonicalize.
-			for iter := va.MapRange(); iter.Next(); {
-				k.Set(iter.Key())
+			iter := getMapIter(va.Value)
+			defer putMapIter(iter)
+			for iter.Next() {
+				k.SetIterKey(iter)
 				if err := marshalKey(mko, enc, k); err != nil {
 					// TODO: If err is errMissingName, then wrap it with as a
 					// SemanticError since this key type cannot be serialized
 					// as a JSON string.
 					return err
 				}
-				v.Set(iter.Value())
+				v.SetIterValue(iter)
 				if err := marshalVal(mo, enc, v); err != nil {
 					return err
 				}
