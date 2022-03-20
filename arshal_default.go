@@ -415,19 +415,14 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 		}
 		fv := va.Float()
-		switch {
-		case !allowNonFinite && (math.IsNaN(fv) || math.IsInf(fv, 0)):
-			err := fmt.Errorf("invalid value: %v", fv)
-			return &SemanticError{action: "marshal", GoType: t, Err: err}
-		case math.IsNaN(fv):
-			return enc.WriteToken(String("NaN"))
-		case math.IsInf(fv, +1):
-			return enc.WriteToken(String("Infinity"))
-		case math.IsInf(fv, -1):
-			return enc.WriteToken(String("-Infinity"))
-		default:
-			return enc.writeNumber(fv, t.Bits(), mo.StringifyNumbers)
+		if math.IsNaN(fv) || math.IsInf(fv, 0) {
+			if !allowNonFinite {
+				err := fmt.Errorf("invalid value: %v", fv)
+				return &SemanticError{action: "marshal", GoType: t, Err: err}
+			}
+			return enc.WriteToken(Float(fv))
 		}
+		return enc.writeNumber(fv, t.Bits(), mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		var allowNonFinite bool
