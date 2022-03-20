@@ -262,13 +262,6 @@ func (e *Encoder) flush() error {
 func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.buf)) }
 func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 
-var emptyValues = [][]byte{
-	[]byte(`null`),
-	[]byte(`""`),
-	[]byte(`{}`), // encoder never emits whitespace within an empty object
-	[]byte(`[]`), // encoder never emits whitespace within an empty array
-}
-
 // avoidFlush indicates whether to avoid flushing to ensure there is always
 // enough in the buffer to unwrite the last object member if it were empty.
 func (e *Encoder) avoidFlush() bool {
@@ -285,7 +278,7 @@ func (e *Encoder) avoidFlush() bool {
 	case last.needObjectName():
 		// Never flush after the object value if it does turn out to be empty.
 		switch string(e.buf[len(e.buf)-2:]) {
-		case `ll`, `""`, `{}`, `[]`: // last two bytes of every emptyValues
+		case `ll`, `""`, `{}`, `[]`: // last two bytes of every empty value
 			return true
 		}
 	}
@@ -305,19 +298,30 @@ func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 	b := e.unflushedBuffer()
 
 	// Detect whether the last value was empty.
-	var val []byte
-	for _, v := range emptyValues {
-		if bytes.HasSuffix(b, v) {
-			val = v
-			break
+	var n int
+	if len(b) >= 3 {
+		switch string(b[len(b)-2:]) {
+		case "ll": // last two bytes of `null`
+			n = len(`null`)
+		case `""`:
+			// It is possible for a non-empty string to have `""` as a suffix
+			// if the second to the last quote was escaped.
+			if b[len(b)-3] == '\\' {
+				return false // e.g., `"\""` is not empty
+			}
+			n = len(`""`)
+		case `{}`:
+			n = len(`{}`)
+		case `[]`:
+			n = len(`[]`)
 		}
 	}
-	if len(val) == 0 {
-		return false // the last written value was not empty
+	if n == 0 {
+		return false
 	}
 
 	// Unwrite the value, whitespace, colon, name, whitespace, and comma.
-	b = b[:len(b)-len(val)]
+	b = b[:len(b)-n]
 	b = trimSuffixWhitespace(b)
 	b = trimSuffixByte(b, ':')
 	b = trimSuffixString(b)

@@ -1468,6 +1468,12 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
+		name: "Structs/OmitEmpty/NonEmptyString",
+		in: struct {
+			X string `json:",omitempty"`
+		}{`"`},
+		want: `{"X":"\""}`,
+	}, {
 		name: "Structs/OmitZeroEmpty/Zero",
 		in:   structOmitZeroEmptyAll{},
 		want: `{}`,
