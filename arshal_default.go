@@ -33,17 +33,13 @@ type seenPointers map[typedPointer]struct{}
 
 type typedPointer struct {
 	typ reflect.Type
-	// TODO: This breaks if Go ever switches to a moving garbage collector.
-	// This should use unsafe.Pointer, but that requires importing unsafe.
-	// We only use pointers for comparisons, and never for unsafe type casts.
-	// See https://golang.org/cl/14137 and https://golang.org/issue/40592.
-	ptr uintptr
+	ptr any // always stores unsafe.Pointer, but avoids depending on unsafe
 }
 
 // visit visits pointer p of type t, reporting an error if seen before.
 // If successfully visited, then the caller must eventually call leave.
 func (m *seenPointers) visit(v reflect.Value) error {
-	p := typedPointer{v.Type(), v.Pointer()}
+	p := typedPointer{v.Type(), v.UnsafePointer()}
 	if _, ok := (*m)[p]; ok {
 		return &SemanticError{action: "marshal", GoType: p.typ, Err: errors.New("encountered a cycle")}
 	}
@@ -54,7 +50,7 @@ func (m *seenPointers) visit(v reflect.Value) error {
 	return nil
 }
 func (m *seenPointers) leave(v reflect.Value) {
-	p := typedPointer{v.Type(), v.Pointer()}
+	p := typedPointer{v.Type(), v.UnsafePointer()}
 	delete(*m, p)
 }
 
