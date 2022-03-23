@@ -114,7 +114,7 @@ type Decoder struct {
 // Invariants:
 //	0 ≤ prevStart ≤ prevEnd ≤ len(buf) ≤ cap(buf)
 type decodeBuffer struct {
-	buf       []byte
+	buf       []byte // may alias rd if it is a bytes.Buffer
 	prevStart int
 	prevEnd   int
 
@@ -122,11 +122,7 @@ type decodeBuffer struct {
 	// the absolute offset relative to the start of io.Reader stream.
 	baseOffset int64
 
-	// If rd and bb are both nil, then buf is the entirety of the input.
-	// Otherwise, exactly either rd or bb is non-nil.
-	// If bb is non-nil, then buf aliases the internal buffer of bb.
 	rd io.Reader
-	bb *bytes.Buffer
 }
 
 // NewDecoder constructs a new streaming decoder reading from r.
@@ -175,7 +171,7 @@ var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after 
 // fetch reads at least 1 byte from the underlying io.Reader.
 // It returns io.ErrUnexpectedEOF if zero bytes were read and io.EOF was seen.
 func (d *Decoder) fetch() error {
-	if d.rd == nil && d.bb == nil {
+	if d.rd == nil {
 		return io.ErrUnexpectedEOF
 	}
 
@@ -184,14 +180,11 @@ func (d *Decoder) fetch() error {
 
 	// Specialize bytes.Buffer for better performance.
 	if bb, ok := d.rd.(*bytes.Buffer); ok && bb != nil {
-		d.rd, d.bb = nil, bb
-	}
-	if d.bb != nil {
 		switch {
-		case d.bb.Len() == 0:
+		case bb.Len() == 0:
 			return io.ErrUnexpectedEOF
 		case len(d.buf) == 0:
-			d.buf = d.bb.Next(d.bb.Len()) // "read" all data in the buffer
+			d.buf = bb.Next(bb.Len()) // "read" all data in the buffer
 			return nil
 		default:
 			// This only occurs if a partially filled bytes.Buffer was provided
@@ -265,7 +258,11 @@ const invalidateBufferByte = '#' // invalid starting character for JSON grammar
 func (d *decodeBuffer) invalidatePreviousRead() {
 	// Avoid mutating the buffer if d.rd is nil which implies that d.buf
 	// is provided by the user code and may not expect mutations.
-	if d.rd != nil && d.prevStart < d.prevEnd {
+	isBytesBuffer := func(r io.Reader) bool {
+		_, ok := r.(*bytes.Buffer)
+		return ok
+	}
+	if d.rd != nil && !isBytesBuffer(d.rd) && d.prevStart < d.prevEnd && uint(d.prevStart) < uint(len(d.buf)) {
 		d.buf[d.prevStart] = invalidateBufferByte
 		d.prevStart = d.prevEnd
 	}
