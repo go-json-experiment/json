@@ -112,17 +112,13 @@ type Encoder struct {
 //	• buf[len(buf):cap(buf)] // unused portion of the buffer
 //
 type encodeBuffer struct {
-	buf []byte
+	buf []byte // may alias wr if it is a bytes.Buffer
 
 	// baseOffset can be added to len(buf) to obtain the absolute offset
 	// relative to the start of io.Writer stream.
 	baseOffset int64
 
-	// If wr and bb are both nil, then buf is the entirety of the output.
-	// Otherwise, exactly either wr or bb is non-nil.
-	// If bb is non-nil, then buf aliases the internal buffer of bb.
 	wr io.Writer
-	bb *bytes.Buffer
 
 	// maxValue is the approximate maximum RawValue size passed to WriteValue.
 	maxValue int
@@ -174,8 +170,6 @@ func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
 	e.encodeBuffer = encodeBuffer{buf: b, wr: w}
 	e.options = o
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
-		e.wr = nil
-		e.bb = bb
 		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 	}
 }
@@ -190,15 +184,16 @@ func (e *Encoder) Reset(r io.Writer) {
 func (e *Encoder) needFlush() bool {
 	// NOTE: This function is carefully written to be inlineable.
 
+	// Avoid flushing if e.wr is nil since there is no underlying writer.
 	// Flush if less than 25% of the capacity remains.
 	// Flushing at some constant fraction ensures that the buffer stops growing
 	// so long as the largest Token or Value fits within that unused capacity.
-	return e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4
+	return e.wr != nil && (e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4)
 }
 
 // flush flushes the buffer to the underlying io.Writer.
 func (e *Encoder) flush() error {
-	if e.wr == nil && e.bb == nil {
+	if e.wr == nil || e.avoidFlush() {
 		return nil
 	}
 
@@ -206,12 +201,12 @@ func (e *Encoder) flush() error {
 	e.names.copyQuotedBuffer(e.buf)
 
 	// Specialize bytes.Buffer for better performance.
-	if e.bb != nil {
+	if bb, ok := e.wr.(*bytes.Buffer); ok && bb != nil {
 		// If e.buf already aliases the internal buffer of bb,
 		// then the Write call simply increments the internal offset,
 		// otherwise Write operates as expected.
 		// See https://golang.org/issue/42986.
-		n, _ := e.bb.Write(e.buf) // never fails
+		n, _ := bb.Write(e.buf) // never fails
 		e.baseOffset += int64(n)
 
 		// If the internal buffer of bytes.Buffer is too small,
@@ -219,11 +214,11 @@ func (e *Encoder) flush() error {
 		// This would be semantically correct, but hurts performance.
 		// As such, ensure 25% of the current length is always available
 		// to reduce the probability that other appends must allocate.
-		if avail := e.bb.Cap() - e.bb.Len(); avail < e.bb.Len()/4 {
-			e.bb.Grow(avail + 1)
+		if avail := bb.Cap() - bb.Len(); avail < bb.Len()/4 {
+			bb.Grow(avail + 1)
 		}
 
-		e.buf = e.bb.Bytes()[e.bb.Len():] // alias the unused buffer of bb
+		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 		return nil
 	}
 
@@ -265,7 +260,6 @@ func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 // avoidFlush indicates whether to avoid flushing to ensure there is always
 // enough in the buffer to unwrite the last object member if it were empty.
 func (e *Encoder) avoidFlush() bool {
-	// NOTE: This function is carefully written to be inlineable.
 	switch last := e.tokens.last(); {
 	case last.length() == 0:
 		// Never flush after ObjectStart or ArrayStart since we don't know yet
@@ -275,7 +269,7 @@ func (e *Encoder) avoidFlush() bool {
 		// Never flush before the object value since we don't know yet
 		// if the object value will end up being empty.
 		return true
-	case last.needObjectName():
+	case last.needObjectName() && len(e.buf) >= 2:
 		// Never flush after the object value if it does turn out to be empty.
 		switch string(e.buf[len(e.buf)-2:]) {
 		case `ll`, `""`, `{}`, `[]`: // last two bytes of every empty value
@@ -474,7 +468,7 @@ func (e *Encoder) WriteToken(t Token) error {
 
 	// Finish off the buffer and store it back into e.
 	e.buf = b
-	if e.needFlush() && !e.avoidFlush() {
+	if e.needFlush() {
 		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
 			e.buf = append(e.buf, '\n')
 		}
@@ -559,7 +553,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 
 	// Finish off the buffer and store it back into e.
 	e.buf = b
-	if e.needFlush() && !e.avoidFlush() {
+	if e.needFlush() {
 		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
 			e.buf = append(e.buf, '\n')
 		}
@@ -649,7 +643,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 
 	// Finish off the buffer and store it back into e.
 	e.buf = b
-	if e.needFlush() && !e.avoidFlush() {
+	if e.needFlush() {
 		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
 			e.buf = append(e.buf, '\n')
 		}

@@ -27,7 +27,6 @@ func TestInline(t *testing.T) {
 		m := make(map[string]bool)
 		for _, s := range []string{
 			"Encoder.needFlush",
-			"Encoder.avoidFlush",
 			"trimSuffixWhitespace",
 			"trimSuffixString",
 			"trimSuffixByte",
