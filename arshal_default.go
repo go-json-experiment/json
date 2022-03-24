@@ -1226,8 +1226,12 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			case '[':
 				v = newAddressableValue(sliceAnyType)
 			default:
-				// TODO: This could also be due to an I/O error.
-				return &SyntacticError{ByteOffset: dec.InputOffset(), str: "invalid JSON token"}
+				// If k is invalid (e.g., due to an I/O or syntax error), then
+				// that will be cached by PeekKind and returned by ReadValue.
+				// If k is '}' or ']', then ReadValue must error since
+				// those are invalid kinds at the start of a JSON value.
+				_, err := dec.ReadValue()
+				return err
 			}
 		} else {
 			// Shallow copy the existing value to keep it addressable.

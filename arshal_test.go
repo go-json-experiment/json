@@ -4939,6 +4939,12 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
+		name:    "Interfaces/Invalid",
+		inBuf:   `]`,
+		inVal:   new(any),
+		want:    new(any),
+		wantErr: newInvalidCharacterError(']', "at start of value"),
+	}, {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
 		// See https://golang.org/issue/26946.

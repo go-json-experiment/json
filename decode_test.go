@@ -7,6 +7,7 @@ package json
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net"
@@ -220,8 +221,8 @@ var decoderErrorTestdata = []struct {
 	in:   ` null , null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
-		{'n', zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
-		{'n', zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
+		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
+		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
 	},
 	wantOffset: len(` null`),
 }, {
@@ -381,8 +382,8 @@ var decoderErrorTestdata = []struct {
 		{'{', zeroValue, newInvalidCharacterError('"', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{'"', zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
-		{'"', zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
@@ -392,8 +393,8 @@ var decoderErrorTestdata = []struct {
 		{'{', zeroValue, newInvalidCharacterError(',', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{'"', zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
-		{'"', zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
@@ -403,8 +404,8 @@ var decoderErrorTestdata = []struct {
 		{'{', zeroValue, newInvalidCharacterError('#', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{'#', zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
-		{'#', zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
+		{0, zeroValue, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
@@ -415,8 +416,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{'"', zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
-		{'"', zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
@@ -427,8 +428,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{'"', zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
-		{'"', zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
@@ -439,8 +440,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{'#', zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
-		{'#', zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroToken, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroValue, errMissingComma.withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
@@ -449,8 +450,8 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError(',', `at start of string (expecting '"')`).withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
-		{'}', zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
-		{'}', zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
+		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
+		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
 	},
 	wantOffset: len(` {`),
 }, {
@@ -461,8 +462,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{'}', zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
-		{'}', zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
@@ -623,8 +624,8 @@ var decoderErrorTestdata = []struct {
 		{'[', zeroValue, newInvalidCharacterError('"', "after array value (expecting ',' or ']')").withOffset(int64(len(` [ "fizz" `))), ""},
 		{'[', ArrayStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{'"', zeroToken, errMissingComma.withOffset(int64(len(` [ "fizz" `))), ""},
-		{'"', zeroValue, errMissingComma.withOffset(int64(len(` [ "fizz" `))), ""},
+		{0, zeroToken, errMissingComma.withOffset(int64(len(` [ "fizz" `))), ""},
+		{0, zeroValue, errMissingComma.withOffset(int64(len(` [ "fizz" `))), ""},
 	},
 	wantOffset: len(` [ "fizz"`),
 }, {
@@ -830,6 +831,98 @@ func TestBlockingDecoder(t *testing.T) {
 
 		if err := <-errCh; err != nil {
 			t.Errorf("Encoder.WriteValue error: %v", err)
+		}
+	}
+}
+
+func TestPeekableDecoder(t *testing.T) {
+	type operation any // PeekKind | ReadToken | ReadValue | BufferWrite
+	type PeekKind struct {
+		want Kind
+	}
+	type ReadToken struct {
+		wantKind Kind
+		wantErr  error
+	}
+	type ReadValue struct {
+		wantKind Kind
+		wantErr  error
+	}
+	type WriteString struct {
+		in string
+	}
+	ops := []operation{
+		PeekKind{0},
+		WriteString{"[ "},
+		ReadToken{0, io.EOF}, // previous error from PeekKind is cached once
+		ReadToken{'[', nil},
+
+		PeekKind{0},
+		WriteString{"] "},
+		ReadValue{0, io.ErrUnexpectedEOF}, // previous error from PeekKind is cached once
+		ReadValue{0, newInvalidCharacterError(']', "at start of value").withOffset(2)},
+		ReadToken{']', nil},
+
+		WriteString{"[ "},
+		ReadToken{'[', nil},
+
+		WriteString{" null "},
+		PeekKind{'n'},
+		PeekKind{'n'},
+		ReadToken{'n', nil},
+
+		WriteString{", "},
+		PeekKind{0},
+		WriteString{"fal"},
+		PeekKind{'f'},
+		ReadValue{0, io.ErrUnexpectedEOF},
+		WriteString{"se "},
+		ReadValue{'f', nil},
+
+		PeekKind{0},
+		WriteString{" , "},
+		PeekKind{0},
+		WriteString{` "" `},
+		ReadValue{0, io.ErrUnexpectedEOF}, // previous error from PeekKind is cached once
+		ReadValue{'"', nil},
+
+		WriteString{" , 0"},
+		PeekKind{'0'},
+		ReadToken{'0', nil},
+
+		WriteString{" , {} , []"},
+		PeekKind{'{'},
+		ReadValue{'{', nil},
+		ReadValue{'[', nil},
+
+		WriteString{"]"},
+		ReadToken{']', nil},
+	}
+
+	bb := struct{ *bytes.Buffer }{new(bytes.Buffer)}
+	d := NewDecoder(bb)
+	for i, op := range ops {
+		switch op := op.(type) {
+		case PeekKind:
+			if got := d.PeekKind(); got != op.want {
+				t.Fatalf("%d: Decoder.PeekKind() = %v, want %v", i, got, op.want)
+			}
+		case ReadToken:
+			gotTok, gotErr := d.ReadToken()
+			gotKind := gotTok.Kind()
+			if gotKind != op.wantKind || !reflect.DeepEqual(gotErr, op.wantErr) {
+				t.Fatalf("%d: Decoder.ReadToken() = (%v, %v), want (%v, %v)", i, gotKind, gotErr, op.wantKind, op.wantErr)
+			}
+		case ReadValue:
+			gotVal, gotErr := d.ReadValue()
+			gotKind := gotVal.Kind()
+			if gotKind != op.wantKind || !reflect.DeepEqual(gotErr, op.wantErr) {
+				t.Fatalf("%d: Decoder.ReadValue() = (%v, %v), want (%v, %v)", i, gotKind, gotErr, op.wantKind, op.wantErr)
+			}
+		case WriteString:
+			bb.WriteString(op.in)
+		default:
+			panic(fmt.Sprintf("unknown operation: %T", op))
 		}
 	}
 }

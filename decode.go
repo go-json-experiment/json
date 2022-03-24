@@ -114,6 +114,9 @@ type Decoder struct {
 // Invariants:
 //	0 ≤ prevStart ≤ prevEnd ≤ len(buf) ≤ cap(buf)
 type decodeBuffer struct {
+	peekPos int   // non-zero if valid offset into buf for start of next token
+	peekErr error // implies peekPos is -1
+
 	buf       []byte // may alias rd if it is a bytes.Buffer
 	prevStart int
 	prevEnd   int
@@ -292,39 +295,56 @@ func (d *decodeBuffer) unreadBuffer() []byte       { return d.buf[d.prevEnd:len(
 // PeekKind retrieves the next token kind, but does not advance the read offset.
 // It returns 0 if there are no more tokens.
 func (d *Decoder) PeekKind() Kind {
-	// TODO: Do we want to distinguish between io.EOF and other errors?
-	//
-	// One reason to return a non-zero value is because people may check
-	// d.PeekKind() > 0 as a way to determine whether there are more tokens.
-	// Returning non-zero likely causes the user code to perform subsequent
-	// operations on Decoder, which would return an error. In contrast,
-	// a zero value might give the illusion that the token stream properly ended
-	// with io.EOF and the user code will silently ignore any errors.
-	d.invalidatePreviousRead()
+	// Check whether we have a cached peek result.
+	if d.peekPos > 0 {
+		return Kind(d.buf[d.peekPos]).normalize()
+	}
 
 	var err error
+	d.invalidatePreviousRead()
 	pos := d.prevEnd
 
 	// Consume leading whitespace.
 	pos += consumeWhitespace(d.buf[pos:])
 	if d.needMore(pos) {
 		if pos, err = d.consumeWhitespace(pos); err != nil {
+			if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+				err = io.EOF // EOF possibly if no Tokens present after top-level value
+			}
+			d.peekPos, d.peekErr = -1, err
 			return invalidKind
 		}
 	}
 
 	// Consume colon or comma.
+	var delim byte
 	if c := d.buf[pos]; c == ':' || c == ',' {
+		delim = c
 		pos += 1
 		pos += consumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
+				d.peekPos, d.peekErr = -1, err
 				return invalidKind
 			}
 		}
 	}
+	next := Kind(d.buf[pos]).normalize()
+	if d.tokens.needDelim(next) != delim {
+		pos = d.prevEnd // restore position to right after leading whitespace
+		pos += consumeWhitespace(d.buf[pos:])
+		err = d.tokens.checkDelim(delim, next)
+		err = d.injectSyntacticErrorWithPosition(err, pos)
+		d.peekPos, d.peekErr = -1, err
+		return invalidKind
+	}
 
-	return Kind(d.buf[pos]).normalize()
+	// This may set peekPos to zero, which is indistinguishable from
+	// the uninitialized state. While a small hit to performance, it is correct
+	// since ReadValue and ReadToken will disregard the cached result and
+	// recompute the next kind.
+	d.peekPos, d.peekErr = pos, nil
+	return next
 }
 
 // skipValue is semantically equivalent to calling ReadValue and discarding
@@ -357,40 +377,53 @@ func (d *Decoder) skipValue() error {
 // The returned token is only valid until the next Peek or Read call.
 // It returns io.EOF if there are no more tokens.
 func (d *Decoder) ReadToken() (Token, error) {
-	d.invalidatePreviousRead()
-
+	// Determine the next kind.
 	var err error
-	pos := d.prevEnd
-
-	// Consume leading whitespace.
-	pos += consumeWhitespace(d.buf[pos:])
-	if d.needMore(pos) {
-		if pos, err = d.consumeWhitespace(pos); err != nil {
-			if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
-				err = io.EOF // EOF possibly if no Tokens present after top-level value
-			}
+	var next Kind
+	pos := d.peekPos
+	if pos != 0 {
+		// Use cached peek result.
+		if d.peekErr != nil {
+			err := d.peekErr
+			d.peekPos, d.peekErr = 0, nil // possibly a transient I/O error
 			return Token{}, err
 		}
-	}
+		next = Kind(d.buf[pos]).normalize()
+		d.peekPos = 0 // reset cache
+	} else {
+		d.invalidatePreviousRead()
+		pos = d.prevEnd
 
-	// Consume colon or comma.
-	var delim byte
-	if c := d.buf[pos]; c == ':' || c == ',' {
-		delim = c
-		pos += 1
+		// Consume leading whitespace.
 		pos += consumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
+				if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+					err = io.EOF // EOF possibly if no Tokens present after top-level value
+				}
 				return Token{}, err
 			}
 		}
-	}
-	next := Kind(d.buf[pos]).normalize()
-	if d.tokens.needDelim(next) != delim {
-		pos = d.prevEnd // restore position to right after leading whitespace
-		pos += consumeWhitespace(d.buf[pos:])
-		err = d.tokens.checkDelim(delim, next)
-		return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
+
+		// Consume colon or comma.
+		var delim byte
+		if c := d.buf[pos]; c == ':' || c == ',' {
+			delim = c
+			pos += 1
+			pos += consumeWhitespace(d.buf[pos:])
+			if d.needMore(pos) {
+				if pos, err = d.consumeWhitespace(pos); err != nil {
+					return Token{}, err
+				}
+			}
+		}
+		next = Kind(d.buf[pos]).normalize()
+		if d.tokens.needDelim(next) != delim {
+			pos = d.prevEnd // restore position to right after leading whitespace
+			pos += consumeWhitespace(d.buf[pos:])
+			err = d.tokens.checkDelim(delim, next)
+			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
+		}
 	}
 
 	// Handle the next token.
@@ -544,40 +577,53 @@ func (d *Decoder) ReadToken() (Token, error) {
 // then it reports a SyntacticError and the internal state remains unchanged.
 // It returns io.EOF if there are no more values.
 func (d *Decoder) ReadValue() (RawValue, error) {
-	d.invalidatePreviousRead()
-
+	// Determine the next kind.
 	var err error
-	pos := d.prevEnd
-
-	// Consume leading whitespace.
-	pos += consumeWhitespace(d.buf[pos:])
-	if d.needMore(pos) {
-		if pos, err = d.consumeWhitespace(pos); err != nil {
-			if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
-				err = io.EOF // EOF possibly if no Tokens present after top-level value
-			}
+	var next Kind
+	pos := d.peekPos
+	if pos != 0 {
+		// Use cached peek result.
+		if d.peekErr != nil {
+			err := d.peekErr
+			d.peekPos, d.peekErr = 0, nil // possibly a transient I/O error
 			return nil, err
 		}
-	}
+		next = Kind(d.buf[pos]).normalize()
+		d.peekPos = 0 // reset cache
+	} else {
+		d.invalidatePreviousRead()
+		pos = d.prevEnd
 
-	// Consume colon or comma.
-	var delim byte
-	if c := d.buf[pos]; c == ':' || c == ',' {
-		delim = c
-		pos += 1
+		// Consume leading whitespace.
 		pos += consumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
+				if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+					err = io.EOF // EOF possibly if no Tokens present after top-level value
+				}
 				return nil, err
 			}
 		}
-	}
-	next := Kind(d.buf[pos]).normalize()
-	if d.tokens.needDelim(next) != delim {
-		pos = d.prevEnd // restore position to right after leading whitespace
-		pos += consumeWhitespace(d.buf[pos:])
-		err = d.tokens.checkDelim(delim, next)
-		return nil, d.injectSyntacticErrorWithPosition(err, pos)
+
+		// Consume colon or comma.
+		var delim byte
+		if c := d.buf[pos]; c == ':' || c == ',' {
+			delim = c
+			pos += 1
+			pos += consumeWhitespace(d.buf[pos:])
+			if d.needMore(pos) {
+				if pos, err = d.consumeWhitespace(pos); err != nil {
+					return nil, err
+				}
+			}
+		}
+		next = Kind(d.buf[pos]).normalize()
+		if d.tokens.needDelim(next) != delim {
+			pos = d.prevEnd // restore position to right after leading whitespace
+			pos += consumeWhitespace(d.buf[pos:])
+			err = d.tokens.checkDelim(delim, next)
+			return nil, d.injectSyntacticErrorWithPosition(err, pos)
+		}
 	}
 
 	// Handle the next value.
