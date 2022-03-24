@@ -959,67 +959,101 @@ func (e *Encoder) StackPointer() string {
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
 func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
-	var i, n int
-	dst = append(dst, '"')
-	for len(s) > n {
-		// Optimize for long sequences of unescaped characters.
-		if escapeRune == nil {
-			noEscape := func(c byte) bool {
-				return ' ' <= c && c != '\\' && c != '"' && c <= unicode.MaxASCII
+	appendEscapedASCII := func(dst []byte, c byte) []byte {
+		switch c {
+		case '"', '\\':
+			dst = append(dst, '\\', c)
+		case '\b':
+			dst = append(dst, "\\b"...)
+		case '\f':
+			dst = append(dst, "\\f"...)
+		case '\n':
+			dst = append(dst, "\\n"...)
+		case '\r':
+			dst = append(dst, "\\r"...)
+		case '\t':
+			dst = append(dst, "\\t"...)
+		default:
+			dst = append(dst, "\\u"...)
+			dst = appendHexUint16(dst, uint16(c))
+		}
+		return dst
+	}
+	appendEscapedUnicode := func(dst []byte, r rune) []byte {
+		if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
+			dst = append(dst, "\\u"...)
+			dst = appendHexUint16(dst, uint16(r1))
+			dst = append(dst, "\\u"...)
+			dst = appendHexUint16(dst, uint16(r2))
+		} else {
+			dst = append(dst, "\\u"...)
+			dst = appendHexUint16(dst, uint16(r))
+		}
+		return dst
+	}
+
+	// Optimize for when escapeRune is nil.
+	if escapeRune == nil {
+		var i, n int
+		dst = append(dst, '"')
+		for uint(len(s)) > uint(n) {
+			// Handle single-byte ASCII.
+			if c := s[n]; c <= unicode.MaxASCII {
+				if c < ' ' || c == '"' || c == '\\' {
+					dst = append(dst, s[i:n]...)
+					dst = appendEscapedASCII(dst, c)
+					n++
+					i = n
+				} else {
+					n++
+				}
+				continue
 			}
-			for len(s) > n && noEscape(s[n]) {
-				n++
-			}
-			if len(s) == n {
-				break
+
+			// Handle multi-byte Unicode.
+			r, rn := utf8.DecodeRuneInString(s[n:])
+			if r == utf8.RuneError && rn == 1 {
+				dst = append(dst, s[i:n]...)
+				if validateUTF8 {
+					return dst, &SyntacticError{str: "invalid UTF-8 within string"}
+				}
+				dst = append(dst, "\ufffd"...)
+				n += rn
+				i = n
+			} else {
+				n += rn
 			}
 		}
+		dst = append(dst, s[i:n]...)
+		dst = append(dst, '"')
+		return dst, nil
+	}
 
+	// Slower implementation for when escapeRune is non-nil.
+	var i, n int
+	dst = append(dst, '"')
+	for uint(len(s)) > uint(n) {
 		switch r, rn := utf8.DecodeRuneInString(s[n:]); {
 		case r == utf8.RuneError && rn == 1:
 			dst = append(dst, s[i:n]...)
 			if validateUTF8 {
 				return dst, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
-			if escapeRune != nil && escapeRune('\ufffd') {
+			if escapeRune('\ufffd') {
 				dst = append(dst, `\ufffd`...)
 			} else {
 				dst = append(dst, "\ufffd"...)
 			}
 			n += rn
 			i = n
-		case escapeRune != nil && escapeRune(r):
+		case escapeRune(r):
 			dst = append(dst, s[i:n]...)
-			if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
-				dst = append(dst, "\\u"...)
-				dst = appendHexUint16(dst, uint16(r1))
-				dst = append(dst, "\\u"...)
-				dst = appendHexUint16(dst, uint16(r2))
-			} else {
-				dst = append(dst, "\\u"...)
-				dst = appendHexUint16(dst, uint16(r))
-			}
+			dst = appendEscapedUnicode(dst, r)
 			n += rn
 			i = n
 		case r < ' ' || r == '"' || r == '\\':
 			dst = append(dst, s[i:n]...)
-			switch r {
-			case '"', '\\':
-				dst = append(dst, '\\', byte(r))
-			case '\b':
-				dst = append(dst, "\\b"...)
-			case '\f':
-				dst = append(dst, "\\f"...)
-			case '\n':
-				dst = append(dst, "\\n"...)
-			case '\r':
-				dst = append(dst, "\\r"...)
-			case '\t':
-				dst = append(dst, "\\t"...)
-			default:
-				dst = append(dst, "\\u"...)
-				dst = appendHexUint16(dst, uint16(r))
-			}
+			dst = appendEscapedASCII(dst, byte(r))
 			n += rn
 			i = n
 		default:
