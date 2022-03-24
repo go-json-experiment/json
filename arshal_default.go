@@ -239,7 +239,8 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
-		val, err := dec.ReadValue()
+		var flags valueFlags
+		val, err := dec.readValue(&flags)
 		if err != nil {
 			return err
 		}
@@ -249,7 +250,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			va.Set(reflect.Zero(t))
 			return nil
 		case '"':
-			val = unescapeStringMayCopy(val)
+			val = unescapeStringMayCopy(val, flags.isVerbatim())
 
 			// For base64 and base32, decodedLen computes the maximum output size
 			// when given the original input size. To compute the exact size,
@@ -302,7 +303,8 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
-		val, err := dec.ReadValue()
+		var flags valueFlags
+		val, err := dec.readValue(&flags)
 		if err != nil {
 			return err
 		}
@@ -315,7 +317,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			if !uo.StringifyNumbers {
 				break
 			}
-			val = unescapeStringMayCopy(val)
+			val = unescapeStringMayCopy(val, flags.isVerbatim())
 			fallthrough
 		case '0':
 			var negOffset int
@@ -362,7 +364,8 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
-		val, err := dec.ReadValue()
+		var flags valueFlags
+		val, err := dec.readValue(&flags)
 		if err != nil {
 			return err
 		}
@@ -375,7 +378,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			if !uo.StringifyNumbers {
 				break
 			}
-			val = unescapeStringMayCopy(val)
+			val = unescapeStringMayCopy(val, flags.isVerbatim())
 			fallthrough
 		case '0':
 			n, ok := parseDecUint(val)
@@ -430,7 +433,8 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
-		val, err := dec.ReadValue()
+		var flags valueFlags
+		val, err := dec.readValue(&flags)
 		if err != nil {
 			return err
 		}
@@ -440,7 +444,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			va.SetFloat(0)
 			return nil
 		case '"':
-			val = unescapeStringMayCopy(val)
+			val = unescapeStringMayCopy(val, flags.isVerbatim())
 			if allowNonFinite {
 				switch string(val) {
 				case "NaN":
@@ -807,12 +811,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			prevIdx = f.id
 		}
 		if fields.inlinedFallback != nil && !(mo.DiscardUnknownMembers && fields.inlinedFallback.unknown) {
-			var insertQuotedName func([]byte) bool
+			var insertUnquotedName func([]byte) bool
 			if !enc.options.AllowDuplicateNames {
-				insertQuotedName = func(quotedName []byte) bool {
+				insertUnquotedName = func(name []byte) bool {
 					// Check that the name from inlined fallback does not match
 					// one of the previously marshaled names from known fields.
-					name := unescapeStringMayCopy(quotedName)
 					if foldedFields := fields.byFoldedName[string(foldName(name))]; len(foldedFields) > 0 {
 						if f := fields.byActualName[string(name)]; f != nil {
 							return seenIdxs.insert(uint(f.id))
@@ -826,10 +829,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 					// Check that the name does not match any other name
 					// previously marshaled from the inlined fallback.
-					return enc.namespaces.last().insertQuoted(quotedName)
+					return enc.namespaces.last().insertUnquoted(name)
 				}
 			}
-			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback, insertQuotedName); err != nil {
+			if err := marshalInlinedFallbackAll(mo, enc, va, fields.inlinedFallback, insertUnquotedName); err != nil {
 				return err
 			}
 		}
@@ -862,11 +865,12 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			dec.tokens.last.disableNamespace()
 			for dec.PeekKind() != '}' {
 				// Process the object member name.
-				val, err := dec.ReadValue()
+				var flags valueFlags
+				val, err := dec.readValue(&flags)
 				if err != nil {
 					return err
 				}
-				name := unescapeStringMayCopy(val)
+				name := unescapeStringMayCopy(val, flags.isVerbatim())
 				f := fields.byActualName[string(name)]
 				if f == nil {
 					for _, f2 := range fields.byFoldedName[string(foldName(name))] {
@@ -879,7 +883,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						if uo.RejectUnknownNames && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
 							return &SemanticError{action: "unmarshal", GoType: t, Err: ErrUnknownName}
 						}
-						if !dec.options.AllowDuplicateNames && !dec.namespaces.last().insertQuoted(val) {
+						if !dec.options.AllowDuplicateNames && !dec.namespaces.last().insertUnquoted(name) {
 							// TODO: Unread the object name.
 							err := &SyntacticError{str: "duplicate name " + string(val) + " in object"}
 							return err.withOffset(dec.InputOffset() - int64(len(val)))
@@ -892,7 +896,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 							}
 						} else {
 							// Marshal into value capable of storing arbitrary object members.
-							if err := unmarshalInlinedFallbackNext(uo, dec, va, fields.inlinedFallback, val); err != nil {
+							if err := unmarshalInlinedFallbackNext(uo, dec, va, fields.inlinedFallback, val, name); err != nil {
 								return err
 							}
 						}

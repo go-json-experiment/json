@@ -62,8 +62,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
+			var flags valueFlags
 			td := va.Addr().Interface().(*time.Duration)
-			val, err := dec.ReadValue()
+			val, err := dec.readValue(&flags)
 			if err != nil {
 				return err
 			}
@@ -73,7 +74,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*td = time.Duration(0)
 				return nil
 			case k == '"' && !nanos:
-				val = unescapeStringMayCopy(val)
+				val = unescapeStringMayCopy(val, flags.isVerbatim())
 				td2, err := time.ParseDuration(string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
@@ -132,8 +133,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
+			var flags valueFlags
 			tt := va.Addr().Interface().(*time.Time)
-			val, err := dec.ReadValue()
+			val, err := dec.readValue(&flags)
 			if err != nil {
 				return err
 			}
@@ -143,7 +145,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*tt = time.Time{}
 				return nil
 			case '"':
-				val = unescapeStringMayCopy(val)
+				val = unescapeStringMayCopy(val, flags.isVerbatim())
 				tt2, err := time.Parse(format, string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}

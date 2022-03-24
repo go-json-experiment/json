@@ -617,14 +617,26 @@ func (ns *objectNamespace) lastUnquoted() []byte {
 	return ns.getUnquoted(ns.length() - 1)
 }
 
-// insertQuoted inserts an escaped name and reports whether it was inserted,
+// insertQuoted inserts a name and reports whether it was inserted,
 // which only occurs if name is not already in the namespace.
 // The provided name must be a valid JSON string.
-func (ns *objectNamespace) insertQuoted(b []byte) bool {
-	// TODO: Consider making two variations of insert that operate on
-	// both escaped and unescaped strings.
-	allNames, _ := unescapeString(ns.allUnquotedNames, b)
-	name := allNames[len(ns.allUnquotedNames):]
+func (ns *objectNamespace) insertQuoted(name []byte, isVerbatim bool) bool {
+	if isVerbatim {
+		name = name[len(`"`) : len(name)-len(`"`)]
+	}
+	return ns.insert(name, !isVerbatim)
+}
+func (ns *objectNamespace) insertUnquoted(name []byte) bool {
+	return ns.insert(name, false)
+}
+func (ns *objectNamespace) insert(name []byte, quoted bool) bool {
+	var allNames []byte
+	if quoted {
+		allNames, _ = unescapeString(ns.allUnquotedNames, name)
+	} else {
+		allNames = append(ns.allUnquotedNames, name...)
+	}
+	name = allNames[len(ns.allUnquotedNames):]
 
 	// Switch to a map if the buffer is too large for linear search.
 	// This does not add the current name to the map.

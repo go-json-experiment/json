@@ -475,9 +475,10 @@ func (d *Decoder) ReadToken() (Token, error) {
 		return True, nil
 
 	case '"':
+		var flags valueFlags // TODO: Preserve this in Token?
 		if n = consumeSimpleString(d.buf[pos:]); n == 0 {
 			oldAbsPos := d.baseOffset + int64(pos)
-			pos, err = d.consumeString(pos)
+			pos, err = d.consumeString(&flags, pos)
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
 			if err != nil {
@@ -490,7 +491,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 			if !d.tokens.last.isValidNamespace() {
 				return Token{}, errInvalidNamespace
 			}
-			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos]) {
+			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
 				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 			}
@@ -568,6 +569,18 @@ func (d *Decoder) ReadToken() (Token, error) {
 	}
 }
 
+type valueFlags uint
+
+const (
+	stringNonVerbatim  valueFlags = 1 // string cannot be naively treated as valid UTF-8
+	stringNonCanonical valueFlags = 2 // string not formatted according to RFC 8785, section 3.2.2.2.
+	// TODO: Track whether a number is a non-integer?
+)
+
+func (f *valueFlags) set(f2 valueFlags) { *f |= f2 }
+func (f valueFlags) isVerbatim() bool   { return f&stringNonVerbatim == 0 }
+func (f valueFlags) isCanonical() bool  { return f&stringNonCanonical == 0 }
+
 // ReadValue returns the next raw JSON value, advancing the read offset.
 // The value is stripped of any leading or trailing whitespace.
 // The returned value is only valid until the next Peek or Read call and
@@ -576,6 +589,10 @@ func (d *Decoder) ReadToken() (Token, error) {
 // then it reports a SyntacticError and the internal state remains unchanged.
 // It returns io.EOF if there are no more values.
 func (d *Decoder) ReadValue() (RawValue, error) {
+	var flags valueFlags
+	return d.readValue(&flags)
+}
+func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 	// Determine the next kind.
 	var err error
 	var next Kind
@@ -627,7 +644,7 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 
 	// Handle the next value.
 	oldAbsPos := d.baseOffset + int64(pos)
-	pos, err = d.consumeValue(pos)
+	pos, err = d.consumeValue(flags, pos)
 	newAbsPos := d.baseOffset + int64(pos)
 	n := int(newAbsPos - oldAbsPos)
 	if err != nil {
@@ -642,7 +659,7 @@ func (d *Decoder) ReadValue() (RawValue, error) {
 				err = errInvalidNamespace
 				break
 			}
-			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos]) {
+			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
 				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 				break
 			}
@@ -721,7 +738,7 @@ func (d *Decoder) consumeWhitespace(pos int) (newPos int, err error) {
 
 // consumeValue consumes a single JSON value starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the value.
-func (d *Decoder) consumeValue(pos int) (newPos int, err error) {
+func (d *Decoder) consumeValue(flags *valueFlags, pos int) (newPos int, err error) {
 	for {
 		var n int
 		var err error
@@ -740,7 +757,7 @@ func (d *Decoder) consumeValue(pos int) (newPos int, err error) {
 			}
 		case '"':
 			if n = consumeSimpleString(d.buf[pos:]); n == 0 {
-				return d.consumeString(pos)
+				return d.consumeString(flags, pos)
 			}
 		case '0':
 			// NOTE: Since JSON numbers are not self-terminating,
@@ -749,9 +766,9 @@ func (d *Decoder) consumeValue(pos int) (newPos int, err error) {
 				return d.consumeNumber(pos)
 			}
 		case '{':
-			return d.consumeObject(pos)
+			return d.consumeObject(flags, pos)
 		case '[':
-			return d.consumeArray(pos)
+			return d.consumeArray(flags, pos)
 		default:
 			return pos, newInvalidCharacterError(byte(next), "at start of value")
 		}
@@ -788,10 +805,10 @@ func (d *Decoder) consumeLiteral(pos int, lit string) (newPos int, err error) {
 
 // consumeString consumes a single JSON string starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the string.
-func (d *Decoder) consumeString(pos int) (newPos int, err error) {
+func (d *Decoder) consumeString(flags *valueFlags, pos int) (newPos int, err error) {
 	var n int
 	for {
-		n, err = consumeStringResumable(d.buf[pos:], n, !d.options.AllowInvalidUTF8)
+		n, err = consumeStringResumable(flags, d.buf[pos:], n, !d.options.AllowInvalidUTF8)
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -833,7 +850,7 @@ func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
 
 // consumeObject consumes a single JSON object starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the object.
-func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
+func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err error) {
 	var n int
 	var names *objectNamespace
 	if !d.options.AllowDuplicateNames {
@@ -868,18 +885,20 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 				return pos, err
 			}
 		}
+		var flags2 valueFlags
 		if n = consumeSimpleString(d.buf[pos:]); n == 0 {
 			oldAbsPos := d.baseOffset + int64(pos)
-			pos, err = d.consumeString(pos)
+			pos, err = d.consumeString(&flags2, pos)
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
+			flags.set(flags2)
 			if err != nil {
 				return pos, err
 			}
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && !names.insertQuoted(d.buf[pos-n:pos]) {
+		if !d.options.AllowDuplicateNames && !names.insertQuoted(d.buf[pos-n:pos], flags2.isVerbatim()) {
 			return pos - n, &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
 		}
 
@@ -902,7 +921,7 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 				return pos, err
 			}
 		}
-		pos, err = d.consumeValue(pos)
+		pos, err = d.consumeValue(flags, pos)
 		if err != nil {
 			return pos, err
 		}
@@ -929,7 +948,7 @@ func (d *Decoder) consumeObject(pos int) (newPos int, err error) {
 
 // consumeArray consumes a single JSON array starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the array.
-func (d *Decoder) consumeArray(pos int) (newPos int, err error) {
+func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err error) {
 	// Handle before start.
 	if d.buf[pos] != '[' {
 		panic("BUG: consumeArray must be called with a buffer that starts with '['")
@@ -956,7 +975,7 @@ func (d *Decoder) consumeArray(pos int) (newPos int, err error) {
 				return pos, err
 			}
 		}
-		pos, err = d.consumeValue(pos)
+		pos, err = d.consumeValue(flags, pos)
 		if err != nil {
 			return pos, err
 		}
@@ -1119,13 +1138,13 @@ func consumeSimpleString(b []byte) (n int) {
 // characters within the string itself.
 // It reports the number of bytes consumed and whether an error was encountered.
 // If the input appears truncated, it returns io.ErrUnexpectedEOF.
-func consumeString(b []byte, validateUTF8 bool) (n int, err error) {
-	return consumeStringResumable(b, 0, validateUTF8)
+func consumeString(flags *valueFlags, b []byte, validateUTF8 bool) (n int, err error) {
+	return consumeStringResumable(flags, b, 0, validateUTF8)
 }
 
 // consumeStringResumable is identical to consumeString but supports resuming
 // from a previous call that returned io.ErrUnexpectedEOF.
-func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
+func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
 	// Consume the leading quote.
 	switch {
 	case resumeOffset > 0:
@@ -1159,25 +1178,33 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 
 		switch r, rn := utf8.DecodeRune(b[n:]); {
 		case r == utf8.RuneError && rn == 1: // invalid UTF-8
+			if !utf8.FullRune(b[n:]) {
+				return n, io.ErrUnexpectedEOF
+			}
+			flags.set(stringNonVerbatim | stringNonCanonical)
 			if validateUTF8 {
-				if !utf8.FullRune(b[n:]) {
-					return n, io.ErrUnexpectedEOF
-				}
 				return n, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
 			n++
 		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
 			if r < ' ' {
+				flags.set(stringNonVerbatim | stringNonCanonical)
 				return n, newInvalidCharacterError(b[n], "within string (expecting non-control character)")
 			}
 
 			// Handle escape sequence.
+			flags.set(stringNonVerbatim)
 			resumeOffset = n
 			if uint(len(b)) < uint(n+2) {
 				return resumeOffset, io.ErrUnexpectedEOF
 			}
 			switch r := b[n+1]; r {
-			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+			case '/':
+				// Forward slash is the only character with 3 representations.
+				// Per RFC 8785, section 3.2.2.2., this must not be escaped.
+				flags.set(stringNonCanonical)
+				n += 2
+			case '"', '\\', 'b', 'f', 'n', 'r', 't':
 				n += 2
 			case 'u':
 				if uint(len(b)) < uint(n+6) {
@@ -1185,7 +1212,18 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
 				if !ok {
+					flags.set(stringNonCanonical)
 					return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
+				}
+				// Only certain control characters can use the \uFFFF notation
+				// for canonical formating (per RFC 8785, section 3.2.2.2.).
+				switch v1 {
+				case '\b', '\f', '\n', '\r', '\t':
+					flags.set(stringNonCanonical)
+				default:
+					if v1 >= ' ' {
+						flags.set(stringNonCanonical)
+					}
 				}
 				n += 6
 
@@ -1206,6 +1244,7 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 					n += 6
 				}
 			default:
+				flags.set(stringNonCanonical)
 				return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+2])) + " within string"}
 			}
 		default:
@@ -1322,15 +1361,13 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 // If there are no escaped characters, the output is simply a subslice of
 // the input with the surrounding quotes removed.
 // Otherwise, a new buffer is allocated for the output.
-func unescapeStringMayCopy(src []byte) []byte {
-	if consumeSimpleString(src) == len(src) {
+func unescapeStringMayCopy(src []byte, isVerbatim bool) []byte {
+	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	if isVerbatim {
 		return src[len(`"`) : len(src)-len(`"`)]
 	}
-	out, ok := unescapeString(make([]byte, 0, len(src)), src)
-	if !ok {
-		panic("BUG: invalid JSON string")
-	}
-	return out
+	src, _ = unescapeString(make([]byte, 0, len(src)), src)
+	return src
 }
 
 // consumeSimpleNumber consumes the next JSON number per RFC 7159, section 6

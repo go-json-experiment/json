@@ -27,9 +27,7 @@ func TestInline(t *testing.T) {
 		m := make(map[string]bool)
 		for _, s := range []string{
 			"Encoder.needFlush",
-			"trimSuffixWhitespace",
-			"trimSuffixString",
-			"trimSuffixByte",
+			"Decoder.ReadValue", // thin wrapper over Decoder.readValue
 			"decodeBuffer.needMore",
 			"consumeWhitespace",
 			"consumeNull",
@@ -39,6 +37,7 @@ func TestInline(t *testing.T) {
 			"consumeString", // thin wrapper over consumeStringResumable
 			"consumeSimpleNumber",
 			"consumeNumber", // thin wrapper over consumeNumberResumable
+			"unescapeStringMayCopy",
 			"hasSuffixByte",
 			"trimSuffixByte",
 			"trimSuffixString",
@@ -70,6 +69,8 @@ func TestInline(t *testing.T) {
 			"objectNameStack.replaceLastUnquotedName",
 			"objectNameStack.pop",
 			"objectNameStack.ensureCopiedBuffer",
+			"objectNamespace.insertQuoted",   // thin wrapper over objectNamespace.insert
+			"objectNamespace.insertUnquoted", // thin wrapper over objectNamespace.insert
 			"Token.String",
 			"foldName",
 		} {

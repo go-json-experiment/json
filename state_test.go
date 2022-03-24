@@ -294,7 +294,7 @@ func TestObjectNamespace(t *testing.T) {
 		for i, op := range ops {
 			switch op := op.(type) {
 			case insert:
-				gotInserted := ns.insertQuoted([]byte(op.name))
+				gotInserted := ns.insertQuoted([]byte(op.name), false)
 				if gotInserted != op.wantInserted {
 					t.Fatalf("%d: objectNamespace{%v}.insert(%v) = %v, want %v", i, strings.Join(wantNames, " "), op.name, gotInserted, op.wantInserted)
 				}
@@ -326,7 +326,7 @@ func TestObjectNamespace(t *testing.T) {
 
 		// Insert a large number of names.
 		for i := 0; i < 64; i++ {
-			ns.insertQuoted([]byte(fmt.Sprintf(`"name%d"`, i)))
+			ns.insertUnquoted([]byte(fmt.Sprintf(`name%d`, i)))
 		}
 
 		// Verify that we did switch to using a Go map.

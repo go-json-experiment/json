@@ -421,7 +421,7 @@ func (e *Encoder) WriteToken(t Token) error {
 				err = errInvalidNamespace
 				break
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}
@@ -526,7 +526,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 			if !e.tokens.last.isValidNamespace() {
 				return errInvalidNamespace
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
 				return &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
@@ -609,7 +609,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 				err = errInvalidNamespace
 				break
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}
@@ -666,6 +666,7 @@ func (e *Encoder) appendIndent(b []byte, n int) []byte {
 // appends it to the end of b, reformatting whitespace and strings as needed.
 // It returns the updated versions of b and v.
 func (e *Encoder) reformatValue(b []byte, v RawValue, depth int) ([]byte, RawValue, error) {
+	// TODO: Should this update valueFlags as input?
 	if len(v) == 0 {
 		return b, v, io.ErrUnexpectedEOF
 	}
@@ -759,7 +760,7 @@ func (e *Encoder) reformatObject(b []byte, v RawValue, depth int) ([]byte, RawVa
 		if err != nil {
 			return b, v, err
 		}
-		if !e.options.AllowDuplicateNames && !names.insertQuoted(b[n0:]) {
+		if !e.options.AllowDuplicateNames && !names.insertQuoted(b[n0:], false) {
 			return b, v, &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 		}
 
@@ -1065,11 +1066,13 @@ func appendString(dst []byte, s string, validateUTF8 bool, escapeRune func(rune)
 // reformatting it if necessary for the given escapeRune parameter.
 // It returns the appended output and the remainder of the input.
 func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, []byte, error) {
-	n, err := consumeString(src, validateUTF8)
+	// TODO: Should this update valueFlags as input?
+	var flags valueFlags
+	n, err := consumeString(&flags, src, validateUTF8)
 	if err != nil {
 		return dst, src[n:], err
 	}
-	if preserveRaw {
+	if preserveRaw || (escapeRune == nil && flags.isCanonical()) {
 		dst = append(dst, src[:n]...) // copy the string verbatim
 		return dst, src[n:], nil
 	}

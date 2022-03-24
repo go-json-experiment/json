@@ -1019,67 +1019,71 @@ func TestConsumeString(t *testing.T) {
 		in          string
 		simple      bool
 		want        int
+		wantFlags   valueFlags
 		wantStr     string
 		wantErr     error
 		wantErrUTF8 error // error if validateUTF8 is specified
 	}{
-		{``, false, 0, "", io.ErrUnexpectedEOF, nil},
-		{`"`, false, 1, "", io.ErrUnexpectedEOF, nil},
-		{`""`, true, 2, "", nil, nil},
-		{`""x`, true, 2, "", nil, nil},
-		{` ""x`, false, 0, "", newInvalidCharacterError(' ', "at start of string (expecting '\"')"), nil},
-		{`"hello`, false, 6, "hello", io.ErrUnexpectedEOF, nil},
-		{`"hello"`, true, 7, "hello", nil, nil},
-		{"\"\x00\"", false, 1, "", newInvalidCharacterError('\x00', "within string (expecting non-control character)"), nil},
-		{`"\u0000"`, false, 8, "\x00", nil, nil},
-		{"\"\x1f\"", false, 1, "", newInvalidCharacterError('\x1f', "within string (expecting non-control character)"), nil},
-		{`"\u001f"`, false, 8, "\x1f", nil, nil},
-		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil},
-		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil},
-		{"\"x\x80\"", false, 4, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xff\"", false, 4, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xc0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xc0\x80\"", false, 5, "x\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xe0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xe0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xe0\x80\x80\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xf0", false, 3, "x\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xf0\x80", false, 4, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xf0\x80\x80", false, 5, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xf0\x80\x80\x80\"", false, 7, "x\ufffd\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"x\xed\xba\xad\"", false, 6, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
-		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
-		{`"¢"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"¢"`[:3], false, 3, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"¢"`[:4], false, 4, "¢", nil, nil},
-		{`"€"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"€"`[:3], false, 3, "\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"€"`[:4], false, 4, "€", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"€"`[:5], false, 5, "€", nil, nil},
-		{`"𐍈"`[:2], false, 2, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:3], false, 3, "\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:4], false, 4, "\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:5], false, 5, "𐍈", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"𐍈"`[:6], false, 6, "𐍈", nil, nil},
-		{`"x\`, false, 2, "x", io.ErrUnexpectedEOF, nil},
-		{`"x\"`, false, 4, "x\"", io.ErrUnexpectedEOF, nil},
-		{`"x\x"`, false, 2, "x", &SyntacticError{str: `invalid escape sequence "\\x" within string`}, nil},
-		{`"\"\\\/\b\f\n\r\t"`, false, 18, "\"\\/\b\f\n\r\t", nil, nil},
-		{`"\u`, false, 1, "", io.ErrUnexpectedEOF, nil},
-		{`"\uf`, false, 1, "", io.ErrUnexpectedEOF, nil},
-		{`"\uff`, false, 1, "", io.ErrUnexpectedEOF, nil},
-		{`"\ufff`, false, 1, "", io.ErrUnexpectedEOF, nil},
-		{`"\ufffd`, false, 7, "\ufffd", io.ErrUnexpectedEOF, nil},
-		{`"\ufffd"`, false, 8, "\ufffd", nil, nil},
-		{`"\uABCD"`, false, 8, "\uabcd", nil, nil},
-		{`"\uefX0"`, false, 1, "", &SyntacticError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
-		{`"\uDEAD"`, false, 8, "\ufffd", nil, io.ErrUnexpectedEOF},
-		{`"\uDEAD______"`, false, 14, "\ufffd______", nil, &SyntacticError{str: "invalid unpaired surrogate half within string"}},
-		{`"\uDEAD\uXXXX"`, false, 7, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
-		{`"\uDEAD\uBEEF"`, false, 14, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair in string`}},
-		{`"\uD800\udead"`, false, 14, "\U000102ad", nil, nil},
-		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, "\"\\/\b\f\n\r\t", nil, nil},
-		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
+		{``, false, 0, 0, "", io.ErrUnexpectedEOF, nil},
+		{`"`, false, 1, 0, "", io.ErrUnexpectedEOF, nil},
+		{`""`, true, 2, 0, "", nil, nil},
+		{`""x`, true, 2, 0, "", nil, nil},
+		{` ""x`, false, 0, 0, "", newInvalidCharacterError(' ', "at start of string (expecting '\"')"), nil},
+		{`"hello`, false, 6, 0, "hello", io.ErrUnexpectedEOF, nil},
+		{`"hello"`, true, 7, 0, "hello", nil, nil},
+		{"\"\x00\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError('\x00', "within string (expecting non-control character)"), nil},
+		{`"\u0000"`, false, 8, stringNonVerbatim, "\x00", nil, nil},
+		{"\"\x1f\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError('\x1f', "within string (expecting non-control character)"), nil},
+		{`"\u001f"`, false, 8, stringNonVerbatim, "\x1f", nil, nil},
+		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil},
+		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, 0, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil},
+		{"\"x\x80\"", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xff\"", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xc0", false, 3, stringNonVerbatim | stringNonCanonical, "x\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xc0\x80\"", false, 5, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xe0", false, 2, 0, "x", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{"\"x\xe0\x80", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xe0\x80\x80\"", false, 6, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0", false, 2, 0, "x", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{"\"x\xf0\x80", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0\x80\x80", false, 5, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xf0\x80\x80\x80\"", false, 7, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"x\xed\xba\xad\"", false, 6, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, &SyntacticError{str: "invalid UTF-8 within string"}},
+		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, 0, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
+		{`"¢"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"¢"`[:3], false, 3, 0, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
+		{`"¢"`[:4], false, 4, 0, "¢", nil, nil},
+		{`"€"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"€"`[:3], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"€"`[:4], false, 4, 0, "€", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
+		{`"€"`[:5], false, 5, 0, "€", nil, nil},
+		{`"𐍈"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"𐍈"`[:3], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"𐍈"`[:4], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"𐍈"`[:5], false, 5, 0, "𐍈", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
+		{`"𐍈"`[:6], false, 6, 0, "𐍈", nil, nil},
+		{`"x\`, false, 2, stringNonVerbatim, "x", io.ErrUnexpectedEOF, nil},
+		{`"x\"`, false, 4, stringNonVerbatim, "x\"", io.ErrUnexpectedEOF, nil},
+		{`"x\x"`, false, 2, stringNonVerbatim | stringNonCanonical, "x", &SyntacticError{str: `invalid escape sequence "\\x" within string`}, nil},
+		{`"\"\\\b\f\n\r\t"`, false, 16, stringNonVerbatim, "\"\\\b\f\n\r\t", nil, nil},
+		{`"/"`, true, 3, 0, "/", nil, nil},
+		{`"\/"`, false, 4, stringNonVerbatim | stringNonCanonical, "/", nil, nil},
+		{`"\u002f"`, false, 8, stringNonVerbatim | stringNonCanonical, "/", nil, nil},
+		{`"\u`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
+		{`"\uf`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
+		{`"\uff`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
+		{`"\ufff`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
+		{`"\ufffd`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, nil},
+		{`"\ufffd"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, nil},
+		{`"\uABCD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\uabcd", nil, nil},
+		{`"\uefX0"`, false, 1, stringNonVerbatim | stringNonCanonical, "", &SyntacticError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
+		{`"\uDEAD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, io.ErrUnexpectedEOF},
+		{`"\uDEAD______"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd______", nil, &SyntacticError{str: "invalid unpaired surrogate half within string"}},
+		{`"\uDEAD\uXXXX"`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
+		{`"\uDEAD\uBEEF"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair in string`}},
+		{`"\uD800\udead"`, false, 14, stringNonVerbatim | stringNonCanonical, "\U000102ad", nil, nil},
+		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, stringNonVerbatim | stringNonCanonical, "\"\\/\b\f\n\r\t", nil, nil},
+		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, stringNonVerbatim | stringNonCanonical, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
 	}
 
 	for _, tt := range tests {
@@ -1091,11 +1095,15 @@ func TestConsumeString(t *testing.T) {
 				t.Errorf("consumeSimpleString(%q) = %v, want %v", tt.in, got, 0)
 			}
 
-			got, gotErr := consumeString([]byte(tt.in), false)
+			var gotFlags valueFlags
+			got, gotErr := consumeString(&gotFlags, []byte(tt.in), false)
+			if gotFlags != tt.wantFlags {
+				t.Errorf("consumeString(%q, false) flags = %v, want %v", tt.in, gotFlags, tt.wantFlags)
+			}
 			if got != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr) {
 				t.Errorf("consumeString(%q, false) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
-			switch got, gotErr := consumeString([]byte(tt.in), true); {
+			switch got, gotErr := consumeString(&gotFlags, []byte(tt.in), true); {
 			case tt.wantErrUTF8 == nil && (got != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr)):
 				t.Errorf("consumeString(%q, true) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			case tt.wantErrUTF8 != nil && (got > tt.want || !reflect.DeepEqual(gotErr, tt.wantErrUTF8)):

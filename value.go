@@ -255,8 +255,9 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		beforeBody := d.InputOffset() // offset after '{'
 		for d.PeekKind() != '}' {
 			beforeName := d.InputOffset()
-			name, _ := d.ReadValue()
-			name = unescapeStringMayCopy(name)
+			var flags valueFlags
+			name, _ := d.readValue(&flags)
+			name = unescapeStringMayCopy(name, flags.isVerbatim())
 			reorderObjects(d, scratch)
 			afterValue := d.InputOffset()
 

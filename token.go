@@ -243,7 +243,9 @@ func (t Token) string() (string, []byte) {
 		}
 		buf := raw.previousBuffer()
 		if buf[0] == '"' {
-			return "", unescapeStringMayCopy(buf)
+			// TODO: Preserve valueFlags in Token?
+			isVerbatim := consumeSimpleString(buf) == len(buf)
+			return "", unescapeStringMayCopy(buf, isVerbatim)
 		}
 		// Handle tokens that are not JSON strings for fmt.Stringer.
 		return "", buf
