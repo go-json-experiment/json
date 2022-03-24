@@ -1086,7 +1086,7 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 	switch {
 	case resumeOffset > 0:
 		n = resumeOffset // already handled the leading quote
-	case len(b) == 0:
+	case uint(len(b)) == 0:
 		return n, io.ErrUnexpectedEOF
 	case b[0] == '"':
 		n++
@@ -1095,13 +1095,22 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 	}
 
 	// Consume every character in the string.
-	for len(b) > n {
+	for uint(len(b)) > uint(n) {
 		// Optimize for long sequences of unescaped characters.
-		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] <= unicode.MaxASCII) {
+		noEscape := func(c byte) bool {
+			return c <= unicode.MaxASCII && ' ' <= c && c != '\\' && c != '"'
+		}
+		for uint(len(b)) > uint(n) && noEscape(b[n]) {
 			n++
 		}
-		if len(b) == n {
+		if uint(len(b)) <= uint(n) {
 			return n, io.ErrUnexpectedEOF
+		}
+
+		// Check for terminating quote.
+		if b[n] == '"' {
+			n++
+			return n, nil
 		}
 
 		switch r, rn := utf8.DecodeRune(b[n:]); {
@@ -1113,21 +1122,21 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 				return n, &SyntacticError{str: "invalid UTF-8 within string"}
 			}
 			n++
-		case r < ' ': // invalid control character
-			return n, newInvalidCharacterError(b[n], "within string (expecting non-control character)")
-		case r == '"': // terminating quote
-			n++
-			return n, nil
-		case r == '\\': // escape sequence
+		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
+			if r < ' ' {
+				return n, newInvalidCharacterError(b[n], "within string (expecting non-control character)")
+			}
+
+			// Handle escape sequence.
 			resumeOffset = n
-			if len(b) < n+2 {
+			if uint(len(b)) < uint(n+2) {
 				return resumeOffset, io.ErrUnexpectedEOF
 			}
 			switch r := b[n+1]; r {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 				n += 2
 			case 'u':
-				if len(b) < n+6 {
+				if uint(len(b)) < uint(n+6) {
 					return resumeOffset, io.ErrUnexpectedEOF
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
@@ -1137,10 +1146,10 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 				n += 6
 
 				if validateUTF8 && utf16.IsSurrogate(rune(v1)) {
-					if len(b) >= n+2 && (b[n] != '\\' || b[n+1] != 'u') {
+					if uint(len(b)) >= uint(n+2) && (b[n] != '\\' || b[n+1] != 'u') {
 						return n, &SyntacticError{str: "invalid unpaired surrogate half within string"}
 					}
-					if len(b) < n+6 {
+					if uint(len(b)) < uint(n+6) {
 						return resumeOffset, io.ErrUnexpectedEOF
 					}
 					v2, ok := parseHexUint16(b[n+2 : n+6])
@@ -1167,68 +1176,86 @@ func consumeStringResumable(b []byte, resumeOffset int, validateUTF8 bool) (n in
 // The input must be an entire JSON string with no surrounding whitespace.
 func unescapeString(dst, src []byte) (v []byte, ok bool) {
 	// Consume quote delimiters.
-	if len(src) < 1 || src[0] != '"' {
+	if uint(len(src)) == 0 || src[0] != '"' {
 		return dst, false
 	}
-	src = src[1:]
+	i, n := 1, 1
 
 	// Consume every character until completion.
-	for len(src) > 0 {
+	for uint(len(src)) > uint(n) {
 		// Optimize for long sequences of unescaped characters.
-		var n int
-		for len(src) > n && (' ' <= src[n] && src[n] != '\\' && src[n] != '"' && src[n] <= unicode.MaxASCII) {
+		noEscape := func(c byte) bool {
+			return c <= unicode.MaxASCII && ' ' <= c && c != '\\' && c != '"'
+		}
+		for uint(len(src)) > uint(n) && noEscape(src[n]) {
 			n++
 		}
-		dst, src = append(dst, src[:n]...), src[n:]
-		if len(src) == 0 {
+		if uint(len(src)) <= uint(n) {
 			break
 		}
 
-		switch r, rn := utf8.DecodeRune(src); {
+		// Check for terminating quote.
+		if src[n] == '"' {
+			dst = append(dst, src[i:n]...)
+			n++
+			return dst, len(src) == n
+		}
+
+		switch r, rn := utf8.DecodeRune(src[n:]); {
 		case r == utf8.RuneError && rn == 1:
 			// NOTE: An unescaped string may be longer than the escaped string
 			// because invalid UTF-8 bytes are being replaced.
-			dst, src = append(dst, "\uFFFD"...), src[1:]
-		case r < ' ':
-			return dst, false // invalid control character or unescaped quote
-		case r == '"':
-			src = src[1:]
-			return dst, len(src) == 0
-		case r == '\\':
-			if len(src) < 2 {
+			dst = append(dst, src[i:n]...)
+			dst = append(dst, "\uFFFD"...)
+			n += rn
+			i = n
+		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
+			dst = append(dst, src[i:n]...)
+			if r < ' ' {
+				return dst, false // invalid control character or unescaped quote
+			}
+
+			// Handle escape sequence.
+			if uint(len(src)) < uint(n+2) {
 				return dst, false // truncated escape sequence
 			}
-			switch r := src[1]; r {
+			switch r := src[n+1]; r {
 			case '"', '\\', '/':
-				dst, src = append(dst, r), src[2:]
+				dst = append(dst, r)
+				n += 2
 			case 'b':
-				dst, src = append(dst, '\b'), src[2:]
+				dst = append(dst, '\b')
+				n += 2
 			case 'f':
-				dst, src = append(dst, '\f'), src[2:]
+				dst = append(dst, '\f')
+				n += 2
 			case 'n':
-				dst, src = append(dst, '\n'), src[2:]
+				dst = append(dst, '\n')
+				n += 2
 			case 'r':
-				dst, src = append(dst, '\r'), src[2:]
+				dst = append(dst, '\r')
+				n += 2
 			case 't':
-				dst, src = append(dst, '\t'), src[2:]
+				dst = append(dst, '\t')
+				n += 2
 			case 'u':
-				if len(src) < 6 {
+				if uint(len(src)) < uint(n+6) {
 					return dst, false // truncated escape sequence
 				}
-				v1, ok := parseHexUint16(src[2:6])
+				v1, ok := parseHexUint16(src[n+2 : n+6])
 				if !ok {
 					return dst, false // invalid escape sequence
 				}
-				src = src[6:]
+				n += 6
 
 				// Check whether this is a surrogate halve.
 				r := rune(v1)
 				if utf16.IsSurrogate(r) {
 					r = unicode.ReplacementChar // assume failure unless the following succeeds
-					if len(src) >= 6 && src[0] == '\\' && src[1] == 'u' {
-						if v2, ok := parseHexUint16(src[2:6]); ok {
+					if uint(len(src)) >= uint(n+6) && src[n+0] == '\\' && src[n+1] == 'u' {
+						if v2, ok := parseHexUint16(src[n+2 : n+6]); ok {
 							if r = utf16.DecodeRune(rune(v1), rune(v2)); r != unicode.ReplacementChar {
-								src = src[6:]
+								n += 6
 							}
 						}
 					}
@@ -1238,11 +1265,12 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 			default:
 				return dst, false // invalid escape sequence
 			}
+			i = n
 		default:
-			dst, src = append(dst, src[:rn]...), src[rn:]
+			n += rn
 		}
 	}
-
+	dst = append(dst, src[i:n]...)
 	return dst, false // truncated input
 }
 
