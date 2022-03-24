@@ -60,7 +60,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			if err != nil {
 				return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
 			}
-			if dec.tokens.last().needObjectValue() && insertQuotedName != nil && !insertQuotedName(val) {
+			if dec.tokens.last.needObjectValue() && insertQuotedName != nil && !insertQuotedName(val) {
 				return &SyntacticError{str: "duplicate name " + string(val) + " in object"}
 			}
 			if err := enc.WriteValue(val); err != nil {

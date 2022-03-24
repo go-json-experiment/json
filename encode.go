@@ -260,16 +260,16 @@ func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 // avoidFlush indicates whether to avoid flushing to ensure there is always
 // enough in the buffer to unwrite the last object member if it were empty.
 func (e *Encoder) avoidFlush() bool {
-	switch last := e.tokens.last(); {
-	case last.length() == 0:
+	switch {
+	case e.tokens.last.length() == 0:
 		// Never flush after ObjectStart or ArrayStart since we don't know yet
 		// if the object or array will end up being empty.
 		return true
-	case last.needObjectValue():
+	case e.tokens.last.needObjectValue():
 		// Never flush before the object value since we don't know yet
 		// if the object value will end up being empty.
 		return true
-	case last.needObjectName() && len(e.buf) >= 2:
+	case e.tokens.last.needObjectName() && len(e.buf) >= 2:
 		// Never flush after the object value if it does turn out to be empty.
 		switch string(e.buf[len(e.buf)-2:]) {
 		case `ll`, `""`, `{}`, `[]`: // last two bytes of every empty value
@@ -282,8 +282,7 @@ func (e *Encoder) avoidFlush() bool {
 // unwriteEmptyObjectMember tries to unwrite the last object member
 // if the value is empty. It reports whether it successfully unwrote it.
 func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
-	last := e.tokens.last()
-	if !last.isObject() || !last.needObjectName() || last.length() == 0 {
+	if last := e.tokens.last; !last.isObject() || !last.needObjectName() || last.length() == 0 {
 		panic("BUG: must be called on an object after writing a value")
 	}
 
@@ -324,10 +323,10 @@ func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 	e.buf = b // store back truncated unflushed buffer
 
 	// Undo state changes.
-	last.decrement() // for object member value
-	last.decrement() // for object member name
+	e.tokens.last.decrement() // for object member value
+	e.tokens.last.decrement() // for object member name
 	if !e.options.AllowDuplicateNames {
-		if last.isActiveNamespace() {
+		if e.tokens.last.isActiveNamespace() {
 			e.namespaces.last().removeLast()
 		}
 		e.names.clearLast()
@@ -417,13 +416,12 @@ func (e *Encoder) WriteToken(t Token) error {
 		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
 			break
 		}
-		last := e.tokens.last()
-		if !e.options.AllowDuplicateNames && last.needObjectName() {
-			if !last.isValidNamespace() {
+		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+			if !e.tokens.last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
 			}
-			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}
@@ -524,12 +522,11 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 		}
 
 		// Update the state machine.
-		last := e.tokens.last()
-		if !e.options.AllowDuplicateNames && last.needObjectName() {
-			if !last.isValidNamespace() {
+		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+			if !e.tokens.last.isValidNamespace() {
 				return errInvalidNamespace
 			}
-			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
 				return &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
@@ -607,13 +604,12 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	case 'n', 'f', 't':
 		err = e.tokens.appendLiteral()
 	case '"':
-		last := e.tokens.last()
-		if !e.options.AllowDuplicateNames && last.needObjectName() {
-			if !last.isValidNamespace() {
+		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+			if !e.tokens.last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
 			}
-			if last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:]) {
 				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
 				break
 			}
@@ -929,7 +925,7 @@ func (e *Encoder) StackDepth() int {
 // A complete JSON object must have an even length.
 func (e *Encoder) StackIndex(i int) (Kind, int) {
 	// NOTE: Keep in sync with Decoder.StackIndex.
-	switch s := e.tokens[i]; {
+	switch s := e.tokens.index(i); {
 	case i > 0 && s.isObject():
 		return '{', s.length()
 	case i > 0 && s.isArray():

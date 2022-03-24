@@ -546,7 +546,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// As such, disable the expensive duplicate name check if we know
 			// that every Go key will serialize as a unique JSON string.
 			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), enc.options.AllowInvalidUTF8) {
-				enc.tokens.last().disableNamespace()
+				enc.tokens.last.disableNamespace()
 			}
 
 			// NOTE: Map entries are serialized in a non-deterministic order.
@@ -613,7 +613,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// to the same Go value. This is an unusual interaction
 			// between syntax and semantics, but is more correct.
 			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), dec.options.AllowInvalidUTF8) {
-				dec.tokens.last().disableNamespace()
+				dec.tokens.last.disableNamespace()
 			}
 
 			// In the rare case where the map is not already empty,
@@ -715,7 +715,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		}
 		var seenIdxs uintSet
 		prevIdx := -1
-		enc.tokens.last().disableNamespace() // we manually ensure unique names below
+		enc.tokens.last.disableNamespace() // we manually ensure unique names below
 		for i := range fields.flattened {
 			f := &fields.flattened[i]
 			v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
@@ -754,8 +754,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			//	5. There is no possibility of an error occuring.
 			{
 				// Append any delimiters or optional whitespace.
-				last := enc.tokens.last()
-				if last.length() > 0 {
+				if enc.tokens.last.length() > 0 {
 					enc.buf = append(enc.buf, ',')
 				}
 				if enc.options.multiline {
@@ -772,7 +771,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				if !enc.options.AllowDuplicateNames {
 					enc.names.replaceLastQuotedOffset(n0)
 				}
-				last.increment()
+				enc.tokens.last.increment()
 			}
 
 			// Write the object member value.
@@ -860,7 +859,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				return &err
 			}
 			var seenIdxs uintSet
-			dec.tokens.last().disableNamespace()
+			dec.tokens.last.disableNamespace()
 			for dec.PeekKind() != '}' {
 				// Process the object member name.
 				val, err := dec.ReadValue()

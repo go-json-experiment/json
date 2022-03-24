@@ -157,7 +157,8 @@ func TestStateMachine(t *testing.T) {
 				switch op := op.(type) {
 				case stackLengths:
 					var got []int
-					for _, e := range state {
+					for i := 0; i < state.depth(); i++ {
+						e := state.index(i)
 						got = append(got, e.length())
 					}
 					want := []int(op)

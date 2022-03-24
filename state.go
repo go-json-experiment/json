@@ -48,7 +48,8 @@ func (s *state) reset() {
 // Invariant: Must call s.names.copyQuotedBuffer beforehand.
 func (s state) appendStackPointer(b []byte) []byte {
 	var objectDepth int
-	for _, e := range s.tokens[1:] {
+	for i := 1; i < s.tokens.depth(); i++ {
+		e := s.tokens.index(i)
 		if e.length() == 0 {
 			break // empty object or array
 		}
@@ -93,77 +94,86 @@ func (s state) appendStackPointer(b []byte) []byte {
 //
 // For performance, most methods are carefully written to be inlineable.
 // The zero value is not a valid state machine; call reset first.
-type stateMachine []stateEntry
+type stateMachine struct {
+	stack []stateEntry
+	last  stateEntry
+}
 
 // reset resets the state machine.
 // The machine always starts with a minimum depth of 1.
 func (m *stateMachine) reset() {
-	if cap(*m) > 1<<10 {
-		*m = nil
+	m.stack = m.stack[:0]
+	if cap(m.stack) > 1<<10 {
+		m.stack = nil
 	}
-	*m = append((*m)[:0], stateTypeArray)
+	m.last = stateTypeArray
 }
 
 // depth is the current nested depth of JSON objects and arrays.
 // It is one-indexed (i.e., top-level values have a depth of 1).
 func (m stateMachine) depth() int {
-	return len(m)
+	return len(m.stack) + 1
+}
+
+// index returns a reference to the ith entry.
+// It is only valid until the next push method call.
+func (m *stateMachine) index(i int) *stateEntry {
+	if i == len(m.stack) {
+		return &m.last
+	}
+	return &m.stack[i]
 }
 
 // depthLength reports the current nested depth and
 // the length of the last JSON object or array.
 func (m stateMachine) depthLength() (int, int) {
-	return len(m), m[len(m)-1].length()
-}
-
-// last returns a pointer to the last entry.
-func (m stateMachine) last() *stateEntry {
-	return &m[len(m)-1]
+	return m.depth(), m.last.length()
 }
 
 // appendLiteral appends a JSON literal as the next token in the sequence.
 // If an error is returned, the state is not mutated.
-func (m stateMachine) appendLiteral() error {
-	switch e := m.last(); {
-	case e.needObjectName():
+func (m *stateMachine) appendLiteral() error {
+	switch {
+	case m.last.needObjectName():
 		return errMissingName
-	case !e.isValidNamespace():
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		e.increment()
+		m.last.increment()
 		return nil
 	}
 }
 
 // appendString appends a JSON string as the next token in the sequence.
 // If an error is returned, the state is not mutated.
-func (m stateMachine) appendString() error {
-	switch e := m.last(); {
-	case !e.isValidNamespace():
+func (m *stateMachine) appendString() error {
+	switch {
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		e.increment()
+		m.last.increment()
 		return nil
 	}
 }
 
 // appendNumber appends a JSON number as the next token in the sequence.
 // If an error is returned, the state is not mutated.
-func (m stateMachine) appendNumber() error {
+func (m *stateMachine) appendNumber() error {
 	return m.appendLiteral()
 }
 
 // pushObject appends a JSON start object token as next in the sequence.
 // If an error is returned, the state is not mutated.
 func (m *stateMachine) pushObject() error {
-	switch e := m.last(); {
-	case e.needObjectName():
+	switch {
+	case m.last.needObjectName():
 		return errMissingName
-	case !e.isValidNamespace():
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		e.increment()
-		*m = append(*m, stateTypeObject)
+		m.last.increment()
+		m.stack = append(m.stack, m.last)
+		m.last = stateTypeObject
 		return nil
 	}
 }
@@ -171,15 +181,16 @@ func (m *stateMachine) pushObject() error {
 // popObject appends a JSON end object token as next in the sequence.
 // If an error is returned, the state is not mutated.
 func (m *stateMachine) popObject() error {
-	switch e := m.last(); {
-	case !e.isObject():
+	switch {
+	case !m.last.isObject():
 		return errMismatchDelim
-	case e.needObjectValue():
+	case m.last.needObjectValue():
 		return errMissingValue
-	case !e.isValidNamespace():
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		*m = (*m)[:len(*m)-1]
+		m.last = m.stack[len(m.stack)-1]
+		m.stack = m.stack[:len(m.stack)-1]
 		return nil
 	}
 }
@@ -187,14 +198,15 @@ func (m *stateMachine) popObject() error {
 // pushArray appends a JSON start array token as next in the sequence.
 // If an error is returned, the state is not mutated.
 func (m *stateMachine) pushArray() error {
-	switch e := m.last(); {
-	case e.needObjectName():
+	switch {
+	case m.last.needObjectName():
 		return errMissingName
-	case !e.isValidNamespace():
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		e.increment()
-		*m = append(*m, stateTypeArray)
+		m.last.increment()
+		m.stack = append(m.stack, m.last)
+		m.last = stateTypeArray
 		return nil
 	}
 }
@@ -202,13 +214,14 @@ func (m *stateMachine) pushArray() error {
 // popArray appends a JSON end array token as next in the sequence.
 // If an error is returned, the state is not mutated.
 func (m *stateMachine) popArray() error {
-	switch e := m.last(); {
-	case !e.isArray() || len(*m) == 1: // forbid popping top-level virtual JSON array
+	switch {
+	case !m.last.isArray() || len(m.stack) == 0: // forbid popping top-level virtual JSON array
 		return errMismatchDelim
-	case !e.isValidNamespace():
+	case !m.last.isValidNamespace():
 		return errInvalidNamespace
 	default:
-		*m = (*m)[:len(*m)-1]
+		m.last = m.stack[len(m.stack)-1]
+		m.stack = m.stack[:len(m.stack)-1]
 		return nil
 	}
 }
@@ -219,12 +232,12 @@ func (m *stateMachine) popArray() error {
 // should be appended to the output immediately before the next token.
 func (m stateMachine) needIndent(next Kind) (n int) {
 	willEnd := next == '}' || next == ']'
-	switch e := m.last(); {
+	switch {
 	case m.depth() == 1:
 		return 0 // top-level values are never indented
-	case e.length() == 0 && willEnd:
+	case m.last.length() == 0 && willEnd:
 		return 0 // an empty object or array is never indented
-	case e.length() == 0 || e.needImplicitComma(next):
+	case m.last.length() == 0 || m.last.needImplicitComma(next):
 		return m.depth()
 	case willEnd:
 		return m.depth() - 1
@@ -237,10 +250,10 @@ func (m stateMachine) needIndent(next Kind) (n int) {
 // before the next token of the specified kind.
 // A zero value means no delimiter should be emitted.
 func (m stateMachine) needDelim(next Kind) (delim byte) {
-	switch e := m.last(); {
-	case e.needImplicitColon():
+	switch {
+	case m.last.needImplicitColon():
 		return ':'
-	case e.needImplicitComma(next) && len(m) != 1: // comma not needed for top-level values
+	case m.last.needImplicitComma(next) && len(m.stack) != 0: // comma not needed for top-level values
 		return ','
 	}
 	return 0
@@ -268,10 +281,11 @@ func (m stateMachine) checkDelim(delim byte, next Kind) error {
 // the namespaces in Encoder or Decoder will be left in an inconsistent state.
 // Mark the namespaces as invalid so that future method calls on
 // Encoder or Decoder will return an error.
-func (m stateMachine) invalidateDisabledNamespaces() {
-	for i, e := range m {
+func (m *stateMachine) invalidateDisabledNamespaces() {
+	for i := 0; i < m.depth(); i++ {
+		e := m.index(i)
 		if !e.isActiveNamespace() {
-			m[i].invalidateNamespace()
+			e.invalidateNamespace()
 		}
 	}
 }
