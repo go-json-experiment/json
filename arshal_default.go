@@ -292,6 +292,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 
 func makeIntArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
+	bits := t.Bits()
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
@@ -326,7 +327,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 				negOffset = 1
 			}
 			n, ok := parseDecUint(val[negOffset:])
-			maxInt := uint64(1) << (t.Bits() - 1)
+			maxInt := uint64(1) << (bits - 1)
 			overflow := (neg && n > maxInt) || (!neg && n > maxInt-1)
 			if !ok {
 				if n != math.MaxUint64 {
@@ -353,6 +354,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 
 func makeUintArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
+	bits := t.Bits()
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
@@ -382,7 +384,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			fallthrough
 		case '0':
 			n, ok := parseDecUint(val)
-			maxUint := uint64(1) << t.Bits()
+			maxUint := uint64(1) << bits
 			overflow := n > maxUint-1
 			if !ok {
 				if n != math.MaxUint64 {
@@ -405,6 +407,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 
 func makeFloatArshaler(t reflect.Type) *arshaler {
 	var fncs arshaler
+	bits := t.Bits()
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		var allowNonFinite bool
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
@@ -422,7 +425,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			return enc.WriteToken(Float(fv))
 		}
-		return enc.writeNumber(fv, t.Bits(), mo.StringifyNumbers)
+		return enc.writeNumber(fv, bits, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		var allowNonFinite bool
@@ -471,7 +474,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			// We never report an overflow condition since we can always
 			// round the input to the closest representable finite value.
 			// For extremely large numbers, the closest value is ±MaxFloat.
-			fv, _ := parseFloat(val, t.Bits())
+			fv, _ := parseFloat(val, bits)
 			va.SetFloat(fv)
 			return nil
 		}
