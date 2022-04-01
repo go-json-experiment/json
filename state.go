@@ -246,6 +246,18 @@ func (m stateMachine) needIndent(next Kind) (n int) {
 	}
 }
 
+// mayAppendDelim appends a colon or comma that may precede the next token.
+func (m stateMachine) mayAppendDelim(b []byte, next Kind) []byte {
+	switch {
+	case m.last.needImplicitColon():
+		return append(b, ':')
+	case m.last.needImplicitComma(next) && len(m.stack) != 0: // comma not needed for top-level values
+		return append(b, ',')
+	default:
+		return b
+	}
+}
+
 // needDelim reports whether a colon or comma token should be implicitly emitted
 // before the next token of the specified kind.
 // A zero value means no delimiter should be emitted.
@@ -255,8 +267,9 @@ func (m stateMachine) needDelim(next Kind) (delim byte) {
 		return ':'
 	case m.last.needImplicitComma(next) && len(m.stack) != 0: // comma not needed for top-level values
 		return ','
+	default:
+		return 0
 	}
-	return 0
 }
 
 // checkDelim reports whether the specified delimiter should be there given

@@ -197,6 +197,11 @@ func (e *Encoder) flush() error {
 		return nil
 	}
 
+	// In streaming mode, always emit a newline after the top-level value.
+	if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
+		e.buf = append(e.buf, '\n')
+	}
+
 	// Inform objectNameStack that we are about to flush the buffer content.
 	e.names.copyQuotedBuffer(e.buf)
 
@@ -387,16 +392,9 @@ func (e *Encoder) WriteToken(t Token) error {
 	b := e.buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	c := e.tokens.needDelim(k)
-	if c != 0 {
-		b = append(b, c)
-	}
+	b = e.tokens.mayAppendDelim(b, k)
 	if e.options.multiline {
-		if c == ':' {
-			b = append(b, ' ')
-		} else {
-			b = e.appendIndent(b, e.tokens.needIndent(k))
-		}
+		b = e.appendWhitespace(b, k)
 	}
 
 	// Append the token to the output and to the state machine.
@@ -467,9 +465,6 @@ func (e *Encoder) WriteToken(t Token) error {
 	// Finish off the buffer and store it back into e.
 	e.buf = b
 	if e.needFlush() {
-		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
-			e.buf = append(e.buf, '\n')
-		}
 		return e.flush()
 	}
 	return nil
@@ -488,16 +483,9 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 	b := e.buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	c := e.tokens.needDelim('0')
-	if c != 0 {
-		b = append(b, c)
-	}
+	b = e.tokens.mayAppendDelim(b, '0')
 	if e.options.multiline {
-		if c == ':' {
-			b = append(b, ' ')
-		} else {
-			b = e.appendIndent(b, e.tokens.needIndent('0'))
-		}
+		b = e.appendWhitespace(b, '0')
 	}
 
 	if quote {
@@ -551,9 +539,6 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 	// Finish off the buffer and store it back into e.
 	e.buf = b
 	if e.needFlush() {
-		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
-			e.buf = append(e.buf, '\n')
-		}
 		return e.flush()
 	}
 	return nil
@@ -574,16 +559,9 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	b := e.buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	c := e.tokens.needDelim(k)
-	if c != 0 {
-		b = append(b, c)
-	}
+	b = e.tokens.mayAppendDelim(b, k)
 	if e.options.multiline {
-		if c == ':' {
-			b = append(b, ' ')
-		} else {
-			b = e.appendIndent(b, e.tokens.needIndent(k))
-		}
+		b = e.appendWhitespace(b, k)
 	}
 
 	// Append the value the output.
@@ -640,12 +618,18 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	// Finish off the buffer and store it back into e.
 	e.buf = b
 	if e.needFlush() {
-		if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
-			e.buf = append(e.buf, '\n')
-		}
 		return e.flush()
 	}
 	return nil
+}
+
+// appendWhitespace appends whitespace that immediately precedes the next token.
+func (e *Encoder) appendWhitespace(b []byte, next Kind) []byte {
+	if e.tokens.needDelim(next) == ':' {
+		return append(b, ' ')
+	} else {
+		return e.appendIndent(b, e.tokens.needIndent(next))
+	}
 }
 
 // appendIndent appends the appropriate number of indentation characters
