@@ -530,6 +530,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
+		once.Do(init)
 		if err := enc.WriteToken(ObjectStart); err != nil {
 			return err
 		}
@@ -538,7 +539,6 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			mko := mo
 			mko.StringifyNumbers = true
 
-			once.Do(init)
 			// TODO: Handle custom arshalers.
 			nonDefaultKey := keyFncs.nonDefault
 			marshalKey := keyFncs.marshal
@@ -594,6 +594,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			va.Set(reflect.Zero(t))
 			return nil
 		case '{':
+			once.Do(init)
 			if va.IsNil() {
 				va.Set(reflect.MakeMap(t))
 			}
@@ -602,7 +603,6 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			uko := uo
 			uko.StringifyNumbers = true
 
-			once.Do(init)
 			// TODO: Handle custom arshalers.
 			nonDefaultKey := keyFncs.nonDefault
 			unmarshalKey := keyFncs.unmarshal
@@ -708,14 +708,14 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
-		if err := enc.WriteToken(ObjectStart); err != nil {
-			return err
-		}
 		once.Do(init)
 		if errInit != nil {
 			err := *errInit // shallow copy SemanticError
 			err.action = "marshal"
 			return &err
+		}
+		if err := enc.WriteToken(ObjectStart); err != nil {
+			return err
 		}
 		var seenIdxs uintSet
 		prevIdx := -1
@@ -990,10 +990,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			}
 		}
 
+		once.Do(init)
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
-		once.Do(init)
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
 		for i, n := 0, va.Len(); i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed slice element is always addressable
@@ -1072,10 +1072,10 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
+		once.Do(init)
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
-		once.Do(init)
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
 		for i := 0; i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
