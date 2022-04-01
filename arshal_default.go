@@ -97,6 +97,22 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
+
+		// Optimize for marshaling without preceding whitespace.
+		if !enc.options.multiline && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, 't')
+			if va.Bool() {
+				enc.buf = append(enc.buf, "true"...)
+			} else {
+				enc.buf = append(enc.buf, "false"...)
+			}
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		return enc.WriteToken(Bool(va.Bool()))
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
@@ -297,6 +313,18 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
+
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
+			enc.buf = strconv.AppendInt(enc.buf, va.Int(), 10)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		x := math.Float64frombits(uint64(va.Int()))
 		return enc.writeNumber(x, rawIntNumber, mo.StringifyNumbers)
 	}
@@ -359,6 +387,18 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 			return newInvalidFormatError("marshal", t, mo.format)
 		}
+
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
+			enc.buf = strconv.AppendUint(enc.buf, va.Uint(), 10)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		x := math.Float64frombits(uint64(va.Uint()))
 		return enc.writeNumber(x, rawUintNumber, mo.StringifyNumbers)
 	}
@@ -417,7 +457,19 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
+
+		// Optimize for marshaling without preceding whitespace or string escaping.
 		fv := va.Float()
+		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
+			enc.buf = appendNumber(enc.buf, fv, bits)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		if math.IsNaN(fv) || math.IsInf(fv, 0) {
 			if !allowNonFinite {
 				err := fmt.Errorf("invalid value: %v", fv)
@@ -533,11 +585,24 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
+
+		// Optimize for marshaling an empty map without any preceding whitespace.
+		n := va.Len()
+		if n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
+			enc.buf = append(enc.buf, "{}"...)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		once.Do(init)
 		if err := enc.WriteToken(ObjectStart); err != nil {
 			return err
 		}
-		if va.Len() > 0 {
+		if n > 0 {
 			// Handle maps with numeric key types by stringifying them.
 			mko := mo
 			mko.StringifyNumbers = true
@@ -993,12 +1058,24 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			}
 		}
 
+		// Optimize for marshaling an empty slice without any preceding whitespace.
+		n := va.Len()
+		if n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
+			enc.buf = append(enc.buf, "[]"...)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
+
 		once.Do(init)
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal // TODO: Handle custom arshalers.
-		for i, n := 0, va.Len(); i < n; i++ {
+		for i := 0; i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
