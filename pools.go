@@ -42,9 +42,10 @@ func putDecoder(d *Decoder) {
 		*d = Decoder{state: d.state} // only preserve state
 	} else {
 		// If the Decoder escaped, we cannot naively recycle it.
-		// However, we can allocate a new Decoder and reuse the state.
+		// However, we can allocate a new Decoder and
+		// reuse the state machine and string cache.
 		old := d
-		d = &Decoder{state: d.state}
+		d = &Decoder{state: d.state, stringCache: d.stringCache}
 		old.state = state{} // invalidate old state
 	}
 	decoderPool.Put(d)

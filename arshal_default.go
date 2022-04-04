@@ -149,17 +149,23 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			return newInvalidFormatError("unmarshal", t, uo.format)
 		}
-		tok, err := dec.ReadToken()
+		var flags valueFlags
+		val, err := dec.readValue(&flags)
 		if err != nil {
 			return err
 		}
-		k := tok.Kind()
+		k := val.Kind()
 		switch k {
 		case 'n':
 			va.SetString("")
 			return nil
 		case '"':
-			va.SetString(tok.String())
+			val = unescapeStringMayCopy(val, flags.isVerbatim())
+			if dec.stringCache == nil {
+				dec.stringCache = new(stringCache)
+			}
+			str := dec.stringCache.make(val)
+			va.SetString(str)
 			return nil
 		}
 		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}

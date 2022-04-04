@@ -101,7 +101,8 @@ type Decoder struct {
 	decodeBuffer
 	options DecodeOptions
 
-	escaped bool // only used when unmarshaling
+	escaped     bool         // only used when unmarshaling
+	stringCache *stringCache // only used when unmarshaling
 }
 
 // decodeBuffer is a buffer split into 4 segments:
