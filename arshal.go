@@ -105,7 +105,9 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in any) error {
 
 	// Lookup and call the marshal function for this type.
 	marshal := lookupArshaler(t).marshal
-	// TODO: Handle custom marshalers.
+	if mo.Marshalers != nil {
+		marshal, _ = mo.Marshalers.lookup(marshal, t)
+	}
 	if err := marshal(mo, out, va); err != nil {
 		if !out.options.AllowDuplicateNames {
 			out.tokens.invalidateDisabledNamespaces()
@@ -212,7 +214,9 @@ func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out any) error {
 
 	// Lookup and call the unmarshal function for this type.
 	unmarshal := lookupArshaler(t).unmarshal
-	// TODO: Handle custom unmarshalers.
+	if uo.Unmarshalers != nil {
+		unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t)
+	}
 	if err := unmarshal(uo, in, va); err != nil {
 		if !in.options.AllowDuplicateNames {
 			in.tokens.invalidateDisabledNamespaces()
@@ -237,8 +241,8 @@ func newAddressableValue(t reflect.Type) addressableValue {
 
 // All marshal and unmarshal behavior is implemented using these signatures.
 type (
-	marshaler   func(MarshalOptions, *Encoder, addressableValue) error
-	unmarshaler func(UnmarshalOptions, *Decoder, addressableValue) error
+	marshaler   = func(MarshalOptions, *Encoder, addressableValue) error
+	unmarshaler = func(UnmarshalOptions, *Decoder, addressableValue) error
 )
 
 type arshaler struct {

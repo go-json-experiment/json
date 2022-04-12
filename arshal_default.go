@@ -18,12 +18,14 @@ import (
 
 var (
 	// Most natural Go type that correspond with each JSON type.
+	anyType          = reflect.TypeOf((*any)(nil)).Elem()            // JSON value
 	boolType         = reflect.TypeOf((*bool)(nil)).Elem()           // JSON bool
 	stringType       = reflect.TypeOf((*string)(nil)).Elem()         // JSON string
 	float64Type      = reflect.TypeOf((*float64)(nil)).Elem()        // JSON number
 	mapStringAnyType = reflect.TypeOf((*map[string]any)(nil)).Elem() // JSON object
 	sliceAnyType     = reflect.TypeOf((*[]any)(nil)).Elem()          // JSON array
 
+	bytesType       = reflect.TypeOf((*[]byte)(nil)).Elem()
 	emptyStructType = reflect.TypeOf((*struct{})(nil)).Elem()
 )
 
@@ -613,10 +615,13 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			mko := mo
 			mko.StringifyNumbers = true
 
-			// TODO: Handle custom arshalers.
 			nonDefaultKey := keyFncs.nonDefault
 			marshalKey := keyFncs.marshal
 			marshalVal := valFncs.marshal
+			if mo.Marshalers != nil {
+				marshalKey, _ = mo.Marshalers.lookup(marshalKey, t.Key())
+				marshalVal, _ = mo.Marshalers.lookup(marshalVal, t.Elem())
+			}
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
 
@@ -677,10 +682,13 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			uko := uo
 			uko.StringifyNumbers = true
 
-			// TODO: Handle custom arshalers.
 			nonDefaultKey := keyFncs.nonDefault
 			unmarshalKey := keyFncs.unmarshal
 			unmarshalVal := valFncs.unmarshal
+			if uo.Unmarshalers != nil {
+				unmarshalKey, _ = uo.Unmarshalers.lookup(unmarshalKey, t.Key())
+				unmarshalVal, _ = uo.Unmarshalers.lookup(unmarshalVal, t.Elem())
+			}
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
 
@@ -810,8 +818,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				continue
 			}
 
-			marshal := f.fncs.marshal // TODO: Handle custom arshalers.
+			marshal := f.fncs.marshal
 			nonDefault := f.fncs.nonDefault
+			if mo.Marshalers != nil {
+				var ok bool
+				marshal, ok = mo.Marshalers.lookup(marshal, f.typ)
+				nonDefault = nonDefault || ok
+			}
 
 			// OmitEmpty skips the field if the marshaled JSON value is empty,
 			// which we can know up front if there are no custom marshalers,
@@ -984,7 +997,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 
 				// Process the object member value.
-				unmarshal := f.fncs.unmarshal // TODO: Handle custom arshalers.
+				unmarshal := f.fncs.unmarshal
+				if uo.Unmarshalers != nil {
+					unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, f.typ)
+				}
 				uo2 := uo
 				if f.string {
 					uo2.StringifyNumbers = true
@@ -1080,8 +1096,11 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
-		marshal := valFncs.marshal // TODO: Handle custom arshalers.
-		for i := 0; i < n; i++ {
+		marshal := valFncs.marshal
+		if mo.Marshalers != nil {
+			marshal, _ = mo.Marshalers.lookup(marshal, t.Elem())
+		}
+		for i, n := 0, va.Len(); i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
@@ -1112,7 +1131,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '[':
 			once.Do(init)
-			unmarshal := valFncs.unmarshal // TODO: Handle custom arshalers.
+			unmarshal := valFncs.unmarshal
+			if uo.Unmarshalers != nil {
+				unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t.Elem())
+			}
 			va.SetLen(0)
 			mustZero := true // we do not know the cleanliness of unused capacity
 			for i := 0; dec.PeekKind() != ']'; i++ {
@@ -1162,7 +1184,10 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		if err := enc.WriteToken(ArrayStart); err != nil {
 			return err
 		}
-		marshal := valFncs.marshal // TODO: Handle custom arshalers.
+		marshal := valFncs.marshal
+		if mo.Marshalers != nil {
+			marshal, _ = mo.Marshalers.lookup(marshal, t.Elem())
+		}
 		for i := 0; i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
 			if err := marshal(mo, enc, v); err != nil {
@@ -1189,7 +1214,10 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '[':
 			once.Do(init)
-			unmarshal := valFncs.unmarshal // TODO: Handle custom arshalers.
+			unmarshal := valFncs.unmarshal
+			if uo.Unmarshalers != nil {
+				unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t.Elem())
+			}
 			var i int
 			for dec.PeekKind() != ']' {
 				if i >= t.Len() {
@@ -1240,7 +1268,10 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			return enc.WriteToken(Null)
 		}
 		once.Do(init)
-		marshal := valFncs.marshal       // TODO: Handle custom arshalers. Should this occur before the nil check?
+		marshal := valFncs.marshal
+		if mo.Marshalers != nil {
+			marshal, _ = mo.Marshalers.lookup(marshal, t.Elem())
+		}
 		v := addressableValue{va.Elem()} // dereferenced pointer is always addressable
 		return marshal(mo, enc, v)
 	}
@@ -1254,7 +1285,10 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 		once.Do(init)
-		unmarshal := valFncs.unmarshal // TODO: Handle custom arshalers. Should this occur before the nil check?
+		unmarshal := valFncs.unmarshal
+		if uo.Unmarshalers != nil {
+			unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t.Elem())
+		}
 		if va.IsNil() {
 			va.Set(reflect.New(t.Elem()))
 		}
@@ -1278,7 +1312,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		}
 		v := newAddressableValue(va.Elem().Type())
 		v.Set(va.Elem())
-		marshal := lookupArshaler(v.Type()).marshal // TODO: Handle custom arshalers. Should this occur before the nil check?
+		marshal := lookupArshaler(v.Type()).marshal
+		if mo.Marshalers != nil {
+			marshal, _ = mo.Marshalers.lookup(marshal, v.Type())
+		}
 		return marshal(mo, enc, v)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
@@ -1295,11 +1332,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		var v addressableValue
 		if va.IsNil() {
 			k := dec.PeekKind()
-			if t.NumMethod() > 0 {
-				// TODO: If types sets are allowed in ordinary interface types,
-				// then the concrete type to use can be known in the case where
-				// the type set contains exactly one Go type.
-				// See https://golang.org/issue/45346.
+			if !isAnyType(t) {
 				err := errors.New("cannot derive concrete type for non-empty interface")
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
@@ -1329,12 +1362,24 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			v = newAddressableValue(va.Elem().Type())
 			v.Set(va.Elem())
 		}
-		unmarshal := lookupArshaler(v.Type()).unmarshal // TODO: Handle custom arshalers. Should this occur before the nil check?
+		unmarshal := lookupArshaler(v.Type()).unmarshal
+		if uo.Unmarshalers != nil {
+			unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, v.Type())
+		}
 		err := unmarshal(uo, dec, v)
 		va.Set(v.Value)
 		return err
 	}
 	return &fncs
+}
+
+// isAnyType reports wether t is equivalent to the any interface type.
+func isAnyType(t reflect.Type) bool {
+	// This is forward compatible if the Go language permits type sets within
+	// ordinary interfaces where an interface with zero methods does not
+	// necessarily mean it can hold every possible Go type.
+	// See https://golang.org/issue/45346.
+	return t == anyType || anyType.Implements(t)
 }
 
 func makeInvalidArshaler(t reflect.Type) *arshaler {

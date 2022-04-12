@@ -36,7 +36,7 @@ type MarshalerV1 interface {
 //
 // The implementation must write only one JSON value to the Encoder.
 type MarshalerV2 interface {
-	MarshalNextJSON(*Encoder, MarshalOptions) error
+	MarshalNextJSON(MarshalOptions, *Encoder) error
 
 	// TODO: Should users call the MarshalOptions.MarshalNext method or
 	// should/can they call this method directly? Does it matter?
@@ -65,7 +65,7 @@ type UnmarshalerV1 interface {
 // It is recommended that UnmarshalNextJSON implement merge semantics when
 // unmarshaling into a pre-populated value.
 type UnmarshalerV2 interface {
-	UnmarshalNextJSON(*Decoder, UnmarshalOptions) error
+	UnmarshalNextJSON(UnmarshalOptions, *Decoder) error
 
 	// TODO: Should users call the UnmarshalOptions.UnmarshalNext method or
 	// should/can they call this method directly? Does it matter?
@@ -86,12 +86,13 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 			enc.escaped = true // pessimistically assume MarshalNextJSON leaks the Encoder
 			prevDepth, prevLength := enc.tokens.depthLength()
-			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalNextJSON(enc, mo)
+			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalNextJSON(mo, enc)
 			currDepth, currLength := enc.tokens.depthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
 				err = errors.New("must write exactly one JSON value")
 			}
 			if err != nil {
+				err = wrapSkipFunc(err, "marshal method")
 				// TODO: Avoid wrapping semantic or I/O errors.
 				return &SemanticError{action: "marshal", GoType: t, Err: err}
 			}
@@ -103,6 +104,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			marshaler := va.addrWhen(needAddr).Interface().(MarshalerV1)
 			val, err := marshaler.MarshalJSON()
 			if err != nil {
+				err = wrapSkipFunc(err, "marshal method")
 				// TODO: Avoid wrapping semantic errors.
 				return &SemanticError{action: "marshal", GoType: t, Err: err}
 			}
@@ -118,6 +120,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			marshaler := va.addrWhen(needAddr).Interface().(encoding.TextMarshaler)
 			s, err := marshaler.MarshalText()
 			if err != nil {
+				err = wrapSkipFunc(err, "marshal method")
 				// TODO: Avoid wrapping semantic errors.
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
@@ -141,12 +144,13 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			dec.escaped = true // pessimistically assume UnmarshalNextJSON leaks the Decoder
 			prevDepth, prevLength := dec.tokens.depthLength()
-			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalNextJSON(dec, uo)
+			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalNextJSON(uo, dec)
 			currDepth, currLength := dec.tokens.depthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
 				err = errors.New("must read exactly one JSON value")
 			}
 			if err != nil {
+				err = wrapSkipFunc(err, "unmarshal method")
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
 				return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 			}
@@ -161,6 +165,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			unmarshaler := va.addrWhen(needAddr).Interface().(UnmarshalerV1)
 			if err := unmarshaler.UnmarshalJSON(val); err != nil {
+				err = wrapSkipFunc(err, "unmarshal method")
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
 				return &SemanticError{action: "unmarshal", JSONKind: val.Kind(), GoType: t, Err: err}
 			}
@@ -181,6 +186,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			s := unescapeStringMayCopy(val, flags.isVerbatim())
 			unmarshaler := va.addrWhen(needAddr).Interface().(encoding.TextUnmarshaler)
 			if err := unmarshaler.UnmarshalText(s); err != nil {
+				err = wrapSkipFunc(err, "unmarshal method")
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
 				return &SemanticError{action: "unmarshal", JSONKind: val.Kind(), GoType: t, Err: err}
 			}

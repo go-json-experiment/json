@@ -6,6 +6,7 @@ package json
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -25,6 +26,7 @@ type (
 	jsonObject = map[string]any
 	jsonArray  = []any
 
+	namedAny     any
 	namedBool    bool
 	namedString  string
 	namedBytes   []byte
@@ -384,10 +386,10 @@ type (
 	structMethodJSONv1 struct{ value string }
 	structMethodText   struct{ value string }
 
-	marshalJSONv2Func   func(*Encoder, MarshalOptions) error
+	marshalJSONv2Func   func(MarshalOptions, *Encoder) error
 	marshalJSONv1Func   func() ([]byte, error)
 	marshalTextFunc     func() ([]byte, error)
-	unmarshalJSONv2Func func(*Decoder, UnmarshalOptions) error
+	unmarshalJSONv2Func func(UnmarshalOptions, *Decoder) error
 	unmarshalJSONv1Func func([]byte) error
 	unmarshalTextFunc   func([]byte) error
 
@@ -406,9 +408,12 @@ type (
 	valueNeverZero    string
 	pointerAlwaysZero string
 	pointerNeverZero  string
+
+	valueStringer   struct{}
+	pointerStringer struct{}
 )
 
-func (p *allMethods) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
+func (p *allMethods) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
 	if got, want := "MarshalNextJSON", p.method; got != want {
 		return fmt.Errorf("called wrong method: got %v, want %v", got, want)
 	}
@@ -427,7 +432,7 @@ func (p *allMethods) MarshalText() ([]byte, error) {
 	return p.value, nil
 }
 
-func (p *allMethods) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
+func (p *allMethods) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
 	p.method = "UnmarshalNextJSON"
 	val, err := dec.ReadValue()
 	p.value = val
@@ -444,10 +449,10 @@ func (p *allMethods) UnmarshalText(val []byte) error {
 	return nil
 }
 
-func (s structMethodJSONv2) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
+func (s structMethodJSONv2) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
 	return enc.WriteToken(String(s.value))
 }
-func (s *structMethodJSONv2) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
+func (s *structMethodJSONv2) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
 	tok, err := dec.ReadToken()
 	if err != nil {
 		return err
@@ -479,8 +484,8 @@ func (s *structMethodText) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (f marshalJSONv2Func) MarshalNextJSON(enc *Encoder, mo MarshalOptions) error {
-	return f(enc, mo)
+func (f marshalJSONv2Func) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
+	return f(mo, enc)
 }
 func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 	return f()
@@ -488,8 +493,8 @@ func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 func (f marshalTextFunc) MarshalText() ([]byte, error) {
 	return f()
 }
-func (f unmarshalJSONv2Func) UnmarshalNextJSON(dec *Decoder, uo UnmarshalOptions) error {
-	return f(dec, uo)
+func (f unmarshalJSONv2Func) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
+	return f(uo, dec)
 }
 func (f unmarshalJSONv1Func) UnmarshalJSON(b []byte) error {
 	return f(b)
@@ -520,8 +525,10 @@ func (valueNeverZero) IsZero() bool     { return false }
 func (*pointerAlwaysZero) IsZero() bool { return true }
 func (*pointerNeverZero) IsZero() bool  { return false }
 
+func (valueStringer) String() string    { return "" }
+func (*pointerStringer) String() string { return "" }
+
 var (
-	anyType                      = reflect.TypeOf((*any)(nil)).Elem()
 	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
 	intType                      = reflect.TypeOf((*int)(nil)).Elem()
 	int8Type                     = reflect.TypeOf((*int8)(nil)).Elem()
@@ -564,7 +571,9 @@ var (
 	unmarshalJSONv2FuncType      = reflect.TypeOf((*unmarshalJSONv2Func)(nil)).Elem()
 	unmarshalJSONv1FuncType      = reflect.TypeOf((*unmarshalJSONv1Func)(nil)).Elem()
 	unmarshalTextFuncType        = reflect.TypeOf((*unmarshalTextFunc)(nil)).Elem()
+	nocaseStringType             = reflect.TypeOf((*nocaseString)(nil)).Elem()
 	ioReaderType                 = reflect.TypeOf((*io.Reader)(nil)).Elem()
+	fmtStringerType              = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
 )
 
@@ -2263,25 +2272,31 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 	}, {
 		name: "Methods/Invalid/JSONv2/Error",
-		in: marshalJSONv2Func(func(*Encoder, MarshalOptions) error {
+		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
 			return errors.New("some error")
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
 		name: "Methods/Invalid/JSONv2/TooFew",
-		in: marshalJSONv2Func(func(*Encoder, MarshalOptions) error {
+		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
 			return nil // do nothing
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
 	}, {
 		name: "Methods/Invalid/JSONv2/TooMany",
-		in: marshalJSONv2Func(func(enc *Encoder, mo MarshalOptions) error {
+		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
 			enc.WriteToken(Null)
 			enc.WriteToken(Null)
 			return nil
 		}),
 		want:    `nullnull`,
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
+	}, {
+		name: "Methods/Invalid/JSONv2/SkipFunc",
+		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
+			return SkipFunc
+		}),
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("marshal method cannot be skipped")},
 	}, {
 		name: "Methods/Invalid/JSONv1/Error",
 		in: marshalJSONv1Func(func() ([]byte, error) {
@@ -2295,6 +2310,12 @@ func TestMarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError('i', "at start of value")},
 	}, {
+		name: "Methods/Invalid/JSONv1/SkipFunc",
+		in: marshalJSONv1Func(func() ([]byte, error) {
+			return nil, SkipFunc
+		}),
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv1FuncType, Err: errors.New("marshal method cannot be skipped")},
+	}, {
 		name: "Methods/Invalid/Text/Error",
 		in: marshalTextFunc(func() ([]byte, error) {
 			return nil, errors.New("some error")
@@ -2307,9 +2328,15 @@ func TestMarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntacticError{str: "invalid UTF-8 within string"}},
 	}, {
+		name: "Methods/Invalid/Text/SkipFunc",
+		in: marshalTextFunc(func() ([]byte, error) {
+			return nil, SkipFunc
+		}),
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: errors.New("marshal method cannot be skipped")},
+	}, {
 		name: "Methods/Invalid/MapKey/JSONv2/Syntax",
 		in: map[any]string{
-			addr(marshalJSONv2Func(func(enc *Encoder, mo MarshalOptions) error {
+			addr(marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
 				return enc.WriteToken(Null)
 			})): "invalid",
 		},
@@ -2324,6 +2351,789 @@ func TestMarshal(t *testing.T) {
 		},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName},
+	}, {
+		name: "Functions/Bool/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/NamedBool/V1/NoMatch",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
+				return nil, errors.New("must not be called")
+			}),
+		},
+		in:   true,
+		want: `true`,
+	}, {
+		name: "Functions/NamedBool/V1/Match",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   namedBool(true),
+		want: `"called"`,
+	}, {
+		name: "Functions/PointerBool/V1/Match",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v *bool) ([]byte, error) {
+				_ = *v // must be non-nil pointer
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Bool/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				return enc.WriteToken(String("called"))
+			}),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/NamedBool/V2/NoMatch",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
+				return errors.New("must not be called")
+			}),
+		},
+		in:   true,
+		want: `true`,
+	}, {
+		name: "Functions/NamedBool/V2/Match",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
+				return enc.WriteToken(String("called"))
+			}),
+		},
+		in:   namedBool(true),
+		want: `"called"`,
+	}, {
+		name: "Functions/PointerBool/V2/Match",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+				_ = *v // must be non-nil pointer
+				return enc.WriteToken(String("called"))
+			}),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Bool/Empty1/NoMatch",
+		mopts: MarshalOptions{
+			Marshalers: new(Marshalers),
+		},
+		in:   true,
+		want: `true`,
+	}, {
+		name: "Functions/Bool/Empty2/NoMatch",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(),
+		},
+		in:   true,
+		want: `true`,
+	}, {
+		name: "Functions/Bool/V1/DirectError",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+				return nil, errors.New("some error")
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
+	}, {
+		name: "Functions/Bool/V1/SkipError",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+				return nil, SkipFunc
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("marshal function of type func(T) ([]byte, error) cannot be skipped")},
+	}, {
+		name: "Functions/Bool/V1/InvalidValue",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+				return []byte("invalid"), nil
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: &SyntacticError{str: "invalid character 'i' at start of value"}},
+	}, {
+		name: "Functions/Bool/V2/DirectError",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				return errors.New("some error")
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
+	}, {
+		name: "Functions/Bool/V2/TooFew",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				return nil
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
+	}, {
+		name: "Functions/Bool/V2/TooMany",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				enc.WriteValue([]byte(`"hello"`))
+				enc.WriteValue([]byte(`"world"`))
+				return nil
+			}),
+		},
+		in:      true,
+		want:    `"hello""world"`,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
+	}, {
+		name: "Functions/Bool/V2/Skipped",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				return SkipFunc
+			}),
+		},
+		in:   true,
+		want: `true`,
+	}, {
+		name: "Functions/Bool/V2/ProcessBeforeSkip",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				enc.WriteValue([]byte(`"hello"`))
+				return SkipFunc
+			}),
+		},
+		in:      true,
+		want:    `"hello"`,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must not write any JSON tokens when skipping")},
+	}, {
+		name: "Functions/Bool/V2/WrappedSkipError",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				return fmt.Errorf("wrap: %w", SkipFunc)
+			}),
+		},
+		in:      true,
+		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: fmt.Errorf("wrap: %w", SkipFunc)},
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/PointerNoCaseString/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
+				_ = *v // must be non-nil pointer
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/TextMarshaler/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
+				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V1/InvalidValue",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+				return []byte(`null`), nil
+			}),
+		},
+		in:      map[nocaseString]string{"hello": "world"},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V2/InvalidKind",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+				return []byte(`null`), nil
+			}),
+		},
+		in:      map[nocaseString]string{"hello": "world"},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/PointerNoCaseString/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
+				_ = *v // must be non-nil pointer
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/TextMarshaler/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
+				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[nocaseString]string{"hello": "world"},
+		want: `{"called":"world"}`,
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V2/InvalidToken",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+				return enc.WriteToken(Null)
+			}),
+		},
+		in:      map[nocaseString]string{"hello": "world"},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V2/InvalidValue",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+				return enc.WriteValue([]byte(`null`))
+			}),
+		},
+		in:      map[nocaseString]string{"hello": "world"},
+		want:    `{`,
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
+	}, {
+		name: "Functions/Map/Value/NoCaseString/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Functions/Map/Value/PointerNoCaseString/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
+				_ = *v // must be non-nil pointer
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Functions/Map/Value/TextMarshaler/V1",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
+				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
+				return []byte(`"called"`), nil
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Functions/Map/Value/NoCaseString/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Functions/Map/Value/PointerNoCaseString/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
+				_ = *v // must be non-nil pointer
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Functions/Map/Value/TextMarshaler/V2",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
+				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   map[string]nocaseString{"hello": "world"},
+		want: `{"hello":"called"}`,
+	}, {
+		name: "Funtions/Struct/Fields",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(v bool) ([]byte, error) {
+					return []byte(`"called1"`), nil
+				}),
+				MarshalFuncV1(func(v *string) ([]byte, error) {
+					return []byte(`"called2"`), nil
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v []byte) error {
+					return enc.WriteValue([]byte(`"called3"`))
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *int64) error {
+					return enc.WriteValue([]byte(`"called4"`))
+				}),
+			),
+		},
+		in:   structScalars{},
+		want: `{"Bool":"called1","String":"called2","Bytes":"called3","Int":"called4","Uint":0,"Float":0}`,
+	}, {
+		name: "Functions/Struct/OmitEmpty",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(v bool) ([]byte, error) {
+					return []byte(`null`), nil
+				}),
+				MarshalFuncV1(func(v string) ([]byte, error) {
+					return []byte(`"called1"`), nil
+				}),
+				MarshalFuncV1(func(v *stringMarshalNonEmpty) ([]byte, error) {
+					return []byte(`""`), nil
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bytesMarshalNonEmpty) error {
+					return enc.WriteValue([]byte(`{}`))
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *float64) error {
+					return enc.WriteValue([]byte(`[]`))
+				}),
+				MarshalFuncV1(func(v mapMarshalNonEmpty) ([]byte, error) {
+					return []byte(`"called2"`), nil
+				}),
+				MarshalFuncV1(func(v []string) ([]byte, error) {
+					return []byte(`"called3"`), nil
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *sliceMarshalNonEmpty) error {
+					return enc.WriteValue([]byte(`"called4"`))
+				}),
+			),
+		},
+		in:   structOmitEmptyAll{},
+		want: `{"String":"called1","MapNonEmpty":"called2","Slice":"called3","SliceNonEmpty":"called4"}`,
+	}, {
+		name: "Functions/Struct/OmitZero",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(v bool) ([]byte, error) {
+					panic("should not be called")
+				}),
+				MarshalFuncV1(func(v *string) ([]byte, error) {
+					panic("should not be called")
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v []byte) error {
+					panic("should not be called")
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *int64) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		in:   structOmitZeroAll{},
+		want: `{}`,
+	}, {
+		name: "Functions/Struct/Inlined",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(v structInlinedL1) ([]byte, error) {
+					panic("should not be called")
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *StructEmbed2) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		in:   structInlined{},
+		want: `{"D":""}`,
+	}, {
+		name: "Functions/Slice/Elem",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
+				return []byte(`"` + strconv.FormatBool(v) + `"`), nil
+			}),
+		},
+		in:   []bool{true, false},
+		want: `["true","false"]`,
+	}, {
+		name: "Functions/Array/Elem",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+				return enc.WriteValue([]byte(`"` + strconv.FormatBool(*v) + `"`))
+			}),
+		},
+		in:   [2]bool{true, false},
+		want: `["true","false"]`,
+	}, {
+		name: "Functions/Pointer/Nil",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+				panic("should not be called")
+			}),
+		},
+		in:   struct{ X *bool }{nil},
+		want: `{"X":null}`,
+	}, {
+		name: "Functions/Pointer/NonNil",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   struct{ X *bool }{addr(false)},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Functions/Interface/Nil",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
+				panic("should not be called")
+			}),
+		},
+		in:   struct{ X fmt.Stringer }{nil},
+		want: `{"X":null}`,
+	}, {
+		name: "Functions/Interface/NonNil/MatchInterface",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   struct{ X fmt.Stringer }{valueStringer{}},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Functions/Interface/NonNil/MatchConcrete",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v valueStringer) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   struct{ X fmt.Stringer }{valueStringer{}},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Functions/Interface/NonNil/MatchPointer",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *valueStringer) error {
+				return enc.WriteValue([]byte(`"called"`))
+			}),
+		},
+		in:   struct{ X fmt.Stringer }{valueStringer{}},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Functions/Interface/Any",
+		in: []any{
+			nil,                           // nil
+			valueStringer{},               // T
+			(*valueStringer)(nil),         // *T
+			addr(valueStringer{}),         // *T
+			(**valueStringer)(nil),        // **T
+			addr((*valueStringer)(nil)),   // **T
+			addr(addr(valueStringer{})),   // **T
+			pointerStringer{},             // T
+			(*pointerStringer)(nil),       // *T
+			addr(pointerStringer{}),       // *T
+			(**pointerStringer)(nil),      // **T
+			addr((*pointerStringer)(nil)), // **T
+			addr(addr(pointerStringer{})), // **T
+			"LAST",
+		},
+		want: `[null,{},null,{},null,null,{},{},null,{},null,null,{},"LAST"]`,
+		mopts: MarshalOptions{
+			Marshalers: func() *Marshalers {
+				type P [2]int
+				type PV struct {
+					P P
+					V any
+				}
+				type namedAny any
+
+				var lastChecks []func() error
+				checkLast := func() error {
+					for _, fn := range lastChecks {
+						if err := fn(); err != nil {
+							return err
+						}
+					}
+					return SkipFunc
+				}
+				makeValueChecker := func(name string, want []PV) func(e *Encoder, v any) error {
+					checkNext := func(e *Encoder, v any) error {
+						p := P{len(e.tokens.stack), e.tokens.last.length()}
+						rv := reflect.ValueOf(v)
+						pv := PV{p, v}
+						switch {
+						case len(want) == 0:
+							return fmt.Errorf("%s: %v: got more values than expected", name, p)
+						case !rv.IsValid() || rv.Kind() != reflect.Pointer || rv.IsNil():
+							return fmt.Errorf("%s: %v: got %#v, want non-nil pointer type", name, p, v)
+						case !reflect.DeepEqual(pv, want[0]):
+							return fmt.Errorf("%s:\n\tgot  %#v\n\twant %#v", name, pv, want[0])
+						default:
+							want = want[1:]
+							return SkipFunc
+						}
+					}
+					lastChecks = append(lastChecks, func() error {
+						if len(want) > 0 {
+							return fmt.Errorf("%s: did not get enough values, want %d more", name, len(want))
+						}
+						return nil
+					})
+					return checkNext
+				}
+				makePositionChecker := func(name string, want []P) func(e *Encoder, v any) error {
+					checkNext := func(e *Encoder, v any) error {
+						p := P{len(e.tokens.stack), e.tokens.last.length()}
+						switch {
+						case len(want) == 0:
+							return fmt.Errorf("%s: %v: got more values than wanted", name, p)
+						case p != want[0]:
+							return fmt.Errorf("%s: got %v, want %v", name, p, want[0])
+						default:
+							want = want[1:]
+							return SkipFunc
+						}
+					}
+					lastChecks = append(lastChecks, func() error {
+						if len(want) > 0 {
+							return fmt.Errorf("%s: did not get enough values, want %d more", name, len(want))
+						}
+						return nil
+					})
+					return checkNext
+				}
+
+				wantAny := []PV{
+					{P{0, 0}, addr([]any{
+						nil,
+						valueStringer{},
+						(*valueStringer)(nil),
+						addr(valueStringer{}),
+						(**valueStringer)(nil),
+						addr((*valueStringer)(nil)),
+						addr(addr(valueStringer{})),
+						pointerStringer{},
+						(*pointerStringer)(nil),
+						addr(pointerStringer{}),
+						(**pointerStringer)(nil),
+						addr((*pointerStringer)(nil)),
+						addr(addr(pointerStringer{})),
+						"LAST",
+					})},
+					{P{1, 0}, addr(any(nil))},
+					{P{1, 1}, addr(any(valueStringer{}))},
+					{P{1, 1}, addr(valueStringer{})},
+					{P{1, 2}, addr(any((*valueStringer)(nil)))},
+					{P{1, 2}, addr((*valueStringer)(nil))},
+					{P{1, 3}, addr(any(addr(valueStringer{})))},
+					{P{1, 3}, addr(addr(valueStringer{}))},
+					{P{1, 3}, addr(valueStringer{})},
+					{P{1, 4}, addr(any((**valueStringer)(nil)))},
+					{P{1, 4}, addr((**valueStringer)(nil))},
+					{P{1, 5}, addr(any(addr((*valueStringer)(nil))))},
+					{P{1, 5}, addr(addr((*valueStringer)(nil)))},
+					{P{1, 5}, addr((*valueStringer)(nil))},
+					{P{1, 6}, addr(any(addr(addr(valueStringer{}))))},
+					{P{1, 6}, addr(addr(addr(valueStringer{})))},
+					{P{1, 6}, addr(addr(valueStringer{}))},
+					{P{1, 6}, addr(valueStringer{})},
+					{P{1, 7}, addr(any(pointerStringer{}))},
+					{P{1, 7}, addr(pointerStringer{})},
+					{P{1, 8}, addr(any((*pointerStringer)(nil)))},
+					{P{1, 8}, addr((*pointerStringer)(nil))},
+					{P{1, 9}, addr(any(addr(pointerStringer{})))},
+					{P{1, 9}, addr(addr(pointerStringer{}))},
+					{P{1, 9}, addr(pointerStringer{})},
+					{P{1, 10}, addr(any((**pointerStringer)(nil)))},
+					{P{1, 10}, addr((**pointerStringer)(nil))},
+					{P{1, 11}, addr(any(addr((*pointerStringer)(nil))))},
+					{P{1, 11}, addr(addr((*pointerStringer)(nil)))},
+					{P{1, 11}, addr((*pointerStringer)(nil))},
+					{P{1, 12}, addr(any(addr(addr(pointerStringer{}))))},
+					{P{1, 12}, addr(addr(addr(pointerStringer{})))},
+					{P{1, 12}, addr(addr(pointerStringer{}))},
+					{P{1, 12}, addr(pointerStringer{})},
+					{P{1, 13}, addr(any("LAST"))},
+					{P{1, 13}, addr("LAST")},
+				}
+				checkAny := makeValueChecker("any", wantAny)
+				anyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v any) error {
+					return checkAny(enc, v)
+				})
+
+				var wantPointerAny []PV
+				for _, v := range wantAny {
+					if _, ok := v.V.(*any); ok {
+						wantPointerAny = append(wantPointerAny, v)
+					}
+				}
+				checkPointerAny := makeValueChecker("*any", wantPointerAny)
+				pointerAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *any) error {
+					return checkPointerAny(enc, v)
+				})
+
+				checkNamedAny := makeValueChecker("namedAny", wantAny)
+				namedAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedAny) error {
+					return checkNamedAny(enc, v)
+				})
+
+				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
+				pointerNamedAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *namedAny) error {
+					return checkPointerNamedAny(enc, v)
+				})
+
+				type stringer = fmt.Stringer
+				var wantStringer []PV
+				for _, v := range wantAny {
+					if _, ok := v.V.(stringer); ok {
+						wantStringer = append(wantStringer, v)
+					}
+				}
+				checkStringer := makeValueChecker("stringer", wantStringer)
+				stringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v stringer) error {
+					return checkStringer(enc, v)
+				})
+
+				checkPointerStringer := makeValueChecker("*stringer", nil)
+				pointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *stringer) error {
+					return checkPointerStringer(enc, v)
+				})
+
+				wantValueStringer := []P{{1, 1}, {1, 3}, {1, 6}}
+				checkValueValueStringer := makePositionChecker("valueStringer", wantValueStringer)
+				valueValueStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v valueStringer) error {
+					return checkValueValueStringer(enc, v)
+				})
+
+				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
+				pointerValueStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *valueStringer) error {
+					return checkPointerValueStringer(enc, v)
+				})
+
+				wantPointerStringer := []P{{1, 7}, {1, 9}, {1, 12}}
+				checkValuePointerStringer := makePositionChecker("pointerStringer", wantPointerStringer)
+				valuePointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v pointerStringer) error {
+					return checkValuePointerStringer(enc, v)
+				})
+
+				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
+				pointerPointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *pointerStringer) error {
+					return checkPointerPointerStringer(enc, v)
+				})
+
+				lastMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+					return checkLast()
+				})
+
+				return NewMarshalers(
+					anyMarshaler,
+					pointerAnyMarshaler,
+					namedAnyMarshaler,
+					pointerNamedAnyMarshaler, // never called
+					stringerMarshaler,
+					pointerStringerMarshaler, // never called
+					valueValueStringerMarshaler,
+					pointerValueStringerMarshaler,
+					valuePointerStringerMarshaler,
+					pointerPointerStringerMarshaler,
+					lastMarshaler,
+				)
+			}(),
+		},
+	}, {
+		name: "Functions/Precedence/V1First",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(bool) ([]byte, error) {
+					return []byte(`"called"`), nil
+				}),
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Precedence/V2First",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+					return enc.WriteToken(String("called"))
+				}),
+				MarshalFuncV1(func(bool) ([]byte, error) {
+					panic("should not be called")
+				}),
+			),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Precedence/V2Skipped",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+					return SkipFunc
+				}),
+				MarshalFuncV1(func(bool) ([]byte, error) {
+					return []byte(`"called"`), nil
+				}),
+			),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Precedence/NestedFirst",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				NewMarshalers(
+					MarshalFuncV1(func(bool) ([]byte, error) {
+						return []byte(`"called"`), nil
+					}),
+				),
+				MarshalFuncV1(func(bool) ([]byte, error) {
+					panic("should not be called")
+				}),
+			),
+		},
+		in:   true,
+		want: `"called"`,
+	}, {
+		name: "Functions/Precedence/NestedLast",
+		mopts: MarshalOptions{
+			Marshalers: NewMarshalers(
+				MarshalFuncV1(func(bool) ([]byte, error) {
+					return []byte(`"called"`), nil
+				}),
+				NewMarshalers(
+					MarshalFuncV1(func(bool) ([]byte, error) {
+						panic("should not be called")
+					}),
+				),
+			),
+		},
+		in:   true,
+		want: `"called"`,
 	}, {
 		name: "Duration/Zero",
 		in: struct {
@@ -4939,6 +5749,14 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
+		name:  "Interfaces/NamedAny/String",
+		inBuf: `"string"`,
+		inVal: new(namedAny),
+		want: func() namedAny {
+			var vi namedAny = "string"
+			return &vi
+		}(),
+	}, {
 		name:    "Interfaces/Invalid",
 		inBuf:   `]`,
 		inVal:   new(any),
@@ -5096,25 +5914,32 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  "Methods/Invalid/JSONv2/Error",
 		inBuf: `{}`,
-		inVal: addr(unmarshalJSONv2Func(func(*Decoder, UnmarshalOptions) error {
+		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
 		name: "Methods/Invalid/JSONv2/TooFew",
-		inVal: addr(unmarshalJSONv2Func(func(*Decoder, UnmarshalOptions) error {
+		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
 			return nil // do nothing
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
 	}, {
 		name:  "Methods/Invalid/JSONv2/TooMany",
 		inBuf: `{}{}`,
-		inVal: addr(unmarshalJSONv2Func(func(dec *Decoder, uo UnmarshalOptions) error {
+		inVal: addr(unmarshalJSONv2Func(func(uo UnmarshalOptions, dec *Decoder) error {
 			dec.ReadValue()
 			dec.ReadValue()
 			return nil
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
+	}, {
+		name:  "Methods/Invalid/JSONv2/SkipFunc",
+		inBuf: `{}`,
+		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
+			return SkipFunc
+		})),
+		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
 		name:  "Methods/Invalid/JSONv1/Error",
 		inBuf: `{}`,
@@ -5122,6 +5947,13 @@ func TestUnmarshal(t *testing.T) {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalJSONv1FuncType, Err: errors.New("some error")},
+	}, {
+		name:  "Methods/Invalid/JSONv1/SkipFunc",
+		inBuf: `{}`,
+		inVal: addr(unmarshalJSONv1Func(func([]byte) error {
+			return SkipFunc
+		})),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalJSONv1FuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
 		name:  "Methods/Invalid/Text/Error",
 		inBuf: `"value"`,
@@ -5136,6 +5968,824 @@ func TestUnmarshal(t *testing.T) {
 			panic("should not be called")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalTextFuncType, Err: errors.New("JSON value must be string type")},
+	}, {
+		name:  "Methods/Invalid/Text/SkipFunc",
+		inBuf: `"value"`,
+		inVal: addr(unmarshalTextFunc(func([]byte) error {
+			return SkipFunc
+		})),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: unmarshalTextFuncType, Err: errors.New("unmarshal method cannot be skipped")},
+	}, {
+		name: "Functions/String/V1",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+				if string(b) != `""` {
+					return fmt.Errorf("got %s, want %s", b, `""`)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/NamedString/V1/NoMatch",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
+				panic("should not be called")
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr(""),
+	}, {
+		name: "Functions/NamedString/V1/Match",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
+				if string(b) != `""` {
+					return fmt.Errorf("got %s, want %s", b, `""`)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(namedString("")),
+		want:  addr(namedString("called")),
+	}, {
+		name: "Functions/String/V2",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				switch b, err := dec.ReadValue(); {
+				case err != nil:
+					return err
+				case string(b) != `""`:
+					return fmt.Errorf("got %s, want %s", b, `""`)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/NamedString/V2/NoMatch",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
+				panic("should not be called")
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr(""),
+	}, {
+		name: "Functions/NamedString/V2/Match",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
+				switch t, err := dec.ReadToken(); {
+				case err != nil:
+					return err
+				case t.String() != ``:
+					return fmt.Errorf("got %q, want %q", t, ``)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(namedString("")),
+		want:  addr(namedString("called")),
+	}, {
+		name: "Functions/String/Empty1/NoMatch",
+		uopts: UnmarshalOptions{
+			Unmarshalers: new(Unmarshalers),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr(""),
+	}, {
+		name: "Functions/String/Empty2/NoMatch",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr(""),
+	}, {
+		name: "Functions/String/V1/DirectError",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
+				return errors.New("some error")
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
+	}, {
+		name: "Functions/String/V1/SkipError",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
+				return SkipFunc
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("unmarshal function of type func([]byte, T) error cannot be skipped")},
+	}, {
+		name: "Functions/String/V2/DirectError",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				return errors.New("some error")
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
+	}, {
+		name: "Functions/String/V2/TooFew",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				return nil
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
+	}, {
+		name: "Functions/String/V2/TooMany",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				if _, err := dec.ReadValue(); err != nil {
+					return err
+				}
+				if _, err := dec.ReadValue(); err != nil {
+					return err
+				}
+				return nil
+			}),
+		},
+		inBuf:   `["",""]`,
+		inVal:   addr([]string{}),
+		want:    addr([]string{""}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
+	}, {
+		name: "Functions/String/V2/Skipped",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				return SkipFunc
+			}),
+		},
+		inBuf: `""`,
+		inVal: addr(""),
+		want:  addr(""),
+	}, {
+		name: "Functions/String/V2/ProcessBeforeSkip",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				if _, err := dec.ReadValue(); err != nil {
+					return err
+				}
+				return SkipFunc
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must not read any JSON tokens when skipping")},
+	}, {
+		name: "Functions/String/V2/WrappedSkipError",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				return fmt.Errorf("wrap: %w", SkipFunc)
+			}),
+		},
+		inBuf:   `""`,
+		inVal:   addr(""),
+		want:    addr(""),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: fmt.Errorf("wrap: %w", SkipFunc)},
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V1",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
+				if string(b) != `"hello"` {
+					return fmt.Errorf("got %s, want %s", b, `"hello"`)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[nocaseString]string{}),
+		want:  addr(map[nocaseString]string{"called": "world"}),
+	}, {
+		name: "Functions/Map/Key/TextMarshaler/V1",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
+				if string(b) != `"hello"` {
+					return fmt.Errorf("got %s, want %s", b, `"hello"`)
+				}
+				*v.(*nocaseString) = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[nocaseString]string{}),
+		want:  addr(map[nocaseString]string{"called": "world"}),
+	}, {
+		name: "Functions/Map/Key/NoCaseString/V2",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
+				switch t, err := dec.ReadToken(); {
+				case err != nil:
+					return err
+				case t.String() != "hello":
+					return fmt.Errorf("got %q, want %q", t, "hello")
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[nocaseString]string{}),
+		want:  addr(map[nocaseString]string{"called": "world"}),
+	}, {
+		name: "Functions/Map/Key/TextMarshaler/V2",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
+				switch b, err := dec.ReadValue(); {
+				case err != nil:
+					return err
+				case string(b) != `"hello"`:
+					return fmt.Errorf("got %s, want %s", b, `"hello"`)
+				}
+				*v.(*nocaseString) = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[nocaseString]string{}),
+		want:  addr(map[nocaseString]string{"called": "world"}),
+	}, {
+		name: "Functions/Map/Value/NoCaseString/V1",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
+				if string(b) != `"world"` {
+					return fmt.Errorf("got %s, want %s", b, `"world"`)
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[string]nocaseString{}),
+		want:  addr(map[string]nocaseString{"hello": "called"}),
+	}, {
+		name: "Functions/Map/Value/TextMarshaler/V1",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
+				if string(b) != `"world"` {
+					return fmt.Errorf("got %s, want %s", b, `"world"`)
+				}
+				*v.(*nocaseString) = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[string]nocaseString{}),
+		want:  addr(map[string]nocaseString{"hello": "called"}),
+	}, {
+		name: "Functions/Map/Value/NoCaseString/V2",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
+				switch t, err := dec.ReadToken(); {
+				case err != nil:
+					return err
+				case t.String() != "world":
+					return fmt.Errorf("got %q, want %q", t, "world")
+				}
+				*v = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[string]nocaseString{}),
+		want:  addr(map[string]nocaseString{"hello": "called"}),
+	}, {
+		name: "Functions/Map/Value/TextMarshaler/V2",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
+				switch b, err := dec.ReadValue(); {
+				case err != nil:
+					return err
+				case string(b) != `"world"`:
+					return fmt.Errorf("got %s, want %s", b, `"world"`)
+				}
+				*v.(*nocaseString) = "called"
+				return nil
+			}),
+		},
+		inBuf: `{"hello":"world"}`,
+		inVal: addr(map[string]nocaseString{}),
+		want:  addr(map[string]nocaseString{"hello": "called"}),
+	}, {
+		name: "Funtions/Struct/Fields",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV1(func(b []byte, v *bool) error {
+					if string(b) != `"called1"` {
+						return fmt.Errorf("got %s, want %s", b, `"called1"`)
+					}
+					*v = true
+					return nil
+				}),
+				UnmarshalFuncV1(func(b []byte, v *string) error {
+					if string(b) != `"called2"` {
+						return fmt.Errorf("got %s, want %s", b, `"called2"`)
+					}
+					*v = "called2"
+					return nil
+				}),
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *[]byte) error {
+					switch t, err := dec.ReadToken(); {
+					case err != nil:
+						return err
+					case t.String() != "called3":
+						return fmt.Errorf("got %q, want %q", t, "called3")
+					}
+					*v = []byte("called3")
+					return nil
+				}),
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *int64) error {
+					switch b, err := dec.ReadValue(); {
+					case err != nil:
+						return err
+					case string(b) != `"called4"`:
+						return fmt.Errorf("got %s, want %s", b, `"called4"`)
+					}
+					*v = 123
+					return nil
+				}),
+			),
+		},
+		inBuf: `{"Bool":"called1","String":"called2","Bytes":"called3","Int":"called4","Uint":456,"Float":789}`,
+		inVal: addr(structScalars{}),
+		want:  addr(structScalars{Bool: true, String: "called2", Bytes: []byte("called3"), Int: 123, Uint: 456, Float: 789}),
+	}, {
+		name: "Functions/Struct/Inlined",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV1(func([]byte, *structInlinedL1) error {
+					panic("should not be called")
+				}),
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *StructEmbed2) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+		inVal: new(structInlined),
+		want: addr(structInlined{
+			X: structInlinedL1{
+				X:            &structInlinedL2{A: "A1", B: "B1" /* C: "C1" */},
+				StructEmbed1: StructEmbed1{ /* C: "C2" */ D: "D2" /* E: "E2" */},
+			},
+			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
+		}),
+	}, {
+		name: "Functions/Slice/Elem",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
+				return nil
+			}),
+		},
+		inBuf: `["hello","World"]`,
+		inVal: addr([]string{}),
+		want:  addr([]string{"HELLO", "WORLD"}),
+	}, {
+		name: "Functions/Array/Elem",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
+				return nil
+			}),
+		},
+		inBuf: `["hello","World"]`,
+		inVal: addr([2]string{}),
+		want:  addr([2]string{"HELLO", "WORLD"}),
+	}, {
+		name: "Functions/Pointer/Nil",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				t, err := dec.ReadToken()
+				*v = strings.ToUpper(t.String())
+				return err
+			}),
+		},
+		inBuf: `{"X":"hello"}`,
+		inVal: addr(struct{ X *string }{nil}),
+		want:  addr(struct{ X *string }{addr("HELLO")}),
+	}, {
+		name: "Functions/Pointer/NonNil",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				t, err := dec.ReadToken()
+				*v = strings.ToUpper(t.String())
+				return err
+			}),
+		},
+		inBuf: `{"X":"hello"}`,
+		inVal: addr(struct{ X *string }{addr("")}),
+		want:  addr(struct{ X *string }{addr("HELLO")}),
+	}, {
+		name: "Functions/Interface/Nil",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v fmt.Stringer) error {
+				panic("should not be called")
+			}),
+		},
+		inBuf:   `{"X":"hello"}`,
+		inVal:   addr(struct{ X fmt.Stringer }{nil}),
+		want:    addr(struct{ X fmt.Stringer }{nil}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: fmtStringerType, Err: errors.New("cannot derive concrete type for non-empty interface")},
+	}, {
+		name: "Functions/Interface/NetIP",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+				*v = net.IP{}
+				return SkipFunc
+			}),
+		},
+		inBuf: `{"X":"1.1.1.1"}`,
+		inVal: addr(struct{ X fmt.Stringer }{nil}),
+		want:  addr(struct{ X fmt.Stringer }{net.IPv4(1, 1, 1, 1)}),
+	}, {
+		name: "Functions/Interface/NewPointerNetIP",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+				*v = new(net.IP)
+				return SkipFunc
+			}),
+		},
+		inBuf: `{"X":"1.1.1.1"}`,
+		inVal: addr(struct{ X fmt.Stringer }{nil}),
+		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
+	}, {
+		name: "Functions/Interface/NilPointerNetIP",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+				*v = (*net.IP)(nil)
+				return SkipFunc
+			}),
+		},
+		inBuf: `{"X":"1.1.1.1"}`,
+		inVal: addr(struct{ X fmt.Stringer }{nil}),
+		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
+	}, {
+		name: "Functions/Interface/NilPointerNetIP/Override",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+					*v = (*net.IP)(nil)
+					return SkipFunc
+				}),
+				UnmarshalFuncV1(func(b []byte, v *net.IP) error {
+					b = bytes.ReplaceAll(b, []byte(`1`), []byte(`8`))
+					return v.UnmarshalText(bytes.Trim(b, `"`))
+				}),
+			),
+		},
+		inBuf: `{"X":"1.1.1.1"}`,
+		inVal: addr(struct{ X fmt.Stringer }{nil}),
+		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(8, 8, 8, 8))}),
+	}, {
+		name:  "Functions/Interface/Any",
+		inBuf: `[null,{},{},{},{},{},{},{},{},{},{},{},{},"LAST"]`,
+		inVal: addr([...]any{
+			nil,                           // nil
+			valueStringer{},               // T
+			(*valueStringer)(nil),         // *T
+			addr(valueStringer{}),         // *T
+			(**valueStringer)(nil),        // **T
+			addr((*valueStringer)(nil)),   // **T
+			addr(addr(valueStringer{})),   // **T
+			pointerStringer{},             // T
+			(*pointerStringer)(nil),       // *T
+			addr(pointerStringer{}),       // *T
+			(**pointerStringer)(nil),      // **T
+			addr((*pointerStringer)(nil)), // **T
+			addr(addr(pointerStringer{})), // **T
+			"LAST",
+		}),
+		uopts: UnmarshalOptions{
+			Unmarshalers: func() *Unmarshalers {
+				type P [2]int
+				type PV struct {
+					P P
+					V any
+				}
+				type namedAny any
+
+				var lastChecks []func() error
+				checkLast := func() error {
+					for _, fn := range lastChecks {
+						if err := fn(); err != nil {
+							return err
+						}
+					}
+					return SkipFunc
+				}
+				makeValueChecker := func(name string, want []PV) func(d *Decoder, v any) error {
+					checkNext := func(d *Decoder, v any) error {
+						p := P{len(d.tokens.stack), d.tokens.last.length()}
+						rv := reflect.ValueOf(v)
+						pv := PV{p, v}
+						switch {
+						case len(want) == 0:
+							return fmt.Errorf("%s: %v: got more values than expected", name, p)
+						case !rv.IsValid() || rv.Kind() != reflect.Pointer || rv.IsNil():
+							return fmt.Errorf("%s: %v: got %#v, want non-nil pointer type", name, p, v)
+						case !reflect.DeepEqual(pv, want[0]):
+							return fmt.Errorf("%s:\n\tgot  %#v\n\twant %#v", name, pv, want[0])
+						default:
+							want = want[1:]
+							return SkipFunc
+						}
+					}
+					lastChecks = append(lastChecks, func() error {
+						if len(want) > 0 {
+							return fmt.Errorf("%s: did not get enough values, want %d more", name, len(want))
+						}
+						return nil
+					})
+					return checkNext
+				}
+				makePositionChecker := func(name string, want []P) func(d *Decoder, v any) error {
+					checkNext := func(d *Decoder, v any) error {
+						p := P{len(d.tokens.stack), d.tokens.last.length()}
+						switch {
+						case len(want) == 0:
+							return fmt.Errorf("%s: %v: got more values than wanted", name, p)
+						case p != want[0]:
+							return fmt.Errorf("%s: got %v, want %v", name, p, want[0])
+						default:
+							want = want[1:]
+							return SkipFunc
+						}
+					}
+					lastChecks = append(lastChecks, func() error {
+						if len(want) > 0 {
+							return fmt.Errorf("%s: did not get enough values, want %d more", name, len(want))
+						}
+						return nil
+					})
+					return checkNext
+				}
+
+				// In contrast to marshal, unmarshal automatically allocates for
+				// nil pointers, which causes unmarshal to visit more values.
+				wantAny := []PV{
+					{P{1, 0}, addr(any(nil))},
+					{P{1, 1}, addr(any(valueStringer{}))},
+					{P{1, 1}, addr(valueStringer{})},
+					{P{1, 2}, addr(any((*valueStringer)(nil)))},
+					{P{1, 2}, addr((*valueStringer)(nil))},
+					{P{1, 2}, addr(valueStringer{})},
+					{P{1, 3}, addr(any(addr(valueStringer{})))},
+					{P{1, 3}, addr(addr(valueStringer{}))},
+					{P{1, 3}, addr(valueStringer{})},
+					{P{1, 4}, addr(any((**valueStringer)(nil)))},
+					{P{1, 4}, addr((**valueStringer)(nil))},
+					{P{1, 4}, addr((*valueStringer)(nil))},
+					{P{1, 4}, addr(valueStringer{})},
+					{P{1, 5}, addr(any(addr((*valueStringer)(nil))))},
+					{P{1, 5}, addr(addr((*valueStringer)(nil)))},
+					{P{1, 5}, addr((*valueStringer)(nil))},
+					{P{1, 5}, addr(valueStringer{})},
+					{P{1, 6}, addr(any(addr(addr(valueStringer{}))))},
+					{P{1, 6}, addr(addr(addr(valueStringer{})))},
+					{P{1, 6}, addr(addr(valueStringer{}))},
+					{P{1, 6}, addr(valueStringer{})},
+					{P{1, 7}, addr(any(pointerStringer{}))},
+					{P{1, 7}, addr(pointerStringer{})},
+					{P{1, 8}, addr(any((*pointerStringer)(nil)))},
+					{P{1, 8}, addr((*pointerStringer)(nil))},
+					{P{1, 8}, addr(pointerStringer{})},
+					{P{1, 9}, addr(any(addr(pointerStringer{})))},
+					{P{1, 9}, addr(addr(pointerStringer{}))},
+					{P{1, 9}, addr(pointerStringer{})},
+					{P{1, 10}, addr(any((**pointerStringer)(nil)))},
+					{P{1, 10}, addr((**pointerStringer)(nil))},
+					{P{1, 10}, addr((*pointerStringer)(nil))},
+					{P{1, 10}, addr(pointerStringer{})},
+					{P{1, 11}, addr(any(addr((*pointerStringer)(nil))))},
+					{P{1, 11}, addr(addr((*pointerStringer)(nil)))},
+					{P{1, 11}, addr((*pointerStringer)(nil))},
+					{P{1, 11}, addr(pointerStringer{})},
+					{P{1, 12}, addr(any(addr(addr(pointerStringer{}))))},
+					{P{1, 12}, addr(addr(addr(pointerStringer{})))},
+					{P{1, 12}, addr(addr(pointerStringer{}))},
+					{P{1, 12}, addr(pointerStringer{})},
+					{P{1, 13}, addr(any("LAST"))},
+					{P{1, 13}, addr("LAST")},
+				}
+				checkAny := makeValueChecker("any", wantAny)
+				anyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v any) error {
+					return checkAny(dec, v)
+				})
+
+				var wantPointerAny []PV
+				for _, v := range wantAny {
+					if _, ok := v.V.(*any); ok {
+						wantPointerAny = append(wantPointerAny, v)
+					}
+				}
+				checkPointerAny := makeValueChecker("*any", wantPointerAny)
+				pointerAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *any) error {
+					return checkPointerAny(dec, v)
+				})
+
+				checkNamedAny := makeValueChecker("namedAny", wantAny)
+				namedAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v namedAny) error {
+					return checkNamedAny(dec, v)
+				})
+
+				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
+				pointerNamedAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedAny) error {
+					return checkPointerNamedAny(dec, v)
+				})
+
+				type stringer = fmt.Stringer
+				var wantStringer []PV
+				for _, v := range wantAny {
+					if _, ok := v.V.(stringer); ok {
+						wantStringer = append(wantStringer, v)
+					}
+				}
+				checkStringer := makeValueChecker("stringer", wantStringer)
+				stringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v stringer) error {
+					return checkStringer(dec, v)
+				})
+
+				checkPointerStringer := makeValueChecker("*stringer", nil)
+				pointerStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *stringer) error {
+					return checkPointerStringer(dec, v)
+				})
+
+				wantValueStringer := []P{{1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {1, 6}}
+				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
+				pointerValueStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *valueStringer) error {
+					return checkPointerValueStringer(dec, v)
+				})
+
+				wantPointerStringer := []P{{1, 7}, {1, 8}, {1, 9}, {1, 10}, {1, 11}, {1, 12}}
+				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
+				pointerPointerStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *pointerStringer) error {
+					return checkPointerPointerStringer(dec, v)
+				})
+
+				lastUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+					return checkLast()
+				})
+
+				return NewUnmarshalers(
+					// This is just like unmarshaling into a Go array,
+					// but avoids zero-ing the element before calling unmarshal.
+					UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *[14]any) error {
+						if _, err := dec.ReadToken(); err != nil {
+							return err
+						}
+						for i := 0; i < len(*v); i++ {
+							if err := uo.UnmarshalNext(dec, &(*v)[i]); err != nil {
+								return err
+							}
+						}
+						if _, err := dec.ReadToken(); err != nil {
+							return err
+						}
+						return nil
+					}),
+
+					anyUnmarshaler,
+					pointerAnyUnmarshaler,
+					namedAnyUnmarshaler,
+					pointerNamedAnyUnmarshaler, // never called
+					stringerUnmarshaler,
+					pointerStringerUnmarshaler, // never called
+					pointerValueStringerUnmarshaler,
+					pointerPointerStringerUnmarshaler,
+					lastUnmarshaler,
+				)
+			}(),
+		},
+	}, {
+		name: "Functions/Precedence/V1First",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV1(func(b []byte, v *string) error {
+					if string(b) != `"called"` {
+						return fmt.Errorf("got %s, want %s", b, `"called"`)
+					}
+					*v = "called"
+					return nil
+				}),
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		inBuf: `"called"`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/Precedence/V2First",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+					switch t, err := dec.ReadToken(); {
+					case err != nil:
+						return err
+					case t.String() != "called":
+						return fmt.Errorf("got %q, want %q", t, "called")
+					}
+					*v = "called"
+					return nil
+				}),
+				UnmarshalFuncV1(func([]byte, *string) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		inBuf: `"called"`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/Precedence/V2Skipped",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+					return SkipFunc
+				}),
+				UnmarshalFuncV1(func(b []byte, v *string) error {
+					if string(b) != `"called"` {
+						return fmt.Errorf("got %s, want %s", b, `"called"`)
+					}
+					*v = "called"
+					return nil
+				}),
+			),
+		},
+		inBuf: `"called"`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/Precedence/NestedFirst",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				NewUnmarshalers(
+					UnmarshalFuncV1(func(b []byte, v *string) error {
+						if string(b) != `"called"` {
+							return fmt.Errorf("got %s, want %s", b, `"called"`)
+						}
+						*v = "called"
+						return nil
+					}),
+				),
+				UnmarshalFuncV1(func([]byte, *string) error {
+					panic("should not be called")
+				}),
+			),
+		},
+		inBuf: `"called"`,
+		inVal: addr(""),
+		want:  addr("called"),
+	}, {
+		name: "Functions/Precedence/NestedLast",
+		uopts: UnmarshalOptions{
+			Unmarshalers: NewUnmarshalers(
+				UnmarshalFuncV1(func(b []byte, v *string) error {
+					if string(b) != `"called"` {
+						return fmt.Errorf("got %s, want %s", b, `"called"`)
+					}
+					*v = "called"
+					return nil
+				}),
+				NewUnmarshalers(
+					UnmarshalFuncV1(func([]byte, *string) error {
+						panic("should not be called")
+					}),
+				),
+			),
+		},
+		inBuf: `"called"`,
+		inVal: addr(""),
+		want:  addr("called"),
 	}, {
 		name:  "Duration/Null",
 		inBuf: `{"D1":null,"D2":null}`,
@@ -5356,7 +7006,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeTimeType},
 	}, {
-		name:  "Time/RFC3339/Mismatch",
+		name:  "Time/RFC3339/ParseError",
 		inBuf: `{"T":"2021-09-29T12:44:52"}`,
 		inVal: new(struct {
 			T time.Time
