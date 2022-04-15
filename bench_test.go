@@ -510,7 +510,7 @@ func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 func BenchmarkRawValue(b *testing.B) {
 	var data []byte
 	for _, ts := range jsonTestdata() {
-		if ts.name == "StarcraftSettings" {
+		if ts.name == "CitmCatalog" {
 			data = ts.data
 		}
 	}
