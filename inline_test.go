@@ -74,7 +74,7 @@ func TestInline(t *testing.T) {
 			"objectNamespace.insertUnquoted", // thin wrapper over objectNamespace.insert
 			"Token.String",
 			"foldName",
-			"hash128",
+			"hash64",
 		} {
 			m[s] = true
 		}
