@@ -18,15 +18,7 @@ func getEncoder(b []byte, w io.Writer, o EncodeOptions) *Encoder {
 	return e
 }
 func putEncoder(e *Encoder) {
-	if !e.escaped {
-		*e = Encoder{state: e.state} // only preserve state
-	} else {
-		// If the Encoder escaped, we cannot naively recycle it.
-		// However, we can allocate a new Encoder and reuse the state.
-		old := e
-		e = &Encoder{state: e.state}
-		old.state = state{} // invalidate old state
-	}
+	*e = Encoder{state: e.state}
 	encoderPool.Put(e)
 }
 
@@ -38,16 +30,7 @@ func getDecoder(b []byte, r io.Reader, o DecodeOptions) *Decoder {
 	return d
 }
 func putDecoder(d *Decoder) {
-	if !d.escaped {
-		*d = Decoder{state: d.state} // only preserve state
-	} else {
-		// If the Decoder escaped, we cannot naively recycle it.
-		// However, we can allocate a new Decoder and
-		// reuse the state machine and string cache.
-		old := d
-		d = &Decoder{state: d.state, stringCache: d.stringCache}
-		old.state = state{} // invalidate old state
-	}
+	*d = Decoder{state: d.state, stringCache: d.stringCache}
 	decoderPool.Put(d)
 }
 

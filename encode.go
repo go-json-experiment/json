@@ -102,7 +102,6 @@ type Encoder struct {
 	encodeBuffer
 	options EncodeOptions
 
-	escaped      bool         // only used when marshaling
 	seenPointers seenPointers // only used when marshaling
 }
 

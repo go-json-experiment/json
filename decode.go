@@ -101,7 +101,6 @@ type Decoder struct {
 	decodeBuffer
 	options DecodeOptions
 
-	escaped     bool         // only used when unmarshaling
 	stringCache *stringCache // only used when unmarshaling
 }
 
