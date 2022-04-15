@@ -466,8 +466,16 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 		}
 
-		// Optimize for marshaling without preceding whitespace or string escaping.
 		fv := va.Float()
+		if math.IsNaN(fv) || math.IsInf(fv, 0) {
+			if !allowNonFinite {
+				err := fmt.Errorf("invalid value: %v", fv)
+				return &SemanticError{action: "marshal", GoType: t, Err: err}
+			}
+			return enc.WriteToken(Float(fv))
+		}
+
+		// Optimize for marshaling without preceding whitespace or string escaping.
 		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
 			enc.buf = appendNumber(enc.buf, fv, bits)
@@ -478,13 +486,6 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		if math.IsNaN(fv) || math.IsInf(fv, 0) {
-			if !allowNonFinite {
-				err := fmt.Errorf("invalid value: %v", fv)
-				return &SemanticError{action: "marshal", GoType: t, Err: err}
-			}
-			return enc.WriteToken(Float(fv))
-		}
 		return enc.writeNumber(fv, bits, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {

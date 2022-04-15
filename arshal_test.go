@@ -731,12 +731,10 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.NaN())},
 	}, {
 		name:    "Floats/Invalid/PositiveInfinity",
-		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.Inf(+1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(+1))},
 	}, {
 		name:    "Floats/Invalid/NegativeInfinity",
-		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.Inf(-1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
 	}, {
