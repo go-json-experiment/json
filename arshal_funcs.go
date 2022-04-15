@@ -139,6 +139,7 @@ func (a *typedArshalers[Options, Coder]) lookup(fnc func(Options, *Coder, addres
 // if T is an interface or pointer type.
 //
 // The function must marshal exactly one JSON value.
+// The value of T must not be retained outside the function call.
 // It may not return SkipFunc.
 func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 	t := reflect.TypeOf((*T)(nil)).Elem()
@@ -172,6 +173,8 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 // on the provided encoder. It may return SkipFunc such that marshaling can
 // move on to the next marshal function. However, no mutable method calls may
 // be called on the encoder if SkipFunc is returned.
+// The pointer to Encoder and the value of T must not be retained
+// outside the function call.
 func MarshalFuncV2[T any](fn func(MarshalOptions, *Encoder, T) error) *Marshalers {
 	t := reflect.TypeOf((*T)(nil)).Elem()
 	assertCastableTo(t, true)
@@ -207,6 +210,8 @@ func MarshalFuncV2[T any](fn func(MarshalOptions, *Encoder, T) error) *Marshaler
 // The function is always provided with a non-nil pointer value.
 //
 // The function must unmarshal exactly one JSON value.
+// The input []byte must not be mutated.
+// The input []byte and value T must not be retained outside the function call.
 // It may not return SkipFunc.
 func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 	t := reflect.TypeOf((*T)(nil)).Elem()
@@ -239,6 +244,8 @@ func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 // on the provided decoder. It may return SkipFunc such that unmarshaling can
 // move on to the next unmarshal function. However, no mutable method calls may
 // be called on the decoder if SkipFunc is returned.
+// The pointer to Decoder and the value of T must not be retained
+// outside the function call.
 func UnmarshalFuncV2[T any](fn func(UnmarshalOptions, *Decoder, T) error) *Unmarshalers {
 	t := reflect.TypeOf((*T)(nil)).Elem()
 	assertCastableTo(t, false)

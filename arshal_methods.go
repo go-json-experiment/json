@@ -23,6 +23,9 @@ var (
 // MarshalerV1 is implemented by types that can marshal themselves.
 // It is recommended that types implement MarshalerV2 unless
 // the implementation is trying to avoid a hard dependency on this package.
+//
+// It is recommended that implementations return a buffer that is safe
+// for the caller to retain and potentially mutate.
 type MarshalerV1 interface {
 	MarshalJSON() ([]byte, error)
 }
@@ -34,7 +37,8 @@ type MarshalerV1 interface {
 // then MarshalerV2 takes precedence. In such a case, both implementations
 // should aim to have equivalent behavior for the default marshal options.
 //
-// The implementation must write only one JSON value to the Encoder.
+// The implementation must write only one JSON value to the Encoder and
+// must not retain the pointer to Encoder.
 type MarshalerV2 interface {
 	MarshalNextJSON(MarshalOptions, *Encoder) error
 
@@ -50,6 +54,8 @@ type MarshalerV2 interface {
 // UnmarshalJSON must copy the JSON data if it is retained after returning.
 // It is recommended that UnmarshalJSON implement merge semantics when
 // unmarshaling into a pre-populated value.
+//
+// Implementations must not retain or mutate the input []byte.
 type UnmarshalerV1 interface {
 	UnmarshalJSON([]byte) error
 }
@@ -64,6 +70,8 @@ type UnmarshalerV1 interface {
 // The implementation must read only one JSON value from the Decoder.
 // It is recommended that UnmarshalNextJSON implement merge semantics when
 // unmarshaling into a pre-populated value.
+//
+// Implementations must not retain the pointer to Decoder.
 type UnmarshalerV2 interface {
 	UnmarshalNextJSON(UnmarshalOptions, *Decoder) error
 
