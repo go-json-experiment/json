@@ -2575,6 +2575,16 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
 	}, {
+		name: "Functions/Map/Key/String/V1/DuplicateName",
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
+				return []byte(`"name"`), nil
+			}),
+		},
+		in:      map[string]string{"name1": "value", "name2": "value"},
+		want:    `{"name":"name"`,
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: &SyntacticError{str: `duplicate name "name" in object`}},
+	}, {
 		name: "Functions/Map/Key/NoCaseString/V2",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
@@ -6231,6 +6241,21 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
+	}, {
+		name: "Functions/Map/Key/String/V1/DuplicateName",
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				if _, err := dec.ReadValue(); err != nil {
+					return err
+				}
+				*v = fmt.Sprintf("%d-%d", len(dec.tokens.stack), dec.tokens.last.length())
+				return nil
+			}),
+		},
+		inBuf:   `{"name":"value","name":"value"}`,
+		inVal:   addr(map[string]string{}),
+		want:    addr(map[string]string{"1-1": "1-2"}),
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: (&SyntacticError{str: `duplicate name "name" in object`}).withOffset(int64(len(`{"name":"value",`)))},
 	}, {
 		name: "Functions/Map/Value/NoCaseString/V1",
 		uopts: UnmarshalOptions{

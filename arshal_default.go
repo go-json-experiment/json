@@ -619,8 +619,10 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			marshalKey := keyFncs.marshal
 			marshalVal := valFncs.marshal
 			if mo.Marshalers != nil {
-				marshalKey, _ = mo.Marshalers.lookup(marshalKey, t.Key())
+				var ok bool
+				marshalKey, ok = mo.Marshalers.lookup(marshalKey, t.Key())
 				marshalVal, _ = mo.Marshalers.lookup(marshalVal, t.Elem())
+				nonDefaultKey = nonDefaultKey || ok
 			}
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
@@ -686,8 +688,10 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			unmarshalKey := keyFncs.unmarshal
 			unmarshalVal := valFncs.unmarshal
 			if uo.Unmarshalers != nil {
-				unmarshalKey, _ = uo.Unmarshalers.lookup(unmarshalKey, t.Key())
+				var ok bool
+				unmarshalKey, ok = uo.Unmarshalers.lookup(unmarshalKey, t.Key())
 				unmarshalVal, _ = uo.Unmarshalers.lookup(unmarshalVal, t.Elem())
+				nonDefaultKey = nonDefaultKey || ok
 			}
 			k := newAddressableValue(t.Key())
 			v := newAddressableValue(t.Elem())
