@@ -512,7 +512,7 @@ type (
 		Lang                 string          `json:"lang"`
 	}
 	twitterUser struct {
-		ID                             int             `json:"id"`
+		ID                             int64           `json:"id"`
 		IDStr                          string          `json:"id_str"`
 		Name                           string          `json:"name"`
 		ScreenName                     string          `json:"screen_name"`
