@@ -216,7 +216,7 @@ func (d *Decoder) fetch() error {
 	grow := cap(d.buf) <= maxBufferSize/growthSizeFactor
 	// Growing can be expensive, so only grow
 	// if a sufficient number of bytes have been processed.
-	grow = grow && int64(cap(d.buf)/growthRateFactor) > d.previousOffsetEnd()
+	grow = grow && int64(cap(d.buf)) < d.previousOffsetEnd()/growthRateFactor
 	// If prevStart==0, then fetch was called in order to fetch more data
 	// to finish consuming a large JSON value contiguously.
 	// Grow if less than 25% of the remaining capacity is available.

@@ -578,6 +578,67 @@ func TestCoderStackPointer(t *testing.T) {
 	}
 }
 
+func TestCoderBufferGrowth(t *testing.T) {
+	// The growth rate of the internal buffer should be exponential,
+	// but should not grow unbounded.
+	checkGrowth := func(ns []int) {
+		t.Helper()
+		var sumBytes, sumRates, numGrows float64
+		prev := ns[0]
+		for i := 1; i < len(ns)-1; i++ {
+			n := ns[i]
+			if n != prev {
+				sumRates += float64(n) / float64(prev)
+				numGrows++
+				prev = n
+			}
+			if n > 1<<20 {
+				t.Fatalf("single Read/Write too large: %d", n)
+			}
+			sumBytes += float64(n)
+		}
+		if mean := sumBytes / float64(len(ns)); mean < 1<<10 {
+			t.Fatalf("average Read/Write too small: %0.1f", mean)
+		}
+		switch mean := sumRates / numGrows; {
+		case mean < 1.25:
+			t.Fatalf("average growth rate too slow: %0.3f", mean)
+		case mean > 2.00:
+			t.Fatalf("average growth rate too fast: %0.3f", mean)
+		}
+	}
+
+	bb := &bytesBuffer{new(bytes.Buffer)}
+
+	var writeSizes []int
+	if err := MarshalFull(WriterFunc(func(b []byte) (int, error) {
+		n, err := bb.Write(b)
+		writeSizes = append(writeSizes, n)
+		return n, err
+	}), make([]struct{}, 1e6)); err != nil {
+		t.Fatalf("MarshalFull error: %v", err)
+	}
+	checkGrowth(writeSizes)
+
+	var readSizes []int
+	if err := UnmarshalFull(ReaderFunc(func(b []byte) (int, error) {
+		n, err := bb.Read(b)
+		readSizes = append(readSizes, n)
+		return n, err
+	}), new([]struct{})); err != nil {
+		t.Fatalf("UnmarshalFull error: %v", err)
+	}
+	checkGrowth(readSizes)
+}
+
+type ReaderFunc func([]byte) (int, error)
+
+func (f ReaderFunc) Read(b []byte) (int, error) { return f(b) }
+
+type WriterFunc func([]byte) (int, error)
+
+func (f WriterFunc) Write(b []byte) (int, error) { return f(b) }
+
 // FaultyBuffer implements io.Reader and io.Writer.
 // It may process fewer bytes than the provided buffer
 // and may randomly return an error.

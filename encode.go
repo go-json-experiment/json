@@ -251,7 +251,7 @@ func (e *Encoder) flush() error {
 	grow := cap(e.buf) <= maxBufferSize/growthSizeFactor
 	// Growing can be expensive, so only grow
 	// if a sufficient number of bytes have been processed.
-	grow = grow && int64(cap(e.buf)/growthRateFactor) > e.previousOffsetEnd()
+	grow = grow && int64(cap(e.buf)) < e.previousOffsetEnd()/growthRateFactor
 	if grow {
 		e.buf = make([]byte, 0, cap(e.buf)*growthSizeFactor)
 	}
