@@ -1100,7 +1100,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		if mo.Marshalers != nil {
 			marshal, _ = mo.Marshalers.lookup(marshal, t.Elem())
 		}
-		for i, n := 0, va.Len(); i < n; i++ {
+		for i := 0; i < n; i++ {
 			v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 			if err := marshal(mo, enc, v); err != nil {
 				return err
@@ -1220,7 +1220,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			}
 			var i int
 			for dec.PeekKind() != ']' {
-				if i >= t.Len() {
+				if i >= n {
 					err := errors.New("too many array elements")
 					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}
@@ -1234,7 +1234,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			if _, err := dec.ReadToken(); err != nil {
 				return err
 			}
-			if i < t.Len() {
+			if i < n {
 				err := errors.New("too few array elements")
 				return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 			}
