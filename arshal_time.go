@@ -24,7 +24,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	// dependency on time from json.
 	//
 	// Injecting the arshaling functionality like this will not be identical
-	// to actually declaring methods on these types since embedding of the
+	// to actually declaring methods on the time types since embedding of the
 	// time types will not be able to forward this functionality.
 	switch t {
 	case timeDurationType:
@@ -161,8 +161,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 }
 
 func checkTimeFormat(format string) (string, error) {
-	// Assume that an exported format constant in the time package
-	// will always started with uppercase ASCII.
+	// We assume that an exported constant in the time package will
+	// always start with an uppercase ASCII letter.
 	if len(format) > 0 && 'A' <= format[0] && format[0] <= 'Z' {
 		switch format {
 		case "ANSIC":

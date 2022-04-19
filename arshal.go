@@ -127,7 +127,8 @@ type UnmarshalOptions struct {
 	Unmarshalers *Unmarshalers
 
 	// StringifyNumbers specifies that numeric Go types can be deserialized
-	// from either a JSON number or a JSON string containing a JSON number.
+	// from either a JSON number or a JSON string containing a JSON number
+	// without any surrounding whitespace.
 	StringifyNumbers bool
 
 	// MatchCaseInsensitiveNames specifies that unmarshaling into a Go struct
@@ -198,7 +199,7 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 // TODO: Document details for all types are unmarshaled.
 func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out any) error {
 	v := reflect.ValueOf(out)
-	if !v.IsValid() || (v.Kind() != reflect.Pointer || v.IsNil()) {
+	if !v.IsValid() || v.Kind() != reflect.Pointer || v.IsNil() {
 		var t reflect.Type
 		if v.IsValid() {
 			t = v.Type()

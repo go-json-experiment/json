@@ -36,8 +36,8 @@ func TestInline(t *testing.T) {
 			"consumeSimpleString",
 			"consumeString", // thin wrapper over consumeStringResumable
 			"consumeSimpleNumber",
-			"consumeNumber", // thin wrapper over consumeNumberResumable
-			"unescapeStringMayCopy",
+			"consumeNumber",         // thin wrapper over consumeNumberResumable
+			"unescapeStringMayCopy", // thin wrapper over unescapeString
 			"hasSuffixByte",
 			"trimSuffixByte",
 			"trimSuffixString",
@@ -72,8 +72,8 @@ func TestInline(t *testing.T) {
 			"objectNameStack.ensureCopiedBuffer",
 			"objectNamespace.insertQuoted",   // thin wrapper over objectNamespace.insert
 			"objectNamespace.insertUnquoted", // thin wrapper over objectNamespace.insert
-			"Token.String",
-			"foldName",
+			"Token.String",                   // thin wrapper over Token.string
+			"foldName",                       // thin wrapper over appendFoldedName
 			"hash64",
 		} {
 			m[s] = true

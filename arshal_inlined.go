@@ -9,13 +9,13 @@ import (
 	"reflect"
 )
 
-// NOTE: This package supports "inlining" a Go struct field, where the contents
+// This package supports "inlining" a Go struct field, where the contents
 // of the serialized field (which must be a JSON object) are treated as if
 // they are part of the parent Go struct (which represents a JSON object).
 //
 // Generally, inlined fields are of a Go struct type, where the fields of the
 // nested struct are virtually hoisted up to the parent struct using rules
-// similar to how Go embedding works (but operating on the JSON namespace).
+// similar to how Go embedding works (but operating within the JSON namespace).
 //
 // However, inlined fields may also be of a Go map type with a string key
 // or a RawValue. Such inlined fields are called "fallback" fields since they

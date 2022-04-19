@@ -31,6 +31,7 @@ type Marshalers = typedMarshalers
 // otherwise the default marshaling behavior is used.
 //
 // For example:
+//
 //	m1 := NewMarshalers(f1, f2)
 //	m2 := NewMarshalers(f0, m1, f3)     // equivalent to m3
 //	m3 := NewMarshalers(f0, f1, f2, f3) // equivalent to m2
@@ -50,6 +51,7 @@ type Unmarshalers = typedUnmarshalers
 // otherwise the default unmarshaling behavior is used.
 //
 // For example:
+//
 //	u1 := NewUnmarshalers(f1, f2)
 //	u2 := NewUnmarshalers(f0, u1, f3)     // equivalent to u3
 //	u3 := NewUnmarshalers(f0, f1, f2, f3) // equivalent to u2
@@ -280,7 +282,9 @@ func UnmarshalFuncV2[T any](fn func(UnmarshalOptions, *Decoder, T) error) *Unmar
 //
 // Let AllTypes be the universal set of all possible Go types.
 // This function generally asserts that:
+//
 //	len([from for from in AllTypes if castableTo(from, to)]) > 0
+//
 // otherwise it panics.
 //
 // As a special-case if marshal is false, then we forbid any non-pointer or

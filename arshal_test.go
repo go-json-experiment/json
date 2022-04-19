@@ -599,7 +599,7 @@ func TestMarshal(t *testing.T) {
 		wantErr error
 
 		canonicalize bool // canonicalize the output before comparing?
-		useWriter    bool // call MarshalFull instead
+		useWriter    bool // call MarshalFull instead of Marshal
 	}{{
 		name: "Nil",
 		in:   nil,
@@ -2380,7 +2380,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/PointerBool/V1/Match",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *bool) ([]byte, error) {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
 			}),
 		},
@@ -2417,7 +2417,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/PointerBool/V2/Match",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return enc.WriteToken(String("called"))
 			}),
 		},
@@ -2536,7 +2536,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/Map/Key/PointerNoCaseString/V1",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
 			}),
 		},
@@ -2595,7 +2595,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/Map/Key/PointerNoCaseString/V2",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
 			}),
 		},
@@ -2644,7 +2644,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/Map/Value/PointerNoCaseString/V1",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
 			}),
 		},
@@ -2673,7 +2673,7 @@ func TestMarshal(t *testing.T) {
 		name: "Functions/Map/Value/PointerNoCaseString/V2",
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
-				_ = *v // must be non-nil pointer
+				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
 			}),
 		},
@@ -6679,7 +6679,7 @@ func TestUnmarshal(t *testing.T) {
 
 				return NewUnmarshalers(
 					// This is just like unmarshaling into a Go array,
-					// but avoids zero-ing the element before calling unmarshal.
+					// but avoids zeroing the element before calling unmarshal.
 					UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *[14]any) error {
 						if _, err := dec.ReadToken(); err != nil {
 							return err

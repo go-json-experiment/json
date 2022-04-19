@@ -50,7 +50,8 @@ type MarshalerV2 interface {
 // It is recommended that types implement UnmarshalerV2 unless
 // the implementation is trying to avoid a hard dependency on this package.
 //
-// The input can be assumed to be a valid encoding of a JSON value.
+// The input can be assumed to be a valid encoding of a JSON value
+// if called from unmarshal functionality in this package.
 // UnmarshalJSON must copy the JSON data if it is retained after returning.
 // It is recommended that UnmarshalJSON implement merge semantics when
 // unmarshaling into a pre-populated value.
@@ -60,7 +61,7 @@ type UnmarshalerV1 interface {
 	UnmarshalJSON([]byte) error
 }
 
-// UnmarshalerV2 is implemented by types that can marshal themselves.
+// UnmarshalerV2 is implemented by types that can unmarshal themselves.
 // It is recommended that types implement UnmarshalerV2 instead of UnmarshalerV1
 // since this is both more performant and flexible.
 // If a type implements both UnmarshalerV1 and UnmarshalerV2,

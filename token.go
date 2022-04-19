@@ -21,11 +21,11 @@ const (
 )
 
 // Token represents a lexical JSON token, which may be one of the following:
-//	• a JSON literal (i.e., null, true, or false)
-//	• a JSON string (e.g., "hello, world!")
-//	• a JSON number (e.g., 123.456)
-//	• a start or end delimiter for a JSON object (i.e., { or } )
-//	• a start or end delimiter for a JSON array (i.e., [ or ] )
+//   - a JSON literal (i.e., null, true, or false)
+//   - a JSON string (e.g., "hello, world!")
+//   - a JSON number (e.g., 123.456)
+//   - a start or end delimiter for a JSON object (i.e., { or } )
+//   - a start or end delimiter for a JSON array (i.e., [ or ] )
 //
 // A Token cannot represent entire array or object values, while a RawValue can.
 // There is no Token to represent commas and colons since
@@ -42,9 +42,9 @@ type Token struct {
 	//	╔═════════════════╦════════════╤════════════╤════════════╗
 	//	║ Token type      ║ raw field  │ str field  │ num field  ║
 	//	╠═════════════════╬════════════╪════════════╪════════════╣
-	//	║ null   (raw)    ║ "null"     │ ""         │ offset     ║
-	//	║ false  (raw)    ║ "false"    │ ""         │ offset     ║
-	//	║ true   (raw)    ║ "true      │ ""         │ offset     ║
+	//	║ null   (raw)    ║ "null"     │ ""         │ 0          ║
+	//	║ false  (raw)    ║ "false"    │ ""         │ 0          ║
+	//	║ true   (raw)    ║ "true"     │ ""         │ 0          ║
 	//	║ string (raw)    ║ non-empty  │ ""         │ offset     ║
 	//	║ string (string) ║ nil        │ non-empty  │ 0          ║
 	//	║ number (raw)    ║ non-empty  │ ""         │ offset     ║
@@ -56,14 +56,14 @@ type Token struct {
 	//	╚═════════════════╩════════════╧════════════╧════════════╝
 	//
 	// Notes:
-	//	• For tokens stored in "raw" form, the num field contains the
-	//	  absolute offset determined by raw.previousOffsetStart().
-	//	  The buffer itself is stored in raw.previousBuffer().
-	//	• JSON literals and structural characters are always in the "raw" form.
-	//	• JSON strings and numbers can be in either "raw" or "exact" forms.
-	//	• The exact zero value of JSON strings and numbers in the "exact" forms
-	//	  have ambiguous representation. Thus, they are always represented
-	//	  in the "raw" form.
+	//   - For tokens stored in "raw" form, the num field contains the
+	//     absolute offset determined by raw.previousOffsetStart().
+	//     The buffer itself is stored in raw.previousBuffer().
+	//   - JSON literals and structural characters are always in the "raw" form.
+	//   - JSON strings and numbers can be in either "raw" or "exact" forms.
+	//   - The exact zero value of JSON strings and numbers in the "exact" forms
+	//     have ambiguous representation. Thus, they are always represented
+	//     in the "raw" form.
 
 	// raw contains a reference to the raw decode buffer.
 	// If non-nil, then its value takes precedence over str and num.
@@ -183,6 +183,7 @@ func (t Token) Clone() Token {
 		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
+		// TODO(https://golang.org/issue/45038): Use bytes.Clone.
 		buf := append([]byte(nil), raw.previousBuffer()...)
 		return Token{raw: &decodeBuffer{buf: buf, prevStart: 0, prevEnd: len(buf)}}
 	}
@@ -324,7 +325,6 @@ func (t Token) Float() float64 {
 
 	// Handle string values with "NaN", "Infinity", or "-Infinity".
 	if t.Kind() == '"' {
-		// TODO: Optimize for when t is in raw form.
 		switch t.String() {
 		case "NaN":
 			return math.NaN()
@@ -471,15 +471,15 @@ func (t Token) Kind() Kind {
 // which is conveniently the first byte of that kind's grammar
 // with the restriction that numbers always be represented with '0':
 //
-//	• 'n': null
-//	• 'f': false
-//	• 't': true
-//	• '"': string
-//	• '0': number
-//	• '{': object start
-//	• '}': object end
-//	• '[': array start
-//	• ']': array end
+//   - 'n': null
+//   - 'f': false
+//   - 't': true
+//   - '"': string
+//   - '0': number
+//   - '{': object start
+//   - '}': object end
+//   - '[': array start
+//   - ']': array end
 //
 // An invalid kind is usually represented using 0,
 // but may be non-zero due to invalid JSON data.

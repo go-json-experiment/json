@@ -31,7 +31,7 @@ func equalTokens(xs, ys []Token) bool {
 	return true
 }
 
-// TestDecoder whether we can parse JSON with either tokens or raw values.
+// TestDecoder tests whether we can parse JSON with either tokens or raw values.
 func TestDecoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value", "TokenDelims"} {

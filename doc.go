@@ -8,8 +8,7 @@
 // primitive data types such as booleans, strings, and numbers,
 // in addition to structured data types such as objects and arrays.
 //
-//
-// Terminology
+// # Terminology
 //
 // This package uses the terms "encode" and "decode" for syntactic functionality
 // that is concerned with processing JSON based on its grammar, and
@@ -25,29 +24,28 @@
 // This package uses JSON terminology when discussing JSON, which may differ
 // from related concepts in Go or elsewhere in computing literature.
 //
-//	• A JSON "object" refers to an unordered collection of name/value members;
-//	• a JSON "array" refers to an ordered sequence of elements; and
-//	• a JSON "value" refers to either a literal (i.e., null, false, or true),
-//	   string, number, object, or array.
+//   - A JSON "object" refers to an unordered collection of name/value members;
+//   - a JSON "array" refers to an ordered sequence of elements; and
+//   - a JSON "value" refers to either a literal (i.e., null, false, or true),
+//     string, number, object, or array.
 //
 // See RFC 8259 for more information.
 //
-//
-// Specifications
+// # Specifications
 //
 // Relevant specifications include RFC 4627, RFC 7159, RFC 7493, RFC 8259,
 // and RFC 8785. Each RFC is generally a stricter subset of another RFC.
 // In increasing order of strictness:
 //
-//	• RFC 4627 and RFC 7159 do not require (but recommend) the use of UTF-8
-//	  and also do not require (but recommend) that object names be unique.
-//	• RFC 8259 requires the use of UTF-8,
-//	  but does not require (but recommends) that object names be unique.
-//	• RFC 7493 requires the use of UTF-8
-//	  and also requires that object names be unique.
-//	• RFC 8785 defines a canonical representation. It requires the use of UTF-8
-//	  and also requires that object names be unique and in a specific ordering.
-//	  It specifies exactly how strings and numbers must be formatted.
+//   - RFC 4627 and RFC 7159 do not require (but recommend) the use of UTF-8
+//     and also do not require (but recommend) that object names be unique.
+//   - RFC 8259 requires the use of UTF-8,
+//     but does not require (but recommends) that object names be unique.
+//   - RFC 7493 requires the use of UTF-8
+//     and also requires that object names be unique.
+//   - RFC 8785 defines a canonical representation. It requires the use of UTF-8
+//     and also requires that object names be unique and in a specific ordering.
+//     It specifies exactly how strings and numbers must be formatted.
 //
 // The primary difference between RFC 4627 and RFC 7159 is that the former
 // restricted top-level values to only JSON objects and arrays, while

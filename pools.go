@@ -10,6 +10,8 @@ import (
 	"sync"
 )
 
+// TODO(https://golang.org/issue/47657): Use sync.PoolOf.
+
 var encoderPool = sync.Pool{New: func() any { return new(Encoder) }}
 
 func getEncoder(b []byte, w io.Writer, o EncodeOptions) *Encoder {

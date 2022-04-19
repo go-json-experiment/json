@@ -41,7 +41,7 @@ func (s *state) reset() {
 	s.namespaces.reset()
 }
 
-// appendStackPointer appends to b a pointer (RFC 6901) to the current value.
+// appendStackPointer appends a JSON Pointer (RFC 6901) to the current value.
 // The returned pointer is only accurate if s.names is populated,
 // otherwise it uses the numeric index as the object member name.
 //
@@ -93,7 +93,7 @@ func (s state) appendStackPointer(b []byte) []byte {
 // between each JSON value.
 //
 // For performance, most methods are carefully written to be inlineable.
-// The zero value is not a valid state machine; call reset first.
+// The zero value is a valid state machine ready for use.
 type stateMachine struct {
 	stack []stateEntry
 	last  stateEntry
@@ -304,9 +304,9 @@ func (m *stateMachine) invalidateDisabledNamespaces() {
 }
 
 // stateEntry encodes several artifacts within a single unsigned integer:
-//	• whether this represents a JSON object or array,
-//	• whether this object should check for duplicate names, and
-//	• how many elements are in this JSON object or array.
+//   - whether this represents a JSON object or array,
+//   - whether this object should check for duplicate names, and
+//   - how many elements are in this JSON object or array.
 type stateEntry uint64
 
 const (
@@ -351,7 +351,7 @@ func (e stateEntry) needObjectName() bool {
 	return e&(stateTypeMask|stateCountLSBMask) == stateTypeObject|stateCountEven
 }
 
-// needImplicitColon reports whether an impicit colon should occur next,
+// needImplicitColon reports whether an colon should occur next,
 // which always occurs after JSON object names.
 func (e stateEntry) needImplicitColon() bool {
 	return e.needObjectValue()
@@ -363,7 +363,7 @@ func (e stateEntry) needObjectValue() bool {
 	return e&(stateTypeMask|stateCountLSBMask) == stateTypeObject|stateCountOdd
 }
 
-// needImplicitComma reports whether an impicit comma should occur next,
+// needImplicitComma reports whether an comma should occur next,
 // which always occurs after a value in a JSON object or array
 // before the next value (or name).
 func (e stateEntry) needImplicitComma(next Kind) bool {
@@ -413,6 +413,8 @@ func (e stateEntry) isValidNamespace() bool {
 // It violates clean abstraction of layers, but is significantly more efficient.
 // This ensures that popping and pushing in the common case is a trivial
 // push/pop of an offset integer.
+//
+// The zero value is an empty names stack ready for use.
 type objectNameStack struct {
 	// offsets is a stack of offsets for each name.
 	// A non-negative offset is the ending offset into the local names buffer.
@@ -499,7 +501,7 @@ func (ns *objectNameStack) pop() {
 
 // copyQuotedBuffer copies names from the remote buffer into the local names
 // buffer so that there are no more offset references into the remote buffer.
-// The allows the remote buffer to change contents without affecting
+// This allows the remote buffer to change contents without affecting
 // the names that this data structure is trying to remember.
 func (ns *objectNameStack) copyQuotedBuffer(b []byte) {
 	// Find the first negative offset.
@@ -611,7 +613,7 @@ func (ns *objectNamespace) reset() {
 	}
 }
 
-// length reports the number names in the namespace.
+// length reports the number of names in the namespace.
 func (ns *objectNamespace) length() int {
 	return len(ns.endOffsets)
 }
@@ -665,7 +667,7 @@ func (ns *objectNamespace) insert(name []byte, quoted bool) bool {
 
 	if ns.mapNames == nil {
 		// Perform linear search over the buffer to find matching names.
-		// It provides O(n) lookup, but doesn't require any allocations.
+		// It provides O(n) lookup, but does not require any allocations.
 		var startOffset uint
 		for _, endOffset := range ns.endOffsets {
 			if string(ns.allUnquotedNames[startOffset:endOffset]) == string(name) {

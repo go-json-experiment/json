@@ -14,7 +14,7 @@ type stringCache [256]string // 256*unsafe.Sizeof(string("")) => 4KiB
 
 // make returns the string form of b.
 // It returns a pre-allocated string from c if present, otherwise
-// it allocated a new string, inserts it into the cache, and returns it.
+// it allocates a new string, inserts it into the cache, and returns it.
 func (c *stringCache) make(b []byte) string {
 	const (
 		minCachedLen = 2   // single byte strings are already interned by the runtime

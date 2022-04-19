@@ -60,7 +60,7 @@ func BenchmarkIntern(b *testing.B) {
 		label string
 		data  [][]byte
 	}{
-		// Best is the best case scenario every string is the same.
+		// Best is the best case scenario where every string is the same.
 		{"Best", func() (out [][]byte) {
 			for i := 0; i < 1000; i++ {
 				out = append(out, []byte("hello, world!"))
@@ -98,7 +98,7 @@ func BenchmarkIntern(b *testing.B) {
 
 	for _, tt := range tests {
 		b.Run(tt.label, func(b *testing.B) {
-			// Alloc simply heap allocates a copy.
+			// Alloc simply heap allocates each string.
 			// This provides an upper bound on the number of allocations.
 			b.Run("Alloc", func(b *testing.B) {
 				b.ReportAllocs()

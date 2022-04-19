@@ -21,35 +21,34 @@ import (
 //
 // This file is structured in the following way:
 //
-//	• consumeXXX functions parse a JSON token from a []byte.
-//	  If the buffer appears truncated, then it returns io.ErrUnexpectedEOF.
-//	  The consumeSimpleXXX functions are so named because they only handle
-//	  a subset of the grammar for the JSON token being parsed.
-//	  They do not handle the full grammar to keep these functions inlineable.
+//   - consumeXXX functions parse an exact JSON token from a []byte.
+//     If the buffer appears truncated, then it returns io.ErrUnexpectedEOF.
+//     The consumeSimpleXXX functions are so named because they only handle
+//     a subset of the grammar for the JSON token being parsed.
+//     They do not handle the full grammar to keep these functions inlineable.
 //
-//	• Decoder.consumeXXX methods parse a JSON token from the internal buffer,
-//	  automatically fetching more input if necessary. These methods take
-//	  a position relative to the start of Decoder.buf as an argument and
-//	  return the end of the consumed JSON token as a position,
-//	  also relative to the start of Decoder.buf.
+//   - Decoder.consumeXXX methods parse the next JSON token from Decoder.buf,
+//     automatically fetching more input if necessary. These methods take
+//     a position relative to the start of Decoder.buf as an argument and
+//     return the end of the consumed JSON token as a position,
+//     also relative to the start of Decoder.buf.
 //
-//	• In the event of an I/O errors or state machine violations,
-//	  the implementation avoids mutating the state of Decoder
-//	  (aside from the book-keeping needed to implement Decoder.fetch).
-//	  For this reason, only Decoder.ReadToken and Decoder.ReadValue are
-//	  responsible for updated Decoder.prevStart and Decoder.prevEnd.
+//   - In the event of an I/O errors or state machine violations,
+//     the implementation avoids mutating the state of Decoder
+//     (aside from the book-keeping needed to implement Decoder.fetch).
+//     For this reason, only Decoder.ReadToken and Decoder.ReadValue are
+//     responsible for updated Decoder.prevStart and Decoder.prevEnd.
 //
-//	• For performance, much of the implementation uses the pattern of calling
-//	  the inlineable consumeXXX functions first, and if more work is necessary,
-//	  then it calls the slower Decoder.consumeXXX methods.
-//	  TODO: Revisit this pattern if the Go compiler provides finer control
-//	  over exactly which calls are inlined or not.
+//   - For performance, much of the implementation uses the pattern of calling
+//     the inlineable consumeXXX functions first, and if more work is necessary,
+//     then it calls the slower Decoder.consumeXXX methods.
+//     TODO: Revisit this pattern if the Go compiler provides finer control
+//     over exactly which calls are inlined or not.
 
 // DecodeOptions configures how JSON decoding operates.
 // The zero value is equivalent to the default settings,
 // which is compliant with both RFC 7493 and RFC 8259.
 type DecodeOptions struct {
-	// TODO: Rename as UnmarshalOptions?
 	requireKeyedLiterals
 	nonComparable
 
@@ -67,7 +66,7 @@ type DecodeOptions struct {
 	AllowInvalidUTF8 bool
 }
 
-// Decoder is a streaming decoder for raw JSON values and tokens.
+// Decoder is a streaming decoder for raw JSON tokens and values.
 // It is used to read a stream of top-level JSON values,
 // each separated by optional whitespace characters.
 //
@@ -106,12 +105,13 @@ type Decoder struct {
 
 // decodeBuffer is a buffer split into 4 segments:
 //
-//	• buf[0:prevEnd]         // already read portion of the buffer
-//	• buf[prevStart:prevEnd] // previously read value
-//	• buf[prevEnd:len(buf)]  // unread portion of the buffer
-//	• buf[len(buf):cap(buf)] // unused portion of the buffer
+//   - buf[0:prevEnd]         // already read portion of the buffer
+//   - buf[prevStart:prevEnd] // previously read value
+//   - buf[prevEnd:len(buf)]  // unread portion of the buffer
+//   - buf[len(buf):cap(buf)] // unused portion of the buffer
 //
 // Invariants:
+//
 //	0 ≤ prevStart ≤ prevEnd ≤ len(buf) ≤ cap(buf)
 type decodeBuffer struct {
 	peekPos int   // non-zero if valid offset into buf for start of next token
@@ -121,7 +121,7 @@ type decodeBuffer struct {
 	prevStart int
 	prevEnd   int
 
-	// baseOffset can be added to prevStart and prevEnd to obtain
+	// baseOffset is added to prevStart and prevEnd to obtain
 	// the absolute offset relative to the start of io.Reader stream.
 	baseOffset int64
 
@@ -222,12 +222,13 @@ func (d *Decoder) fetch() error {
 	// Note that this may cause the input buffer to exceed maxBufferSize.
 	grow = grow || (d.prevStart == 0 && len(d.buf) >= 3*cap(d.buf)/4)
 
-	// Move unread portion of the data to the front.
 	if grow {
+		// Allocate a new buffer and copy the contents of the old buffer over.
 		// TODO: Provide a hard limit on the maximum internal buffer size?
 		buf := make([]byte, 0, cap(d.buf)*growthSizeFactor)
 		d.buf = append(buf, d.buf[d.prevStart:]...)
 	} else {
+		// Move unread portion of the data to the front.
 		n := copy(d.buf[:cap(d.buf)], d.buf[d.prevStart:])
 		d.buf = d.buf[:n]
 	}
@@ -254,7 +255,7 @@ func (d *Decoder) fetch() error {
 
 const invalidateBufferByte = '#' // invalid starting character for JSON grammar
 
-// invalidatePreviousRead invalidates buffers returned by ReadValue calls
+// invalidatePreviousRead invalidates buffers returned by Peek and Read calls
 // so that the first byte is an invalid character.
 // This Hyrum-proofs the API against faulty application code that assumes
 // values returned by ReadValue remain valid past subsequent Read calls.
@@ -572,8 +573,10 @@ func (d *Decoder) ReadToken() (Token, error) {
 type valueFlags uint
 
 const (
-	stringNonVerbatim  valueFlags = 1 // string cannot be naively treated as valid UTF-8
-	stringNonCanonical valueFlags = 2 // string not formatted according to RFC 8785, section 3.2.2.2.
+	_ valueFlags = (1 << iota) / 2 // powers of two starting with zero
+
+	stringNonVerbatim  // string cannot be naively treated as valid UTF-8
+	stringNonCanonical // string not formatted according to RFC 8785, section 3.2.2.2.
 	// TODO: Track whether a number is a non-integer?
 )
 
@@ -1030,11 +1033,11 @@ func (d *Decoder) StackDepth() int {
 // It must be a number between 0 and StackDepth, inclusive.
 // For each level, it reports the kind:
 //
-//  • 0 for a level of zero,
-//  • '{' for a level representing a JSON object, and
-//  • '[' for a level representing a JSON array.
+//   - 0 for a level of zero,
+//   - '{' for a level representing a JSON object, and
+//   - '[' for a level representing a JSON array.
 //
-// and also reports the length of that JSON object or array.
+// It also reports the length of that JSON object or array.
 // Each name and value in a JSON object is counted separately,
 // so the effective number of members would be half the length.
 // A complete JSON object must have an even length.
@@ -1050,7 +1053,7 @@ func (d *Decoder) StackIndex(i int) (Kind, int) {
 	}
 }
 
-// StackPointer returns a pointer (RFC 6901) to the most recently read value.
+// StackPointer returns a JSON Pointer (RFC 6901) to the most recently read value.
 // Object names are only present if AllowDuplicateNames is false, otherwise
 // object members are represented using their index within the object.
 func (d *Decoder) StackPointer() string {
@@ -1145,7 +1148,7 @@ func consumeString(flags *valueFlags, b []byte, validateUTF8 bool) (n int, err e
 // consumeStringResumable is identical to consumeString but supports resuming
 // from a previous call that returned io.ErrUnexpectedEOF.
 func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
-	// Consume the leading quote.
+	// Consume the leading double quote.
 	switch {
 	case resumeOffset > 0:
 		n = resumeOffset // already handled the leading quote
@@ -1170,7 +1173,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 			return n, io.ErrUnexpectedEOF
 		}
 
-		// Check for terminating quote.
+		// Check for terminating double quote.
 		if b[n] == '"' {
 			n++
 			return n, nil
@@ -1254,11 +1257,11 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 	return n, io.ErrUnexpectedEOF
 }
 
-// unescapeString append the unescaped for of a JSON string in src to dst.
+// unescapeString appends the unescaped form of a JSON string in src to dst.
 // Any invalid UTF-8 within the string will be replaced with utf8.RuneError.
 // The input must be an entire JSON string with no surrounding whitespace.
 func unescapeString(dst, src []byte) (v []byte, ok bool) {
-	// Consume quote delimiters.
+	// Consume leading double quote.
 	if uint(len(src)) == 0 || src[0] != '"' {
 		return dst, false
 	}
@@ -1277,7 +1280,7 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 			break
 		}
 
-		// Check for terminating quote.
+		// Check for terminating double quote.
 		if src[n] == '"' {
 			dst = append(dst, src[i:n]...)
 			n++
@@ -1331,7 +1334,7 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 				}
 				n += 6
 
-				// Check whether this is a surrogate halve.
+				// Check whether this is a surrogate half.
 				r := rune(v1)
 				if utf16.IsSurrogate(r) {
 					r = unicode.ReplacementChar // assume failure unless the following succeeds
@@ -1357,17 +1360,17 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 	return dst, false // truncated input
 }
 
-// unescapeStringMayCopy returns the unescaped form of src.
+// unescapeStringMayCopy returns the unescaped form of b.
 // If there are no escaped characters, the output is simply a subslice of
 // the input with the surrounding quotes removed.
 // Otherwise, a new buffer is allocated for the output.
-func unescapeStringMayCopy(src []byte, isVerbatim bool) []byte {
+func unescapeStringMayCopy(b []byte, isVerbatim bool) []byte {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
 	if isVerbatim {
-		return src[len(`"`) : len(src)-len(`"`)]
+		return b[len(`"`) : len(b)-len(`"`)]
 	}
-	src, _ = unescapeString(make([]byte, 0, len(src)), src)
-	return src
+	b, _ = unescapeString(make([]byte, 0, len(b)), b)
+	return b
 }
 
 // consumeSimpleNumber consumes the next JSON number per RFC 7159, section 6
@@ -1543,9 +1546,9 @@ func parseHexUint16(b []byte) (v uint16, ok bool) {
 // See https://golang.org/issue/42429.
 func parseDecUint(b []byte) (v uint64, ok bool) {
 	// Overflow logic is based on strconv/atoi.go:138-149 from Go1.15, where:
-	//	• cutoff is equal to math.MaxUint64/10+1, and
-	//	• the n1 > maxVal check is unnecessary
-	//	  since maxVal is equivalent to math.MaxUint64.
+	//   - cutoff is equal to math.MaxUint64/10+1, and
+	//   - the n1 > maxVal check is unnecessary
+	//     since maxVal is equivalent to math.MaxUint64.
 	var n int
 	var overflow bool
 	for len(b) > n && ('0' <= b[n] && b[n] <= '9') {

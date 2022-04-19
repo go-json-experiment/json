@@ -111,6 +111,7 @@ func TestCaseSensitivity(t *testing.T) {
 // The non-zero values of those types always marshal as JSON strings.
 //
 // Related issues:
+//
 //	https://golang.org/issue/27589
 //	https://golang.org/issue/37711
 func TestNilSlicesAndMaps(t *testing.T) {

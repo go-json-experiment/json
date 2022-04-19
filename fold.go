@@ -20,7 +20,7 @@ func foldName(in []byte) []byte {
 }
 func appendFoldedName(out, in []byte) []byte {
 	for i := 0; i < len(in); {
-		// Handle ASCII.
+		// Handle single-byte ASCII.
 		if c := in[i]; c < utf8.RuneSelf {
 			if c != '_' && c != '-' {
 				if 'a' <= c && c <= 'z' {
@@ -43,6 +43,7 @@ func appendFoldedName(out, in []byte) []byte {
 // for all runes in the same fold set.
 //
 // Invariant:
+//
 //	foldRune(x) == foldRune(y) ⇔ strings.EqualFold(string(x), string(y))
 func foldRune(r rune) rune {
 	for {

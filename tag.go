@@ -70,7 +70,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 
 		t := qe.typ
 		inlinedFallbackIndex := -1         // index of last inlined fallback field in current struct
-		namesIndex := make(map[string]int) // index of each field with a given name in current struct
+		namesIndex := make(map[string]int) // index of each field with a given JSON object name in current struct
 		var hasAnyJSONTag bool             // whether any Go struct field has a `json` tag
 		var hasAnyJSONField bool           // whether any JSON serializable fields exist in current struct
 		for i := 0; i < t.NumField(); i++ {
@@ -146,7 +146,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// JSON object members back by a Go map or RawValue.
 				switch {
 				case tf == rawValueType:
-					f.fncs = nil // manually handled in arshal_inlined.go
+					f.fncs = nil // specially handled in arshal_inlined.go
 				case tf.Kind() == reflect.Map && tf.Key() == stringType:
 					f.fncs = lookupArshaler(tf.Elem())
 				default:
@@ -319,7 +319,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		}))
 		opt := tag[:n]
 		if n == 0 {
-			// Allow a single quoted strings for arbitrary names.
+			// Allow a single quoted string for arbitrary names.
 			opt, n, err = consumeTagOption(tag)
 			if err != nil {
 				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)

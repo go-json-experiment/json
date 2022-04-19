@@ -17,11 +17,11 @@ import (
 // NOTE: RawValue is analogous to v1 json.RawMessage.
 
 // RawValue represents a single raw JSON value, which may be one of the following:
-//	• a JSON literal (i.e., null, true, or false)
-//	• a JSON string (e.g., "hello, world!")
-//	• a JSON number (e.g., 123.456)
-//	• an entire JSON object (e.g., {"fizz":"buzz"} )
-//	• an entire JSON array (e.g., [1,2,3] )
+//   - a JSON literal (i.e., null, true, or false)
+//   - a JSON string (e.g., "hello, world!")
+//   - a JSON number (e.g., 123.456)
+//   - an entire JSON object (e.g., {"fizz":"buzz"} )
+//   - an entire JSON array (e.g., [1,2,3] )
 //
 // RawValue can represent entire array or object values, while Token cannot.
 // RawValue may contain leading and/or trailing whitespace.
@@ -103,7 +103,7 @@ func (v *RawValue) Canonicalize() error {
 	return v.reformat(true, false, "", "")
 }
 
-// TODO: Instead of implementing v1 Marshaler/Unmarshaler,
+// TODO: Instead of implementing the v1 Marshaler/Unmarshaler,
 // consider implementing the v2 versions instead.
 
 // MarshalJSON returns v as the JSON encoding of v.
@@ -129,6 +129,7 @@ func (v *RawValue) UnmarshalJSON(b []byte) error {
 }
 
 // Kind returns the starting token kind.
+// For a valid value, this will never include '}' or ']'.
 func (v RawValue) Kind() Kind {
 	if v := v[consumeWhitespace(v):]; len(v) > 0 {
 		return Kind(v[0]).normalize()
@@ -232,14 +233,14 @@ func (m *memberNames) Swap(i, j int)      { (*m)[i], (*m)[j] = (*m)[j], (*m)[i] 
 // according to the ordering specified in RFC 8785, section 3.2.3.
 //
 // Pre-conditions:
-//	• The value is valid (i.e., no decoder errors should ever occur).
-//	• The value is compact (i.e., no whitespace is present).
-//	• Initial call is provided a Decoder reading from the start of v.
+//   - The value is valid (i.e., no decoder errors should ever occur).
+//   - The value is compact (i.e., no whitespace is present).
+//   - Initial call is provided a Decoder reading from the start of v.
 //
 // Post-conditions:
-//	• Exactly one JSON value is read from the Decoder.
-//	• All fully-parsed JSON objects are reordered by directly moving
-//	  the members in the value buffer.
+//   - Exactly one JSON value is read from the Decoder.
+//   - All fully-parsed JSON objects are reordered by directly moving
+//     the members in the value buffer.
 //
 // The runtime is approximately O(n·log(n)) + O(m·log(m)),
 // where n is len(v) and m is the total number of object members.
@@ -274,6 +275,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		if isSorted {
 			return
 		}
+		// TODO(https://golang.org/issue/47619): Use slices.Sort.
 		sort.Sort(members)
 
 		// Append the reordered members to a new buffer,

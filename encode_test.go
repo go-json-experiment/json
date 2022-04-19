@@ -25,7 +25,7 @@ import (
 	"unicode"
 )
 
-// TestEncoder whether we can produce JSON with either tokens or raw values.
+// TestEncoder tests whether we can produce JSON with either tokens or raw values.
 func TestEncoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, formatName := range []string{"Compact", "Escaped", "Indented"} {
@@ -733,7 +733,7 @@ func TestCanonicalNumber(t *testing.T) {
 			gotLine = append(gotLine, '\n')
 			hash.Write(gotLine)
 
-			// Check that the formatted line matches
+			// Check that the formatted line matches.
 			if checkGolden {
 				wantLine, err := br.ReadBytes('\n')
 				if err != nil {

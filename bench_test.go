@@ -20,8 +20,8 @@ import (
 
 var benchV1 = os.Getenv("BENCHMARK_V1") != ""
 
-// bytesBuffer is identical to bytes.Buffer, but a different type
-// to avoid any optimizations for bytes.Buffer.
+// bytesBuffer is identical to bytes.Buffer,
+// but a different type to avoid any optimizations for bytes.Buffer.
 type bytesBuffer struct{ *bytes.Buffer }
 
 var arshalTestdata = []struct {
@@ -234,7 +234,7 @@ func BenchmarkMarshal(b *testing.B) {
 			// Verify the results.
 			b.StopTimer()
 			if !bytes.Equal(raw, tt.raw) {
-				// Map marshaling in v2 are non-deterministic.
+				// Map marshaling in v2 is non-deterministic.
 				byteHistogram := func(b []byte) (h [256]int) {
 					for _, c := range b {
 						h[c]++

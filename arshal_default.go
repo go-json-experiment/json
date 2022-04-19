@@ -565,6 +565,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 	// NOTE: Values retrieved from a map are not addressable,
 	// so we shallow copy the values to make them addressable and
 	// store them back into the map afterwards.
+
 	var fncs arshaler
 	var (
 		once    sync.Once
@@ -637,12 +638,15 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 			// NOTE: Map entries are serialized in a non-deterministic order.
 			// Users that need stable output should call RawValue.Canonicalize.
+			// TODO(go1.19): Remove use of a sync.Pool with reflect.MapIter.
+			// Calling reflect.Value.MapRange no longer allocates.
+			// See https://golang.org/cl/400675.
 			iter := getMapIter(va.Value)
 			defer putMapIter(iter)
 			for iter.Next() {
 				k.SetIterKey(iter)
 				if err := marshalKey(mko, enc, k); err != nil {
-					// TODO: If err is errMissingName, then wrap it with as a
+					// TODO: If err is errMissingName, then wrap it as a
 					// SemanticError since this key type cannot be serialized
 					// as a JSON string.
 					return err
@@ -844,7 +848,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			//	enc.WriteToken(String(f.name))
 			// but specialized and simplified because:
 			//	1. The Encoder must be expecting an object name.
-			//	2. The object namespaces is guaranteed to be disabled.
+			//	2. The object namespace is guaranteed to be disabled.
 			//	3. The object name is guaranteed to be valid and pre-escaped.
 			//	4. There is no need to flush the buffer (for unwrite purposes).
 			//	5. There is no possibility of an error occuring.
@@ -858,7 +862,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 
 				// Append the token to the output and to the state machine.
-				n0 := len(enc.buf) // buffer size before appending the string
+				n0 := len(enc.buf) // offset before calling appendString
 				if enc.options.EscapeRune == nil {
 					enc.buf = append(enc.buf, f.quotedName...)
 				} else {
@@ -1307,6 +1311,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 	// NOTE: Values retrieved from an interface are not addressable,
 	// so we shallow copy the values to make them addressable and
 	// store them back into the interface afterwards.
+
 	var fncs arshaler
 	fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
