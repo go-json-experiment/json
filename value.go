@@ -301,8 +301,8 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		}
 		copy(d.buf[beforeBody:afterBody], sorted)
 
-		// Update scratch buffer if we grew it.
-		if cap(sorted) > cap(*scratch) {
+		// Update scratch buffer to the largest amount ever used.
+		if len(sorted) > len(*scratch) {
 			*scratch = sorted
 		}
 	case '[':
