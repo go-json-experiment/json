@@ -1144,26 +1144,34 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			if uo.Unmarshalers != nil {
 				unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t.Elem())
 			}
-			va.SetLen(0)
 			mustZero := true // we do not know the cleanliness of unused capacity
-			for i := 0; dec.PeekKind() != ']'; i++ {
-				if i+1 < va.Cap() {
-					va.SetLen(i + 1)
-				} else {
+			cap := va.Cap()
+			if cap > 0 {
+				va.SetLen(cap)
+			}
+			var i int
+			for dec.PeekKind() != ']' {
+				if i == cap {
 					// TODO(https://golang.org/issue/48000): Use reflect.Value.Append.
 					va.Set(reflect.Append(va.Value, reflect.Zero(t.Elem())))
+					cap = va.Cap()
+					va.SetLen(cap)
 					mustZero = false // append guarantees that unused capacity is zero-initialized
 				}
 				v := addressableValue{va.Index(i)} // indexed slice element is always addressable
+				i++
 				if mustZero {
 					v.Set(reflect.Zero(t.Elem()))
 				}
 				if err := unmarshal(uo, dec, v); err != nil {
+					va.SetLen(i)
 					return err
 				}
 			}
-			if va.IsNil() {
+			if i == 0 {
 				va.Set(reflect.MakeSlice(va.Type(), 0, 0))
+			} else {
+				va.SetLen(i)
 			}
 			if _, err := dec.ReadToken(); err != nil {
 				return err
