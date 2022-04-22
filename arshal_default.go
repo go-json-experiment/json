@@ -224,9 +224,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		}
 		val := enc.UnusedBuffer()
 		var b []byte
-		if t.Kind() == reflect.Array {
+		if va.Kind() == reflect.Array {
 			// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
-			b = va.Slice(0, t.Len()).Bytes()
+			b = va.Slice(0, va.Len()).Bytes()
 		} else {
 			b = va.Bytes()
 		}
@@ -286,11 +286,11 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			}
 			n = decodedLen(n)
 			var b []byte
-			if t.Kind() == reflect.Array {
+			if va.Kind() == reflect.Array {
 				// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
-				b = va.Slice(0, t.Len()).Bytes()
+				b = va.Slice(0, va.Len()).Bytes()
 				if n != len(b) {
-					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, t.Len())
+					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, len(b))
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 			} else {
@@ -304,7 +304,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			if _, err := decode(b, val); err != nil {
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
-			if t.Kind() == reflect.Slice {
+			if va.Kind() == reflect.Slice {
 				va.SetBytes(b)
 			}
 			return nil
