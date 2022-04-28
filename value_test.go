@@ -5,6 +5,7 @@
 package json
 
 import (
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -102,9 +103,26 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 }, {
 	name:                "InvalidUTF8",
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
-	wantValid:           false, // uses RFC 8259 as the definition; which validates UTF-8
+	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
 	wantCanonicalizeErr: &SyntacticError{str: "invalid UTF-8 within string"},
+}, {
+	name:          "InvalidUTF8/SurrogateHalf",
+	in:            `"\ud800"`,
+	wantValid:     false, // uses RFC 7493 as the definition; which validates UTF-8
+	wantCompacted: `"\ud800"`,
+	// This error is debatable. We see the first surrogate half and expect to
+	// see another surrogate half. However, len(`"`) is too short for an entire
+	// \uFFFF sequence, so we report io.ErrUnexpectedEOF. However, it's also
+	// clear that '"' is not the start of a \uFFFF sequence, so an invalid UTF-8
+	// error would have also been legitimate.
+	wantCanonicalizeErr: io.ErrUnexpectedEOF,
+}, {
+	name:              "UppercaseEscaped",
+	in:                `"\u000B"`,
+	wantValid:         true,
+	wantCompacted:     `"\u000B"`,
+	wantCanonicalized: `"\u000b"`,
 }, {
 	name:          "DuplicateNames",
 	in:            ` { "0" : 0 , "1" : 1 , "0" : 0 }`,

@@ -1221,11 +1221,20 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 				// Only certain control characters can use the \uFFFF notation
 				// for canonical formating (per RFC 8785, section 3.2.2.2.).
 				switch v1 {
+				// \uFFFF notation not permitted for these characters.
 				case '\b', '\f', '\n', '\r', '\t':
 					flags.set(stringNonCanonical)
 				default:
+					// \uFFFF notation only permitted for control characters.
 					if v1 >= ' ' {
 						flags.set(stringNonCanonical)
+					} else {
+						// \uFFFF notation must be lower case.
+						for _, c := range b[n+2 : n+6] {
+							if 'A' <= c && c <= 'F' {
+								flags.set(stringNonCanonical)
+							}
+						}
 					}
 				}
 				n += 6
