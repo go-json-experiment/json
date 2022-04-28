@@ -100,10 +100,13 @@ func TestFoldRune(t *testing.T) {
 	}
 }
 
-// BenchmarkUnmarshalUnknown unmarshals an unknown field into a struct with
+// TestBenchmarkUnmarshalUnknown unmarshals an unknown field into a struct with
 // varying number of fields. Since the unknown field does not directly match
 // any known field by name, it must fall back on case-insensitive matching.
-func BenchmarkUnmarshalUnknown(b *testing.B) {
+func TestBenchmarkUnmarshalUnknown(t *testing.T) { runUnmarshalUnknown(t) }
+func BenchmarkUnmarshalUnknown(b *testing.B)     { runUnmarshalUnknown(b) }
+
+func runUnmarshalUnknown(tb testing.TB) {
 	in := []byte(`{"NameUnknown":null}`)
 	for _, n := range []int{1, 2, 5, 10, 20, 50, 100} {
 		unmarshal := Unmarshal
@@ -121,11 +124,9 @@ func BenchmarkUnmarshalUnknown(b *testing.B) {
 		}
 		out := reflect.New(reflect.StructOf(fields)).Interface()
 
-		b.Run(fmt.Sprintf("N%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				if err := unmarshal(in, out); err != nil {
-					b.Fatalf("Unmarshal error: %v", err)
-				}
+		runTestOrBench(tb, fmt.Sprintf("N%d", n), int64(len(in)), func(tb testing.TB) {
+			if err := unmarshal(in, out); err != nil {
+				tb.Fatalf("Unmarshal error: %v", err)
 			}
 		})
 	}

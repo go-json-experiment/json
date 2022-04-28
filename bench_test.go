@@ -56,7 +56,7 @@ var arshalTestdata = []struct {
 	val:  addr(float64(12.34)),
 	new:  func() any { return new(float64) },
 }, {
-	name: "Map/Empty",
+	name: "Map/ManyEmpty",
 	raw:  []byte(`[{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}]`),
 	val: addr(func() (out []map[string]string) {
 		for i := 0; i < 100; i++ {
@@ -64,7 +64,7 @@ var arshalTestdata = []struct {
 		}
 		return out
 	}()),
-	new: func() any { return new(map[string]string) },
+	new: func() any { return new([]map[string]string) },
 }, {
 	name: "Map/OneLarge",
 	raw:  []byte(`{"A":"A","B":"B","C":"C","D":"D","E":"E","F":"F","G":"G","H":"H","I":"I","J":"J","K":"K","L":"L","M":"M","N":"N","O":"O","P":"P","Q":"Q","R":"R","S":"S","T":"T","U":"U","V":"V","W":"W","X":"X","Y":"Y","Z":"Z"}`),
@@ -202,82 +202,99 @@ func (*jsonArshalerV2) UnmarshalNextJSON(opts UnmarshalOptions, dec *Decoder) er
 	return err
 }
 
-func BenchmarkUnmarshal(b *testing.B) {
-	for _, tt := range arshalTestdata {
-		b.Run(tt.name, func(b *testing.B) {
-			// Initial setup.
-			unmarshal := Unmarshal
-			if benchV1 {
-				if tt.skipV1 {
-					b.Skip("not supported in v1")
-				}
-				unmarshal = jsonv1.Unmarshal
-			}
+func TestBenchmarkUnmarshal(t *testing.T) { runUnmarshal(t) }
+func BenchmarkUnmarshal(b *testing.B)     { runUnmarshal(b) }
 
-			// Run the benchmark.
-			var val any
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+func runUnmarshal(tb testing.TB) {
+	for _, tt := range arshalTestdata {
+		// Setup the unmarshal operation.
+		var val any
+		run := func(tb testing.TB) {
+			val = tt.new()
+			if err := Unmarshal(tt.raw, val); err != nil {
+				tb.Fatalf("Unmarshal error: %v", err)
+			}
+		}
+		if benchV1 {
+			run = func(tb testing.TB) {
+				if tt.skipV1 {
+					tb.Skip("not supported in v1")
+				}
 				val = tt.new()
-				if err := unmarshal(tt.raw, val); err != nil {
-					b.Fatalf("Unmarshal error: %v", err)
+				if err := jsonv1.Unmarshal(tt.raw, val); err != nil {
+					tb.Fatalf("Unmarshal error: %v", err)
 				}
 			}
+		}
 
-			// Verify the results.
-			b.StopTimer()
-			if !reflect.DeepEqual(val, tt.val) {
-				b.Fatalf("Unmarshal output mismatch:\ngot  %v\nwant %v", val, tt.val)
+		// Verify the results.
+		if _, ok := tb.(*testing.T); ok {
+			run0 := run
+			run = func(tb testing.TB) {
+				run0(tb)
+				if !reflect.DeepEqual(val, tt.val) {
+					tb.Fatalf("Unmarshal output mismatch:\ngot  %v\nwant %v", val, tt.val)
+				}
 			}
-		})
+		}
+
+		runTestOrBench(tb, tt.name, int64(len(tt.raw)), run)
 	}
 }
 
-func BenchmarkMarshal(b *testing.B) {
+func TestBenchmarkMarshal(t *testing.T) { runMarshal(t) }
+func BenchmarkMarshal(b *testing.B)     { runMarshal(b) }
+
+func runMarshal(tb testing.TB) {
 	for _, tt := range arshalTestdata {
-		b.Run(tt.name, func(b *testing.B) {
-			// Initial setup.
-			marshal := Marshal
-			if benchV1 {
+		// Setup the marshal operation.
+		var raw []byte
+		run := func(tb testing.TB) {
+			var err error
+			raw, err = Marshal(tt.val)
+			if err != nil {
+				tb.Fatalf("Marshal error: %v", err)
+			}
+		}
+		if benchV1 {
+			run = func(tb testing.TB) {
 				if tt.skipV1 {
-					b.Skip("not supported in v1")
+					tb.Skip("not supported in v1")
 				}
-				marshal = jsonv1.Marshal
-			}
-
-			// Run the benchmark.
-			var raw []byte
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
 				var err error
-				raw, err = marshal(tt.val)
+				raw, err = jsonv1.Marshal(tt.val)
 				if err != nil {
-					b.Fatalf("Marshal error: %v", err)
+					tb.Fatalf("Marshal error: %v", err)
 				}
 			}
+		}
 
-			// Verify the results.
-			b.StopTimer()
-			if !bytes.Equal(raw, tt.raw) {
-				// Map marshaling in v2 is non-deterministic.
-				byteHistogram := func(b []byte) (h [256]int) {
-					for _, c := range b {
-						h[c]++
+		// Verify the results.
+		if _, ok := tb.(*testing.T); ok {
+			run0 := run
+			run = func(tb testing.TB) {
+				run0(tb)
+				if !bytes.Equal(raw, tt.raw) {
+					// Map marshaling in v2 is non-deterministic.
+					byteHistogram := func(b []byte) (h [256]int) {
+						for _, c := range b {
+							h[c]++
+						}
+						return h
 					}
-					return h
-				}
-				if !(strings.HasPrefix(tt.name, "Map/") && byteHistogram(raw) == byteHistogram(tt.raw)) {
-					b.Fatalf("Marshal output mismatch:\ngot  %s\nwant %s", raw, tt.raw)
+					if !(strings.HasPrefix(tt.name, "Map/") && byteHistogram(raw) == byteHistogram(tt.raw)) {
+						tb.Fatalf("Marshal output mismatch:\ngot  %s\nwant %s", raw, tt.raw)
+					}
 				}
 			}
-		})
+		}
+
+		runTestOrBench(tb, tt.name, int64(len(tt.raw)), run)
 	}
 }
 
-func TestTestdata(t *testing.T)      { runAllTestdata(t) }
-func BenchmarkTestdata(b *testing.B) { runAllTestdata(b) }
+func TestBenchmarkTestdata(t *testing.T) { runAllTestdata(t) }
+func BenchmarkTestdata(b *testing.B)     { runAllTestdata(b) }
 
 func runAllTestdata(tb testing.TB) {
 	for _, td := range jsonTestdata() {
@@ -483,8 +500,8 @@ var slowStreamingDecodeTestdata = []struct {
 	{"LargeWhitespace/Array", []byte(ws + "[" + ws + `"value"` + ws + "," + ws + `"value"` + ws + "]" + ws)},
 }
 
-func TestSlowStreamingDecode(t *testing.T)      { runAllSlowStreamingDecode(t) }
-func BenchmarkSlowStreamingDecode(b *testing.B) { runAllSlowStreamingDecode(b) }
+func TestBenchmarkSlowStreamingDecode(t *testing.T) { runAllSlowStreamingDecode(t) }
+func BenchmarkSlowStreamingDecode(b *testing.B)     { runAllSlowStreamingDecode(b) }
 
 func runAllSlowStreamingDecode(tb testing.TB) {
 	for _, td := range slowStreamingDecodeTestdata {
@@ -534,7 +551,13 @@ func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 	}
 }
 
-func BenchmarkRawValue(b *testing.B) {
+func TestBenchmarkRawValue(t *testing.T) { runRawValue(t) }
+func BenchmarkRawValue(b *testing.B)     { runRawValue(b) }
+
+func runRawValue(tb testing.TB) {
+	if testing.Short() {
+		tb.Skip() // CitmCatalog is not loaded in short mode
+	}
 	var data []byte
 	for _, ts := range jsonTestdata() {
 		if ts.name == "CitmCatalog" {
@@ -542,11 +565,8 @@ func BenchmarkRawValue(b *testing.B) {
 		}
 	}
 
-	b.Run("IsValid", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			RawValue(data).IsValid()
-		}
+	runTestOrBench(tb, "IsValid", int64(len(data)), func(tb testing.TB) {
+		RawValue(data).IsValid()
 	})
 
 	methods := []struct {
@@ -558,25 +578,19 @@ func BenchmarkRawValue(b *testing.B) {
 		{"Canonicalize", (*RawValue).Canonicalize},
 	}
 
+	var v RawValue
 	for _, method := range methods {
-		b.Run(method.name, func(b *testing.B) {
-			v := RawValue(string(data))
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				v = append(v[:0], data...) // reset with original input
-				if err := method.format(&v); err != nil {
-					b.Errorf("RawValue.%v error: %v", method.name, err)
-				}
+		runTestOrBench(tb, method.name, int64(len(data)), func(tb testing.TB) {
+			v = append(v[:0], data...) // reset with original input
+			if err := method.format(&v); err != nil {
+				tb.Errorf("RawValue.%v error: %v", method.name, err)
 			}
 		})
-		b.Run(path.Join(method.name, "Noop"), func(b *testing.B) {
-			v := RawValue(string(data))
-			method.format(&v)
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				if err := method.format(&v); err != nil {
-					b.Errorf("RawValue.%v error: %v", method.name, err)
-				}
+		v = append(v[:0], data...)
+		method.format(&v)
+		runTestOrBench(tb, method.name+"/Noop", int64(len(data)), func(tb testing.TB) {
+			if err := method.format(&v); err != nil {
+				tb.Errorf("RawValue.%v error: %v", method.name, err)
 			}
 		})
 	}
