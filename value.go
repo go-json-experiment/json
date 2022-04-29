@@ -52,8 +52,8 @@ func (v RawValue) String() string {
 // It does not verify whether numbers are representable within the limits
 // of any common numeric type (e.g., float64, int64, or uint64).
 func (v RawValue) IsValid() bool {
-	d := getDecoder(v, nil, DecodeOptions{})
-	defer putDecoder(d)
+	d := getBufferedDecoder(v, DecodeOptions{})
+	defer putBufferedDecoder(d)
 	_, errVal := d.ReadValue()
 	_, errEOF := d.ReadToken()
 	return errVal == nil && errEOF == io.EOF
@@ -162,23 +162,23 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 	eo.omitTopLevelNewline = true
 
 	// Write the entire value to reformat all tokens and whitespace.
-	b := getBuffer()
-	defer putBuffer(b)
-	e := getEncoder(b.buf, nil, eo)
-	defer putEncoder(e)
+	e := getBufferedEncoder(eo)
+	defer putBufferedEncoder(e)
 	if err := e.WriteValue(*v); err != nil {
 		return err
 	}
-	b.buf = e.buf // update buffer if we grew it
 
 	// For canonical output, we may need to reorder object members.
 	if canonical {
+		// Obtain a buffered encoder just to use its internal buffer as
+		// a scratch buffer in reorderObjects for reordering object members.
+		e2 := getBufferedEncoder(EncodeOptions{})
+		defer putBufferedEncoder(e2)
+
 		// Disable redundant checks performed earlier during encoding.
-		b := getBuffer() // used by reorderObjects as a scratch buffer for reordering
-		defer putBuffer(b)
-		d := getDecoder(e.buf, nil, DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true})
-		defer putDecoder(d)
-		reorderObjects(d, &b.buf) // per RFC 8785, section 3.2.3
+		d := getBufferedDecoder(e.buf, DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true})
+		defer putBufferedDecoder(d)
+		reorderObjects(d, &e2.buf) // per RFC 8785, section 3.2.3
 	}
 
 	// Store the result back into the value if different.

@@ -125,6 +125,9 @@ type encodeBuffer struct {
 	maxValue int
 	// unusedCache is the buffer returned by the UnusedBuffer method.
 	unusedCache []byte
+	// bufStats is statistics about buffer utilization.
+	// It is only used with pooled encoders in pools.go.
+	bufStats bufferStatistics
 }
 
 // NewEncoder constructs a new streaming encoder writing to w.
@@ -168,7 +171,7 @@ func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
 		}
 	}
 	e.state.reset()
-	e.encodeBuffer = encodeBuffer{buf: b, wr: w}
+	e.encodeBuffer = encodeBuffer{buf: b, wr: w, bufStats: e.bufStats}
 	e.options = o
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
 		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
@@ -208,12 +211,12 @@ func (e *Encoder) flush() error {
 	e.names.copyQuotedBuffer(e.buf)
 
 	// Specialize bytes.Buffer for better performance.
-	if bb, ok := e.wr.(*bytes.Buffer); ok && bb != nil {
+	if bb, ok := e.wr.(*bytes.Buffer); ok {
 		// If e.buf already aliases the internal buffer of bb,
 		// then the Write call simply increments the internal offset,
 		// otherwise Write operates as expected.
 		// See https://golang.org/issue/42986.
-		n, _ := bb.Write(e.buf) // never fails
+		n, _ := bb.Write(e.buf) // never fails unless bb is nil
 		e.baseOffset += int64(n)
 
 		// If the internal buffer of bytes.Buffer is too small,

@@ -44,8 +44,8 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			return nil
 		}
 
-		dec := getDecoder(b, nil, DecodeOptions{AllowDuplicateNames: true, AllowInvalidUTF8: true})
-		defer putDecoder(dec)
+		dec := getBufferedDecoder(b, DecodeOptions{AllowDuplicateNames: true, AllowInvalidUTF8: true})
+		defer putBufferedDecoder(dec)
 
 		tok, err := dec.ReadToken()
 		if err != nil {

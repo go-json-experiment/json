@@ -61,13 +61,10 @@ func MarshalFull(out io.Writer, in any) error {
 // marshal and encode options. It does not terminate the output with a newline.
 // See MarshalNext for details about the conversion of a Go value into JSON.
 func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err error) {
-	pbuf := getBuffer()
-	defer putBuffer(pbuf)
-	enc := getEncoder(pbuf.buf, nil, eo)
-	defer putEncoder(enc)
+	enc := getBufferedEncoder(eo)
+	defer putBufferedEncoder(enc)
 	enc.options.omitTopLevelNewline = true
 	err = mo.MarshalNext(enc, in)
-	pbuf.buf = enc.buf // update pooled buffer in case we grew it
 	// TODO(https://golang.org/issue/45038): Use bytes.Clone.
 	return append([]byte(nil), enc.buf...), err
 }
@@ -77,8 +74,8 @@ func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err erro
 // See MarshalNext for details about the conversion of a Go value into JSON.
 func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) error {
 	// NOTE: We cannot pool the intermediate buffer since it leaks to out.
-	enc := getEncoder(nil, out, eo)
-	defer putEncoder(enc)
+	enc := getStreamingEncoder(out, eo)
+	defer putStreamingEncoder(enc)
 	enc.options.omitTopLevelNewline = true
 	err := mo.MarshalNext(enc, in)
 	return err
@@ -166,8 +163,8 @@ func UnmarshalFull(in io.Reader, out any) error {
 // The input must be a single JSON value with optional whitespace interspersed.
 // See UnmarshalNext for details about the conversion of JSON into a Go value.
 func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out any) error {
-	dec := getDecoder(in, nil, do)
-	defer putDecoder(dec)
+	dec := getBufferedDecoder(in, do)
+	defer putBufferedDecoder(dec)
 	return uo.unmarshalFull(dec, out)
 }
 
@@ -178,8 +175,8 @@ func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out any) error
 // See UnmarshalNext for details about the conversion of JSON into a Go value.
 func (uo UnmarshalOptions) UnmarshalFull(do DecodeOptions, in io.Reader, out any) error {
 	// NOTE: We cannot pool the intermediate buffer since it leaks to in.
-	dec := getDecoder(nil, in, do)
-	defer putDecoder(dec)
+	dec := getStreamingDecoder(in, do)
+	defer putStreamingDecoder(dec)
 	return uo.unmarshalFull(dec, out)
 }
 func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {

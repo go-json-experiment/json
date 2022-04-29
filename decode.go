@@ -182,7 +182,7 @@ func (d *Decoder) fetch() error {
 	d.names.copyQuotedBuffer(d.buf)
 
 	// Specialize bytes.Buffer for better performance.
-	if bb, ok := d.rd.(*bytes.Buffer); ok && bb != nil {
+	if bb, ok := d.rd.(*bytes.Buffer); ok {
 		switch {
 		case bb.Len() == 0:
 			return io.ErrUnexpectedEOF
