@@ -73,7 +73,6 @@ func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err erro
 // marshal and encode options. It does not terminate the output with a newline.
 // See MarshalNext for details about the conversion of a Go value into JSON.
 func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) error {
-	// NOTE: We cannot pool the intermediate buffer since it leaks to out.
 	enc := getStreamingEncoder(out, eo)
 	defer putStreamingEncoder(enc)
 	enc.options.omitTopLevelNewline = true
@@ -174,7 +173,6 @@ func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out any) error
 // It consumes the entirety of io.Reader until io.EOF is encountered.
 // See UnmarshalNext for details about the conversion of JSON into a Go value.
 func (uo UnmarshalOptions) UnmarshalFull(do DecodeOptions, in io.Reader, out any) error {
-	// NOTE: We cannot pool the intermediate buffer since it leaks to in.
 	dec := getStreamingDecoder(in, do)
 	defer putStreamingDecoder(dec)
 	return uo.unmarshalFull(dec, out)
