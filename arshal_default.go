@@ -215,7 +215,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				encode, encodedLen = encodeBase32Hex, encodedLenBase32Hex
 			case "base16", "hex":
 				encode, encodedLen = encodeBase16, encodedLenBase16
-			case "uintarray":
+			case "array":
 				mo.format = ""
 				return marshalDefault(mo, enc, va)
 			default:
@@ -256,7 +256,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				decode, decodedLen = decodeBase32Hex, decodedLenBase32Hex
 			case "base16", "hex":
 				decode, decodedLen = decodeBase16, decodedLenBase16
-			case "uintarray":
+			case "array":
 				uo.format = ""
 				return unmarshalDefault(uo, dec, va)
 			default:

@@ -218,7 +218,7 @@ type (
 		Base32Hex []byte `json:",format:base32hex"`
 		Base64    []byte `json:",format:base64"`
 		Base64URL []byte `json:",format:base64url"`
-		UintArray []byte `json:",format:uintarray"`
+		Array     []byte `json:",format:array"`
 	}
 	structFormatFloats struct {
 		NonFinite        float64  `json:",format:nonfinite"`
@@ -1558,7 +1558,7 @@ func TestMarshal(t *testing.T) {
 			Base32Hex: []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
 			Base64:    []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
 			Base64URL: []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
-			UintArray: []byte{1, 2, 3, 4},
+			Array:     []byte{1, 2, 3, 4},
 		},
 		want: `{
 	"Base16": "0123456789abcdef",
@@ -1566,13 +1566,27 @@ func TestMarshal(t *testing.T) {
 	"Base32Hex": "0123456789ABCDEFGHIJKLMNOPQRSTUV",
 	"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
 	"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
-	"UintArray": [
+	"Array": [
 		1,
 		2,
 		3,
 		4
 	]
-}`,
+}`}, {
+		name: "Structs/Format/Bytes/Array",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(in byte) ([]byte, error) {
+			if in > 3 {
+				return []byte("true"), nil
+			} else {
+				return []byte("false"), nil
+			}
+		})},
+		in: struct {
+			Array []byte `json:",format:array"`
+		}{
+			Array: []byte{1, 6, 2, 5, 3, 4},
+		},
+		want: `{"Array":[false,true,false,true,false,true]}`,
 	}, {
 		name:  "Structs/Format/Floats",
 		eopts: EncodeOptions{Indent: "\t"},
@@ -4706,7 +4720,7 @@ func TestUnmarshal(t *testing.T) {
 	"Base32Hex": "0123456789ABCDEFGHIJKLMNOPQRSTUV",
 	"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
 	"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
-	"UintArray": [1, 2, 3, 4]
+	"Array": [1, 2, 3, 4]
 }`,
 		inVal: new(structFormatBytes),
 		want: addr(structFormatBytes{
@@ -4715,7 +4729,7 @@ func TestUnmarshal(t *testing.T) {
 			Base32Hex: []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
 			Base64:    []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
 			Base64URL: []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
-			UintArray: []byte{1, 2, 3, 4},
+			Array:     []byte{1, 2, 3, 4},
 		}),
 	}, {
 		name:    "Structs/Format/Bytes/Invalid/Base16/WrongKind",
