@@ -1211,6 +1211,10 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 				n += 2
 			case 'u':
 				if uint(len(b)) < uint(n+6) {
+					if !hasEscapeSequencePrefix(b[n:]) {
+						flags.set(stringNonCanonical)
+						return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:])) + " within string"}
+					}
 					return resumeOffset, io.ErrUnexpectedEOF
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
@@ -1244,6 +1248,10 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 						return n, &SyntacticError{str: "invalid unpaired surrogate half within string"}
 					}
 					if uint(len(b)) < uint(n+6) {
+						if !hasEscapeSequencePrefix(b[n:]) {
+							flags.set(stringNonCanonical)
+							return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:])) + " within string"}
+						}
 						return resumeOffset, io.ErrUnexpectedEOF
 					}
 					v2, ok := parseHexUint16(b[n+2 : n+6])
@@ -1264,6 +1272,22 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 		}
 	}
 	return n, io.ErrUnexpectedEOF
+}
+
+// hasEscapeSequencePrefix reports whether b is possibly
+// the truncated prefix of a \uFFFF escape sequence.
+func hasEscapeSequencePrefix(b []byte) bool {
+	for i, c := range b {
+		switch {
+		case i == 0 && c != '\\':
+			return false
+		case i == 1 && c != 'u':
+			return false
+		case i >= 2 && i < 6 && !('0' <= c && c <= '9') && !('a' <= c && c <= 'f') && !('A' <= c && c <= 'F'):
+			return false
+		}
+	}
+	return true
 }
 
 // unescapeString appends the unescaped form of a JSON string in src to dst.
