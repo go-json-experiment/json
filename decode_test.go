@@ -187,8 +187,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidStart",
 	in:   ` #`,
 	calls: []decoderMethodCall{
-		{'#', zeroToken, newInvalidCharacterError(byte('#'), "at start of token").withOffset(int64(len(" "))), ""},
-		{'#', zeroValue, newInvalidCharacterError(byte('#'), "at start of value").withOffset(int64(len(" "))), ""},
+		{'#', zeroToken, newInvalidCharacterError([]byte("#"), "at start of token").withOffset(int64(len(" "))), ""},
+		{'#', zeroValue, newInvalidCharacterError([]byte("#"), "at start of value").withOffset(int64(len(" "))), ""},
 	},
 }, {
 	name: "StreamN0",
@@ -221,8 +221,8 @@ var decoderErrorTestdata = []struct {
 	in:   ` null , null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
-		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
-		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` null `))), ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` null `))), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` null `))), ""},
 	},
 	wantOffset: len(` null`),
 }, {
@@ -236,8 +236,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidNull",
 	in:   `nulL`,
 	calls: []decoderMethodCall{
-		{'n', zeroToken, newInvalidCharacterError('L', `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
-		{'n', zeroValue, newInvalidCharacterError('L', `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
+		{'n', zeroToken, newInvalidCharacterError([]byte("L"), `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
+		{'n', zeroValue, newInvalidCharacterError([]byte("L"), `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
 	},
 }, {
 	name: "TruncatedFalse",
@@ -250,8 +250,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidFalse",
 	in:   `falsE`,
 	calls: []decoderMethodCall{
-		{'f', zeroToken, newInvalidCharacterError('E', `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
-		{'f', zeroValue, newInvalidCharacterError('E', `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
+		{'f', zeroToken, newInvalidCharacterError([]byte("E"), `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
+		{'f', zeroValue, newInvalidCharacterError([]byte("E"), `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
 	},
 }, {
 	name: "TruncatedTrue",
@@ -264,8 +264,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidTrue",
 	in:   `truE`,
 	calls: []decoderMethodCall{
-		{'t', zeroToken, newInvalidCharacterError('E', `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
-		{'t', zeroValue, newInvalidCharacterError('E', `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
+		{'t', zeroToken, newInvalidCharacterError([]byte("E"), `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
+		{'t', zeroValue, newInvalidCharacterError([]byte("E"), `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
 	},
 }, {
 	name: "TruncatedString",
@@ -278,8 +278,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidString",
 	in:   `"ok` + "\x00",
 	calls: []decoderMethodCall{
-		{'"', zeroToken, newInvalidCharacterError('\x00', `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
-		{'"', zeroValue, newInvalidCharacterError('\x00', `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
+		{'"', zeroToken, newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
+		{'"', zeroValue, newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
 	},
 }, {
 	name: "ValidString/AllowInvalidUTF8/Token",
@@ -316,8 +316,8 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidNumber",
 	in:   `0.e`,
 	calls: []decoderMethodCall{
-		{'0', zeroToken, newInvalidCharacterError('e', "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
-		{'0', zeroValue, newInvalidCharacterError('e', "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
+		{'0', zeroToken, newInvalidCharacterError([]byte("e"), "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
+		{'0', zeroValue, newInvalidCharacterError([]byte("e"), "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
 	},
 }, {
 	name: "TruncatedObject/AfterStart",
@@ -379,7 +379,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingColon",
 	in:   ` { "fizz" "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('"', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("\""), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
@@ -390,7 +390,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingColon/GotComma",
 	in:   ` { "fizz" , "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(',', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte(","), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
@@ -401,7 +401,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingColon/GotHash",
 	in:   ` { "fizz" # "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('#', "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("#"), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{0, zeroToken, errMissingColon.withOffset(int64(len(` { "fizz" `))), ""},
@@ -412,7 +412,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingComma",
 	in:   ` { "fizz" : "buzz" "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('"', "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("\""), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
@@ -424,7 +424,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingComma/GotColon",
 	in:   ` { "fizz" : "buzz" : "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(':', "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte(":"), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
@@ -436,7 +436,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MissingComma/GotHash",
 	in:   ` { "fizz" : "buzz" # "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('#', "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("#"), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
@@ -448,29 +448,29 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/ExtraComma/AfterStart",
 	in:   ` { , } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(',', `at start of string (expecting '"')`).withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte(","), `at start of string (expecting '"')`).withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
-		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
-		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { `))), ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` { `))), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` { `))), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: "InvalidObject/ExtraComma/AfterValue",
 	in:   ` { "fizz" : "buzz" , } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('}', `at start of string (expecting '"')`).withOffset(int64(len(` { "fizz" : "buzz" , `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("}"), `at start of string (expecting '"')`).withOffset(int64(len(` { "fizz" : "buzz" , `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
-		{0, zeroValue, newInvalidCharacterError(',', `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(","), `before next token`).withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
 	name: "InvalidObject/InvalidName/GotNull",
 	in:   ` { null : null } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('n', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("n"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'n', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'n', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -480,7 +480,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/InvalidName/GotFalse",
 	in:   ` { false : false } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('f', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("f"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'f', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'f', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -490,7 +490,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/InvalidName/GotTrue",
 	in:   ` { true : true } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('t', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("t"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'t', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'t', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -500,7 +500,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/InvalidName/GotNumber",
 	in:   ` { 0 : 0 } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('0', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("0"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'0', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'0', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -510,7 +510,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/InvalidName/GotObject",
 	in:   ` { {} : {} } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('{', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("{"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'{', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'{', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -520,7 +520,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/InvalidName/GotArray",
 	in:   ` { [] : [] } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError('[', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("["), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{'[', zeroToken, errMissingName.withOffset(int64(len(` { `))), ""},
 		{'[', zeroValue, errMissingName.withOffset(int64(len(` { `))), ""},
@@ -530,10 +530,10 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidObject/MismatchingDelim",
 	in:   ` { ] `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(']', "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
+		{'{', zeroValue, newInvalidCharacterError([]byte("]"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
 		{'{', ObjectStart, nil, ""},
 		{']', zeroToken, errMismatchDelim.withOffset(int64(len(` { `))), ""},
-		{']', zeroValue, newInvalidCharacterError(']', "at start of value").withOffset(int64(len(` { `))), ""},
+		{']', zeroValue, newInvalidCharacterError([]byte("]"), "at start of value").withOffset(int64(len(` { `))), ""},
 	},
 	wantOffset: len(` {`),
 }, {
@@ -541,7 +541,7 @@ var decoderErrorTestdata = []struct {
 	in:   ` { } `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
-		{'}', zeroValue, newInvalidCharacterError('}', "at start of value").withOffset(int64(len(" { "))), ""},
+		{'}', zeroValue, newInvalidCharacterError([]byte("}"), "at start of value").withOffset(int64(len(" { "))), ""},
 	},
 	wantOffset: len(` {`),
 }, {
@@ -621,7 +621,7 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidArray/MissingComma",
 	in:   ` [ "fizz" "buzz" ] `,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, newInvalidCharacterError('"', "after array value (expecting ',' or ']')").withOffset(int64(len(` [ "fizz" `))), ""},
+		{'[', zeroValue, newInvalidCharacterError([]byte("\""), "after array value (expecting ',' or ']')").withOffset(int64(len(` [ "fizz" `))), ""},
 		{'[', ArrayStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{0, zeroToken, errMissingComma.withOffset(int64(len(` [ "fizz" `))), ""},
@@ -632,10 +632,10 @@ var decoderErrorTestdata = []struct {
 	name: "InvalidArray/MismatchingDelim",
 	in:   ` [ } `,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, newInvalidCharacterError('}', "at start of value").withOffset(int64(len(` [ `))), ""},
+		{'[', zeroValue, newInvalidCharacterError([]byte("}"), "at start of value").withOffset(int64(len(` [ `))), ""},
 		{'[', ArrayStart, nil, ""},
 		{'}', zeroToken, errMismatchDelim.withOffset(int64(len(` { `))), ""},
-		{'}', zeroValue, newInvalidCharacterError('}', "at start of value").withOffset(int64(len(` [ `))), ""},
+		{'}', zeroValue, newInvalidCharacterError([]byte("}"), "at start of value").withOffset(int64(len(` [ `))), ""},
 	},
 	wantOffset: len(` [`),
 }, {
@@ -643,7 +643,7 @@ var decoderErrorTestdata = []struct {
 	in:   ` [ ] `,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
-		{']', zeroValue, newInvalidCharacterError(']', "at start of value").withOffset(int64(len(" [ "))), ""},
+		{']', zeroValue, newInvalidCharacterError([]byte("]"), "at start of value").withOffset(int64(len(" [ "))), ""},
 	},
 	wantOffset: len(` [`),
 }}
@@ -860,7 +860,7 @@ func TestPeekableDecoder(t *testing.T) {
 		PeekKind{0},
 		WriteString{"] "},
 		ReadValue{0, io.ErrUnexpectedEOF}, // previous error from PeekKind is cached once
-		ReadValue{0, newInvalidCharacterError(']', "at start of value").withOffset(2)},
+		ReadValue{0, newInvalidCharacterError([]byte("]"), "at start of value").withOffset(2)},
 		ReadToken{']', nil},
 
 		WriteString{"[ "},
@@ -963,8 +963,8 @@ func TestConsumeLiteral(t *testing.T) {
 		{"null", "nul", 3, io.ErrUnexpectedEOF},
 		{"null", "null", 4, nil},
 		{"null", "nullx", 4, nil},
-		{"null", "x", 0, newInvalidCharacterError('x', "within literal null (expecting 'n')")},
-		{"null", "nuxx", 2, newInvalidCharacterError('x', "within literal null (expecting 'l')")},
+		{"null", "x", 0, newInvalidCharacterError([]byte("x"), "within literal null (expecting 'n')")},
+		{"null", "nuxx", 2, newInvalidCharacterError([]byte("x"), "within literal null (expecting 'l')")},
 
 		{"false", "", 0, io.ErrUnexpectedEOF},
 		{"false", "f", 1, io.ErrUnexpectedEOF},
@@ -973,8 +973,8 @@ func TestConsumeLiteral(t *testing.T) {
 		{"false", "fals", 4, io.ErrUnexpectedEOF},
 		{"false", "false", 5, nil},
 		{"false", "falsex", 5, nil},
-		{"false", "x", 0, newInvalidCharacterError('x', "within literal false (expecting 'f')")},
-		{"false", "falsx", 4, newInvalidCharacterError('x', "within literal false (expecting 'e')")},
+		{"false", "x", 0, newInvalidCharacterError([]byte("x"), "within literal false (expecting 'f')")},
+		{"false", "falsx", 4, newInvalidCharacterError([]byte("x"), "within literal false (expecting 'e')")},
 
 		{"true", "", 0, io.ErrUnexpectedEOF},
 		{"true", "t", 1, io.ErrUnexpectedEOF},
@@ -982,8 +982,8 @@ func TestConsumeLiteral(t *testing.T) {
 		{"true", "tru", 3, io.ErrUnexpectedEOF},
 		{"true", "true", 4, nil},
 		{"true", "truex", 4, nil},
-		{"true", "x", 0, newInvalidCharacterError('x', "within literal true (expecting 't')")},
-		{"true", "trux", 3, newInvalidCharacterError('x', "within literal true (expecting 'e')")},
+		{"true", "x", 0, newInvalidCharacterError([]byte("x"), "within literal true (expecting 't')")},
+		{"true", "trux", 3, newInvalidCharacterError([]byte("x"), "within literal true (expecting 'e')")},
 	}
 
 	for _, tt := range tests {
@@ -1028,12 +1028,12 @@ func TestConsumeString(t *testing.T) {
 		{`"`, false, 1, 0, "", io.ErrUnexpectedEOF, nil},
 		{`""`, true, 2, 0, "", nil, nil},
 		{`""x`, true, 2, 0, "", nil, nil},
-		{` ""x`, false, 0, 0, "", newInvalidCharacterError(' ', "at start of string (expecting '\"')"), nil},
+		{` ""x`, false, 0, 0, "", newInvalidCharacterError([]byte(" "), "at start of string (expecting '\"')"), nil},
 		{`"hello`, false, 6, 0, "hello", io.ErrUnexpectedEOF, nil},
 		{`"hello"`, true, 7, 0, "hello", nil, nil},
-		{"\"\x00\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError('\x00', "within string (expecting non-control character)"), nil},
+		{"\"\x00\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError([]byte("\x00"), "within string (expecting non-control character)"), nil},
 		{`"\u0000"`, false, 8, stringNonVerbatim, "\x00", nil, nil},
-		{"\"\x1f\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError('\x1f', "within string (expecting non-control character)"), nil},
+		{"\"\x1f\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError([]byte("\x1f"), "within string (expecting non-control character)"), nil},
 		{`"\u001f"`, false, 8, stringNonVerbatim, "\x1f", nil, nil},
 		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil},
 		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, 0, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil},
@@ -1130,13 +1130,13 @@ func TestConsumeNumber(t *testing.T) {
 		wantErr error
 	}{
 		{"", false, 0, io.ErrUnexpectedEOF},
-		{`"NaN"`, false, 0, newInvalidCharacterError('"', "within number (expecting digit)")},
-		{`"Infinity"`, false, 0, newInvalidCharacterError('"', "within number (expecting digit)")},
-		{`"-Infinity"`, false, 0, newInvalidCharacterError('"', "within number (expecting digit)")},
-		{".0", false, 0, newInvalidCharacterError('.', "within number (expecting digit)")},
+		{`"NaN"`, false, 0, newInvalidCharacterError([]byte("\""), "within number (expecting digit)")},
+		{`"Infinity"`, false, 0, newInvalidCharacterError([]byte("\""), "within number (expecting digit)")},
+		{`"-Infinity"`, false, 0, newInvalidCharacterError([]byte("\""), "within number (expecting digit)")},
+		{".0", false, 0, newInvalidCharacterError([]byte("."), "within number (expecting digit)")},
 		{"0", true, 1, nil},
 		{"-0", false, 2, nil},
-		{"+0", false, 0, newInvalidCharacterError('+', "within number (expecting digit)")},
+		{"+0", false, 0, newInvalidCharacterError([]byte("+"), "within number (expecting digit)")},
 		{"1", true, 1, nil},
 		{"-1", false, 2, nil},
 		{"00", true, 1, nil},
@@ -1151,8 +1151,8 @@ func TestConsumeNumber(t *testing.T) {
 		{"-9876543210", false, 11, nil},
 		{"9876543210x", true, 10, nil},
 		{"-9876543210x", false, 11, nil},
-		{" 9876543210", true, 0, newInvalidCharacterError(' ', "within number (expecting digit)")},
-		{"- 9876543210", false, 1, newInvalidCharacterError(' ', "within number (expecting digit)")},
+		{" 9876543210", true, 0, newInvalidCharacterError([]byte(" "), "within number (expecting digit)")},
+		{"- 9876543210", false, 1, newInvalidCharacterError([]byte(" "), "within number (expecting digit)")},
 		{strings.Repeat("9876543210", 1000), true, 10000, nil},
 		{"-" + strings.Repeat("9876543210", 1000), false, 1 + 10000, nil},
 		{"0.", false, 1, io.ErrUnexpectedEOF},
@@ -1169,16 +1169,16 @@ func TestConsumeNumber(t *testing.T) {
 		{"-0E0", false, 4, nil},
 		{"0.0123456789", false, 12, nil},
 		{"-0.0123456789", false, 13, nil},
-		{"1.f", false, 2, newInvalidCharacterError('f', "within number (expecting digit)")},
-		{"-1.f", false, 3, newInvalidCharacterError('f', "within number (expecting digit)")},
-		{"1.e", false, 2, newInvalidCharacterError('e', "within number (expecting digit)")},
-		{"-1.e", false, 3, newInvalidCharacterError('e', "within number (expecting digit)")},
+		{"1.f", false, 2, newInvalidCharacterError([]byte("f"), "within number (expecting digit)")},
+		{"-1.f", false, 3, newInvalidCharacterError([]byte("f"), "within number (expecting digit)")},
+		{"1.e", false, 2, newInvalidCharacterError([]byte("e"), "within number (expecting digit)")},
+		{"-1.e", false, 3, newInvalidCharacterError([]byte("e"), "within number (expecting digit)")},
 		{"1e0", false, 3, nil},
 		{"-1e0", false, 4, nil},
 		{"1E0", false, 3, nil},
 		{"-1E0", false, 4, nil},
-		{"1Ex", false, 2, newInvalidCharacterError('x', "within number (expecting digit)")},
-		{"-1Ex", false, 3, newInvalidCharacterError('x', "within number (expecting digit)")},
+		{"1Ex", false, 2, newInvalidCharacterError([]byte("x"), "within number (expecting digit)")},
+		{"-1Ex", false, 3, newInvalidCharacterError([]byte("x"), "within number (expecting digit)")},
 		{"1e-0", false, 4, nil},
 		{"-1e-0", false, 5, nil},
 		{"1e+0", false, 4, nil},

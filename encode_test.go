@@ -164,12 +164,12 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidValue",
 	calls: []encoderMethodCall{
-		{RawValue(`#`), newInvalidCharacterError('#', "at start of value"), ""},
+		{RawValue(`#`), newInvalidCharacterError([]byte("#"), "at start of value"), ""},
 	},
 }, {
 	name: "InvalidValue/DoubleZero",
 	calls: []encoderMethodCall{
-		{RawValue(`00`), newInvalidCharacterError('0', "after top-level value"), ""},
+		{RawValue(`00`), newInvalidCharacterError([]byte("0"), "after top-level value"), ""},
 	},
 }, {
 	name: "TruncatedValue",
@@ -184,7 +184,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidNull",
 	calls: []encoderMethodCall{
-		{RawValue(`nulL`), newInvalidCharacterError('L', "within literal null (expecting 'l')"), ""},
+		{RawValue(`nulL`), newInvalidCharacterError([]byte("L"), "within literal null (expecting 'l')"), ""},
 	},
 }, {
 	name: "TruncatedFalse",
@@ -194,7 +194,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidFalse",
 	calls: []encoderMethodCall{
-		{RawValue(`falsE`), newInvalidCharacterError('E', "within literal false (expecting 'e')"), ""},
+		{RawValue(`falsE`), newInvalidCharacterError([]byte("E"), "within literal false (expecting 'e')"), ""},
 	},
 }, {
 	name: "TruncatedTrue",
@@ -204,7 +204,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidTrue",
 	calls: []encoderMethodCall{
-		{RawValue(`truE`), newInvalidCharacterError('E', "within literal true (expecting 'e')"), ""},
+		{RawValue(`truE`), newInvalidCharacterError([]byte("E"), "within literal true (expecting 'e')"), ""},
 	},
 }, {
 	name: "TruncatedString",
@@ -214,7 +214,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidString",
 	calls: []encoderMethodCall{
-		{RawValue(`"ok` + "\x00"), newInvalidCharacterError('\x00', `within string (expecting non-control character)`), ""},
+		{RawValue(`"ok` + "\x00"), newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`), ""},
 	},
 }, {
 	name: "ValidString/AllowInvalidUTF8/Token",
@@ -245,7 +245,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidNumber",
 	calls: []encoderMethodCall{
-		{RawValue(`0.e`), newInvalidCharacterError('e', "within number (expecting digit)"), ""},
+		{RawValue(`0.e`), newInvalidCharacterError([]byte("e"), "within number (expecting digit)"), ""},
 	},
 }, {
 	name: "TruncatedObject/AfterStart",
@@ -275,30 +275,30 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidObject/MissingColon",
 	calls: []encoderMethodCall{
-		{RawValue(` { "fizz" "buzz" } `), newInvalidCharacterError('"', "after object name (expecting ':')"), ""},
-		{RawValue(` { "fizz" , "buzz" } `), newInvalidCharacterError(',', "after object name (expecting ':')"), ""},
+		{RawValue(` { "fizz" "buzz" } `), newInvalidCharacterError([]byte("\""), "after object name (expecting ':')"), ""},
+		{RawValue(` { "fizz" , "buzz" } `), newInvalidCharacterError([]byte(","), "after object name (expecting ':')"), ""},
 	},
 }, {
 	name: "InvalidObject/MissingComma",
 	calls: []encoderMethodCall{
-		{RawValue(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError('"', "after object value (expecting ',' or '}')"), ""},
-		{RawValue(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError(':', "after object value (expecting ',' or '}')"), ""},
+		{RawValue(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError([]byte("\""), "after object value (expecting ',' or '}')"), ""},
+		{RawValue(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError([]byte(":"), "after object value (expecting ',' or '}')"), ""},
 	},
 }, {
 	name: "InvalidObject/ExtraComma",
 	calls: []encoderMethodCall{
-		{RawValue(` { , } `), newInvalidCharacterError(',', `at start of string (expecting '"')`), ""},
-		{RawValue(` { "fizz" : "buzz" , } `), newInvalidCharacterError('}', `at start of string (expecting '"')`), ""},
+		{RawValue(` { , } `), newInvalidCharacterError([]byte(","), `at start of string (expecting '"')`), ""},
+		{RawValue(` { "fizz" : "buzz" , } `), newInvalidCharacterError([]byte("}"), `at start of string (expecting '"')`), ""},
 	},
 }, {
 	name: "InvalidObject/InvalidName",
 	calls: []encoderMethodCall{
-		{RawValue(`{ null }`), newInvalidCharacterError('n', `at start of string (expecting '"')`), ""},
-		{RawValue(`{ false }`), newInvalidCharacterError('f', `at start of string (expecting '"')`), ""},
-		{RawValue(`{ true }`), newInvalidCharacterError('t', `at start of string (expecting '"')`), ""},
-		{RawValue(`{ 0 }`), newInvalidCharacterError('0', `at start of string (expecting '"')`), ""},
-		{RawValue(`{ {} }`), newInvalidCharacterError('{', `at start of string (expecting '"')`), ""},
-		{RawValue(`{ [] }`), newInvalidCharacterError('[', `at start of string (expecting '"')`), ""},
+		{RawValue(`{ null }`), newInvalidCharacterError([]byte("n"), `at start of string (expecting '"')`), ""},
+		{RawValue(`{ false }`), newInvalidCharacterError([]byte("f"), `at start of string (expecting '"')`), ""},
+		{RawValue(`{ true }`), newInvalidCharacterError([]byte("t"), `at start of string (expecting '"')`), ""},
+		{RawValue(`{ 0 }`), newInvalidCharacterError([]byte("0"), `at start of string (expecting '"')`), ""},
+		{RawValue(`{ {} }`), newInvalidCharacterError([]byte("{"), `at start of string (expecting '"')`), ""},
+		{RawValue(`{ [] }`), newInvalidCharacterError([]byte("["), `at start of string (expecting '"')`), ""},
 		{ObjectStart, nil, ""},
 		{Null, errMissingName, ""},
 		{RawValue(`null`), errMissingName, ""},
@@ -318,16 +318,16 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "InvalidObject/InvalidValue",
 	calls: []encoderMethodCall{
-		{RawValue(`{ "0": x }`), newInvalidCharacterError('x', `at start of value`), ""},
+		{RawValue(`{ "0": x }`), newInvalidCharacterError([]byte("x"), `at start of value`), ""},
 	},
 }, {
 	name: "InvalidObject/MismatchingDelim",
 	calls: []encoderMethodCall{
-		{RawValue(` { ] `), newInvalidCharacterError(']', `at start of string (expecting '"')`), ""},
-		{RawValue(` { "0":0 ] `), newInvalidCharacterError(']', `after object value (expecting ',' or '}')`), ""},
+		{RawValue(` { ] `), newInvalidCharacterError([]byte("]"), `at start of string (expecting '"')`), ""},
+		{RawValue(` { "0":0 ] `), newInvalidCharacterError([]byte("]"), `after object value (expecting ',' or '}')`), ""},
 		{ObjectStart, nil, ""},
 		{ArrayEnd, errMismatchDelim, ""},
-		{RawValue(`]`), newInvalidCharacterError(']', "at start of value"), ""},
+		{RawValue(`]`), newInvalidCharacterError([]byte("]"), "at start of value"), ""},
 		{ObjectEnd, nil, ""},
 	},
 	wantOut: "{}\n",
@@ -394,15 +394,15 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: "TruncatedArray/MissingComma",
 	calls: []encoderMethodCall{
-		{RawValue(` [ "fizz" "buzz" ] `), newInvalidCharacterError('"', "after array value (expecting ',' or ']')"), ""},
+		{RawValue(` [ "fizz" "buzz" ] `), newInvalidCharacterError([]byte("\""), "after array value (expecting ',' or ']')"), ""},
 	},
 }, {
 	name: "InvalidArray/MismatchingDelim",
 	calls: []encoderMethodCall{
-		{RawValue(` [ } `), newInvalidCharacterError('}', `at start of value`), ""},
+		{RawValue(` [ } `), newInvalidCharacterError([]byte("}"), `at start of value`), ""},
 		{ArrayStart, nil, ""},
 		{ObjectEnd, errMismatchDelim, ""},
-		{RawValue(`}`), newInvalidCharacterError('}', "at start of value"), ""},
+		{RawValue(`}`), newInvalidCharacterError([]byte("}"), "at start of value"), ""},
 		{ArrayEnd, nil, ""},
 	},
 	wantOut: "[]\n",

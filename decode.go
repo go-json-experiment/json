@@ -565,7 +565,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		return ArrayEnd, nil
 
 	default:
-		err = newInvalidCharacterError(byte(next), "at start of token")
+		err = newInvalidCharacterError(d.buf[pos:], "at start of token")
 		return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 	}
 }
@@ -698,7 +698,7 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 func (d *Decoder) checkEOF() error {
 	switch pos, err := d.consumeWhitespace(d.prevEnd); err {
 	case nil:
-		return newInvalidCharacterError(d.buf[pos], "after top-level value")
+		return newInvalidCharacterError(d.buf[pos:], "after top-level value")
 	case io.ErrUnexpectedEOF:
 		return nil
 	default:
@@ -773,7 +773,7 @@ func (d *Decoder) consumeValue(flags *valueFlags, pos int) (newPos int, err erro
 		case '[':
 			return d.consumeArray(flags, pos)
 		default:
-			return pos, newInvalidCharacterError(byte(next), "at start of value")
+			return pos, newInvalidCharacterError(d.buf[pos:], "at start of value")
 		}
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
@@ -912,8 +912,8 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 				return pos, err
 			}
 		}
-		if c := d.buf[pos]; c != ':' {
-			return pos, newInvalidCharacterError(c, "after object name (expecting ':')")
+		if d.buf[pos] != ':' {
+			return pos, newInvalidCharacterError(d.buf[pos:], "after object name (expecting ':')")
 		}
 		pos++
 
@@ -936,7 +936,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 				return pos, err
 			}
 		}
-		switch c := d.buf[pos]; c {
+		switch d.buf[pos] {
 		case ',':
 			pos++
 			continue
@@ -944,7 +944,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 			pos++
 			return pos, nil
 		default:
-			return pos, newInvalidCharacterError(c, "after object value (expecting ',' or '}')")
+			return pos, newInvalidCharacterError(d.buf[pos:], "after object value (expecting ',' or '}')")
 		}
 	}
 }
@@ -990,7 +990,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err erro
 				return pos, err
 			}
 		}
-		switch c := d.buf[pos]; c {
+		switch d.buf[pos] {
 		case ',':
 			pos++
 			continue
@@ -998,7 +998,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err erro
 			pos++
 			return pos, nil
 		default:
-			return pos, newInvalidCharacterError(c, "after array value (expecting ',' or ']')")
+			return pos, newInvalidCharacterError(d.buf[pos:], "after array value (expecting ',' or ']')")
 		}
 	}
 }
@@ -1108,7 +1108,7 @@ func consumeTrue(b []byte) int {
 func consumeLiteral(b []byte, lit string) (n int, err error) {
 	for i := 0; i < len(b) && i < len(lit); i++ {
 		if b[i] != lit[i] {
-			return i, newInvalidCharacterError(b[i], "within literal "+lit+" (expecting "+escapeCharacter(lit[i])+")")
+			return i, newInvalidCharacterError(b[i:], "within literal "+lit+" (expecting "+strconv.QuoteRune(rune(lit[i]))+")")
 		}
 	}
 	if len(b) < len(lit) {
@@ -1157,7 +1157,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 	case b[0] == '"':
 		n++
 	default:
-		return n, newInvalidCharacterError(b[n], `at start of string (expecting '"')`)
+		return n, newInvalidCharacterError(b[n:], `at start of string (expecting '"')`)
 	}
 
 	// Consume every character in the string.
@@ -1192,7 +1192,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
 			if r < ' ' {
 				flags.set(stringNonVerbatim | stringNonCanonical)
-				return n, newInvalidCharacterError(b[n], "within string (expecting non-control character)")
+				return n, newInvalidCharacterError(b[n:], "within string (expecting non-control character)")
 			}
 
 			// Handle escape sequence.
@@ -1478,7 +1478,7 @@ beforeInteger:
 		}
 		state = withinIntegerDigits
 	default:
-		return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
+		return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
 	}
 
 	// Consume optional fractional component.
@@ -1492,7 +1492,7 @@ beforeFractional:
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
-			return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
+			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
 		}
 		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 			n++
@@ -1514,7 +1514,7 @@ beforeExponent:
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
-			return n, state, newInvalidCharacterError(b[n], "within number (expecting digit)")
+			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
 		}
 		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
 			n++

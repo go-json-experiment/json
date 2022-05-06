@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const errorPrefix = "json: "
@@ -168,17 +169,15 @@ func (e *SyntacticError) withOffset(pos int64) error {
 	return &SyntacticError{ByteOffset: pos, str: e.str}
 }
 
-func newInvalidCharacterError(c byte, where string) *SyntacticError {
-	return &SyntacticError{str: "invalid character " + escapeCharacter(c) + " " + where}
+func newInvalidCharacterError(prefix []byte, where string) *SyntacticError {
+	what := quoteRune(prefix)
+	return &SyntacticError{str: "invalid character " + what + " " + where}
 }
 
-func escapeCharacter(c byte) string {
-	switch c {
-	case '\'':
-		return `'\''`
-	case '"':
-		return `'"'`
-	default:
-		return "'" + strings.TrimPrefix(strings.TrimSuffix(strconv.Quote(string([]byte{c})), `"`), `"`) + "'"
+func quoteRune(b []byte) string {
+	r, n := utf8.DecodeRune(b)
+	if r == utf8.RuneError && n == 1 {
+		return `'\x` + strconv.FormatUint(uint64(b[0]), 16) + `'`
 	}
+	return strconv.QuoteRune(r)
 }

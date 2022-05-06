@@ -164,10 +164,10 @@ func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
 	if len(o.Indent) > 0 {
 		o.multiline = true
 		if s := trimLeftSpaceTab(o.IndentPrefix); len(s) > 0 {
-			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent prefix")
+			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
 		}
 		if s := trimLeftSpaceTab(o.Indent); len(s) > 0 {
-			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
+			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
 		}
 	}
 	e.state.reset()
@@ -579,7 +579,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	}
 	v = v[consumeWhitespace(v):]
 	if len(v) > 0 {
-		return newInvalidCharacterError(v[0], "after top-level value")
+		return newInvalidCharacterError(v[0:], "after top-level value")
 	}
 
 	// Append the kind to the state machine.
@@ -691,7 +691,7 @@ func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, Ra
 	case '[':
 		return e.reformatArray(dst, src, depth)
 	default:
-		return dst, src, newInvalidCharacterError(byte(k), "at start of value")
+		return dst, src, newInvalidCharacterError(src, "at start of value")
 	}
 	if err != nil {
 		return dst, src, err
@@ -758,8 +758,8 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, R
 		if len(src) == 0 {
 			return dst, src, io.ErrUnexpectedEOF
 		}
-		if c := src[0]; c != ':' {
-			return dst, src, newInvalidCharacterError(c, "after object name (expecting ':')")
+		if src[0] != ':' {
+			return dst, src, newInvalidCharacterError(src, "after object name (expecting ':')")
 		}
 		dst, src = append(dst, ':'), src[1:]
 		if e.options.multiline {
@@ -781,7 +781,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, R
 		if len(src) == 0 {
 			return dst, src, io.ErrUnexpectedEOF
 		}
-		switch c := src[0]; c {
+		switch src[0] {
 		case ',':
 			dst, src = append(dst, ','), src[1:]
 			continue
@@ -792,7 +792,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, R
 			dst, src = append(dst, '}'), src[1:]
 			return dst, src, nil
 		default:
-			return dst, src, newInvalidCharacterError(c, "after object value (expecting ',' or '}')")
+			return dst, src, newInvalidCharacterError(src, "after object value (expecting ',' or '}')")
 		}
 	}
 }
@@ -840,7 +840,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, Ra
 		if len(src) == 0 {
 			return dst, src, io.ErrUnexpectedEOF
 		}
-		switch c := src[0]; c {
+		switch src[0] {
 		case ',':
 			dst, src = append(dst, ','), src[1:]
 			continue
@@ -851,7 +851,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, Ra
 			dst, src = append(dst, ']'), src[1:]
 			return dst, src, nil
 		default:
-			return dst, src, newInvalidCharacterError(c, "after array value (expecting ',' or ']')")
+			return dst, src, newInvalidCharacterError(src, "after array value (expecting ',' or ']')")
 		}
 	}
 }

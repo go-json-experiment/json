@@ -168,3 +168,22 @@ func TestErrorsIs(t *testing.T) {
 		}
 	}
 }
+
+func TestQuoteRune(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"x", `'x'`},
+		{"\n", `'\n'`},
+		{"'", `'\''`},
+		{"\xff", `'\xff'`},
+		{"💩", `'💩'`},
+		{"💩"[:1], `'\xf0'`},
+		{"\uffff", `'\uffff'`},
+		{"\U00101234", `'\U00101234'`},
+	}
+	for _, tt := range tests {
+		got := quoteRune([]byte(tt.in))
+		if got != tt.want {
+			t.Errorf("quoteRune(%q) = %s, want %s", tt.in, got, tt.want)
+		}
+	}
+}

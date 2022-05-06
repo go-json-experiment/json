@@ -1811,12 +1811,12 @@ func TestMarshal(t *testing.T) {
 		name:    "Structs/InlinedFallback/RawValue/InvalidObjectEnd",
 		in:      structInlineRawValue{X: RawValue(` { "name" : false , } `)},
 		want:    `{"name":false`,
-		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError(',', "before next token").withOffset(int64(len(` { "name" : false `)))},
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError([]byte(","), "before next token").withOffset(int64(len(` { "name" : false `)))},
 	}, {
 		name:    "Structs/InlinedFallback/RawValue/InvalidDualObject",
 		in:      structInlineRawValue{X: RawValue(`{}{}`)},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError('{', "after top-level value")},
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError([]byte("{"), "after top-level value")},
 	}, {
 		name: "Structs/InlinedFallback/RawValue/Nested/Nil",
 		in:   structInlinePointerInlineRawValue{},
@@ -2320,7 +2320,7 @@ func TestMarshal(t *testing.T) {
 		in: marshalJSONv1Func(func() ([]byte, error) {
 			return []byte("invalid"), nil
 		}),
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError('i', "at start of value")},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError([]byte("i"), "at start of value")},
 	}, {
 		name: "Methods/Invalid/JSONv1/SkipFunc",
 		in: marshalJSONv1Func(func() ([]byte, error) {
@@ -3346,7 +3346,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `falsetrue`,
 		inVal:   addr(true),
 		want:    addr(false),
-		wantErr: newInvalidCharacterError('t', "after top-level value"),
+		wantErr: newInvalidCharacterError([]byte("t"), "after top-level value"),
 	}, {
 		name:  "Bools/Null",
 		inBuf: `null`,
@@ -5030,7 +5030,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineRawValue),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":`)}),
-		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
 		name:  "Structs/InlinedFallback/RawValue/CaseSensitive",
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -5155,13 +5155,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": nil}}),
-		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
 		name:    "Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing",
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
-		wantErr: newInvalidCharacterError('i', "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
+		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
 		name:  "Structs/InlinedFallback/MapStringAny/CaseSensitive",
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -5783,7 +5783,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `]`,
 		inVal:   new(any),
 		want:    new(any),
-		wantErr: newInvalidCharacterError(']', "at start of value"),
+		wantErr: newInvalidCharacterError([]byte("]"), "at start of value"),
 	}, {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
@@ -6928,7 +6928,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(struct {
 			D time.Duration
 		}{1}),
-		wantErr: newInvalidCharacterError('x', "at start of value").withOffset(int64(len(`{"D":`))),
+		wantErr: newInvalidCharacterError([]byte("x"), "at start of value").withOffset(int64(len(`{"D":`))),
 	}, {
 		name:  "Duration/Format/Invalid",
 		inBuf: `{"D":"0s"}`,
@@ -7065,7 +7065,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct {
 			T time.Time
 		}),
-		wantErr: newInvalidCharacterError('x', "at start of value").withOffset(int64(len(`{"D":`))),
+		wantErr: newInvalidCharacterError([]byte("x"), "at start of value").withOffset(int64(len(`{"D":`))),
 	}, {
 		name:  "Time/IgnoreInvalidFormat",
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},

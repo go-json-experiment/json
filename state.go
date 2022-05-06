@@ -283,7 +283,7 @@ func (m stateMachine) checkDelim(delim byte, next Kind) error {
 	case needDelim == ',':
 		return errMissingComma
 	default:
-		return newInvalidCharacterError(delim, "before next token")
+		return newInvalidCharacterError([]byte{delim}, "before next token")
 	}
 }
 

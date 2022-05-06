@@ -147,10 +147,10 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 		eo.multiline = false           // per RFC 8785, section 3.2.1
 	} else {
 		if s := trimLeftSpaceTab(prefix); len(s) > 0 {
-			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent prefix")
+			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
 		}
 		if s := trimLeftSpaceTab(indent); len(s) > 0 {
-			panic("json: invalid character " + escapeCharacter(s[0]) + " in indent")
+			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
 		}
 		eo.AllowInvalidUTF8 = true
 		eo.AllowDuplicateNames = true

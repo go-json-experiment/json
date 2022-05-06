@@ -509,7 +509,7 @@ func (k Kind) String() string {
 	case ']':
 		return "]"
 	default:
-		return "<invalid json.Kind: " + escapeCharacter(byte(k)) + ">"
+		return "<invalid json.Kind: " + quoteRune([]byte{byte(k)}) + ">"
 	}
 }
 
