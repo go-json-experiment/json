@@ -17,13 +17,13 @@ func TestIntern(t *testing.T) {
 	for i := 0; i <= len(alphabet); i++ {
 		want := alphabet[i:]
 		if got := sc.make([]byte(want)); got != want {
-			t.Errorf("make = %v, want %v", got, want)
+			t.Fatalf("make = %v, want %v", got, want)
 		}
 	}
 	for i := 0; i < 1000; i++ {
 		want := fmt.Sprintf("test%b", i)
 		if got := sc.make([]byte(want)); got != want {
-			t.Errorf("make = %v, want %v", got, want)
+			t.Fatalf("make = %v, want %v", got, want)
 		}
 	}
 }

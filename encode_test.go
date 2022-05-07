@@ -30,14 +30,14 @@ func TestEncoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, formatName := range []string{"Compact", "Escaped", "Indented"} {
 			for _, typeName := range []string{"Token", "Value", "TokenDelims"} {
-				t.Run(path.Join(td.name, typeName, formatName), func(t *testing.T) {
-					testEncoder(t, formatName, typeName, td)
+				t.Run(path.Join(td.name.name, typeName, formatName), func(t *testing.T) {
+					testEncoder(t, td.name.where, formatName, typeName, td)
 				})
 			}
 		}
 	}
 }
-func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntry) {
+func testEncoder(t *testing.T, where pc, formatName, typeName string, td coderTestdataEntry) {
 	var want string
 	dst := new(bytes.Buffer)
 	enc := NewEncoder(dst)
@@ -63,18 +63,18 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 		var pointers []string
 		for _, tok := range td.tokens {
 			if err := enc.WriteToken(tok); err != nil {
-				t.Fatalf("Encoder.WriteToken error: %v", err)
+				t.Fatalf("%s: Encoder.WriteToken error: %v", where, err)
 			}
 			if td.pointers != nil {
 				pointers = append(pointers, enc.StackPointer())
 			}
 		}
 		if !reflect.DeepEqual(pointers, td.pointers) {
-			t.Fatalf("pointers mismatch:\ngot  %q\nwant %q", pointers, td.pointers)
+			t.Fatalf("%s: pointers mismatch:\ngot  %q\nwant %q", where, pointers, td.pointers)
 		}
 	case "Value":
 		if err := enc.WriteValue(RawValue(td.in)); err != nil {
-			t.Fatalf("Encoder.WriteValue error: %v", err)
+			t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)
 		}
 	case "TokenDelims":
 		// Use WriteToken for object/array delimiters, WriteValue otherwise.
@@ -82,7 +82,7 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 			switch tok.Kind() {
 			case '{', '}', '[', ']':
 				if err := enc.WriteToken(tok); err != nil {
-					t.Fatalf("Encoder.WriteToken error: %v", err)
+					t.Fatalf("%s: Encoder.WriteToken error: %v", where, err)
 				}
 			default:
 				val := RawValue(tok.String())
@@ -90,7 +90,7 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 					val, _ = appendString(nil, tok.String(), false, nil)
 				}
 				if err := enc.WriteValue(val); err != nil {
-					t.Fatalf("Encoder.WriteValue error: %v", err)
+					t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)
 				}
 			}
 		}
@@ -98,7 +98,7 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 
 	got := dst.String()
 	if got != want {
-		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
+		t.Errorf("%s: output mismatch:\ngot  %q\nwant %q", where, got, want)
 	}
 }
 
@@ -106,13 +106,13 @@ func testEncoder(t *testing.T, formatName, typeName string, td coderTestdataEntr
 func TestFaultyEncoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
-			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
-				testFaultyEncoder(t, typeName, td)
+			t.Run(path.Join(td.name.name, typeName), func(t *testing.T) {
+				testFaultyEncoder(t, td.name.where, typeName, td)
 			})
 		}
 	}
 }
-func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
+func testFaultyEncoder(t *testing.T, where pc, typeName string, td coderTestdataEntry) {
 	b := &FaultyBuffer{
 		MaxBytes: 1,
 		MayError: io.ErrShortWrite,
@@ -129,19 +129,19 @@ func testFaultyEncoder(t *testing.T, typeName string, td coderTestdataEntry) {
 		for i, tok := range td.tokens {
 			err := enc.WriteToken(tok)
 			if err != nil && !errors.Is(err, io.ErrShortWrite) {
-				t.Fatalf("%d: Encoder.WriteToken error: %v", i, err)
+				t.Fatalf("%s: %d: Encoder.WriteToken error: %v", where, i, err)
 			}
 		}
 	case "Value":
 		err := enc.WriteValue(RawValue(td.in))
 		if err != nil && !errors.Is(err, io.ErrShortWrite) {
-			t.Fatalf("Encoder.WriteValue error: %v", err)
+			t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)
 		}
 	}
 	gotOutput := string(append(b.B, enc.unflushedBuffer()...))
 	wantOutput := td.outCompacted + "\n"
 	if gotOutput != wantOutput {
-		t.Fatalf("output mismatch:\ngot  %s\nwant %s", gotOutput, wantOutput)
+		t.Fatalf("%s: output mismatch:\ngot  %s\nwant %s", where, gotOutput, wantOutput)
 	}
 }
 
@@ -152,146 +152,146 @@ type encoderMethodCall struct {
 }
 
 var encoderErrorTestdata = []struct {
-	name    string
+	name    testName
 	opts    EncodeOptions
 	calls   []encoderMethodCall
 	wantOut string
 }{{
-	name: "InvalidToken",
+	name: name("InvalidToken"),
 	calls: []encoderMethodCall{
 		{zeroToken, &SyntacticError{str: "invalid json.Token"}, ""},
 	},
 }, {
-	name: "InvalidValue",
+	name: name("InvalidValue"),
 	calls: []encoderMethodCall{
 		{RawValue(`#`), newInvalidCharacterError([]byte("#"), "at start of value"), ""},
 	},
 }, {
-	name: "InvalidValue/DoubleZero",
+	name: name("InvalidValue/DoubleZero"),
 	calls: []encoderMethodCall{
 		{RawValue(`00`), newInvalidCharacterError([]byte("0"), "after top-level value"), ""},
 	},
 }, {
-	name: "TruncatedValue",
+	name: name("TruncatedValue"),
 	calls: []encoderMethodCall{
 		{zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedNull",
+	name: name("TruncatedNull"),
 	calls: []encoderMethodCall{
 		{RawValue(`nul`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidNull",
+	name: name("InvalidNull"),
 	calls: []encoderMethodCall{
 		{RawValue(`nulL`), newInvalidCharacterError([]byte("L"), "within literal null (expecting 'l')"), ""},
 	},
 }, {
-	name: "TruncatedFalse",
+	name: name("TruncatedFalse"),
 	calls: []encoderMethodCall{
 		{RawValue(`fals`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidFalse",
+	name: name("InvalidFalse"),
 	calls: []encoderMethodCall{
 		{RawValue(`falsE`), newInvalidCharacterError([]byte("E"), "within literal false (expecting 'e')"), ""},
 	},
 }, {
-	name: "TruncatedTrue",
+	name: name("TruncatedTrue"),
 	calls: []encoderMethodCall{
 		{RawValue(`tru`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidTrue",
+	name: name("InvalidTrue"),
 	calls: []encoderMethodCall{
 		{RawValue(`truE`), newInvalidCharacterError([]byte("E"), "within literal true (expecting 'e')"), ""},
 	},
 }, {
-	name: "TruncatedString",
+	name: name("TruncatedString"),
 	calls: []encoderMethodCall{
 		{RawValue(`"star`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidString",
+	name: name("InvalidString"),
 	calls: []encoderMethodCall{
 		{RawValue(`"ok` + "\x00"), newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`), ""},
 	},
 }, {
-	name: "ValidString/AllowInvalidUTF8/Token",
+	name: name("ValidString/AllowInvalidUTF8/Token"),
 	opts: EncodeOptions{AllowInvalidUTF8: true},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
-	name: "ValidString/AllowInvalidUTF8/Value",
+	name: name("ValidString/AllowInvalidUTF8/Value"),
 	opts: EncodeOptions{AllowInvalidUTF8: true},
 	calls: []encoderMethodCall{
 		{RawValue("\"living\xde\xad\xbe\xef\""), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
-	name: "InvalidString/RejectInvalidUTF8",
+	name: name("InvalidString/RejectInvalidUTF8"),
 	opts: EncodeOptions{AllowInvalidUTF8: false},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), &SyntacticError{str: "invalid UTF-8 within string"}, ""},
 		{RawValue("\"living\xde\xad\xbe\xef\""), &SyntacticError{str: "invalid UTF-8 within string"}, ""},
 	},
 }, {
-	name: "TruncatedNumber",
+	name: name("TruncatedNumber"),
 	calls: []encoderMethodCall{
 		{RawValue(`0.`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidNumber",
+	name: name("InvalidNumber"),
 	calls: []encoderMethodCall{
 		{RawValue(`0.e`), newInvalidCharacterError([]byte("e"), "within number (expecting digit)"), ""},
 	},
 }, {
-	name: "TruncatedObject/AfterStart",
+	name: name("TruncatedObject/AfterStart"),
 	calls: []encoderMethodCall{
 		{RawValue(`{`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedObject/AfterName",
+	name: name("TruncatedObject/AfterName"),
 	calls: []encoderMethodCall{
 		{RawValue(`{"0"`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedObject/AfterColon",
+	name: name("TruncatedObject/AfterColon"),
 	calls: []encoderMethodCall{
 		{RawValue(`{"0":`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedObject/AfterValue",
+	name: name("TruncatedObject/AfterValue"),
 	calls: []encoderMethodCall{
 		{RawValue(`{"0":0`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedObject/AfterComma",
+	name: name("TruncatedObject/AfterComma"),
 	calls: []encoderMethodCall{
 		{RawValue(`{"0":0,`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidObject/MissingColon",
+	name: name("InvalidObject/MissingColon"),
 	calls: []encoderMethodCall{
 		{RawValue(` { "fizz" "buzz" } `), newInvalidCharacterError([]byte("\""), "after object name (expecting ':')"), ""},
 		{RawValue(` { "fizz" , "buzz" } `), newInvalidCharacterError([]byte(","), "after object name (expecting ':')"), ""},
 	},
 }, {
-	name: "InvalidObject/MissingComma",
+	name: name("InvalidObject/MissingComma"),
 	calls: []encoderMethodCall{
 		{RawValue(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError([]byte("\""), "after object value (expecting ',' or '}')"), ""},
 		{RawValue(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError([]byte(":"), "after object value (expecting ',' or '}')"), ""},
 	},
 }, {
-	name: "InvalidObject/ExtraComma",
+	name: name("InvalidObject/ExtraComma"),
 	calls: []encoderMethodCall{
 		{RawValue(` { , } `), newInvalidCharacterError([]byte(","), `at start of string (expecting '"')`), ""},
 		{RawValue(` { "fizz" : "buzz" , } `), newInvalidCharacterError([]byte("}"), `at start of string (expecting '"')`), ""},
 	},
 }, {
-	name: "InvalidObject/InvalidName",
+	name: name("InvalidObject/InvalidName"),
 	calls: []encoderMethodCall{
 		{RawValue(`{ null }`), newInvalidCharacterError([]byte("n"), `at start of string (expecting '"')`), ""},
 		{RawValue(`{ false }`), newInvalidCharacterError([]byte("f"), `at start of string (expecting '"')`), ""},
@@ -316,12 +316,12 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: "{}\n",
 }, {
-	name: "InvalidObject/InvalidValue",
+	name: name("InvalidObject/InvalidValue"),
 	calls: []encoderMethodCall{
 		{RawValue(`{ "0": x }`), newInvalidCharacterError([]byte("x"), `at start of value`), ""},
 	},
 }, {
-	name: "InvalidObject/MismatchingDelim",
+	name: name("InvalidObject/MismatchingDelim"),
 	calls: []encoderMethodCall{
 		{RawValue(` { ] `), newInvalidCharacterError([]byte("]"), `at start of string (expecting '"')`), ""},
 		{RawValue(` { "0":0 ] `), newInvalidCharacterError([]byte("]"), `after object value (expecting ',' or '}')`), ""},
@@ -332,7 +332,7 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: "{}\n",
 }, {
-	name: "ValidObject/UniqueNames",
+	name: name("ValidObject/UniqueNames"),
 	calls: []encoderMethodCall{
 		{ObjectStart, nil, ""},
 		{String("0"), nil, ""},
@@ -344,7 +344,7 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: `{"0":0,"1":1}` + "\n" + `{"0":0,"1":1}` + "\n",
 }, {
-	name: "ValidObject/DuplicateNames",
+	name: name("ValidObject/DuplicateNames"),
 	opts: EncodeOptions{AllowDuplicateNames: true},
 	calls: []encoderMethodCall{
 		{ObjectStart, nil, ""},
@@ -357,7 +357,7 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: `{"0":0,"0":0}` + "\n" + `{"0":0,"0":0}` + "\n",
 }, {
-	name: "InvalidObject/DuplicateNames",
+	name: name("InvalidObject/DuplicateNames"),
 	calls: []encoderMethodCall{
 		{ObjectStart, nil, ""},
 		{String("0"), nil, ""},
@@ -377,27 +377,27 @@ var encoderErrorTestdata = []struct {
 	},
 	wantOut: `{"0":{},"1":{}}` + "\n",
 }, {
-	name: "TruncatedArray/AfterStart",
+	name: name("TruncatedArray/AfterStart"),
 	calls: []encoderMethodCall{
 		{RawValue(`[`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedArray/AfterValue",
+	name: name("TruncatedArray/AfterValue"),
 	calls: []encoderMethodCall{
 		{RawValue(`[0`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedArray/AfterComma",
+	name: name("TruncatedArray/AfterComma"),
 	calls: []encoderMethodCall{
 		{RawValue(`[0,`), io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "TruncatedArray/MissingComma",
+	name: name("TruncatedArray/MissingComma"),
 	calls: []encoderMethodCall{
 		{RawValue(` [ "fizz" "buzz" ] `), newInvalidCharacterError([]byte("\""), "after array value (expecting ',' or ']')"), ""},
 	},
 }, {
-	name: "InvalidArray/MismatchingDelim",
+	name: name("InvalidArray/MismatchingDelim"),
 	calls: []encoderMethodCall{
 		{RawValue(` [ } `), newInvalidCharacterError([]byte("}"), `at start of value`), ""},
 		{ArrayStart, nil, ""},
@@ -412,12 +412,12 @@ var encoderErrorTestdata = []struct {
 // leaves the Encoder in a consistent state.
 func TestEncoderErrors(t *testing.T) {
 	for _, td := range encoderErrorTestdata {
-		t.Run(path.Join(td.name), func(t *testing.T) {
-			testEncoderErrors(t, td.opts, td.calls, td.wantOut)
+		t.Run(path.Join(td.name.name), func(t *testing.T) {
+			testEncoderErrors(t, td.name.where, td.opts, td.calls, td.wantOut)
 		})
 	}
 }
-func testEncoderErrors(t *testing.T, opts EncodeOptions, calls []encoderMethodCall, wantOut string) {
+func testEncoderErrors(t *testing.T, where pc, opts EncodeOptions, calls []encoderMethodCall, wantOut string) {
 	dst := new(bytes.Buffer)
 	enc := opts.NewEncoder(dst)
 	for i, call := range calls {
@@ -429,23 +429,23 @@ func testEncoderErrors(t *testing.T, opts EncodeOptions, calls []encoderMethodCa
 			gotErr = enc.WriteValue(tokVal)
 		}
 		if !reflect.DeepEqual(gotErr, call.wantErr) {
-			t.Fatalf("%d: error mismatch: got %#v, want %#v", i, gotErr, call.wantErr)
+			t.Fatalf("%s: %d: error mismatch: got %#v, want %#v", where, i, gotErr, call.wantErr)
 		}
 		if call.wantPointer != "" {
 			gotPointer := enc.StackPointer()
 			if gotPointer != call.wantPointer {
-				t.Fatalf("%d: Encoder.StackPointer = %s, want %s", i, gotPointer, call.wantPointer)
+				t.Fatalf("%s: %d: Encoder.StackPointer = %s, want %s", where, i, gotPointer, call.wantPointer)
 			}
 		}
 	}
 	gotOut := dst.String() + string(enc.unflushedBuffer())
 	if gotOut != wantOut {
-		t.Errorf("output mismatch:\ngot  %q\nwant %q", gotOut, wantOut)
+		t.Fatalf("%s: output mismatch:\ngot  %q\nwant %q", where, gotOut, wantOut)
 	}
 	gotOffset := int(enc.OutputOffset())
 	wantOffset := len(wantOut)
 	if gotOffset != wantOffset {
-		t.Errorf("Encoder.OutputOffset = %v, want %v", gotOffset, wantOffset)
+		t.Fatalf("%s: Encoder.OutputOffset = %v, want %v", where, gotOffset, wantOffset)
 	}
 }
 

@@ -15,12 +15,33 @@ import (
 	"io"
 	"math"
 	"net"
+	"path"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+type testName struct {
+	name  string
+	where pc
+}
+
+func name(s string) (t testName) {
+	t.name = s
+	runtime.Callers(2, t.where[:])
+	return t
+}
+
+type pc [1]uintptr
+
+func (pc pc) String() string {
+	frames := runtime.CallersFrames(pc[:])
+	frame, _ := frames.Next()
+	return fmt.Sprintf("%s:%d", path.Base(frame.File), frame.Line)
+}
 
 type (
 	jsonObject = map[string]any
@@ -591,7 +612,7 @@ func mustParseTime(layout, value string) time.Time {
 
 func TestMarshal(t *testing.T) {
 	tests := []struct {
-		name    string
+		name    testName
 		mopts   MarshalOptions
 		eopts   EncodeOptions
 		in      any
@@ -601,198 +622,198 @@ func TestMarshal(t *testing.T) {
 		canonicalize bool // canonicalize the output before comparing?
 		useWriter    bool // call MarshalFull instead of Marshal
 	}{{
-		name: "Nil",
+		name: name("Nil"),
 		in:   nil,
 		want: `null`,
 	}, {
-		name: "Bools",
+		name: name("Bools"),
 		in:   []bool{false, true},
 		want: `[false,true]`,
 	}, {
-		name: "Bools/Named",
+		name: name("Bools/Named"),
 		in:   []namedBool{false, true},
 		want: `[false,true]`,
 	}, {
-		name:  "Bools/NotStringified",
+		name:  name("Bools/NotStringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in:    []bool{false, true},
 		want:  `[false,true]`,
 	}, {
-		name:  "Bools/IgnoreInvalidFormat",
+		name:  name("Bools/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    true,
 		want:  `true`,
 	}, {
-		name: "Strings",
+		name: name("Strings"),
 		in:   []string{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
 	}, {
-		name: "Strings/Named",
+		name: name("Strings/Named"),
 		in:   []namedString{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
 	}, {
-		name:  "Strings/IgnoreInvalidFormat",
+		name:  name("Strings/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    "string",
 		want:  `"string"`,
 	}, {
-		name: "Bytes",
+		name: name("Bytes"),
 		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
-		name: "Bytes/Large",
+		name: name("Bytes/Large"),
 		in:   []byte("the quick brown fox jumped over the lazy dog and ate the homework that I spent so much time on."),
 		want: `"dGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciB0aGUgbGF6eSBkb2cgYW5kIGF0ZSB0aGUgaG9tZXdvcmsgdGhhdCBJIHNwZW50IHNvIG11Y2ggdGltZSBvbi4="`,
 	}, {
-		name: "Bytes/Named",
+		name: name("Bytes/Named"),
 		in:   []namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
-		name:  "Bytes/NotStringified",
+		name:  name("Bytes/NotStringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in:    [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want:  `["","","AQ==","AQI=","AQID"]`,
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a slice of uints.
-		name: "Bytes/Invariant",
+		name: name("Bytes/Invariant"),
 		in:   [][]namedByte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `[[],[],[1],[1,2],[1,2,3]]`,
 	}, {
 		// NOTE: This differs in behavior from v1,
 		// but keeps the representation of slices and arrays more consistent.
-		name: "Bytes/ByteArray",
+		name: name("Bytes/ByteArray"),
 		in:   [5]byte{'h', 'e', 'l', 'l', 'o'},
 		want: `"aGVsbG8="`,
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as an array of uints.
-		name: "Bytes/NamedByteArray",
+		name: name("Bytes/NamedByteArray"),
 		in:   [5]namedByte{'h', 'e', 'l', 'l', 'o'},
 		want: `[104,101,108,108,111]`,
 	}, {
-		name:  "Bytes/IgnoreInvalidFormat",
+		name:  name("Bytes/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    []byte("hello"),
 		want:  `"aGVsbG8="`,
 	}, {
-		name: "Ints",
+		name: name("Ints"),
 		in: []any{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
 		want: `[0,-128,-32768,-2147483648,-9223372036854775808,-6464]`,
 	}, {
-		name:  "Ints/Stringified",
+		name:  name("Ints/Stringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []any{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
 		want: `["0","-128","-32768","-2147483648","-9223372036854775808","-6464"]`,
 	}, {
-		name:  "Ints/IgnoreInvalidFormat",
+		name:  name("Ints/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    int(0),
 		want:  `0`,
 	}, {
-		name: "Uints",
+		name: name("Uints"),
 		in: []any{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `[0,255,65535,4294967295,18446744073709551615,6464]`,
 	}, {
-		name:  "Uints/Stringified",
+		name:  name("Uints/Stringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []any{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `["0","255","65535","4294967295","18446744073709551615","6464"]`,
 	}, {
-		name:  "Uints/IgnoreInvalidFormat",
+		name:  name("Uints/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    uint(0),
 		want:  `0`,
 	}, {
-		name: "Floats",
+		name: name("Floats"),
 		in: []any{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `[3.4028235e+38,1.7976931348623157e+308,64.64]`,
 	}, {
-		name:  "Floats/Stringified",
+		name:  name("Floats/Stringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in: []any{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `["3.4028235e+38","1.7976931348623157e+308","64.64"]`,
 	}, {
-		name:    "Floats/Invalid/NaN",
+		name:    name("Floats/Invalid/NaN"),
 		mopts:   MarshalOptions{StringifyNumbers: true},
 		in:      math.NaN(),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.NaN())},
 	}, {
-		name:    "Floats/Invalid/PositiveInfinity",
+		name:    name("Floats/Invalid/PositiveInfinity"),
 		in:      math.Inf(+1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(+1))},
 	}, {
-		name:    "Floats/Invalid/NegativeInfinity",
+		name:    name("Floats/Invalid/NegativeInfinity"),
 		in:      math.Inf(-1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
 	}, {
-		name:  "Floats/IgnoreInvalidFormat",
+		name:  name("Floats/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    float64(0),
 		want:  `0`,
 	}, {
-		name:    "Maps/InvalidKey/Bool",
+		name:    name("Maps/InvalidKey/Bool"),
 		in:      map[bool]string{false: "value"},
 		want:    `{`,
 		wantErr: errMissingName,
 	}, {
-		name:    "Maps/InvalidKey/NamedBool",
+		name:    name("Maps/InvalidKey/NamedBool"),
 		in:      map[namedBool]string{false: "value"},
 		want:    `{`,
 		wantErr: errMissingName,
 	}, {
-		name:    "Maps/InvalidKey/Array",
+		name:    name("Maps/InvalidKey/Array"),
 		in:      map[[1]string]string{{"key"}: "value"},
 		want:    `{`,
 		wantErr: errMissingName,
 	}, {
-		name:    "Maps/InvalidKey/Channel",
+		name:    name("Maps/InvalidKey/Channel"),
 		in:      map[chan string]string{make(chan string): "value"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name:         "Maps/ValidKey/Int",
+		name:         name("Maps/ValidKey/Int"),
 		in:           map[int64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
 		canonicalize: true,
 		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
 	}, {
-		name:         "Maps/ValidKey/NamedInt",
+		name:         name("Maps/ValidKey/NamedInt"),
 		in:           map[namedInt64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
 		canonicalize: true,
 		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
 	}, {
-		name:         "Maps/ValidKey/Uint",
+		name:         name("Maps/ValidKey/Uint"),
 		in:           map[uint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
 		canonicalize: true,
 		want:         `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
 	}, {
-		name:         "Maps/ValidKey/NamedUint",
+		name:         name("Maps/ValidKey/NamedUint"),
 		in:           map[namedUint64]string{0: "Zero", math.MaxUint64: "MaxUint64"},
 		canonicalize: true,
 		want:         `{"0":"Zero","18446744073709551615":"MaxUint64"}`,
 	}, {
-		name: "Maps/ValidKey/Float",
+		name: name("Maps/ValidKey/Float"),
 		in:   map[float64]string{3.14159: "value"},
 		want: `{"3.14159":"value"}`,
 	}, {
-		name:    "Maps/InvalidKey/Float/NaN",
+		name:    name("Maps/InvalidKey/Float/NaN"),
 		in:      map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: errors.New("invalid value: NaN")},
 	}, {
-		name: "Maps/ValidKey/Interface",
+		name: name("Maps/ValidKey/Interface"),
 		in: map[any]any{
 			"key":               "key",
 			namedInt64(-64):     int32(-32),
@@ -802,35 +823,35 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"-64":-32,"64":32,"64.64":32.32,"key":"key"}`,
 	}, {
-		name:  "Maps/DuplicateName/String/AllowInvalidUTF8+AllowDuplicateNames",
+		name:  name("Maps/DuplicateName/String/AllowInvalidUTF8+AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
 		in:    map[string]string{"\x80": "", "\x81": ""},
 		want:  `{"�":"","�":""}`,
 	}, {
-		name:    "Maps/DuplicateName/String/AllowInvalidUTF8",
+		name:    name("Maps/DuplicateName/String/AllowInvalidUTF8"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: true},
 		in:      map[string]string{"\x80": "", "\x81": ""},
 		want:    `{"�":""`,
 		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
 	}, {
-		name:  "Maps/DuplicateName/NoCaseString/AllowDuplicateNames",
+		name:  name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
 		in:    map[nocaseString]string{"hello": "", "HELLO": ""},
 		want:  `{"hello":"","hello":""}`,
 	}, {
-		name:    "Maps/DuplicateName/NoCaseString",
+		name:    name("Maps/DuplicateName/NoCaseString"),
 		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
 		want:    `{"hello":""`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: &SyntacticError{str: `duplicate name "hello" in object`}},
 	}, {
-		name: "Maps/InvalidValue/Channel",
+		name: name("Maps/InvalidValue/Channel"),
 		in: map[string]chan string{
 			"key": nil,
 		},
 		want:    `{"key"`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name: "Maps/RecursiveMap",
+		name: name("Maps/RecursiveMap"),
 		in: recursiveMap{
 			"fizz": {
 				"foo": {},
@@ -841,7 +862,7 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
 	}, {
-		name: "Maps/CyclicMap",
+		name: name("Maps/CyclicMap"),
 		in: func() recursiveMap {
 			m := recursiveMap{"k": nil}
 			m["k"] = m
@@ -850,37 +871,37 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveMap{}), Err: errors.New("encountered a cycle")},
 	}, {
-		name:  "Maps/IgnoreInvalidFormat",
+		name:  name("Maps/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    map[string]string{},
 		want:  `{}`,
 	}, {
-		name: "Structs/Empty",
+		name: name("Structs/Empty"),
 		in:   structEmpty{},
 		want: `{}`,
 	}, {
-		name: "Structs/UnexportedIgnored",
+		name: name("Structs/UnexportedIgnored"),
 		in:   structUnexportedIgnored{ignored: "ignored"},
 		want: `{}`,
 	}, {
-		name: "Structs/IgnoredUnexportedEmbedded",
+		name: name("Structs/IgnoredUnexportedEmbedded"),
 		in:   structIgnoredUnexportedEmbedded{namedString: "ignored"},
 		want: `{}`,
 	}, {
-		name: "Structs/WeirdNames",
+		name: name("Structs/WeirdNames"),
 		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
 		want: `{"":"empty",",":"comma","\"":"quote"}`,
 	}, {
-		name:  "Structs/EscapedNames",
+		name:  name("Structs/EscapedNames"),
 		eopts: EncodeOptions{EscapeRune: func(rune) bool { return true }},
 		in:    structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
 		want:  `{"":"\u0065\u006d\u0070\u0074\u0079","\u002c":"\u0063\u006f\u006d\u006d\u0061","\u0022":"\u0071\u0075\u006f\u0074\u0065"}`,
 	}, {
-		name: "Structs/NoCase",
+		name: name("Structs/NoCase"),
 		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
 		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 	}, {
-		name:  "Structs/Normal",
+		name:  name("Structs/Normal"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structAll{
 			Bool:   true,
@@ -1026,7 +1047,7 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name:  "Structs/Stringified",
+		name:  name("Structs/Stringified"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structStringifiedAll{
 			Bool:   true,
@@ -1172,7 +1193,7 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name:  "Structs/Stringified/Escaped",
+		name:  name("Structs/Stringified/Escaped"),
 		eopts: EncodeOptions{Indent: "\t", EscapeRune: func(rune) bool { return true }},
 		in: structStringifiedAll{
 			Bool:   true,
@@ -1222,11 +1243,11 @@ func TestMarshal(t *testing.T) {
 	"\u0049\u006e\u0074\u0065\u0072\u0066\u0061\u0063\u0065": null
 }`,
 	}, {
-		name: "Structs/OmitZero/Zero",
+		name: name("Structs/OmitZero/Zero"),
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
-		name:  "Structs/OmitZero/NonZero",
+		name:  name("Structs/OmitZero/NonZero"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitZeroAll{
 			Bool:          true,                                   // not omitted since true is non-zero
@@ -1284,11 +1305,11 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name: "Structs/OmitZeroMethod/Zero",
+		name: name("Structs/OmitZeroMethod/Zero"),
 		in:   structOmitZeroMethodAll{},
 		want: `{}`,
 	}, {
-		name:  "Structs/OmitZeroMethod/NonZero",
+		name:  name("Structs/OmitZeroMethod/NonZero"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitZeroMethodAll{
 			ValAlwaysZero:                   valueAlwaysZero("nonzero"),
@@ -1315,7 +1336,7 @@ func TestMarshal(t *testing.T) {
 	"PointerPointerPointerNeverZero": "nonzero"
 }`,
 	}, {
-		name:  "Structs/OmitEmpty/Zero",
+		name:  name("Structs/OmitEmpty/Zero"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in:    structOmitEmptyAll{},
 		want: `{
@@ -1333,7 +1354,7 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
-		name:  "Structs/OmitEmpty/EmptyNonZero",
+		name:  name("Structs/OmitEmpty/EmptyNonZero"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitEmptyAll{
 			String:                string(""),
@@ -1388,7 +1409,7 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
-		name:  "Structs/OmitEmpty/NonEmpty",
+		name:  name("Structs/OmitEmpty/NonEmpty"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitEmptyAll{
 			Bool:                  true,
@@ -1471,17 +1492,17 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
-		name: "Structs/OmitEmpty/NonEmptyString",
+		name: name("Structs/OmitEmpty/NonEmptyString"),
 		in: struct {
 			X string `json:",omitempty"`
 		}{`"`},
 		want: `{"X":"\""}`,
 	}, {
-		name: "Structs/OmitZeroEmpty/Zero",
+		name: name("Structs/OmitZeroEmpty/Zero"),
 		in:   structOmitZeroEmptyAll{},
 		want: `{}`,
 	}, {
-		name: "Structs/OmitZeroEmpty/Empty",
+		name: name("Structs/OmitZeroEmpty/Empty"),
 		in: structOmitZeroEmptyAll{
 			Bytes:     []byte{},
 			Map:       map[string]string{},
@@ -1491,7 +1512,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{}`,
 	}, {
-		name: "Structs/OmitEmpty/PathologicalDepth",
+		name: name("Structs/OmitEmpty/PathologicalDepth"),
 		in: func() any {
 			type X struct {
 				X *X `json:",omitempty"`
@@ -1508,7 +1529,7 @@ func TestMarshal(t *testing.T) {
 		want:      `{}`,
 		useWriter: true,
 	}, {
-		name: "Structs/OmitEmpty/PathologicalBreadth",
+		name: name("Structs/OmitEmpty/PathologicalBreadth"),
 		in: func() any {
 			var fields []reflect.StructField
 			for i := 0; i < 100; i++ {
@@ -1523,7 +1544,7 @@ func TestMarshal(t *testing.T) {
 		want:      `{}`,
 		useWriter: true,
 	}, {
-		name: "Structs/OmitEmpty/PathologicalTree",
+		name: name("Structs/OmitEmpty/PathologicalTree"),
 		in: func() any {
 			type X struct {
 				XL, XR *X `json:",omitempty"`
@@ -1540,7 +1561,7 @@ func TestMarshal(t *testing.T) {
 		want:      `{}`,
 		useWriter: true,
 	}, {
-		name: "Structs/OmitZeroEmpty/NonEmpty",
+		name: name("Structs/OmitZeroEmpty/NonEmpty"),
 		in: structOmitZeroEmptyAll{
 			Bytes:     []byte("value"),
 			Map:       map[string]string{"": ""},
@@ -1550,7 +1571,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Pointer":{"Bool":true},"Interface":[""]}`,
 	}, {
-		name:  "Structs/Format/Bytes",
+		name:  name("Structs/Format/Bytes"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structFormatBytes{
 			Base16:    []byte("\x01\x23\x45\x67\x89\xab\xcd\xef"),
@@ -1573,7 +1594,7 @@ func TestMarshal(t *testing.T) {
 		4
 	]
 }`}, {
-		name: "Structs/Format/Bytes/Array",
+		name: name("Structs/Format/Bytes/Array"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(in byte) ([]byte, error) {
 			if in > 3 {
 				return []byte("true"), nil
@@ -1588,7 +1609,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"Array":[false,true,false,true,false,true]}`,
 	}, {
-		name:  "Structs/Format/Floats",
+		name:  name("Structs/Format/Floats"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatFloats{
 			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi)},
@@ -1615,7 +1636,7 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:  "Structs/Format/Maps",
+		name:  name("Structs/Format/Maps"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatMaps{
 			{EmitNull: nil, PointerEmitNull: new(map[string]string)},
@@ -1641,7 +1662,7 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:  "Structs/Format/Slices",
+		name:  name("Structs/Format/Slices"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: []structFormatSlices{
 			{EmitNull: nil, PointerEmitNull: new([]string)},
@@ -1667,66 +1688,66 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:    "Structs/Format/Invalid/Bool",
+		name:    name("Structs/Format/Invalid/Bool"),
 		in:      structFormatInvalid{Bool: true},
 		want:    `{"Bool"`,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/String",
+		name:    name("Structs/Format/Invalid/String"),
 		in:      structFormatInvalid{String: "string"},
 		want:    `{"String"`,
 		wantErr: &SemanticError{action: "marshal", GoType: stringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Bytes",
+		name:    name("Structs/Format/Invalid/Bytes"),
 		in:      structFormatInvalid{Bytes: []byte("bytes")},
 		want:    `{"Bytes"`,
 		wantErr: &SemanticError{action: "marshal", GoType: bytesType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Int",
+		name:    name("Structs/Format/Invalid/Int"),
 		in:      structFormatInvalid{Int: 1},
 		want:    `{"Int"`,
 		wantErr: &SemanticError{action: "marshal", GoType: int64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Uint",
+		name:    name("Structs/Format/Invalid/Uint"),
 		in:      structFormatInvalid{Uint: 1},
 		want:    `{"Uint"`,
 		wantErr: &SemanticError{action: "marshal", GoType: uint64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Float",
+		name:    name("Structs/Format/Invalid/Float"),
 		in:      structFormatInvalid{Float: 1},
 		want:    `{"Float"`,
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Map",
+		name:    name("Structs/Format/Invalid/Map"),
 		in:      structFormatInvalid{Map: map[string]string{}},
 		want:    `{"Map"`,
 		wantErr: &SemanticError{action: "marshal", GoType: mapStringStringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Struct",
+		name:    name("Structs/Format/Invalid/Struct"),
 		in:      structFormatInvalid{Struct: structAll{Bool: true}},
 		want:    `{"Struct"`,
 		wantErr: &SemanticError{action: "marshal", GoType: structAllType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Slice",
+		name:    name("Structs/Format/Invalid/Slice"),
 		in:      structFormatInvalid{Slice: []string{}},
 		want:    `{"Slice"`,
 		wantErr: &SemanticError{action: "marshal", GoType: sliceStringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Array",
+		name:    name("Structs/Format/Invalid/Array"),
 		in:      structFormatInvalid{Array: [1]string{"string"}},
 		want:    `{"Array"`,
 		wantErr: &SemanticError{action: "marshal", GoType: array1StringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Interface",
+		name:    name("Structs/Format/Invalid/Interface"),
 		in:      structFormatInvalid{Interface: "anything"},
 		want:    `{"Interface"`,
 		wantErr: &SemanticError{action: "marshal", GoType: anyType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name: "Structs/Inline/Zero",
+		name: name("Structs/Inline/Zero"),
 		in:   structInlined{},
 		want: `{"D":""}`,
 	}, {
-		name: "Structs/Inline/Alloc",
+		name: name("Structs/Inline/Alloc"),
 		in: structInlined{
 			X: structInlinedL1{
 				X:            &structInlinedL2{},
@@ -1736,7 +1757,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"E":"","F":"","G":"","A":"","B":"","D":""}`,
 	}, {
-		name: "Structs/Inline/NonZero",
+		name: name("Structs/Inline/NonZero"),
 		in: structInlined{
 			X: structInlinedL1{
 				X:            &structInlinedL2{A: "A1", B: "B1", C: "C1"},
@@ -1746,23 +1767,23 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
 	}, {
-		name: "Structs/InlinedFallback/RawValue/Nil",
+		name: name("Structs/InlinedFallback/RawValue/Nil"),
 		in:   structInlineRawValue{X: RawValue(nil)},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/RawValue/Empty",
+		name: name("Structs/InlinedFallback/RawValue/Empty"),
 		in:   structInlineRawValue{X: RawValue("")},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/RawValue/NonEmptyN1",
+		name: name("Structs/InlinedFallback/RawValue/NonEmptyN1"),
 		in:   structInlineRawValue{X: RawValue(` { "fizz" : "buzz" } `)},
 		want: `{"fizz":"buzz"}`,
 	}, {
-		name: "Structs/InlinedFallback/RawValue/NonEmptyN2",
+		name: name("Structs/InlinedFallback/RawValue/NonEmptyN2"),
 		in:   structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "foo" : "bar" } `)},
 		want: `{"fizz":"buzz","foo":"bar"}`,
 	}, {
-		name: "Structs/InlinedFallback/RawValue/NonEmptyWithOthers",
+		name: name("Structs/InlinedFallback/RawValue/NonEmptyWithOthers"),
 		in: structInlineRawValue{
 			A: 1,
 			X: RawValue(` { "fizz" : "buzz" , "foo" : "bar" } `),
@@ -1771,87 +1792,87 @@ func TestMarshal(t *testing.T) {
 		// NOTE: Inlined fallback fields are always serialized last.
 		want: `{"A":1,"B":2,"fizz":"buzz","foo":"bar"}`,
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/RejectDuplicateNames",
+		name:    name("Structs/InlinedFallback/RawValue/RejectDuplicateNames"),
 		eopts:   EncodeOptions{AllowDuplicateNames: false},
 		in:      structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
 		want:    `{"fizz":"buzz"`,
 		wantErr: &SyntacticError{str: `duplicate name "fizz" in object`},
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/AllowDuplicateNames",
+		name:  name("Structs/InlinedFallback/RawValue/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
 		in:    structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
 		want:  `{"fizz":"buzz","fizz":"buzz"}`,
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/RejectInvalidUTF8",
+		name:    name("Structs/InlinedFallback/RawValue/RejectInvalidUTF8"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: false},
 		in:      structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
 		want:    `{`,
 		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/AllowInvalidUTF8",
+		name:  name("Structs/InlinedFallback/RawValue/AllowInvalidUTF8"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true},
 		in:    structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
 		want:  `{"ޭ��":"value"}`,
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/InvalidWhitespace",
+		name:    name("Structs/InlinedFallback/RawValue/InvalidWhitespace"),
 		in:      structInlineRawValue{X: RawValue("\n\r\t ")},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: io.EOF},
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/InvalidObject",
+		name:    name("Structs/InlinedFallback/RawValue/InvalidObject"),
 		in:      structInlineRawValue{X: RawValue(` true `)},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 't', GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/InvalidObjectName",
+		name:    name("Structs/InlinedFallback/RawValue/InvalidObjectName"),
 		in:      structInlineRawValue{X: RawValue(` { true : false } `)},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: errMissingName.withOffset(int64(len(" { ")))},
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/InvalidObjectEnd",
+		name:    name("Structs/InlinedFallback/RawValue/InvalidObjectEnd"),
 		in:      structInlineRawValue{X: RawValue(` { "name" : false , } `)},
 		want:    `{"name":false`,
 		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError([]byte(","), "before next token").withOffset(int64(len(` { "name" : false `)))},
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/InvalidDualObject",
+		name:    name("Structs/InlinedFallback/RawValue/InvalidDualObject"),
 		in:      structInlineRawValue{X: RawValue(`{}{}`)},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError([]byte("{"), "after top-level value")},
 	}, {
-		name: "Structs/InlinedFallback/RawValue/Nested/Nil",
+		name: name("Structs/InlinedFallback/RawValue/Nested/Nil"),
 		in:   structInlinePointerInlineRawValue{},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerRawValue/Nil",
+		name: name("Structs/InlinedFallback/PointerRawValue/Nil"),
 		in:   structInlinePointerRawValue{},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerRawValue/NonEmpty",
+		name: name("Structs/InlinedFallback/PointerRawValue/NonEmpty"),
 		in:   structInlinePointerRawValue{X: addr(RawValue(` { "fizz" : "buzz" } `))},
 		want: `{"fizz":"buzz"}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
+		name: name("Structs/InlinedFallback/PointerRawValue/Nested/Nil"),
 		in:   structInlineInlinePointerRawValue{},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/MapStringAny/Nil",
+		name: name("Structs/InlinedFallback/MapStringAny/Nil"),
 		in:   structInlineMapStringAny{X: nil},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/MapStringAny/Empty",
+		name: name("Structs/InlinedFallback/MapStringAny/Empty"),
 		in:   structInlineMapStringAny{X: make(jsonObject)},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/MapStringAny/NonEmptyN1",
+		name: name("Structs/InlinedFallback/MapStringAny/NonEmptyN1"),
 		in:   structInlineMapStringAny{X: jsonObject{"fizz": nil}},
 		want: `{"fizz":null}`,
 	}, {
-		name:         "Structs/InlinedFallback/MapStringAny/NonEmptyN2",
+		name:         name("Structs/InlinedFallback/MapStringAny/NonEmptyN2"),
 		in:           structInlineMapStringAny{X: jsonObject{"fizz": time.Time{}, "buzz": math.Pi}},
 		want:         `{"buzz":3.141592653589793,"fizz":"0001-01-01T00:00:00Z"}`,
 		canonicalize: true,
 	}, {
-		name: "Structs/InlinedFallback/MapStringAny/NonEmptyWithOthers",
+		name: name("Structs/InlinedFallback/MapStringAny/NonEmptyWithOthers"),
 		in: structInlineMapStringAny{
 			A: 1,
 			X: jsonObject{"fizz": nil},
@@ -1860,47 +1881,47 @@ func TestMarshal(t *testing.T) {
 		// NOTE: Inlined fallback fields are always serialized last.
 		want: `{"A":1,"B":2,"fizz":null}`,
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/RejectInvalidUTF8",
+		name:    name("Structs/InlinedFallback/MapStringAny/RejectInvalidUTF8"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: false},
 		in:      structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
 		want:    `{`,
 		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8",
+		name:  name("Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true},
 		in:    structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
 		want:  `{"ޭ��":null}`,
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/InvalidValue",
+		name:    name("Structs/InlinedFallback/MapStringAny/InvalidValue"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: true},
 		in:      structInlineMapStringAny{X: jsonObject{"name": make(chan string)}},
 		want:    `{"name"`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name: "Structs/InlinedFallback/MapStringAny/Nested/Nil",
+		name: name("Structs/InlinedFallback/MapStringAny/Nested/Nil"),
 		in:   structInlinePointerInlineMapStringAny{},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerMapStringAny/Nil",
+		name: name("Structs/InlinedFallback/PointerMapStringAny/Nil"),
 		in:   structInlinePointerMapStringAny{X: nil},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerMapStringAny/NonEmpty",
+		name: name("Structs/InlinedFallback/PointerMapStringAny/NonEmpty"),
 		in:   structInlinePointerMapStringAny{X: addr(jsonObject{"name": "value"})},
 		want: `{"name":"value"}`,
 	}, {
-		name: "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
+		name: name("Structs/InlinedFallback/PointerMapStringAny/Nested/Nil"),
 		in:   structInlineInlinePointerMapStringAny{},
 		want: `{}`,
 	}, {
-		name: "Structs/InlinedFallback/MapStringInt",
+		name: name("Structs/InlinedFallback/MapStringInt"),
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		},
 		want:         `{"one":1,"two":2,"zero":0}`,
 		canonicalize: true,
 	}, {
-		name:  "Structs/InlinedFallback/MapStringInt/StringifiedNumbers",
+		name:  name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
@@ -1908,7 +1929,7 @@ func TestMarshal(t *testing.T) {
 		want:         `{"one":"1","two":"2","zero":"0"}`,
 		canonicalize: true,
 	}, {
-		name:  "Structs/InlinedFallback/DiscardUnknownMembers",
+		name:  name("Structs/InlinedFallback/DiscardUnknownMembers"),
 		mopts: MarshalOptions{DiscardUnknownMembers: true},
 		in: structInlineRawValue{
 			A: 1,
@@ -1918,7 +1939,7 @@ func TestMarshal(t *testing.T) {
 		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
 		want: `{"A":1,"B":2,"fizz":"buzz"}`,
 	}, {
-		name:  "Structs/UnknownFallback/DiscardUnknownMembers",
+		name:  name("Structs/UnknownFallback/DiscardUnknownMembers"),
 		mopts: MarshalOptions{DiscardUnknownMembers: true},
 		in: structUnknownRawValue{
 			A: 1,
@@ -1927,7 +1948,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"A":1,"B":2}`,
 	}, {
-		name: "Structs/UnknownFallback",
+		name: name("Structs/UnknownFallback"),
 		in: structUnknownRawValue{
 			A: 1,
 			X: RawValue(` { "fizz" : "buzz" } `),
@@ -1935,55 +1956,55 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"A":1,"B":2,"fizz":"buzz"}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/Other",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/Other"),
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"dupe":"","dupe":""}`),
 		},
 		want:    `{"dupe":""`,
 		wantErr: &SyntacticError{str: `duplicate name "dupe" in object`},
 	}, {
-		name:  "Structs/DuplicateName/NoCaseInlineRawValue/Other/AllowDuplicateNames",
+		name:  name("Structs/DuplicateName/NoCaseInlineRawValue/Other/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"dupe": "", "dupe": ""}`),
 		},
 		want: `{"dupe":"","dupe":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferent",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferent"),
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "AaA": "", "AAa": "", "AAA": ""}`),
 		},
 		want: `{"Aaa":"","AaA":"","AAa":"","AAA":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict"),
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "Aaa": ""}`),
 		},
 		want:    `{"Aaa":""`,
 		wantErr: &SyntacticError{str: `duplicate name "Aaa" in object`},
 	}, {
-		name:  "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict/AllowDuplicateNames",
+		name:  name("Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "Aaa": ""}`),
 		},
 		want: `{"Aaa":"","Aaa":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict"),
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "AaA": "", "aaa": ""}`),
 		},
 		want:    `{"Aaa":"","AaA":""`,
 		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
 	}, {
-		name:  "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict/AllowDuplicateNames",
+		name:  name("Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "AaA": "", "aaa": ""}`),
 		},
 		want: `{"Aaa":"","AaA":"","aaa":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferentWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/ExactDifferentWithField"),
 		in: structNoCaseInlineRawValue{
 			AAA: "x",
 			AaA: "x",
@@ -1991,7 +2012,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"AAA":"x","AaA":"x","Aaa":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/ExactConflictWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/ExactConflictWithField"),
 		in: structNoCaseInlineRawValue{
 			AAA: "x",
 			AaA: "x",
@@ -2000,7 +2021,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{"AAA":"x","AaA":"x"`,
 		wantErr: &SyntacticError{str: `duplicate name "AAA" in object`},
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflictWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflictWithField"),
 		in: structNoCaseInlineRawValue{
 			AAA: "x",
 			AaA: "x",
@@ -2009,14 +2030,14 @@ func TestMarshal(t *testing.T) {
 		want:    `{"AAA":"x","AaA":"x"`,
 		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferent",
+		name: name("Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferent"),
 		in: structNoCaseInlineMapStringAny{
 			X: jsonObject{"Aaa": "", "AaA": "", "AAa": "", "AAA": ""},
 		},
 		want:         `{"AAA":"","AAa":"","AaA":"","Aaa":""}`,
 		canonicalize: true,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferentWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferentWithField"),
 		in: structNoCaseInlineMapStringAny{
 			AAA: "x",
 			AaA: "x",
@@ -2024,7 +2045,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"AAA":"x","AaA":"x","Aaa":""}`,
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/ExactConflictWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineMapStringAny/ExactConflictWithField"),
 		in: structNoCaseInlineMapStringAny{
 			AAA: "x",
 			AaA: "x",
@@ -2033,7 +2054,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{"AAA":"x","AaA":"x"`,
 		wantErr: &SyntacticError{str: `duplicate name "AAA" in object`},
 	}, {
-		name: "Structs/DuplicateName/NoCaseInlineMapStringAny/NoCaseConflictWithField",
+		name: name("Structs/DuplicateName/NoCaseInlineMapStringAny/NoCaseConflictWithField"),
 		in: structNoCaseInlineMapStringAny{
 			AAA: "x",
 			AaA: "x",
@@ -2042,37 +2063,37 @@ func TestMarshal(t *testing.T) {
 		want:    `{"AAA":"x","AaA":"x"`,
 		wantErr: &SyntacticError{str: `duplicate name "aaa" in object`},
 	}, {
-		name:    "Structs/Invalid/Conflicting",
+		name:    name("Structs/Invalid/Conflicting"),
 		in:      structConflicting{},
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structConflictingType, Err: errors.New("Go struct fields A and B conflict over JSON object name \"conflict\"")},
 	}, {
-		name:    "Structs/Invalid/NoneExported",
+		name:    name("Structs/Invalid/NoneExported"),
 		in:      structNoneExported{},
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
 	}, {
-		name:    "Structs/Invalid/MalformedTag",
+		name:    name("Structs/Invalid/MalformedTag"),
 		in:      structMalformedTag{},
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structMalformedTagType, Err: errors.New("Go struct field Malformed has malformed `json` tag: invalid character '\"' at start of option (expecting Unicode letter or single quote)")},
 	}, {
-		name:    "Structs/Invalid/UnexportedTag",
+		name:    name("Structs/Invalid/UnexportedTag"),
 		in:      structUnexportedTag{},
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")},
 	}, {
-		name:    "Structs/Invalid/UnexportedEmbedded",
+		name:    name("Structs/Invalid/UnexportedEmbedded"),
 		in:      structUnexportedEmbedded{},
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
-		name:  "Structs/IgnoreInvalidFormat",
+		name:  name("Structs/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    struct{}{},
 		want:  `{}`,
 	}, {
-		name: "Slices/Interface",
+		name: name("Slices/Interface"),
 		in: []any{
 			false, true,
 			"hello", []byte("world"),
@@ -2082,12 +2103,12 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[false,true,"hello","d29ybGQ=",-32,-64,32,64,32.32,64.64]`,
 	}, {
-		name:    "Slices/Invalid/Channel",
+		name:    name("Slices/Invalid/Channel"),
 		in:      [](chan string){nil},
 		want:    `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name: "Slices/RecursiveSlice",
+		name: name("Slices/RecursiveSlice"),
 		in: recursiveSlice{
 			nil,
 			{},
@@ -2096,7 +2117,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[[],[],[[]],[[],[]]]`,
 	}, {
-		name: "Slices/CyclicSlice",
+		name: name("Slices/CyclicSlice"),
 		in: func() recursiveSlice {
 			s := recursiveSlice{{}}
 			s[0] = s
@@ -2105,82 +2126,82 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveSlice{}), Err: errors.New("encountered a cycle")},
 	}, {
-		name:  "Slices/IgnoreInvalidFormat",
+		name:  name("Slices/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    []string{"hello", "goodbye"},
 		want:  `["hello","goodbye"]`,
 	}, {
-		name: "Arrays/Empty",
+		name: name("Arrays/Empty"),
 		in:   [0]struct{}{},
 		want: `[]`,
 	}, {
-		name: "Arrays/Bool",
+		name: name("Arrays/Bool"),
 		in:   [2]bool{false, true},
 		want: `[false,true]`,
 	}, {
-		name: "Arrays/String",
+		name: name("Arrays/String"),
 		in:   [2]string{"hello", "goodbye"},
 		want: `["hello","goodbye"]`,
 	}, {
-		name: "Arrays/Bytes",
+		name: name("Arrays/Bytes"),
 		in:   [2][]byte{[]byte("hello"), []byte("goodbye")},
 		want: `["aGVsbG8=","Z29vZGJ5ZQ=="]`,
 	}, {
-		name: "Arrays/Int",
+		name: name("Arrays/Int"),
 		in:   [2]int64{math.MinInt64, math.MaxInt64},
 		want: `[-9223372036854775808,9223372036854775807]`,
 	}, {
-		name: "Arrays/Uint",
+		name: name("Arrays/Uint"),
 		in:   [2]uint64{0, math.MaxUint64},
 		want: `[0,18446744073709551615]`,
 	}, {
-		name: "Arrays/Float",
+		name: name("Arrays/Float"),
 		in:   [2]float64{-math.MaxFloat64, +math.MaxFloat64},
 		want: `[-1.7976931348623157e+308,1.7976931348623157e+308]`,
 	}, {
-		name:    "Arrays/Invalid/Channel",
+		name:    name("Arrays/Invalid/Channel"),
 		in:      new([1]chan string),
 		want:    `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name:  "Arrays/IgnoreInvalidFormat",
+		name:  name("Arrays/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    [2]string{"hello", "goodbye"},
 		want:  `["hello","goodbye"]`,
 	}, {
-		name: "Pointers/NilL0",
+		name: name("Pointers/NilL0"),
 		in:   (*int)(nil),
 		want: `null`,
 	}, {
-		name: "Pointers/NilL1",
+		name: name("Pointers/NilL1"),
 		in:   (**int)(new(*int)),
 		want: `null`,
 	}, {
-		name: "Pointers/Bool",
+		name: name("Pointers/Bool"),
 		in:   addr(addr(bool(true))),
 		want: `true`,
 	}, {
-		name: "Pointers/String",
+		name: name("Pointers/String"),
 		in:   addr(addr(string("string"))),
 		want: `"string"`,
 	}, {
-		name: "Pointers/Bytes",
+		name: name("Pointers/Bytes"),
 		in:   addr(addr([]byte("bytes"))),
 		want: `"Ynl0ZXM="`,
 	}, {
-		name: "Pointers/Int",
+		name: name("Pointers/Int"),
 		in:   addr(addr(int(-100))),
 		want: `-100`,
 	}, {
-		name: "Pointers/Uint",
+		name: name("Pointers/Uint"),
 		in:   addr(addr(uint(100))),
 		want: `100`,
 	}, {
-		name: "Pointers/Float",
+		name: name("Pointers/Float"),
 		in:   addr(addr(float64(3.14159))),
 		want: `3.14159`,
 	}, {
-		name: "Pointers/CyclicPointer",
+		name: name("Pointers/CyclicPointer"),
 		in: func() *recursivePointer {
 			p := new(recursivePointer)
 			p.P = p
@@ -2189,116 +2210,116 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePointer)(nil)), Err: errors.New("encountered a cycle")},
 	}, {
-		name:  "Pointers/IgnoreInvalidFormat",
+		name:  name("Pointers/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    addr(addr(bool(true))),
 		want:  `true`,
 	}, {
-		name: "Interfaces/Nil/Empty",
+		name: name("Interfaces/Nil/Empty"),
 		in:   [1]any{nil},
 		want: `[null]`,
 	}, {
-		name: "Interfaces/Nil/NonEmpty",
+		name: name("Interfaces/Nil/NonEmpty"),
 		in:   [1]io.Reader{nil},
 		want: `[null]`,
 	}, {
-		name:  "Interfaces/IgnoreInvalidFormat",
+		name:  name("Interfaces/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    [1]io.Reader{nil},
 		want:  `[null]`,
 	}, {
-		name: "Interfaces/Any",
+		name: name("Interfaces/Any"),
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}, [8]byte{}}},
 		want: `{"X":[null,false,"",0,{},[],"AAAAAAAAAAA="]}`,
 	}, {
-		name: "Interfaces/Any/Named",
+		name: name("Interfaces/Any/Named"),
 		in:   struct{ X namedAny }{[]namedAny{nil, false, "", 0.0, map[string]namedAny{}, []namedAny{}, [8]byte{}}},
 		want: `{"X":[null,false,"",0,{},[],"AAAAAAAAAAA="]}`,
 	}, {
-		name:  "Interfaces/Any/Stringified",
+		name:  name("Interfaces/Any/Stringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in:    struct{ X any }{0.0},
 		want:  `{"X":"0"}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/Any",
+		name: name("Interfaces/Any/MarshalFunc/Any"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v any) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `"called"`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/Bool",
+		name: name("Interfaces/Any/MarshalFunc/Bool"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,"called","",0,{},[]]}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/String",
+		name: name("Interfaces/Any/MarshalFunc/String"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"called",0,{},[]]}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/Float64",
+		name: name("Interfaces/Any/MarshalFunc/Float64"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v float64) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"","called",{},[]]}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/MapStringAny",
+		name: name("Interfaces/Any/MarshalFunc/MapStringAny"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v map[string]any) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"",0,"called",[]]}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/SliceAny",
+		name: name("Interfaces/Any/MarshalFunc/SliceAny"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v []any) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Interfaces/Any/MarshalFunc/Bytes",
+		name: name("Interfaces/Any/MarshalFunc/Bytes"),
 		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v [8]byte) ([]byte, error) {
 			return []byte(`"called"`), nil
 		})},
 		in:   struct{ X any }{[8]byte{}},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Interfaces/Any/Maps/Empty",
+		name: name("Interfaces/Any/Maps/Empty"),
 		in:   struct{ X any }{map[string]any{}},
 		want: `{"X":{}}`,
 	}, {
-		name:  "Interfaces/Any/Maps/Empty/Multiline",
+		name:  name("Interfaces/Any/Maps/Empty/Multiline"),
 		eopts: EncodeOptions{multiline: true},
 		in:    struct{ X any }{map[string]any{}},
 		want:  "{\n\"X\": {}\n}",
 	}, {
-		name: "Interfaces/Any/Maps/NonEmpty",
+		name: name("Interfaces/Any/Maps/NonEmpty"),
 		in:   struct{ X any }{map[string]any{"fizz": "buzz"}},
 		want: `{"X":{"fizz":"buzz"}}`,
 	}, {
-		name:    "Interfaces/Any/Maps/RejectInvalidUTF8",
+		name:    name("Interfaces/Any/Maps/RejectInvalidUTF8"),
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{`,
 		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
 	}, {
-		name:    "Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames",
+		name:    name("Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: true},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
 		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
 	}, {
-		name:  "Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames",
+		name:  name("Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
 		in:    struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:  `{"X":{"�":"","�":""}}`,
 	}, {
-		name: "Interfaces/Any/Maps/Cyclic",
+		name: name("Interfaces/Any/Maps/Cyclic"),
 		in: func() any {
 			m := map[string]any{}
 			m[""] = m
@@ -2307,20 +2328,20 @@ func TestMarshal(t *testing.T) {
 		want:    `{"X"` + strings.Repeat(`:{""`, startDetectingCyclesAfter),
 		wantErr: &SemanticError{action: "marshal", GoType: mapStringAnyType, Err: errors.New("encountered a cycle")},
 	}, {
-		name: "Interfaces/Any/Slices/Empty",
+		name: name("Interfaces/Any/Slices/Empty"),
 		in:   struct{ X any }{[]any{}},
 		want: `{"X":[]}`,
 	}, {
-		name:  "Interfaces/Any/Slices/Empty/Multiline",
+		name:  name("Interfaces/Any/Slices/Empty/Multiline"),
 		eopts: EncodeOptions{multiline: true},
 		in:    struct{ X any }{[]any{}},
 		want:  "{\n\"X\": []\n}",
 	}, {
-		name: "Interfaces/Any/Slices/NonEmpty",
+		name: name("Interfaces/Any/Slices/NonEmpty"),
 		in:   struct{ X any }{[]any{"fizz", "buzz"}},
 		want: `{"X":["fizz","buzz"]}`,
 	}, {
-		name: "Interfaces/Any/Slices/Cyclic",
+		name: name("Interfaces/Any/Slices/Cyclic"),
 		in: func() any {
 			s := make([]any, 1)
 			s[0] = s
@@ -2329,54 +2350,54 @@ func TestMarshal(t *testing.T) {
 		want:    `{"X":` + strings.Repeat(`[`, startDetectingCyclesAfter),
 		wantErr: &SemanticError{action: "marshal", GoType: sliceAnyType, Err: errors.New("encountered a cycle")},
 	}, {
-		name: "Methods/NilPointer",
+		name: name("Methods/NilPointer"),
 		in:   struct{ X *allMethods }{X: (*allMethods)(nil)}, // method should not be called
 		want: `{"X":null}`,
 	}, {
 		// NOTE: Fixes https://github.com/dominikh/go-tools/issues/975.
-		name: "Methods/NilInterface",
+		name: name("Methods/NilInterface"),
 		in:   struct{ X MarshalerV2 }{X: (*allMethods)(nil)}, // method should not be called
 		want: `{"X":null}`,
 	}, {
-		name: "Methods/AllMethods",
+		name: name("Methods/AllMethods"),
 		in:   struct{ X *allMethods }{X: &allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/AllMethodsExceptJSONv2",
+		name: name("Methods/AllMethodsExceptJSONv2"),
 		in:   struct{ X *allMethodsExceptJSONv2 }{X: &allMethodsExceptJSONv2{allMethods: allMethods{method: "MarshalJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/AllMethodsExceptJSONv1",
+		name: name("Methods/AllMethodsExceptJSONv1"),
 		in:   struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/AllMethodsExceptText",
+		name: name("Methods/AllMethodsExceptText"),
 		in:   struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/OnlyMethodJSONv2",
+		name: name("Methods/OnlyMethodJSONv2"),
 		in:   struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/OnlyMethodJSONv1",
+		name: name("Methods/OnlyMethodJSONv1"),
 		in:   struct{ X *onlyMethodJSONv1 }{X: &onlyMethodJSONv1{allMethods: allMethods{method: "MarshalJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/OnlyMethodText",
+		name: name("Methods/OnlyMethodText"),
 		in:   struct{ X *onlyMethodText }{X: &onlyMethodText{allMethods: allMethods{method: "MarshalText", value: []byte(`hello`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		name: "Methods/IP",
+		name: name("Methods/IP"),
 		in:   net.IPv4(192, 168, 0, 100),
 		want: `"192.168.0.100"`,
 	}, {
 		// NOTE: Fixes https://golang.org/issue/46516.
-		name: "Methods/Anonymous",
+		name: name("Methods/Anonymous"),
 		in:   struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
 		// NOTE: Fixes https://golang.org/issue/22967.
-		name: "Methods/Addressable",
+		name: name("Methods/Addressable"),
 		in: struct {
 			V allMethods
 			M map[string]allMethods
@@ -2389,35 +2410,35 @@ func TestMarshal(t *testing.T) {
 		want: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
 	}, {
 		// NOTE: Fixes https://golang.org/issue/29732.
-		name:         "Methods/MapKey/JSONv2",
+		name:         name("Methods/MapKey/JSONv2"),
 		in:           map[structMethodJSONv2]string{{"k1"}: "v1", {"k2"}: "v2"},
 		want:         `{"k1":"v1","k2":"v2"}`,
 		canonicalize: true,
 	}, {
 		// NOTE: Fixes https://golang.org/issue/29732.
-		name:         "Methods/MapKey/JSONv1",
+		name:         name("Methods/MapKey/JSONv1"),
 		in:           map[structMethodJSONv1]string{{"k1"}: "v1", {"k2"}: "v2"},
 		want:         `{"k1":"v1","k2":"v2"}`,
 		canonicalize: true,
 	}, {
-		name:         "Methods/MapKey/Text",
+		name:         name("Methods/MapKey/Text"),
 		in:           map[structMethodText]string{{"k1"}: "v1", {"k2"}: "v2"},
 		want:         `{"k1":"v1","k2":"v2"}`,
 		canonicalize: true,
 	}, {
-		name: "Methods/Invalid/JSONv2/Error",
+		name: name("Methods/Invalid/JSONv2/Error"),
 		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
 			return errors.New("some error")
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
-		name: "Methods/Invalid/JSONv2/TooFew",
+		name: name("Methods/Invalid/JSONv2/TooFew"),
 		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
 			return nil // do nothing
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
 	}, {
-		name: "Methods/Invalid/JSONv2/TooMany",
+		name: name("Methods/Invalid/JSONv2/TooMany"),
 		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
 			enc.WriteToken(Null)
 			enc.WriteToken(Null)
@@ -2426,49 +2447,49 @@ func TestMarshal(t *testing.T) {
 		want:    `nullnull`,
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
 	}, {
-		name: "Methods/Invalid/JSONv2/SkipFunc",
+		name: name("Methods/Invalid/JSONv2/SkipFunc"),
 		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
 			return SkipFunc
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("marshal method cannot be skipped")},
 	}, {
-		name: "Methods/Invalid/JSONv1/Error",
+		name: name("Methods/Invalid/JSONv1/Error"),
 		in: marshalJSONv1Func(func() ([]byte, error) {
 			return nil, errors.New("some error")
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv1FuncType, Err: errors.New("some error")},
 	}, {
-		name: "Methods/Invalid/JSONv1/Syntax",
+		name: name("Methods/Invalid/JSONv1/Syntax"),
 		in: marshalJSONv1Func(func() ([]byte, error) {
 			return []byte("invalid"), nil
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError([]byte("i"), "at start of value")},
 	}, {
-		name: "Methods/Invalid/JSONv1/SkipFunc",
+		name: name("Methods/Invalid/JSONv1/SkipFunc"),
 		in: marshalJSONv1Func(func() ([]byte, error) {
 			return nil, SkipFunc
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv1FuncType, Err: errors.New("marshal method cannot be skipped")},
 	}, {
-		name: "Methods/Invalid/Text/Error",
+		name: name("Methods/Invalid/Text/Error"),
 		in: marshalTextFunc(func() ([]byte, error) {
 			return nil, errors.New("some error")
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: errors.New("some error")},
 	}, {
-		name: "Methods/Invalid/Text/UTF8",
+		name: name("Methods/Invalid/Text/UTF8"),
 		in: marshalTextFunc(func() ([]byte, error) {
 			return []byte("\xde\xad\xbe\xef"), nil
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: &SyntacticError{str: "invalid UTF-8 within string"}},
 	}, {
-		name: "Methods/Invalid/Text/SkipFunc",
+		name: name("Methods/Invalid/Text/SkipFunc"),
 		in: marshalTextFunc(func() ([]byte, error) {
 			return nil, SkipFunc
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: errors.New("marshal method cannot be skipped")},
 	}, {
-		name: "Methods/Invalid/MapKey/JSONv2/Syntax",
+		name: name("Methods/Invalid/MapKey/JSONv2/Syntax"),
 		in: map[any]string{
 			addr(marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
 				return enc.WriteToken(Null)
@@ -2477,7 +2498,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errMissingName},
 	}, {
-		name: "Methods/Invalid/MapKey/JSONv1/Syntax",
+		name: name("Methods/Invalid/MapKey/JSONv1/Syntax"),
 		in: map[any]string{
 			addr(marshalJSONv1Func(func() ([]byte, error) {
 				return []byte(`null`), nil
@@ -2486,7 +2507,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName},
 	}, {
-		name: "Functions/Bool/V1",
+		name: name("Functions/Bool/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
 				return []byte(`"called"`), nil
@@ -2495,7 +2516,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/NamedBool/V1/NoMatch",
+		name: name("Functions/NamedBool/V1/NoMatch"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
 				return nil, errors.New("must not be called")
@@ -2504,7 +2525,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `true`,
 	}, {
-		name: "Functions/NamedBool/V1/Match",
+		name: name("Functions/NamedBool/V1/Match"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
 				return []byte(`"called"`), nil
@@ -2513,7 +2534,7 @@ func TestMarshal(t *testing.T) {
 		in:   namedBool(true),
 		want: `"called"`,
 	}, {
-		name: "Functions/PointerBool/V1/Match",
+		name: name("Functions/PointerBool/V1/Match"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *bool) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
@@ -2523,7 +2544,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Bool/V2",
+		name: name("Functions/Bool/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				return enc.WriteToken(String("called"))
@@ -2532,7 +2553,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/NamedBool/V2/NoMatch",
+		name: name("Functions/NamedBool/V2/NoMatch"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
 				return errors.New("must not be called")
@@ -2541,7 +2562,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `true`,
 	}, {
-		name: "Functions/NamedBool/V2/Match",
+		name: name("Functions/NamedBool/V2/Match"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
 				return enc.WriteToken(String("called"))
@@ -2550,7 +2571,7 @@ func TestMarshal(t *testing.T) {
 		in:   namedBool(true),
 		want: `"called"`,
 	}, {
-		name: "Functions/PointerBool/V2/Match",
+		name: name("Functions/PointerBool/V2/Match"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
 				_ = *v // must be a non-nil pointer
@@ -2560,21 +2581,21 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Bool/Empty1/NoMatch",
+		name: name("Functions/Bool/Empty1/NoMatch"),
 		mopts: MarshalOptions{
 			Marshalers: new(Marshalers),
 		},
 		in:   true,
 		want: `true`,
 	}, {
-		name: "Functions/Bool/Empty2/NoMatch",
+		name: name("Functions/Bool/Empty2/NoMatch"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(),
 		},
 		in:   true,
 		want: `true`,
 	}, {
-		name: "Functions/Bool/V1/DirectError",
+		name: name("Functions/Bool/V1/DirectError"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
 				return nil, errors.New("some error")
@@ -2583,7 +2604,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
 	}, {
-		name: "Functions/Bool/V1/SkipError",
+		name: name("Functions/Bool/V1/SkipError"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
 				return nil, SkipFunc
@@ -2592,7 +2613,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("marshal function of type func(T) ([]byte, error) cannot be skipped")},
 	}, {
-		name: "Functions/Bool/V1/InvalidValue",
+		name: name("Functions/Bool/V1/InvalidValue"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
 				return []byte("invalid"), nil
@@ -2601,7 +2622,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: &SyntacticError{str: "invalid character 'i' at start of value"}},
 	}, {
-		name: "Functions/Bool/V2/DirectError",
+		name: name("Functions/Bool/V2/DirectError"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				return errors.New("some error")
@@ -2610,7 +2631,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
 	}, {
-		name: "Functions/Bool/V2/TooFew",
+		name: name("Functions/Bool/V2/TooFew"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				return nil
@@ -2619,7 +2640,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
 	}, {
-		name: "Functions/Bool/V2/TooMany",
+		name: name("Functions/Bool/V2/TooMany"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				enc.WriteValue([]byte(`"hello"`))
@@ -2631,7 +2652,7 @@ func TestMarshal(t *testing.T) {
 		want:    `"hello""world"`,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
 	}, {
-		name: "Functions/Bool/V2/Skipped",
+		name: name("Functions/Bool/V2/Skipped"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				return SkipFunc
@@ -2640,7 +2661,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `true`,
 	}, {
-		name: "Functions/Bool/V2/ProcessBeforeSkip",
+		name: name("Functions/Bool/V2/ProcessBeforeSkip"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				enc.WriteValue([]byte(`"hello"`))
@@ -2651,7 +2672,7 @@ func TestMarshal(t *testing.T) {
 		want:    `"hello"`,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must not write any JSON tokens when skipping")},
 	}, {
-		name: "Functions/Bool/V2/WrappedSkipError",
+		name: name("Functions/Bool/V2/WrappedSkipError"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
@@ -2660,7 +2681,7 @@ func TestMarshal(t *testing.T) {
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: fmt.Errorf("wrap: %w", SkipFunc)},
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V1",
+		name: name("Functions/Map/Key/NoCaseString/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`"called"`), nil
@@ -2669,7 +2690,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/PointerNoCaseString/V1",
+		name: name("Functions/Map/Key/PointerNoCaseString/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
@@ -2679,7 +2700,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/TextMarshaler/V1",
+		name: name("Functions/Map/Key/TextMarshaler/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
@@ -2689,7 +2710,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V1/InvalidValue",
+		name: name("Functions/Map/Key/NoCaseString/V1/InvalidValue"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`null`), nil
@@ -2699,7 +2720,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V2/InvalidKind",
+		name: name("Functions/Map/Key/NoCaseString/V2/InvalidKind"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`null`), nil
@@ -2709,7 +2730,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
 	}, {
-		name: "Functions/Map/Key/String/V1/DuplicateName",
+		name: name("Functions/Map/Key/String/V1/DuplicateName"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
 				return []byte(`"name"`), nil
@@ -2719,7 +2740,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{"name":"name"`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: &SyntacticError{str: `duplicate name "name" in object`}},
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V2",
+		name: name("Functions/Map/Key/NoCaseString/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2728,7 +2749,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/PointerNoCaseString/V2",
+		name: name("Functions/Map/Key/PointerNoCaseString/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
 				_ = *v // must be a non-nil pointer
@@ -2738,7 +2759,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/TextMarshaler/V2",
+		name: name("Functions/Map/Key/TextMarshaler/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
@@ -2748,7 +2769,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V2/InvalidToken",
+		name: name("Functions/Map/Key/NoCaseString/V2/InvalidToken"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
 				return enc.WriteToken(Null)
@@ -2758,7 +2779,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V2/InvalidValue",
+		name: name("Functions/Map/Key/NoCaseString/V2/InvalidValue"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`null`))
@@ -2768,7 +2789,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
 	}, {
-		name: "Functions/Map/Value/NoCaseString/V1",
+		name: name("Functions/Map/Value/NoCaseString/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`"called"`), nil
@@ -2777,7 +2798,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Functions/Map/Value/PointerNoCaseString/V1",
+		name: name("Functions/Map/Value/PointerNoCaseString/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
@@ -2787,7 +2808,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Functions/Map/Value/TextMarshaler/V1",
+		name: name("Functions/Map/Value/TextMarshaler/V1"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
@@ -2797,7 +2818,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Functions/Map/Value/NoCaseString/V2",
+		name: name("Functions/Map/Value/NoCaseString/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2806,7 +2827,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Functions/Map/Value/PointerNoCaseString/V2",
+		name: name("Functions/Map/Value/PointerNoCaseString/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
 				_ = *v // must be a non-nil pointer
@@ -2816,7 +2837,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Functions/Map/Value/TextMarshaler/V2",
+		name: name("Functions/Map/Value/TextMarshaler/V2"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
@@ -2826,7 +2847,7 @@ func TestMarshal(t *testing.T) {
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
-		name: "Funtions/Struct/Fields",
+		name: name("Funtions/Struct/Fields"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
@@ -2846,7 +2867,7 @@ func TestMarshal(t *testing.T) {
 		in:   structScalars{},
 		want: `{"Bool":"called1","String":"called2","Bytes":"called3","Int":"called4","Uint":0,"Float":0}`,
 	}, {
-		name: "Functions/Struct/OmitEmpty",
+		name: name("Functions/Struct/OmitEmpty"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
@@ -2878,7 +2899,7 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitEmptyAll{},
 		want: `{"String":"called1","MapNonEmpty":"called2","Slice":"called3","SliceNonEmpty":"called4"}`,
 	}, {
-		name: "Functions/Struct/OmitZero",
+		name: name("Functions/Struct/OmitZero"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
@@ -2898,7 +2919,7 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
-		name: "Functions/Struct/Inlined",
+		name: name("Functions/Struct/Inlined"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(v structInlinedL1) ([]byte, error) {
@@ -2912,7 +2933,7 @@ func TestMarshal(t *testing.T) {
 		in:   structInlined{},
 		want: `{"D":""}`,
 	}, {
-		name: "Functions/Slice/Elem",
+		name: name("Functions/Slice/Elem"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
 				return []byte(`"` + strconv.FormatBool(v) + `"`), nil
@@ -2921,7 +2942,7 @@ func TestMarshal(t *testing.T) {
 		in:   []bool{true, false},
 		want: `["true","false"]`,
 	}, {
-		name: "Functions/Array/Elem",
+		name: name("Functions/Array/Elem"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
 				return enc.WriteValue([]byte(`"` + strconv.FormatBool(*v) + `"`))
@@ -2930,7 +2951,7 @@ func TestMarshal(t *testing.T) {
 		in:   [2]bool{true, false},
 		want: `["true","false"]`,
 	}, {
-		name: "Functions/Pointer/Nil",
+		name: name("Functions/Pointer/Nil"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
 				panic("should not be called")
@@ -2939,7 +2960,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X *bool }{nil},
 		want: `{"X":null}`,
 	}, {
-		name: "Functions/Pointer/NonNil",
+		name: name("Functions/Pointer/NonNil"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2948,7 +2969,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X *bool }{addr(false)},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Functions/Interface/Nil",
+		name: name("Functions/Interface/Nil"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
 				panic("should not be called")
@@ -2957,7 +2978,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X fmt.Stringer }{nil},
 		want: `{"X":null}`,
 	}, {
-		name: "Functions/Interface/NonNil/MatchInterface",
+		name: name("Functions/Interface/NonNil/MatchInterface"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2966,7 +2987,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Functions/Interface/NonNil/MatchConcrete",
+		name: name("Functions/Interface/NonNil/MatchConcrete"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v valueStringer) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2975,7 +2996,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Functions/Interface/NonNil/MatchPointer",
+		name: name("Functions/Interface/NonNil/MatchPointer"),
 		mopts: MarshalOptions{
 			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *valueStringer) error {
 				return enc.WriteValue([]byte(`"called"`))
@@ -2984,7 +3005,7 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
 	}, {
-		name: "Functions/Interface/Any",
+		name: name("Functions/Interface/Any"),
 		in: []any{
 			nil,                           // nil
 			valueStringer{},               // T
@@ -3204,7 +3225,7 @@ func TestMarshal(t *testing.T) {
 			}(),
 		},
 	}, {
-		name: "Functions/Precedence/V1First",
+		name: name("Functions/Precedence/V1First"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(bool) ([]byte, error) {
@@ -3218,7 +3239,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Precedence/V2First",
+		name: name("Functions/Precedence/V2First"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
@@ -3232,7 +3253,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Precedence/V2Skipped",
+		name: name("Functions/Precedence/V2Skipped"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
@@ -3246,7 +3267,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Precedence/NestedFirst",
+		name: name("Functions/Precedence/NestedFirst"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				NewMarshalers(
@@ -3262,7 +3283,7 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Functions/Precedence/NestedLast",
+		name: name("Functions/Precedence/NestedLast"),
 		mopts: MarshalOptions{
 			Marshalers: NewMarshalers(
 				MarshalFuncV1(func(bool) ([]byte, error) {
@@ -3278,14 +3299,14 @@ func TestMarshal(t *testing.T) {
 		in:   true,
 		want: `"called"`,
 	}, {
-		name: "Duration/Zero",
+		name: name("Duration/Zero"),
 		in: struct {
 			D1 time.Duration
 			D2 time.Duration `json:",format:nanos"`
 		}{0, 0},
 		want: `{"D1":"0s","D2":0}`,
 	}, {
-		name: "Duration/Positive",
+		name: name("Duration/Positive"),
 		in: struct {
 			D1 time.Duration
 			D2 time.Duration `json:",format:nanos"`
@@ -3295,7 +3316,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"D1":"34293h33m9.123456789s","D2":123456789123456789}`,
 	}, {
-		name: "Duration/Negative",
+		name: name("Duration/Negative"),
 		in: struct {
 			D1 time.Duration
 			D2 time.Duration `json:",format:nanos"`
@@ -3305,19 +3326,19 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
 	}, {
-		name: "Duration/Format/Invalid",
+		name: name("Duration/Format/Invalid"),
 		in: struct {
 			D time.Duration `json:",format:invalid"`
 		}{},
 		want:    `{"D"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:  "Duration/IgnoreInvalidFormat",
+		name:  name("Duration/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    time.Duration(0),
 		want:  `"0s"`,
 	}, {
-		name: "Time/Zero",
+		name: name("Time/Zero"),
 		in: struct {
 			T1 time.Time
 			T2 time.Time `json:",format:RFC822"`
@@ -3335,7 +3356,7 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T5":"0001-01-01T00:00:00Z"}`,
 	}, {
-		name:  "Time/Format",
+		name:  name("Time/Format"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structTimeFormat{
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
@@ -3378,14 +3399,14 @@ func TestMarshal(t *testing.T) {
 	"T18": "\"weird\"1234"
 }`,
 	}, {
-		name: "Time/Format/Invalid",
+		name: name("Time/Format/Invalid"),
 		in: struct {
 			T time.Time `json:",format:UndefinedConstant"`
 		}{},
 		want:    `{"T"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
 	}, {
-		name: "Time/Format/Overflow",
+		name: name("Time/Format/Overflow"),
 		in: struct {
 			T1 time.Time
 			T2 time.Time
@@ -3396,7 +3417,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{"T1":"9999-12-31T23:59:59Z","T2"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year 10000 outside of range [0,9999]`)},
 	}, {
-		name: "Time/Format/Underflow",
+		name: name("Time/Format/Underflow"),
 		in: struct {
 			T1 time.Time
 			T2 time.Time
@@ -3407,14 +3428,14 @@ func TestMarshal(t *testing.T) {
 		want:    `{"T1":"0000-01-01T00:00:00Z","T2"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year -1 outside of range [0,9999]`)},
 	}, {
-		name:  "Time/IgnoreInvalidFormat",
+		name:  name("Time/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		want:  `"2000-01-01T00:00:00Z"`,
 	}}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name.name, func(t *testing.T) {
 			var got []byte
 			var gotErr error
 			if tt.useWriter {
@@ -3428,10 +3449,10 @@ func TestMarshal(t *testing.T) {
 				(*RawValue)(&got).Canonicalize()
 			}
 			if string(got) != tt.want {
-				t.Errorf("Marshal output mismatch:\ngot  %s\nwant %s", got, tt.want)
+				t.Errorf("%s: Marshal output mismatch:\ngot  %s\nwant %s", tt.name.where, got, tt.want)
 			}
 			if !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("Marshal error mismatch:\ngot  %v\nwant %v", gotErr, tt.wantErr)
+				t.Errorf("%s: Marshal error mismatch:\ngot  %v\nwant %v", tt.name.where, gotErr, tt.wantErr)
 			}
 		})
 	}
@@ -3439,7 +3460,7 @@ func TestMarshal(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	tests := []struct {
-		name    string
+		name    testName
 		dopts   DecodeOptions
 		uopts   UnmarshalOptions
 		inBuf   string
@@ -3447,168 +3468,168 @@ func TestUnmarshal(t *testing.T) {
 		want    any
 		wantErr error
 	}{{
-		name:    "Nil",
+		name:    name("Nil"),
 		inBuf:   `null`,
 		wantErr: &SemanticError{action: "unmarshal", Err: errors.New("value must be passed as a non-nil pointer reference")},
 	}, {
-		name:    "NilPointer",
+		name:    name("NilPointer"),
 		inBuf:   `null`,
 		inVal:   (*string)(nil),
 		want:    (*string)(nil),
 		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New("value must be passed as a non-nil pointer reference")},
 	}, {
-		name:    "NonPointer",
+		name:    name("NonPointer"),
 		inBuf:   `null`,
 		inVal:   "unchanged",
 		want:    "unchanged",
 		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New("value must be passed as a non-nil pointer reference")},
 	}, {
-		name:    "Bools/TrailingJunk",
+		name:    name("Bools/TrailingJunk"),
 		inBuf:   `falsetrue`,
 		inVal:   addr(true),
 		want:    addr(false),
 		wantErr: newInvalidCharacterError([]byte("t"), "after top-level value"),
 	}, {
-		name:  "Bools/Null",
+		name:  name("Bools/Null"),
 		inBuf: `null`,
 		inVal: addr(true),
 		want:  addr(false),
 	}, {
-		name:  "Bools",
+		name:  name("Bools"),
 		inBuf: `[null,false,true]`,
 		inVal: new([]bool),
 		want:  addr([]bool{false, false, true}),
 	}, {
-		name:  "Bools/Named",
+		name:  name("Bools/Named"),
 		inBuf: `[null,false,true]`,
 		inVal: new([]namedBool),
 		want:  addr([]namedBool{false, false, true}),
 	}, {
-		name:    "Bools/Invalid/StringifiedFalse",
+		name:    name("Bools/Invalid/StringifiedFalse"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"false"`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
-		name:    "Bools/Invalid/StringifiedTrue",
+		name:    name("Bools/Invalid/StringifiedTrue"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"true"`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
-		name:    "Bools/Invalid/Number",
+		name:    name("Bools/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: boolType},
 	}, {
-		name:    "Bools/Invalid/String",
+		name:    name("Bools/Invalid/String"),
 		inBuf:   `""`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
-		name:    "Bools/Invalid/Object",
+		name:    name("Bools/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: boolType},
 	}, {
-		name:    "Bools/Invalid/Array",
+		name:    name("Bools/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: boolType},
 	}, {
-		name:  "Bools/IgnoreInvalidFormat",
+		name:  name("Bools/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `false`,
 		inVal: addr(true),
 		want:  addr(false),
 	}, {
-		name:  "Strings/Null",
+		name:  name("Strings/Null"),
 		inBuf: `null`,
 		inVal: addr("something"),
 		want:  addr(""),
 	}, {
-		name:  "Strings",
+		name:  name("Strings"),
 		inBuf: `[null,"","hello","世界"]`,
 		inVal: new([]string),
 		want:  addr([]string{"", "", "hello", "世界"}),
 	}, {
-		name:  "Strings/Escaped",
+		name:  name("Strings/Escaped"),
 		inBuf: `[null,"","\u0068\u0065\u006c\u006c\u006f","\u4e16\u754c"]`,
 		inVal: new([]string),
 		want:  addr([]string{"", "", "hello", "世界"}),
 	}, {
-		name:  "Strings/Named",
+		name:  name("Strings/Named"),
 		inBuf: `[null,"","hello","世界"]`,
 		inVal: new([]namedString),
 		want:  addr([]namedString{"", "", "hello", "世界"}),
 	}, {
-		name:    "Strings/Invalid/False",
+		name:    name("Strings/Invalid/False"),
 		inBuf:   `false`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 'f', GoType: stringType},
 	}, {
-		name:    "Strings/Invalid/True",
+		name:    name("Strings/Invalid/True"),
 		inBuf:   `true`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: stringType},
 	}, {
-		name:    "Strings/Invalid/Object",
+		name:    name("Strings/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: stringType},
 	}, {
-		name:    "Strings/Invalid/Array",
+		name:    name("Strings/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr("nochange"),
 		want:    addr("nochange"),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: stringType},
 	}, {
-		name:  "Strings/IgnoreInvalidFormat",
+		name:  name("Strings/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `"hello"`,
 		inVal: addr("goodbye"),
 		want:  addr("hello"),
 	}, {
-		name:  "Bytes/Null",
+		name:  name("Bytes/Null"),
 		inBuf: `null`,
 		inVal: addr([]byte("something")),
 		want:  addr([]byte(nil)),
 	}, {
-		name:  "Bytes",
+		name:  name("Bytes"),
 		inBuf: `[null,"","AQ==","AQI=","AQID"]`,
 		inVal: new([][]byte),
 		want:  addr([][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
-		name:  "Bytes/Large",
+		name:  name("Bytes/Large"),
 		inBuf: `"dGhlIHF1aWNrIGJyb3duIGZveCBqdW1wZWQgb3ZlciB0aGUgbGF6eSBkb2cgYW5kIGF0ZSB0aGUgaG9tZXdvcmsgdGhhdCBJIHNwZW50IHNvIG11Y2ggdGltZSBvbi4="`,
 		inVal: new([]byte),
 		want:  addr([]byte("the quick brown fox jumped over the lazy dog and ate the homework that I spent so much time on.")),
 	}, {
-		name:  "Bytes/Reuse",
+		name:  name("Bytes/Reuse"),
 		inBuf: `"AQID"`,
 		inVal: addr([]byte("changed")),
 		want:  addr([]byte{1, 2, 3}),
 	}, {
-		name:  "Bytes/Escaped",
+		name:  name("Bytes/Escaped"),
 		inBuf: `[null,"","\u0041\u0051\u003d\u003d","\u0041\u0051\u0049\u003d","\u0041\u0051\u0049\u0044"]`,
 		inVal: new([][]byte),
 		want:  addr([][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
-		name:  "Bytes/Named",
+		name:  name("Bytes/Named"),
 		inBuf: `[null,"","AQ==","AQI=","AQID"]`,
 		inVal: new([]namedBytes),
 		want:  addr([]namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
-		name:  "Bytes/NotStringified",
+		name:  name("Bytes/NotStringified"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `[null,"","AQ==","AQI=","AQID"]`,
 		inVal: new([][]byte),
@@ -3616,24 +3637,24 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a slice of uints.
-		name:  "Bytes/Invariant",
+		name:  name("Bytes/Invariant"),
 		inBuf: `[null,[],[1],[1,2],[1,2,3]]`,
 		inVal: new([][]namedByte),
 		want:  addr([][]namedByte{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
 		// NOTE: This differs in behavior from v1,
 		// but keeps the representation of slices and arrays more consistent.
-		name:  "Bytes/ByteArray",
+		name:  name("Bytes/ByteArray"),
 		inBuf: `"aGVsbG8="`,
 		inVal: new([5]byte),
 		want:  addr([5]byte{'h', 'e', 'l', 'l', 'o'}),
 	}, {
-		name:  "Bytes/ByteArray0/Valid",
+		name:  name("Bytes/ByteArray0/Valid"),
 		inBuf: `""`,
 		inVal: new([0]byte),
 		want:  addr([0]byte{}),
 	}, {
-		name:  "Bytes/ByteArray0/Invalid",
+		name:  name("Bytes/ByteArray0/Invalid"),
 		inBuf: `"A"`,
 		inVal: new([0]byte),
 		want:  addr([0]byte{}),
@@ -3642,18 +3663,18 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/ByteArray0/Overflow",
+		name:    name("Bytes/ByteArray0/Overflow"),
 		inBuf:   `"AA=="`,
 		inVal:   new([0]byte),
 		want:    addr([0]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array0ByteType, Err: errors.New("decoded base64 length of 1 mismatches array length of 0")},
 	}, {
-		name:  "Bytes/ByteArray1/Valid",
+		name:  name("Bytes/ByteArray1/Valid"),
 		inBuf: `"AQ=="`,
 		inVal: new([1]byte),
 		want:  addr([1]byte{1}),
 	}, {
-		name:  "Bytes/ByteArray1/Invalid",
+		name:  name("Bytes/ByteArray1/Invalid"),
 		inBuf: `"$$=="`,
 		inVal: new([1]byte),
 		want:  addr([1]byte{}),
@@ -3662,24 +3683,24 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/ByteArray1/Underflow",
+		name:    name("Bytes/ByteArray1/Underflow"),
 		inBuf:   `""`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1ByteType, Err: errors.New("decoded base64 length of 0 mismatches array length of 1")},
 	}, {
-		name:    "Bytes/ByteArray1/Overflow",
+		name:    name("Bytes/ByteArray1/Overflow"),
 		inBuf:   `"AQI="`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1ByteType, Err: errors.New("decoded base64 length of 2 mismatches array length of 1")},
 	}, {
-		name:  "Bytes/ByteArray2/Valid",
+		name:  name("Bytes/ByteArray2/Valid"),
 		inBuf: `"AQI="`,
 		inVal: new([2]byte),
 		want:  addr([2]byte{1, 2}),
 	}, {
-		name:  "Bytes/ByteArray2/Invalid",
+		name:  name("Bytes/ByteArray2/Invalid"),
 		inBuf: `"$$$="`,
 		inVal: new([2]byte),
 		want:  addr([2]byte{}),
@@ -3688,24 +3709,24 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/ByteArray2/Underflow",
+		name:    name("Bytes/ByteArray2/Underflow"),
 		inBuf:   `"AQ=="`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array2ByteType, Err: errors.New("decoded base64 length of 1 mismatches array length of 2")},
 	}, {
-		name:    "Bytes/ByteArray2/Overflow",
+		name:    name("Bytes/ByteArray2/Overflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array2ByteType, Err: errors.New("decoded base64 length of 3 mismatches array length of 2")},
 	}, {
-		name:  "Bytes/ByteArray3/Valid",
+		name:  name("Bytes/ByteArray3/Valid"),
 		inBuf: `"AQID"`,
 		inVal: new([3]byte),
 		want:  addr([3]byte{1, 2, 3}),
 	}, {
-		name:  "Bytes/ByteArray3/Invalid",
+		name:  name("Bytes/ByteArray3/Invalid"),
 		inBuf: `"$$$$"`,
 		inVal: new([3]byte),
 		want:  addr([3]byte{}),
@@ -3714,24 +3735,24 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/ByteArray3/Underflow",
+		name:    name("Bytes/ByteArray3/Underflow"),
 		inBuf:   `"AQI="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array3ByteType, Err: errors.New("decoded base64 length of 2 mismatches array length of 3")},
 	}, {
-		name:    "Bytes/ByteArray3/Overflow",
+		name:    name("Bytes/ByteArray3/Overflow"),
 		inBuf:   `"AQIDAQ=="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array3ByteType, Err: errors.New("decoded base64 length of 4 mismatches array length of 3")},
 	}, {
-		name:  "Bytes/ByteArray4/Valid",
+		name:  name("Bytes/ByteArray4/Valid"),
 		inBuf: `"AQIDBA=="`,
 		inVal: new([4]byte),
 		want:  addr([4]byte{1, 2, 3, 4}),
 	}, {
-		name:  "Bytes/ByteArray4/Invalid",
+		name:  name("Bytes/ByteArray4/Invalid"),
 		inBuf: `"$$$$$$=="`,
 		inVal: new([4]byte),
 		want:  addr([4]byte{}),
@@ -3740,13 +3761,13 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/ByteArray4/Underflow",
+		name:    name("Bytes/ByteArray4/Underflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array4ByteType, Err: errors.New("decoded base64 length of 3 mismatches array length of 4")},
 	}, {
-		name:    "Bytes/ByteArray4/Overflow",
+		name:    name("Bytes/ByteArray4/Overflow"),
 		inBuf:   `"AQIDBAU="`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
@@ -3754,17 +3775,17 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a array of uints.
-		name:  "Bytes/NamedByteArray",
+		name:  name("Bytes/NamedByteArray"),
 		inBuf: `[104,101,108,108,111]`,
 		inVal: new([5]namedByte),
 		want:  addr([5]namedByte{'h', 'e', 'l', 'l', 'o'}),
 	}, {
-		name:  "Bytes/Valid/Denormalized",
+		name:  name("Bytes/Valid/Denormalized"),
 		inBuf: `"AR=="`,
 		inVal: new([]byte),
 		want:  addr([]byte{1}),
 	}, {
-		name:  "Bytes/Invalid/Unpadded1",
+		name:  name("Bytes/Invalid/Unpadded1"),
 		inBuf: `"AQ="`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
@@ -3773,7 +3794,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Bytes/Invalid/Unpadded2",
+		name:  name("Bytes/Invalid/Unpadded2"),
 		inBuf: `"AQ"`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
@@ -3782,7 +3803,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Bytes/Invalid/Character",
+		name:  name("Bytes/Invalid/Character"),
 		inBuf: `"@@@@"`,
 		inVal: addr([]byte("nochange")),
 		want:  addr([]byte("nochange")),
@@ -3791,628 +3812,628 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:    "Bytes/Invalid/Bool",
+		name:    name("Bytes/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: bytesType},
 	}, {
-		name:    "Bytes/Invalid/Number",
+		name:    name("Bytes/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: bytesType},
 	}, {
-		name:    "Bytes/Invalid/Object",
+		name:    name("Bytes/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: bytesType},
 	}, {
-		name:    "Bytes/Invalid/Array",
+		name:    name("Bytes/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr([]byte("nochange")),
 		want:    addr([]byte("nochange")),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
 	}, {
-		name:  "Bytes/IgnoreInvalidFormat",
+		name:  name("Bytes/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `"aGVsbG8="`,
 		inVal: new([]byte),
 		want:  addr([]byte("hello")),
 	}, {
-		name:  "Ints/Null",
+		name:  name("Ints/Null"),
 		inBuf: `null`,
 		inVal: addr(int(1)),
 		want:  addr(int(0)),
 	}, {
-		name:  "Ints/Int",
+		name:  name("Ints/Int"),
 		inBuf: `1`,
 		inVal: addr(int(0)),
 		want:  addr(int(1)),
 	}, {
-		name:    "Ints/Int8/MinOverflow",
+		name:    name("Ints/Int8/MinOverflow"),
 		inBuf:   `-129`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int8Type, Err: fmt.Errorf(`cannot parse "-129" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Ints/Int8/Min",
+		name:  name("Ints/Int8/Min"),
 		inBuf: `-128`,
 		inVal: addr(int8(0)),
 		want:  addr(int8(-128)),
 	}, {
-		name:  "Ints/Int8/Max",
+		name:  name("Ints/Int8/Max"),
 		inBuf: `127`,
 		inVal: addr(int8(0)),
 		want:  addr(int8(127)),
 	}, {
-		name:    "Ints/Int8/MaxOverflow",
+		name:    name("Ints/Int8/MaxOverflow"),
 		inBuf:   `128`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int8Type, Err: fmt.Errorf(`cannot parse "128" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:    "Ints/Int16/MinOverflow",
+		name:    name("Ints/Int16/MinOverflow"),
 		inBuf:   `-32769`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int16Type, Err: fmt.Errorf(`cannot parse "-32769" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Ints/Int16/Min",
+		name:  name("Ints/Int16/Min"),
 		inBuf: `-32768`,
 		inVal: addr(int16(0)),
 		want:  addr(int16(-32768)),
 	}, {
-		name:  "Ints/Int16/Max",
+		name:  name("Ints/Int16/Max"),
 		inBuf: `32767`,
 		inVal: addr(int16(0)),
 		want:  addr(int16(32767)),
 	}, {
-		name:    "Ints/Int16/MaxOverflow",
+		name:    name("Ints/Int16/MaxOverflow"),
 		inBuf:   `32768`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int16Type, Err: fmt.Errorf(`cannot parse "32768" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:    "Ints/Int32/MinOverflow",
+		name:    name("Ints/Int32/MinOverflow"),
 		inBuf:   `-2147483649`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int32Type, Err: fmt.Errorf(`cannot parse "-2147483649" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Ints/Int32/Min",
+		name:  name("Ints/Int32/Min"),
 		inBuf: `-2147483648`,
 		inVal: addr(int32(0)),
 		want:  addr(int32(-2147483648)),
 	}, {
-		name:  "Ints/Int32/Max",
+		name:  name("Ints/Int32/Max"),
 		inBuf: `2147483647`,
 		inVal: addr(int32(0)),
 		want:  addr(int32(2147483647)),
 	}, {
-		name:    "Ints/Int32/MaxOverflow",
+		name:    name("Ints/Int32/MaxOverflow"),
 		inBuf:   `2147483648`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int32Type, Err: fmt.Errorf(`cannot parse "2147483648" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:    "Ints/Int64/MinOverflow",
+		name:    name("Ints/Int64/MinOverflow"),
 		inBuf:   `-9223372036854775809`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int64Type, Err: fmt.Errorf(`cannot parse "-9223372036854775809" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Ints/Int64/Min",
+		name:  name("Ints/Int64/Min"),
 		inBuf: `-9223372036854775808`,
 		inVal: addr(int64(0)),
 		want:  addr(int64(-9223372036854775808)),
 	}, {
-		name:  "Ints/Int64/Max",
+		name:  name("Ints/Int64/Max"),
 		inBuf: `9223372036854775807`,
 		inVal: addr(int64(0)),
 		want:  addr(int64(9223372036854775807)),
 	}, {
-		name:    "Ints/Int64/MaxOverflow",
+		name:    name("Ints/Int64/MaxOverflow"),
 		inBuf:   `9223372036854775808`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: int64Type, Err: fmt.Errorf(`cannot parse "9223372036854775808" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Ints/Named",
+		name:  name("Ints/Named"),
 		inBuf: `-6464`,
 		inVal: addr(namedInt64(0)),
 		want:  addr(namedInt64(-6464)),
 	}, {
-		name:  "Ints/Stringified",
+		name:  name("Ints/Stringified"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"-6464"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
-		name:  "Ints/Escaped",
+		name:  name("Ints/Escaped"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u002d\u0036\u0034\u0036\u0034"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
-		name:  "Ints/Valid/NegativeZero",
+		name:  name("Ints/Valid/NegativeZero"),
 		inBuf: `-0`,
 		inVal: addr(int(1)),
 		want:  addr(int(0)),
 	}, {
-		name:    "Ints/Invalid/Fraction",
+		name:    name("Ints/Invalid/Fraction"),
 		inBuf:   `1.0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/Exponent",
+		name:    name("Ints/Invalid/Exponent"),
 		inBuf:   `1e0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/StringifiedFraction",
+		name:    name("Ints/Invalid/StringifiedFraction"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/StringifiedExponent",
+		name:    name("Ints/Invalid/StringifiedExponent"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/Overflow",
+		name:    name("Ints/Invalid/Overflow"),
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)},
 	}, {
-		name:    "Ints/Invalid/OverflowSyntax",
+		name:    name("Ints/Invalid/OverflowSyntax"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/Whitespace",
+		name:    name("Ints/Invalid/Whitespace"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "0 " as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Ints/Invalid/Bool",
+		name:    name("Ints/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: intType},
 	}, {
-		name:    "Ints/Invalid/String",
+		name:    name("Ints/Invalid/String"),
 		inBuf:   `"0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType},
 	}, {
-		name:    "Ints/Invalid/Object",
+		name:    name("Ints/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: intType},
 	}, {
-		name:    "Ints/Invalid/Array",
+		name:    name("Ints/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: intType},
 	}, {
-		name:  "Ints/IgnoreInvalidFormat",
+		name:  name("Ints/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `1`,
 		inVal: addr(int(0)),
 		want:  addr(int(1)),
 	}, {
-		name:  "Uints/Null",
+		name:  name("Uints/Null"),
 		inBuf: `null`,
 		inVal: addr(uint(1)),
 		want:  addr(uint(0)),
 	}, {
-		name:  "Uints/Uint",
+		name:  name("Uints/Uint"),
 		inBuf: `1`,
 		inVal: addr(uint(0)),
 		want:  addr(uint(1)),
 	}, {
-		name:  "Uints/Uint8/Min",
+		name:  name("Uints/Uint8/Min"),
 		inBuf: `0`,
 		inVal: addr(uint8(1)),
 		want:  addr(uint8(0)),
 	}, {
-		name:  "Uints/Uint8/Max",
+		name:  name("Uints/Uint8/Max"),
 		inBuf: `255`,
 		inVal: addr(uint8(0)),
 		want:  addr(uint8(255)),
 	}, {
-		name:    "Uints/Uint8/MaxOverflow",
+		name:    name("Uints/Uint8/MaxOverflow"),
 		inBuf:   `256`,
 		inVal:   addr(uint8(1)),
 		want:    addr(uint8(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint8Type, Err: fmt.Errorf(`cannot parse "256" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Uints/Uint16/Min",
+		name:  name("Uints/Uint16/Min"),
 		inBuf: `0`,
 		inVal: addr(uint16(1)),
 		want:  addr(uint16(0)),
 	}, {
-		name:  "Uints/Uint16/Max",
+		name:  name("Uints/Uint16/Max"),
 		inBuf: `65535`,
 		inVal: addr(uint16(0)),
 		want:  addr(uint16(65535)),
 	}, {
-		name:    "Uints/Uint16/MaxOverflow",
+		name:    name("Uints/Uint16/MaxOverflow"),
 		inBuf:   `65536`,
 		inVal:   addr(uint16(1)),
 		want:    addr(uint16(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint16Type, Err: fmt.Errorf(`cannot parse "65536" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Uints/Uint32/Min",
+		name:  name("Uints/Uint32/Min"),
 		inBuf: `0`,
 		inVal: addr(uint32(1)),
 		want:  addr(uint32(0)),
 	}, {
-		name:  "Uints/Uint32/Max",
+		name:  name("Uints/Uint32/Max"),
 		inBuf: `4294967295`,
 		inVal: addr(uint32(0)),
 		want:  addr(uint32(4294967295)),
 	}, {
-		name:    "Uints/Uint32/MaxOverflow",
+		name:    name("Uints/Uint32/MaxOverflow"),
 		inBuf:   `4294967296`,
 		inVal:   addr(uint32(1)),
 		want:    addr(uint32(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint32Type, Err: fmt.Errorf(`cannot parse "4294967296" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Uints/Uint64/Min",
+		name:  name("Uints/Uint64/Min"),
 		inBuf: `0`,
 		inVal: addr(uint64(1)),
 		want:  addr(uint64(0)),
 	}, {
-		name:  "Uints/Uint64/Max",
+		name:  name("Uints/Uint64/Max"),
 		inBuf: `18446744073709551615`,
 		inVal: addr(uint64(0)),
 		want:  addr(uint64(18446744073709551615)),
 	}, {
-		name:    "Uints/Uint64/MaxOverflow",
+		name:    name("Uints/Uint64/MaxOverflow"),
 		inBuf:   `18446744073709551616`,
 		inVal:   addr(uint64(1)),
 		want:    addr(uint64(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint64Type, Err: fmt.Errorf(`cannot parse "18446744073709551616" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
-		name:  "Uints/Named",
+		name:  name("Uints/Named"),
 		inBuf: `6464`,
 		inVal: addr(namedUint64(0)),
 		want:  addr(namedUint64(6464)),
 	}, {
-		name:  "Uints/Stringified",
+		name:  name("Uints/Stringified"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"6464"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
 	}, {
-		name:  "Uints/Escaped",
+		name:  name("Uints/Escaped"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u0036\u0034\u0036\u0034"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
 	}, {
-		name:    "Uints/Invalid/NegativeOne",
+		name:    name("Uints/Invalid/NegativeOne"),
 		inBuf:   `-1`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "-1" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/NegativeZero",
+		name:    name("Uints/Invalid/NegativeZero"),
 		inBuf:   `-0`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "-0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/Fraction",
+		name:    name("Uints/Invalid/Fraction"),
 		inBuf:   `1.0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/Exponent",
+		name:    name("Uints/Invalid/Exponent"),
 		inBuf:   `1e0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/StringifiedFraction",
+		name:    name("Uints/Invalid/StringifiedFraction"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1.0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/StringifiedExponent",
+		name:    name("Uints/Invalid/StringifiedExponent"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1e0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/Overflow",
+		name:    name("Uints/Invalid/Overflow"),
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
-		name:    "Uints/Invalid/OverflowSyntax",
+		name:    name("Uints/Invalid/OverflowSyntax"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/Whitespace",
+		name:    name("Uints/Invalid/Whitespace"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"0 "`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "0 " as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Uints/Invalid/Bool",
+		name:    name("Uints/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: uintType},
 	}, {
-		name:    "Uints/Invalid/String",
+		name:    name("Uints/Invalid/String"),
 		inBuf:   `"0"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType},
 	}, {
-		name:    "Uints/Invalid/Object",
+		name:    name("Uints/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: uintType},
 	}, {
-		name:    "Uints/Invalid/Array",
+		name:    name("Uints/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: uintType},
 	}, {
-		name:  "Uints/IgnoreInvalidFormat",
+		name:  name("Uints/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `1`,
 		inVal: addr(uint(0)),
 		want:  addr(uint(1)),
 	}, {
-		name:  "Floats/Null",
+		name:  name("Floats/Null"),
 		inBuf: `null`,
 		inVal: addr(float64(64.64)),
 		want:  addr(float64(0)),
 	}, {
-		name:  "Floats/Float32/Pi",
+		name:  name("Floats/Float32/Pi"),
 		inBuf: `3.14159265358979323846264338327950288419716939937510582097494459`,
 		inVal: addr(float32(32.32)),
 		want:  addr(float32(math.Pi)),
 	}, {
-		name:  "Floats/Float32/Underflow",
+		name:  name("Floats/Float32/Underflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float32(32.32)),
 		want:  addr(float32(-math.MaxFloat32)),
 	}, {
-		name:  "Floats/Float32/Overflow",
+		name:  name("Floats/Float32/Overflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float32(32.32)),
 		want:  addr(float32(-math.MaxFloat32)),
 	}, {
-		name:  "Floats/Float64/Pi",
+		name:  name("Floats/Float64/Pi"),
 		inBuf: `3.14159265358979323846264338327950288419716939937510582097494459`,
 		inVal: addr(float64(64.64)),
 		want:  addr(float64(math.Pi)),
 	}, {
-		name:  "Floats/Float64/Underflow",
+		name:  name("Floats/Float64/Underflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float64(64.64)),
 		want:  addr(float64(-math.MaxFloat64)),
 	}, {
-		name:  "Floats/Float64/Overflow",
+		name:  name("Floats/Float64/Overflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float64(64.64)),
 		want:  addr(float64(-math.MaxFloat64)),
 	}, {
-		name:  "Floats/Named",
+		name:  name("Floats/Named"),
 		inBuf: `64.64`,
 		inVal: addr(namedFloat64(0)),
 		want:  addr(namedFloat64(64.64)),
 	}, {
-		name:  "Floats/Stringified",
+		name:  name("Floats/Stringified"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"64.64"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
-		name:  "Floats/Escaped",
+		name:  name("Floats/Escaped"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u0036\u0034\u002e\u0036\u0034"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
-		name:    "Floats/Invalid/NaN",
+		name:    name("Floats/Invalid/NaN"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"NaN"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Floats/Invalid/Infinity",
+		name:    name("Floats/Invalid/Infinity"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"Infinity"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Floats/Invalid/Whitespace",
+		name:    name("Floats/Invalid/Whitespace"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1 "`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Floats/Invalid/GoSyntax",
+		name:    name("Floats/Invalid/GoSyntax"),
 		uopts:   UnmarshalOptions{StringifyNumbers: true},
 		inBuf:   `"1p-2"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1p-2" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
-		name:    "Floats/Invalid/Bool",
+		name:    name("Floats/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: float64Type},
 	}, {
-		name:    "Floats/Invalid/String",
+		name:    name("Floats/Invalid/String"),
 		inBuf:   `"0"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
 	}, {
-		name:    "Floats/Invalid/Object",
+		name:    name("Floats/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: float64Type},
 	}, {
-		name:    "Floats/Invalid/Array",
+		name:    name("Floats/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: float64Type},
 	}, {
-		name:  "Floats/IgnoreInvalidFormat",
+		name:  name("Floats/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `1`,
 		inVal: addr(float64(0)),
 		want:  addr(float64(1)),
 	}, {
-		name:  "Maps/Null",
+		name:  name("Maps/Null"),
 		inBuf: `null`,
 		inVal: addr(map[string]string{"key": "value"}),
 		want:  new(map[string]string),
 	}, {
-		name:    "Maps/InvalidKey/Bool",
+		name:    name("Maps/InvalidKey/Bool"),
 		inBuf:   `{"true":"false"}`,
 		inVal:   new(map[bool]bool),
 		want:    addr(make(map[bool]bool)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
-		name:    "Maps/InvalidKey/NamedBool",
+		name:    name("Maps/InvalidKey/NamedBool"),
 		inBuf:   `{"true":"false"}`,
 		inVal:   new(map[namedBool]bool),
 		want:    addr(make(map[namedBool]bool)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: namedBoolType},
 	}, {
-		name:    "Maps/InvalidKey/Array",
+		name:    name("Maps/InvalidKey/Array"),
 		inBuf:   `{"key":"value"}`,
 		inVal:   new(map[[1]string]string),
 		want:    addr(make(map[[1]string]string)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1StringType},
 	}, {
-		name:    "Maps/InvalidKey/Channel",
+		name:    name("Maps/InvalidKey/Channel"),
 		inBuf:   `{"key":"value"}`,
 		inVal:   new(map[chan string]string),
 		want:    addr(make(map[chan string]string)),
 		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
-		name:  "Maps/ValidKey/Int",
+		name:  name("Maps/ValidKey/Int"),
 		inBuf: `{"0":0,"-1":1,"2":2,"-3":3}`,
 		inVal: new(map[int]int),
 		want:  addr(map[int]int{0: 0, -1: 1, 2: 2, -3: 3}),
 	}, {
-		name:  "Maps/ValidKey/NamedInt",
+		name:  name("Maps/ValidKey/NamedInt"),
 		inBuf: `{"0":0,"-1":1,"2":2,"-3":3}`,
 		inVal: new(map[namedInt64]int),
 		want:  addr(map[namedInt64]int{0: 0, -1: 1, 2: 2, -3: 3}),
 	}, {
-		name:  "Maps/ValidKey/Uint",
+		name:  name("Maps/ValidKey/Uint"),
 		inBuf: `{"0":0,"1":1,"2":2,"3":3}`,
 		inVal: new(map[uint]uint),
 		want:  addr(map[uint]uint{0: 0, 1: 1, 2: 2, 3: 3}),
 	}, {
-		name:  "Maps/ValidKey/NamedUint",
+		name:  name("Maps/ValidKey/NamedUint"),
 		inBuf: `{"0":0,"1":1,"2":2,"3":3}`,
 		inVal: new(map[namedUint64]uint),
 		want:  addr(map[namedUint64]uint{0: 0, 1: 1, 2: 2, 3: 3}),
 	}, {
-		name:  "Maps/ValidKey/Float",
+		name:  name("Maps/ValidKey/Float"),
 		inBuf: `{"1.234":1.234,"12.34":12.34,"123.4":123.4}`,
 		inVal: new(map[float64]float64),
 		want:  addr(map[float64]float64{1.234: 1.234, 12.34: 12.34, 123.4: 123.4}),
 	}, {
-		name:    "Maps/DuplicateName/Int",
+		name:    name("Maps/DuplicateName/Int"),
 		inBuf:   `{"0":1,"-0":-1}`,
 		inVal:   new(map[int]int),
 		want:    addr(map[int]int{0: 1}),
 		wantErr: (&SyntacticError{str: `duplicate name "-0" in object`}).withOffset(int64(len(`{"0":1,`))),
 	}, {
-		name:  "Maps/DuplicateName/Int/AllowDuplicateNames",
+		name:  name("Maps/DuplicateName/Int/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"0":1,"-0":-1}`,
 		inVal: new(map[int]int),
 		want:  addr(map[int]int{0: -1}), // latter takes precedence
 	}, {
-		name:  "Maps/DuplicateName/Int/OverwriteExisting",
+		name:  name("Maps/DuplicateName/Int/OverwriteExisting"),
 		inBuf: `{"-0":-1}`,
 		inVal: addr(map[int]int{0: 1}),
 		want:  addr(map[int]int{0: -1}),
 	}, {
-		name:    "Maps/DuplicateName/Float",
+		name:    name("Maps/DuplicateName/Float"),
 		inBuf:   `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
 		inVal:   new(map[float64]string),
 		want:    addr(map[float64]string{1: "1.0"}),
 		wantErr: (&SyntacticError{str: `duplicate name "1" in object`}).withOffset(int64(len(`{"1.0":"1.0",`))),
 	}, {
-		name:  "Maps/DuplicateName/Float/AllowDuplicateNames",
+		name:  name("Maps/DuplicateName/Float/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
 		inVal: new(map[float64]string),
 		want:  addr(map[float64]string{1: "1e0"}), // latter takes precedence
 	}, {
-		name:  "Maps/DuplicateName/Float/OverwriteExisting",
+		name:  name("Maps/DuplicateName/Float/OverwriteExisting"),
 		inBuf: `{"1.0":"1.0"}`,
 		inVal: addr(map[float64]string{1: "1"}),
 		want:  addr(map[float64]string{1: "1.0"}),
 	}, {
-		name:    "Maps/DuplicateName/NoCaseString",
+		name:    name("Maps/DuplicateName/NoCaseString"),
 		inBuf:   `{"hello":"hello","HELLO":"HELLO"}`,
 		inVal:   new(map[nocaseString]string),
 		want:    addr(map[nocaseString]string{"hello": "hello"}),
 		wantErr: (&SyntacticError{str: `duplicate name "HELLO" in object`}).withOffset(int64(len(`{"hello":"hello",`))),
 	}, {
-		name:  "Maps/DuplicateName/NoCaseString/AllowDuplicateNames",
+		name:  name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"hello":"hello","HELLO":"HELLO"}`,
 		inVal: new(map[nocaseString]string),
 		want:  addr(map[nocaseString]string{"hello": "HELLO"}), // latter takes precedence
 	}, {
-		name:  "Maps/DuplicateName/NoCaseString/OverwriteExisting",
+		name:  name("Maps/DuplicateName/NoCaseString/OverwriteExisting"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"HELLO":"HELLO"}`,
 		inVal: addr(map[nocaseString]string{"hello": "hello"}),
 		want:  addr(map[nocaseString]string{"hello": "HELLO"}),
 	}, {
-		name:  "Maps/ValidKey/Interface",
+		name:  name("Maps/ValidKey/Interface"),
 		inBuf: `{"false":"false","true":"true","string":"string","0":"0","[]":"[]","{}":"{}"}`,
 		inVal: new(map[any]string),
 		want: addr(map[any]string{
@@ -4424,7 +4445,7 @@ func TestUnmarshal(t *testing.T) {
 			"{}":     "{}",
 		}),
 	}, {
-		name:  "Maps/InvalidValue/Channel",
+		name:  name("Maps/InvalidValue/Channel"),
 		inBuf: `{"key":"value"}`,
 		inVal: new(map[string]chan string),
 		want: addr(map[string]chan string{
@@ -4432,7 +4453,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
-		name:  "Maps/RecursiveMap",
+		name:  name("Maps/RecursiveMap"),
 		inBuf: `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
 		inVal: new(recursiveMap),
 		want: addr(recursiveMap{
@@ -4446,7 +4467,7 @@ func TestUnmarshal(t *testing.T) {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
 		// See https://golang.org/issue/31924.
-		name:  "Maps/Merge",
+		name:  name("Maps/Merge"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"k1":{"k2":"v2"},"k2":{"k1":"v1"},"k2":{"k2":"v2"}}`,
 		inVal: addr(map[string]map[string]string{
@@ -4457,42 +4478,42 @@ func TestUnmarshal(t *testing.T) {
 			"k2": {"k1": "v1", "k2": "v2"},
 		}),
 	}, {
-		name:    "Maps/Invalid/Bool",
+		name:    name("Maps/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: mapStringStringType},
 	}, {
-		name:    "Maps/Invalid/String",
+		name:    name("Maps/Invalid/String"),
 		inBuf:   `""`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: mapStringStringType},
 	}, {
-		name:    "Maps/Invalid/Number",
+		name:    name("Maps/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: mapStringStringType},
 	}, {
-		name:    "Maps/Invalid/Array",
+		name:    name("Maps/Invalid/Array"),
 		inBuf:   `[]`,
 		inVal:   addr(map[string]string{"key": "value"}),
 		want:    addr(map[string]string{"key": "value"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: mapStringStringType},
 	}, {
-		name:  "Maps/IgnoreInvalidFormat",
+		name:  name("Maps/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `{"hello":"goodbye"}`,
 		inVal: addr(map[string]string{}),
 		want:  addr(map[string]string{"hello": "goodbye"}),
 	}, {
-		name:  "Structs/Null",
+		name:  name("Structs/Null"),
 		inBuf: `null`,
 		inVal: addr(structAll{String: "something"}),
 		want:  addr(structAll{}),
 	}, {
-		name:  "Structs/Empty",
+		name:  name("Structs/Empty"),
 		inBuf: `{}`,
 		inVal: addr(structAll{
 			String: "hello",
@@ -4505,7 +4526,7 @@ func TestUnmarshal(t *testing.T) {
 			Slice:  []string{},
 		}),
 	}, {
-		name: "Structs/Normal",
+		name: name("Structs/Normal"),
 		inBuf: `{
 	"Bool": true,
 	"String": "hello",
@@ -4581,7 +4602,7 @@ func TestUnmarshal(t *testing.T) {
 			Pointer: new(structAll),
 		}),
 	}, {
-		name: "Structs/Merge",
+		name: name("Structs/Merge"),
 		inBuf: `{
 	"Bool": false,
 	"String": "goodbye",
@@ -4682,7 +4703,7 @@ func TestUnmarshal(t *testing.T) {
 			Interface: map[string]string{"k1": "v1", "k2": "v2"},
 		}),
 	}, {
-		name: "Structs/Stringified/Normal",
+		name: name("Structs/Stringified/Normal"),
 		inBuf: `{
 	"Bool": true,
 	"String": "hello",
@@ -4758,7 +4779,7 @@ func TestUnmarshal(t *testing.T) {
 			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
-		name: "Structs/Stringified/String",
+		name: name("Structs/Stringified/String"),
 		inBuf: `{
 	"Bool": true,
 	"String": "hello",
@@ -4834,7 +4855,7 @@ func TestUnmarshal(t *testing.T) {
 			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
-		name: "Structs/Format/Bytes",
+		name: name("Structs/Format/Bytes"),
 		inBuf: `{
 	"Base16": "0123456789abcdef",
 	"Base32": "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",
@@ -4853,12 +4874,12 @@ func TestUnmarshal(t *testing.T) {
 			Array:     []byte{1, 2, 3, 4},
 		}),
 	}, {
-		name:    "Structs/Format/Bytes/Invalid/Base16/WrongKind",
+		name:    name("Structs/Format/Bytes/Invalid/Base16/WrongKind"),
 		inBuf:   `{"Base16": [1,2,3,4]}`,
 		inVal:   new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base16/AllPadding",
+		name:  name("Structs/Format/Bytes/Invalid/Base16/AllPadding"),
 		inBuf: `{"Base16": "===="}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4866,7 +4887,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base16/EvenPadding",
+		name:  name("Structs/Format/Bytes/Invalid/Base16/EvenPadding"),
 		inBuf: `{"Base16": "0123456789abcdef="}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4874,7 +4895,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base16/OddPadding",
+		name:  name("Structs/Format/Bytes/Invalid/Base16/OddPadding"),
 		inBuf: `{"Base16": "0123456789abcdef0="}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4882,7 +4903,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name: "Structs/Format/Bytes/Invalid/Base32/Padding",
+		name: name("Structs/Format/Bytes/Invalid/Base32/Padding"),
 		inBuf: `[
 			{"Base32": "NA======"},
 			{"Base32": "NBSQ===="},
@@ -4899,7 +4920,7 @@ func TestUnmarshal(t *testing.T) {
 			{Base32: []byte("hello")},
 		}),
 	}, {
-		name: "Structs/Format/Bytes/Invalid/Base32/Invalid/NoPadding",
+		name: name("Structs/Format/Bytes/Invalid/Base32/Invalid/NoPadding"),
 		inBuf: `[
 				{"Base32": "NA"},
 				{"Base32": "NBSQ"},
@@ -4913,7 +4934,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base32/WrongAlphabet",
+		name:  name("Structs/Format/Bytes/Invalid/Base32/WrongAlphabet"),
 		inBuf: `{"Base32": "0123456789ABCDEFGHIJKLMNOPQRSTUV"}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4921,7 +4942,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base32Hex/WrongAlphabet",
+		name:  name("Structs/Format/Bytes/Invalid/Base32Hex/WrongAlphabet"),
 		inBuf: `{"Base32Hex": "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4929,7 +4950,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base64/WrongAlphabet",
+		name:  name("Structs/Format/Bytes/Invalid/Base64/WrongAlphabet"),
 		inBuf: `{"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4937,7 +4958,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Structs/Format/Bytes/Invalid/Base64URL/WrongAlphabet",
+		name:  name("Structs/Format/Bytes/Invalid/Base64URL/WrongAlphabet"),
 		inBuf: `{"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"}`,
 		inVal: new(structFormatBytes),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
@@ -4945,7 +4966,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name: "Structs/Format/Floats",
+		name: name("Structs/Format/Floats"),
 		inBuf: `[
 	{"NonFinite": 3.141592653589793, "PointerNonFinite": 3.141592653589793},
 	{"NonFinite": "-Infinity", "PointerNonFinite": "-Infinity"},
@@ -4958,27 +4979,27 @@ func TestUnmarshal(t *testing.T) {
 			{NonFinite: math.Inf(+1), PointerNonFinite: addr(math.Inf(+1))},
 		}),
 	}, {
-		name:  "Structs/Format/Floats/NaN",
+		name:  name("Structs/Format/Floats/NaN"),
 		inBuf: `{"NonFinite": "NaN"}`,
 		inVal: new(structFormatFloats),
 		// Avoid checking want since reflect.DeepEqual fails for NaNs.
 	}, {
-		name:    "Structs/Format/Floats/Invalid/NaN",
+		name:    name("Structs/Format/Floats/Invalid/NaN"),
 		inBuf:   `{"NonFinite": "nan"}`,
 		inVal:   new(structFormatFloats),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
 	}, {
-		name:    "Structs/Format/Floats/Invalid/PositiveInfinity",
+		name:    name("Structs/Format/Floats/Invalid/PositiveInfinity"),
 		inBuf:   `{"NonFinite": "+Infinity"}`,
 		inVal:   new(structFormatFloats),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
 	}, {
-		name:    "Structs/Format/Floats/Invalid/NegativeInfinitySpace",
+		name:    name("Structs/Format/Floats/Invalid/NegativeInfinitySpace"),
 		inBuf:   `{"NonFinite": "-Infinity "}`,
 		inVal:   new(structFormatFloats),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type},
 	}, {
-		name: "Structs/Format/Maps",
+		name: name("Structs/Format/Maps"),
 		inBuf: `[
 	{"EmitNull": null, "PointerEmitNull": null},
 	{"EmitNull": {}, "PointerEmitNull": {}},
@@ -4991,7 +5012,7 @@ func TestUnmarshal(t *testing.T) {
 			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"})},
 		}),
 	}, {
-		name: "Structs/Format/Slices",
+		name: name("Structs/Format/Slices"),
 		inBuf: `[
 	{"EmitNull": null, "PointerEmitNull": null},
 	{"EmitNull": [], "PointerEmitNull": []},
@@ -5004,67 +5025,67 @@ func TestUnmarshal(t *testing.T) {
 			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"})},
 		}),
 	}, {
-		name:    "Structs/Format/Invalid/Bool",
+		name:    name("Structs/Format/Invalid/Bool"),
 		inBuf:   `{"Bool":true}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: boolType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/String",
+		name:    name("Structs/Format/Invalid/String"),
 		inBuf:   `{"String": "string"}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: stringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Bytes",
+		name:    name("Structs/Format/Invalid/Bytes"),
 		inBuf:   `{"Bytes": "bytes"}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: bytesType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Int",
+		name:    name("Structs/Format/Invalid/Int"),
 		inBuf:   `{"Int": 1}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: int64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Uint",
+		name:    name("Structs/Format/Invalid/Uint"),
 		inBuf:   `{"Uint": 1}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: uint64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Float",
+		name:    name("Structs/Format/Invalid/Float"),
 		inBuf:   `{"Float": 1}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: float64Type, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Map",
+		name:    name("Structs/Format/Invalid/Map"),
 		inBuf:   `{"Map":{}}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: mapStringStringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Struct",
+		name:    name("Structs/Format/Invalid/Struct"),
 		inBuf:   `{"Struct": {}}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Slice",
+		name:    name("Structs/Format/Invalid/Slice"),
 		inBuf:   `{"Slice": {}}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: sliceStringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Array",
+		name:    name("Structs/Format/Invalid/Array"),
 		inBuf:   `{"Array": []}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:    "Structs/Format/Invalid/Interface",
+		name:    name("Structs/Format/Invalid/Interface"),
 		inBuf:   `{"Interface": "anything"}`,
 		inVal:   new(structFormatInvalid),
 		wantErr: &SemanticError{action: "unmarshal", GoType: anyType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:  "Structs/Inline/Zero",
+		name:  name("Structs/Inline/Zero"),
 		inBuf: `{"D":""}`,
 		inVal: new(structInlined),
 		want:  new(structInlined),
 	}, {
-		name:  "Structs/Inline/Alloc",
+		name:  name("Structs/Inline/Alloc"),
 		inBuf: `{"E":"","F":"","G":"","A":"","B":"","D":""}`,
 		inVal: new(structInlined),
 		want: addr(structInlined{
@@ -5075,7 +5096,7 @@ func TestUnmarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{},
 		}),
 	}, {
-		name:  "Structs/Inline/NonZero",
+		name:  name("Structs/Inline/NonZero"),
 		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
 		inVal: new(structInlined),
 		want: addr(structInlined{
@@ -5086,7 +5107,7 @@ func TestUnmarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		}),
 	}, {
-		name:  "Structs/Inline/Merge",
+		name:  name("Structs/Inline/Merge"),
 		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
 		inVal: addr(structInlined{
 			X: structInlinedL1{
@@ -5103,69 +5124,69 @@ func TestUnmarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/Noop",
+		name:  name("Structs/InlinedFallback/RawValue/Noop"),
 		inBuf: `{"A":1,"B":2}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(nil), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/MergeN1/Nil",
+		name:  name("Structs/InlinedFallback/RawValue/MergeN1/Nil"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/MergeN1/Empty",
+		name:  name("Structs/InlinedFallback/RawValue/MergeN1/Empty"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlineRawValue{X: RawValue{}}),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/MergeN1/Whitespace",
+		name:    name("Structs/InlinedFallback/RawValue/MergeN1/Whitespace"),
 		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
 		inVal:   addr(structInlineRawValue{X: RawValue("\n\r\t ")}),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue("")}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/MergeN1/Null",
+		name:    name("Structs/InlinedFallback/RawValue/MergeN1/Null"),
 		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
 		inVal:   addr(structInlineRawValue{X: RawValue("null")}),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue("null")}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: rawValueType, Err: errors.New("inlined raw value must be a JSON object")},
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/MergeN1/ObjectN0",
+		name:  name("Structs/InlinedFallback/RawValue/MergeN1/ObjectN0"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlineRawValue{X: RawValue(` { } `)}),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(` {"fizz":"buzz"}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/MergeN2/ObjectN1",
+		name:  name("Structs/InlinedFallback/RawValue/MergeN2/ObjectN1"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"foo": [ 1 , 2 , 3 ]}`,
 		inVal: addr(structInlineRawValue{X: RawValue(` { "fizz" : "buzz" } `)}),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(` { "fizz" : "buzz","fizz":"buzz","foo":[ 1 , 2 , 3 ]}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/Merge/ObjectEnd",
+		name:  name("Structs/InlinedFallback/RawValue/Merge/ObjectEnd"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlineRawValue{X: RawValue(` } `)}),
 		// NOTE: This produces invalid output,
 		// but the value being merged into is already invalid.
 		want: addr(structInlineRawValue{A: 1, X: RawValue(`,"fizz":"buzz"}`), B: 2}),
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/MergeInvalidValue",
+		name:    name("Structs/InlinedFallback/RawValue/MergeInvalidValue"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineRawValue),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":`)}),
 		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/CaseSensitive",
+		name:  name("Structs/InlinedFallback/RawValue/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","a":3}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/CaseInsensitive+AllowDuplicateNames",
+		name:  name("Structs/InlinedFallback/RawValue/CaseInsensitive+AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 3, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/CaseInsensitive+RejectDuplicateNames",
+		name:    name("Structs/InlinedFallback/RawValue/CaseInsensitive+RejectDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
 		uopts:   UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -5173,25 +5194,25 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 		wantErr: (&SyntacticError{str: `duplicate name "a" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
-		name:    "Structs/InlinedFallback/RawValue/RejectDuplicateNames",
+		name:    name("Structs/InlinedFallback/RawValue/RejectDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineRawValue),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/AllowDuplicateNames",
+		name:  name("Structs/InlinedFallback/RawValue/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","fizz":"buzz"}`), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/Nested/Noop",
+		name:  name("Structs/InlinedFallback/RawValue/Nested/Noop"),
 		inBuf: `{}`,
 		inVal: new(structInlinePointerInlineRawValue),
 		want:  new(structInlinePointerInlineRawValue),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/Nested/Alloc",
+		name:  name("Structs/InlinedFallback/RawValue/Nested/Alloc"),
 		inBuf: `{"A":1,"fizz":"buzz"}`,
 		inVal: new(structInlinePointerInlineRawValue),
 		want: addr(structInlinePointerInlineRawValue{
@@ -5201,7 +5222,7 @@ func TestUnmarshal(t *testing.T) {
 			}{A: 1, X: RawValue(`{"fizz":"buzz"}`)},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/RawValue/Nested/Merge",
+		name:  name("Structs/InlinedFallback/RawValue/Nested/Merge"),
 		inBuf: `{"fizz":"buzz"}`,
 		inVal: addr(structInlinePointerInlineRawValue{
 			X: &struct {
@@ -5216,22 +5237,22 @@ func TestUnmarshal(t *testing.T) {
 			}{A: 1, X: RawValue(`{"fizz":"buzz"}`)},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerRawValue/Noop",
+		name:  name("Structs/InlinedFallback/PointerRawValue/Noop"),
 		inBuf: `{"A":1,"B":2}`,
 		inVal: new(structInlinePointerRawValue),
 		want:  addr(structInlinePointerRawValue{A: 1, X: nil, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerRawValue/Alloc",
+		name:  name("Structs/InlinedFallback/PointerRawValue/Alloc"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlinePointerRawValue),
 		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz"}`)), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerRawValue/Merge",
+		name:  name("Structs/InlinedFallback/PointerRawValue/Merge"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlinePointerRawValue{X: addr(RawValue(`{"fizz":"buzz"}`))}),
 		want:  addr(structInlinePointerRawValue{A: 1, X: addr(RawValue(`{"fizz":"buzz","fizz":"buzz"}`)), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerRawValue/Nested/Nil",
+		name:  name("Structs/InlinedFallback/PointerRawValue/Nested/Nil"),
 		inBuf: `{"fizz":"buzz"}`,
 		inVal: new(structInlineInlinePointerRawValue),
 		want: addr(structInlineInlinePointerRawValue{
@@ -5240,22 +5261,22 @@ func TestUnmarshal(t *testing.T) {
 			}{X: addr(RawValue(`{"fizz":"buzz"}`))},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/Noop",
+		name:  name("Structs/InlinedFallback/MapStringAny/Noop"),
 		inBuf: `{"A":1,"B":2}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: nil, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/Nil",
+		name:  name("Structs/InlinedFallback/MapStringAny/MergeN1/Nil"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/Empty",
+		name:  name("Structs/InlinedFallback/MapStringAny/MergeN1/Empty"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlineMapStringAny{X: jsonObject{}}),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/MergeN1/ObjectN1",
+		name:  name("Structs/InlinedFallback/MapStringAny/MergeN1/ObjectN1"),
 		inBuf: `{"A":1,"fizz":{"charlie":"DELTA","echo":"foxtrot"},"B":2}`,
 		inVal: addr(structInlineMapStringAny{X: jsonObject{"fizz": jsonObject{
 			"alpha":   "bravo",
@@ -5267,36 +5288,36 @@ func TestUnmarshal(t *testing.T) {
 			"echo":    "foxtrot",
 		}}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/MergeN2/ObjectN1",
+		name:  name("Structs/InlinedFallback/MapStringAny/MergeN2/ObjectN1"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"foo": [ 1 , 2 , 3 ]}`,
 		inVal: addr(structInlineMapStringAny{X: jsonObject{"fizz": "wuzz"}}),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "foo": jsonArray{1.0, 2.0, 3.0}}, B: 2}),
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/MergeInvalidValue",
+		name:    name("Structs/InlinedFallback/MapStringAny/MergeInvalidValue"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": nil}}),
 		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing",
+		name:    name("Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
 		wantErr: newInvalidCharacterError([]byte("i"), "within literal null (expecting 'u')").withOffset(int64(len(`{"A":1,"fizz":n`))),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/CaseSensitive",
+		name:  name("Structs/InlinedFallback/MapStringAny/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "a": 3.0}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/CaseInsensitive+AllowDuplicateNames",
+		name:  name("Structs/InlinedFallback/MapStringAny/CaseInsensitive+AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 3, X: jsonObject{"fizz": "buzz"}, B: 2}),
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/CaseInsensitive+RejectDuplicateNames",
+		name:    name("Structs/InlinedFallback/MapStringAny/CaseInsensitive+RejectDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
 		uopts:   UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -5304,25 +5325,25 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
 		wantErr: (&SyntacticError{str: `duplicate name "a" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
-		name:    "Structs/InlinedFallback/MapStringAny/RejectDuplicateNames",
+		name:    name("Structs/InlinedFallback/MapStringAny/RejectDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
 		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"A":1,"fizz":"buzz","B":2,`))),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/AllowDuplicateNames",
+		name:  name("Structs/InlinedFallback/MapStringAny/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"A":1,"fizz":{"one":1,"two":-2},"B":2,"fizz":{"two":2,"three":3}}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": jsonObject{"one": 1.0, "two": 2.0, "three": 3.0}}, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/Nested/Noop",
+		name:  name("Structs/InlinedFallback/MapStringAny/Nested/Noop"),
 		inBuf: `{}`,
 		inVal: new(structInlinePointerInlineMapStringAny),
 		want:  new(structInlinePointerInlineMapStringAny),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/Nested/Alloc",
+		name:  name("Structs/InlinedFallback/MapStringAny/Nested/Alloc"),
 		inBuf: `{"A":1,"fizz":"buzz"}`,
 		inVal: new(structInlinePointerInlineMapStringAny),
 		want: addr(structInlinePointerInlineMapStringAny{
@@ -5332,7 +5353,7 @@ func TestUnmarshal(t *testing.T) {
 			}{A: 1, X: jsonObject{"fizz": "buzz"}},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringAny/Nested/Merge",
+		name:  name("Structs/InlinedFallback/MapStringAny/Nested/Merge"),
 		inBuf: `{"fizz":"buzz"}`,
 		inVal: addr(structInlinePointerInlineMapStringAny{
 			X: &struct {
@@ -5347,22 +5368,22 @@ func TestUnmarshal(t *testing.T) {
 			}{A: 1, X: jsonObject{"fizz": "buzz"}},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerMapStringAny/Noop",
+		name:  name("Structs/InlinedFallback/PointerMapStringAny/Noop"),
 		inBuf: `{"A":1,"B":2}`,
 		inVal: new(structInlinePointerMapStringAny),
 		want:  addr(structInlinePointerMapStringAny{A: 1, X: nil, B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerMapStringAny/Alloc",
+		name:  name("Structs/InlinedFallback/PointerMapStringAny/Alloc"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlinePointerMapStringAny),
 		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "buzz"}), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerMapStringAny/Merge",
+		name:  name("Structs/InlinedFallback/PointerMapStringAny/Merge"),
 		inBuf: `{"A":1,"fizz":"wuzz","B":2}`,
 		inVal: addr(structInlinePointerMapStringAny{X: addr(jsonObject{"fizz": "buzz"})}),
 		want:  addr(structInlinePointerMapStringAny{A: 1, X: addr(jsonObject{"fizz": "wuzz"}), B: 2}),
 	}, {
-		name:  "Structs/InlinedFallback/PointerMapStringAny/Nested/Nil",
+		name:  name("Structs/InlinedFallback/PointerMapStringAny/Nested/Nil"),
 		inBuf: `{"fizz":"buzz"}`,
 		inVal: new(structInlineInlinePointerMapStringAny),
 		want: addr(structInlineInlinePointerMapStringAny{
@@ -5371,21 +5392,21 @@ func TestUnmarshal(t *testing.T) {
 			}{X: addr(jsonObject{"fizz": "buzz"})},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringInt",
+		name:  name("Structs/InlinedFallback/MapStringInt"),
 		inBuf: `{"zero": 0, "one": 1, "two": 2}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringInt/Null",
+		name:  name("Structs/InlinedFallback/MapStringInt/Null"),
 		inBuf: `{"zero": 0, "one": null, "two": 2}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 0, "two": 2},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/MapStringInt/Invalid",
+		name:  name("Structs/InlinedFallback/MapStringInt/Invalid"),
 		inBuf: `{"zero": 0, "one": {}, "two": 2}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
@@ -5393,7 +5414,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: intType},
 	}, {
-		name:  "Structs/InlinedFallback/MapStringInt/StringifiedNumbers",
+		name:  name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `{"zero": 0, "one": "1", "two": 2}`,
 		inVal: new(structInlineMapStringInt),
@@ -5401,7 +5422,7 @@ func TestUnmarshal(t *testing.T) {
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		}),
 	}, {
-		name:  "Structs/InlinedFallback/RejectUnknownNames",
+		name:  name("Structs/InlinedFallback/RejectUnknownNames"),
 		uopts: UnmarshalOptions{RejectUnknownNames: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlineRawValue),
@@ -5412,14 +5433,14 @@ func TestUnmarshal(t *testing.T) {
 			B: 2,
 		}),
 	}, {
-		name:    "Structs/UnknownFallback/RejectUnknownNames",
+		name:    name("Structs/UnknownFallback/RejectUnknownNames"),
 		uopts:   UnmarshalOptions{RejectUnknownNames: true},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
 		inVal:   new(structUnknownRawValue),
 		want:    addr(structUnknownRawValue{A: 1}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structUnknownRawValueType, Err: ErrUnknownName},
 	}, {
-		name:  "Structs/UnknownFallback",
+		name:  name("Structs/UnknownFallback"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structUnknownRawValue),
 		want: addr(structUnknownRawValue{
@@ -5428,156 +5449,156 @@ func TestUnmarshal(t *testing.T) {
 			B: 2,
 		}),
 	}, {
-		name:  "Structs/UnknownIgnored",
+		name:  name("Structs/UnknownIgnored"),
 		uopts: UnmarshalOptions{RejectUnknownNames: false},
 		inBuf: `{"unknown":"fizzbuzz"}`,
 		inVal: new(structAll),
 		want:  new(structAll),
 	}, {
-		name:    "Structs/RejectUnknownNames",
+		name:    name("Structs/RejectUnknownNames"),
 		uopts:   UnmarshalOptions{RejectUnknownNames: true},
 		inBuf:   `{"unknown":"fizzbuzz"}`,
 		inVal:   new(structAll),
 		want:    new(structAll),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: ErrUnknownName},
 	}, {
-		name:  "Structs/UnexportedIgnored",
+		name:  name("Structs/UnexportedIgnored"),
 		inBuf: `{"ignored":"unused"}`,
 		inVal: new(structUnexportedIgnored),
 		want:  new(structUnexportedIgnored),
 	}, {
-		name:  "Structs/IgnoredUnexportedEmbedded",
+		name:  name("Structs/IgnoredUnexportedEmbedded"),
 		inBuf: `{"namedString":"unused"}`,
 		inVal: new(structIgnoredUnexportedEmbedded),
 		want:  new(structIgnoredUnexportedEmbedded),
 	}, {
-		name:  "Structs/WeirdNames",
+		name:  name("Structs/WeirdNames"),
 		inBuf: `{"":"empty",",":"comma","\"":"quote"}`,
 		inVal: new(structWeirdNames),
 		want:  addr(structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"}),
 	}, {
-		name:  "Structs/NoCase/Exact",
+		name:  name("Structs/NoCase/Exact"),
 		inBuf: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"}),
 	}, {
-		name:  "Structs/NoCase/Merge/AllowDuplicateNames",
+		name:  name("Structs/NoCase/Merge/AllowDuplicateNames"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"AaA":"AaA","aaa":"aaa","aAa":"aAa"}`,
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "aAa"}),
 	}, {
-		name:    "Structs/NoCase/Merge/RejectDuplicateNames",
+		name:    name("Structs/NoCase/Merge/RejectDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: false},
 		inBuf:   `{"AaA":"AaA","aaa":"aaa"}`,
 		inVal:   new(structNoCase),
 		want:    addr(structNoCase{AaA: "AaA"}),
 		wantErr: (&SyntacticError{str: `duplicate name "aaa" in object`}).withOffset(int64(len(`{"AaA":"AaA",`))),
 	}, {
-		name:  "Structs/OptionCaseInsensitive",
+		name:  name("Structs/OptionCaseInsensitive"),
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: true},
 		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
 		inVal: new(structScalars),
 		want:  addr(structScalars{Bool: true, String: "hello", Bytes: []byte{1, 2, 3}, Int: -64, Uint: 64, Float: 3.14159}),
 	}, {
-		name:  "Structs/OptionCaseSensitive",
+		name:  name("Structs/OptionCaseSensitive"),
 		uopts: UnmarshalOptions{MatchCaseInsensitiveNames: false},
 		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
 		inVal: new(structScalars),
 		want:  addr(structScalars{}),
 	}, {
-		name:  "Structs/DuplicateName/NoCase/ExactDifferent",
+		name:  name("Structs/DuplicateName/NoCase/ExactDifferent"),
 		inBuf: `{"AAA":"AAA","AaA":"AaA","AAa":"AAa","Aaa":"Aaa"}`,
 		inVal: addr(structNoCaseInlineRawValue{}),
 		want:  addr(structNoCaseInlineRawValue{AAA: "AAA", AaA: "AaA", AAa: "AAa", Aaa: "Aaa"}),
 	}, {
-		name:    "Structs/DuplicateName/NoCase/ExactConflict",
+		name:    name("Structs/DuplicateName/NoCase/ExactConflict"),
 		inBuf:   `{"AAA":"AAA","AAA":"AAA"}`,
 		inVal:   addr(structNoCaseInlineRawValue{}),
 		want:    addr(structNoCaseInlineRawValue{AAA: "AAA"}),
 		wantErr: (&SyntacticError{str: `duplicate name "AAA" in object`}).withOffset(int64(len(`{"AAA":"AAA",`))),
 	}, {
-		name:  "Structs/DuplicateName/NoCase/OverwriteExact",
+		name:  name("Structs/DuplicateName/NoCase/OverwriteExact"),
 		inBuf: `{"AAA":"after"}`,
 		inVal: addr(structNoCaseInlineRawValue{AAA: "before"}),
 		want:  addr(structNoCaseInlineRawValue{AAA: "after"}),
 	}, {
-		name:    "Structs/DuplicateName/NoCase/NoCaseConflict",
+		name:    name("Structs/DuplicateName/NoCase/NoCaseConflict"),
 		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
 		inVal:   addr(structNoCaseInlineRawValue{}),
 		want:    addr(structNoCaseInlineRawValue{AaA: "aaa"}),
 		wantErr: (&SyntacticError{str: `duplicate name "aaA" in object`}).withOffset(int64(len(`{"aaa":"aaa",`))),
 	}, {
-		name:    "Structs/DuplicateName/NoCase/OverwriteNoCase",
+		name:    name("Structs/DuplicateName/NoCase/OverwriteNoCase"),
 		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
 		inVal:   addr(structNoCaseInlineRawValue{}),
 		want:    addr(structNoCaseInlineRawValue{AaA: "aaa"}),
 		wantErr: (&SyntacticError{str: `duplicate name "aaA" in object`}).withOffset(int64(len(`{"aaa":"aaa",`))),
 	}, {
-		name:  "Structs/DuplicateName/Inline/Unknown",
+		name:  name("Structs/DuplicateName/Inline/Unknown"),
 		inBuf: `{"unknown":""}`,
 		inVal: addr(structNoCaseInlineRawValue{}),
 		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":""}`)}),
 	}, {
-		name:  "Structs/DuplicateName/Inline/UnknownMerge",
+		name:  name("Structs/DuplicateName/Inline/UnknownMerge"),
 		inBuf: `{"unknown":""}`,
 		inVal: addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":""}`)}),
 		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"unknown":"","unknown":""}`)}),
 	}, {
-		name:  "Structs/DuplicateName/Inline/NoCaseOkay",
+		name:  name("Structs/DuplicateName/Inline/NoCaseOkay"),
 		inBuf: `{"b":"","B":""}`,
 		inVal: addr(structNoCaseInlineRawValue{}),
 		want:  addr(structNoCaseInlineRawValue{X: RawValue(`{"b":"","B":""}`)}),
 	}, {
-		name:    "Structs/DuplicateName/Inline/ExactConflict",
+		name:    name("Structs/DuplicateName/Inline/ExactConflict"),
 		inBuf:   `{"b":"","b":""}`,
 		inVal:   addr(structNoCaseInlineRawValue{}),
 		want:    addr(structNoCaseInlineRawValue{X: RawValue(`{"b":""}`)}),
 		wantErr: (&SyntacticError{str: `duplicate name "b" in object`}).withOffset(int64(len(`{"b":"",`))),
 	}, {
-		name:    "Structs/Invalid/ErrUnexpectedEOF",
+		name:    name("Structs/Invalid/ErrUnexpectedEOF"),
 		inBuf:   ``,
 		inVal:   addr(structAll{}),
 		want:    addr(structAll{}),
 		wantErr: io.ErrUnexpectedEOF,
 	}, {
-		name:    "Structs/Invalid/NestedErrUnexpectedEOF",
+		name:    name("Structs/Invalid/NestedErrUnexpectedEOF"),
 		inBuf:   `{"Pointer":`,
 		inVal:   addr(structAll{}),
 		want:    addr(structAll{Pointer: new(structAll)}),
 		wantErr: io.ErrUnexpectedEOF,
 	}, {
-		name:    "Structs/Invalid/Conflicting",
+		name:    name("Structs/Invalid/Conflicting"),
 		inBuf:   `{}`,
 		inVal:   addr(structConflicting{}),
 		want:    addr(structConflicting{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structConflictingType, Err: errors.New("Go struct fields A and B conflict over JSON object name \"conflict\"")},
 	}, {
-		name:    "Structs/Invalid/NoneExported",
+		name:    name("Structs/Invalid/NoneExported"),
 		inBuf:   `{}`,
 		inVal:   addr(structNoneExported{}),
 		want:    addr(structNoneExported{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
 	}, {
-		name:    "Structs/Invalid/MalformedTag",
+		name:    name("Structs/Invalid/MalformedTag"),
 		inBuf:   `{}`,
 		inVal:   addr(structMalformedTag{}),
 		want:    addr(structMalformedTag{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structMalformedTagType, Err: errors.New("Go struct field Malformed has malformed `json` tag: invalid character '\"' at start of option (expecting Unicode letter or single quote)")},
 	}, {
-		name:    "Structs/Invalid/UnexportedTag",
+		name:    name("Structs/Invalid/UnexportedTag"),
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedTag{}),
 		want:    addr(structUnexportedTag{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedTagType, Err: errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")},
 	}, {
-		name:    "Structs/Invalid/UnexportedEmbedded",
+		name:    name("Structs/Invalid/UnexportedEmbedded"),
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedEmbedded{}),
 		want:    addr(structUnexportedEmbedded{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
-		name: "Structs/Unknown",
+		name: name("Structs/Unknown"),
 		inBuf: `{
 	"object0": {},
 	"object1": {"key1": "value"},
@@ -5592,43 +5613,43 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{}{}),
 		want:  addr(struct{}{}),
 	}, {
-		name:  "Structs/IgnoreInvalidFormat",
+		name:  name("Structs/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `{"Field":"Value"}`,
 		inVal: addr(struct{ Field string }{}),
 		want:  addr(struct{ Field string }{"Value"}),
 	}, {
-		name:  "Slices/Null",
+		name:  name("Slices/Null"),
 		inBuf: `null`,
 		inVal: addr([]string{"something"}),
 		want:  addr([]string(nil)),
 	}, {
-		name:  "Slices/Bool",
+		name:  name("Slices/Bool"),
 		inBuf: `[true,false]`,
 		inVal: new([]bool),
 		want:  addr([]bool{true, false}),
 	}, {
-		name:  "Slices/String",
+		name:  name("Slices/String"),
 		inBuf: `["hello","goodbye"]`,
 		inVal: new([]string),
 		want:  addr([]string{"hello", "goodbye"}),
 	}, {
-		name:  "Slices/Bytes",
+		name:  name("Slices/Bytes"),
 		inBuf: `["aGVsbG8=","Z29vZGJ5ZQ=="]`,
 		inVal: new([][]byte),
 		want:  addr([][]byte{[]byte("hello"), []byte("goodbye")}),
 	}, {
-		name:  "Slices/Int",
+		name:  name("Slices/Int"),
 		inBuf: `[-2,-1,0,1,2]`,
 		inVal: new([]int),
 		want:  addr([]int{-2, -1, 0, 1, 2}),
 	}, {
-		name:  "Slices/Uint",
+		name:  name("Slices/Uint"),
 		inBuf: `[0,1,2,3,4]`,
 		inVal: new([]uint),
 		want:  addr([]uint{0, 1, 2, 3, 4}),
 	}, {
-		name:  "Slices/Float",
+		name:  name("Slices/Float"),
 		inBuf: `[3.14159,12.34]`,
 		inVal: new([]float64),
 		want:  addr([]float64{3.14159, 12.34}),
@@ -5636,18 +5657,18 @@ func TestUnmarshal(t *testing.T) {
 		// NOTE: The semantics differs from v1, where the slice length is reset
 		// and new elements are appended to the end.
 		// See https://golang.org/issue/21092.
-		name:  "Slices/Merge",
+		name:  name("Slices/Merge"),
 		inBuf: `[{"k3":"v3"},{"k4":"v4"}]`,
 		inVal: addr([]map[string]string{{"k1": "v1"}, {"k2": "v2"}}[:1]),
 		want:  addr([]map[string]string{{"k3": "v3"}, {"k4": "v4"}}),
 	}, {
-		name:    "Slices/Invalid/Channel",
+		name:    name("Slices/Invalid/Channel"),
 		inBuf:   `["hello"]`,
 		inVal:   new([]chan string),
 		want:    addr([]chan string{nil}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
-		name:  "Slices/RecursiveSlice",
+		name:  name("Slices/RecursiveSlice"),
 		inBuf: `[[],[],[[]],[[],[]]]`,
 		inVal: new(recursiveSlice),
 		want: addr(recursiveSlice{
@@ -5657,194 +5678,194 @@ func TestUnmarshal(t *testing.T) {
 			{{}, {}},
 		}),
 	}, {
-		name:    "Slices/Invalid/Bool",
+		name:    name("Slices/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: sliceStringType},
 	}, {
-		name:    "Slices/Invalid/String",
+		name:    name("Slices/Invalid/String"),
 		inBuf:   `""`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: sliceStringType},
 	}, {
-		name:    "Slices/Invalid/Number",
+		name:    name("Slices/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: sliceStringType},
 	}, {
-		name:    "Slices/Invalid/Object",
+		name:    name("Slices/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr([]string{"nochange"}),
 		want:    addr([]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: sliceStringType},
 	}, {
-		name:  "Slices/IgnoreInvalidFormat",
+		name:  name("Slices/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `[false,true]`,
 		inVal: addr([]bool{true, false}),
 		want:  addr([]bool{false, true}),
 	}, {
-		name:  "Arrays/Null",
+		name:  name("Arrays/Null"),
 		inBuf: `null`,
 		inVal: addr([1]string{"something"}),
 		want:  addr([1]string{}),
 	}, {
-		name:  "Arrays/Bool",
+		name:  name("Arrays/Bool"),
 		inBuf: `[true,false]`,
 		inVal: new([2]bool),
 		want:  addr([2]bool{true, false}),
 	}, {
-		name:  "Arrays/String",
+		name:  name("Arrays/String"),
 		inBuf: `["hello","goodbye"]`,
 		inVal: new([2]string),
 		want:  addr([2]string{"hello", "goodbye"}),
 	}, {
-		name:  "Arrays/Bytes",
+		name:  name("Arrays/Bytes"),
 		inBuf: `["aGVsbG8=","Z29vZGJ5ZQ=="]`,
 		inVal: new([2][]byte),
 		want:  addr([2][]byte{[]byte("hello"), []byte("goodbye")}),
 	}, {
-		name:  "Arrays/Int",
+		name:  name("Arrays/Int"),
 		inBuf: `[-2,-1,0,1,2]`,
 		inVal: new([5]int),
 		want:  addr([5]int{-2, -1, 0, 1, 2}),
 	}, {
-		name:  "Arrays/Uint",
+		name:  name("Arrays/Uint"),
 		inBuf: `[0,1,2,3,4]`,
 		inVal: new([5]uint),
 		want:  addr([5]uint{0, 1, 2, 3, 4}),
 	}, {
-		name:  "Arrays/Float",
+		name:  name("Arrays/Float"),
 		inBuf: `[3.14159,12.34]`,
 		inVal: new([2]float64),
 		want:  addr([2]float64{3.14159, 12.34}),
 	}, {
 		// NOTE: The semantics differs from v1, where elements are not merged.
 		// This is to maintain consistent merge semantics with slices.
-		name:  "Arrays/Merge",
+		name:  name("Arrays/Merge"),
 		inBuf: `[{"k3":"v3"},{"k4":"v4"}]`,
 		inVal: addr([2]map[string]string{{"k1": "v1"}, {"k2": "v2"}}),
 		want:  addr([2]map[string]string{{"k3": "v3"}, {"k4": "v4"}}),
 	}, {
-		name:    "Arrays/Invalid/Channel",
+		name:    name("Arrays/Invalid/Channel"),
 		inBuf:   `["hello"]`,
 		inVal:   new([1]chan string),
 		want:    new([1]chan string),
 		wantErr: &SemanticError{action: "unmarshal", GoType: chanStringType},
 	}, {
-		name:    "Arrays/Invalid/Underflow",
+		name:    name("Arrays/Invalid/Underflow"),
 		inBuf:   `[]`,
 		inVal:   new([1]string),
 		want:    addr([1]string{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too few array elements")},
 	}, {
-		name:    "Arrays/Invalid/Overflow",
+		name:    name("Arrays/Invalid/Overflow"),
 		inBuf:   `["1","2"]`,
 		inVal:   new([1]string),
 		want:    addr([1]string{"1"}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too many array elements")},
 	}, {
-		name:    "Arrays/Invalid/Bool",
+		name:    name("Arrays/Invalid/Bool"),
 		inBuf:   `true`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: array1StringType},
 	}, {
-		name:    "Arrays/Invalid/String",
+		name:    name("Arrays/Invalid/String"),
 		inBuf:   `""`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: array1StringType},
 	}, {
-		name:    "Arrays/Invalid/Number",
+		name:    name("Arrays/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: array1StringType},
 	}, {
-		name:    "Arrays/Invalid/Object",
+		name:    name("Arrays/Invalid/Object"),
 		inBuf:   `{}`,
 		inVal:   addr([1]string{"nochange"}),
 		want:    addr([1]string{"nochange"}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: array1StringType},
 	}, {
-		name:  "Arrays/IgnoreInvalidFormat",
+		name:  name("Arrays/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `[false,true]`,
 		inVal: addr([2]bool{true, false}),
 		want:  addr([2]bool{false, true}),
 	}, {
-		name:  "Pointers/NullL0",
+		name:  name("Pointers/NullL0"),
 		inBuf: `null`,
 		inVal: new(*string),
 		want:  addr((*string)(nil)),
 	}, {
-		name:  "Pointers/NullL1",
+		name:  name("Pointers/NullL1"),
 		inBuf: `null`,
 		inVal: addr((**string)(new(*string))),
 		want:  addr((**string)(nil)),
 	}, {
-		name:  "Pointers/Bool",
+		name:  name("Pointers/Bool"),
 		inBuf: `true`,
 		inVal: addr(new(bool)),
 		want:  addr(addr(true)),
 	}, {
-		name:  "Pointers/String",
+		name:  name("Pointers/String"),
 		inBuf: `"hello"`,
 		inVal: addr(new(string)),
 		want:  addr(addr("hello")),
 	}, {
-		name:  "Pointers/Bytes",
+		name:  name("Pointers/Bytes"),
 		inBuf: `"aGVsbG8="`,
 		inVal: addr(new([]byte)),
 		want:  addr(addr([]byte("hello"))),
 	}, {
-		name:  "Pointers/Int",
+		name:  name("Pointers/Int"),
 		inBuf: `-123`,
 		inVal: addr(new(int)),
 		want:  addr(addr(int(-123))),
 	}, {
-		name:  "Pointers/Uint",
+		name:  name("Pointers/Uint"),
 		inBuf: `123`,
 		inVal: addr(new(int)),
 		want:  addr(addr(int(123))),
 	}, {
-		name:  "Pointers/Float",
+		name:  name("Pointers/Float"),
 		inBuf: `123.456`,
 		inVal: addr(new(float64)),
 		want:  addr(addr(float64(123.456))),
 	}, {
-		name:  "Pointers/Allocate",
+		name:  name("Pointers/Allocate"),
 		inBuf: `"hello"`,
 		inVal: addr((*string)(nil)),
 		want:  addr(addr("hello")),
 	}, {
-		name:  "Points/IgnoreInvalidFormat",
+		name:  name("Points/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `true`,
 		inVal: addr(new(bool)),
 		want:  addr(addr(true)),
 	}, {
-		name:  "Interfaces/Empty/Null",
+		name:  name("Interfaces/Empty/Null"),
 		inBuf: `null`,
 		inVal: new(any),
 		want:  new(any),
 	}, {
-		name:  "Interfaces/NonEmpty/Null",
+		name:  name("Interfaces/NonEmpty/Null"),
 		inBuf: `null`,
 		inVal: new(io.Reader),
 		want:  new(io.Reader),
 	}, {
-		name:    "Interfaces/NonEmpty/Invalid",
+		name:    name("Interfaces/NonEmpty/Invalid"),
 		inBuf:   `"hello"`,
 		inVal:   new(io.Reader),
 		want:    new(io.Reader),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: ioReaderType, Err: errors.New("cannot derive concrete type for non-empty interface")},
 	}, {
-		name:  "Interfaces/Empty/False",
+		name:  name("Interfaces/Empty/False"),
 		inBuf: `false`,
 		inVal: new(any),
 		want: func() any {
@@ -5852,7 +5873,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Empty/True",
+		name:  name("Interfaces/Empty/True"),
 		inBuf: `true`,
 		inVal: new(any),
 		want: func() any {
@@ -5860,7 +5881,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Empty/String",
+		name:  name("Interfaces/Empty/String"),
 		inBuf: `"string"`,
 		inVal: new(any),
 		want: func() any {
@@ -5868,7 +5889,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Empty/Number",
+		name:  name("Interfaces/Empty/Number"),
 		inBuf: `3.14159`,
 		inVal: new(any),
 		want: func() any {
@@ -5876,7 +5897,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Empty/Object",
+		name:  name("Interfaces/Empty/Object"),
 		inBuf: `{"k":"v"}`,
 		inVal: new(any),
 		want: func() any {
@@ -5884,7 +5905,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Empty/Array",
+		name:  name("Interfaces/Empty/Array"),
 		inBuf: `["v"]`,
 		inVal: new(any),
 		want: func() any {
@@ -5892,7 +5913,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/NamedAny/String",
+		name:  name("Interfaces/NamedAny/String"),
 		inBuf: `"string"`,
 		inVal: new(namedAny),
 		want: func() namedAny {
@@ -5900,7 +5921,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:    "Interfaces/Invalid",
+		name:    name("Interfaces/Invalid"),
 		inBuf:   `]`,
 		inVal:   new(any),
 		want:    new(any),
@@ -5910,7 +5931,7 @@ func TestUnmarshal(t *testing.T) {
 		// where existing map entries were not merged into.
 		// See https://golang.org/issue/26946.
 		// See https://golang.org/issue/33993.
-		name:  "Interfaces/Merge/Map",
+		name:  name("Interfaces/Merge/Map"),
 		inBuf: `{"k2":"v2"}`,
 		inVal: func() any {
 			var vi any = map[string]string{"k1": "v1"}
@@ -5921,7 +5942,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Merge/Struct",
+		name:  name("Interfaces/Merge/Struct"),
 		inBuf: `{"Array":["goodbye"]}`,
 		inVal: func() any {
 			var vi any = structAll{String: "hello"}
@@ -5932,7 +5953,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Merge/NamedInt",
+		name:  name("Interfaces/Merge/NamedInt"),
 		inBuf: `64`,
 		inVal: func() any {
 			var vi any = namedInt64(-64)
@@ -5943,7 +5964,7 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/IgnoreInvalidFormat",
+		name:  name("Interfaces/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `true`,
 		inVal: new(any),
@@ -5952,23 +5973,23 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
-		name:  "Interfaces/Any",
+		name:  name("Interfaces/Any"),
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "", 0.0, map[string]any{}, []any{}}}),
 	}, {
-		name:  "Interfaces/Any/Named",
+		name:  name("Interfaces/Any/Named"),
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X namedAny }),
 		want:  addr(struct{ X namedAny }{[]any{nil, false, true, "", 0.0, map[string]any{}, []any{}}}),
 	}, {
-		name:  "Interfaces/Any/Stringified",
+		name:  name("Interfaces/Any/Stringified"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `{"X":"0"}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{"0"}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/Any",
+		name: name("Interfaces/Any/UnmarshalFunc/Any"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *any) error {
 			*v = "called"
 			return nil
@@ -5977,7 +5998,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{"called"}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/Bool",
+		name: name("Interfaces/Any/UnmarshalFunc/Bool"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *bool) error {
 			*v = string(b) != "true"
 			return nil
@@ -5986,7 +6007,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, true, false, "", 0.0, map[string]any{}, []any{}}}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/String",
+		name: name("Interfaces/Any/UnmarshalFunc/String"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
 			*v = "called"
 			return nil
@@ -5995,7 +6016,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "called", 0.0, map[string]any{}, []any{}}}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/Float64",
+		name: name("Interfaces/Any/UnmarshalFunc/Float64"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *float64) error {
 			*v = 3.14159
 			return nil
@@ -6004,7 +6025,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "", 3.14159, map[string]any{}, []any{}}}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/MapStringAny",
+		name: name("Interfaces/Any/UnmarshalFunc/MapStringAny"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *map[string]any) error {
 			*v = map[string]any{"called": nil}
 			return nil
@@ -6013,7 +6034,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "", 0.0, map[string]any{"called": nil}, []any{}}}),
 	}, {
-		name: "Interfaces/Any/UnmarshalFunc/SliceAny",
+		name: name("Interfaces/Any/UnmarshalFunc/SliceAny"),
 		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *[]any) error {
 			*v = []any{"called"}
 			return nil
@@ -6022,97 +6043,97 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{"called"}}),
 	}, {
-		name:  "Interfaces/Any/Maps/NonEmpty",
+		name:  name("Interfaces/Any/Maps/NonEmpty"),
 		inBuf: `{"X":{"fizz":"buzz"}}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
 	}, {
-		name:    "Interfaces/Any/Maps/RejectDuplicateNames",
+		name:    name("Interfaces/Any/Maps/RejectDuplicateNames"),
 		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
 		inVal:   new(struct{ X any }),
 		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
 		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"X":{"fizz":"buzz",`))),
 	}, {
-		name:    "Interfaces/Any/Maps/AllowDuplicateNames",
+		name:    name("Interfaces/Any/Maps/AllowDuplicateNames"),
 		dopts:   DecodeOptions{AllowDuplicateNames: true},
 		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
 		inVal:   new(struct{ X any }),
 		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: stringType},
 	}, {
-		name:  "Interfaces/Any/Slices/NonEmpty",
+		name:  name("Interfaces/Any/Slices/NonEmpty"),
 		inBuf: `{"X":["fizz","buzz"]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{"fizz", "buzz"}}),
 	}, {
-		name:  "Methods/NilPointer/Null",
+		name:  name("Methods/NilPointer/Null"),
 		inBuf: `{"X":null}`,
 		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
 		want:  addr(struct{ X *allMethods }{X: (*allMethods)(nil)}), // method should not be called
 	}, {
-		name:  "Methods/NilPointer/Value",
+		name:  name("Methods/NilPointer/Value"),
 		inBuf: `{"X":"value"}`,
 		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
 		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
 	}, {
-		name:  "Methods/NilInterface/Null",
+		name:  name("Methods/NilInterface/Null"),
 		inBuf: `{"X":null}`,
 		inVal: addr(struct{ X MarshalerV2 }{X: (*allMethods)(nil)}),
 		want:  addr(struct{ X MarshalerV2 }{X: nil}), // interface value itself is nil'd out
 	}, {
-		name:  "Methods/NilInterface/Value",
+		name:  name("Methods/NilInterface/Value"),
 		inBuf: `{"X":"value"}`,
 		inVal: addr(struct{ X MarshalerV2 }{X: (*allMethods)(nil)}),
 		want:  addr(struct{ X MarshalerV2 }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
 	}, {
-		name:  "Methods/AllMethods",
+		name:  name("Methods/AllMethods"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethods }),
 		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}),
 	}, {
-		name:  "Methods/AllMethodsExceptJSONv2",
+		name:  name("Methods/AllMethodsExceptJSONv2"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethodsExceptJSONv2 }),
 		want:  addr(struct{ X *allMethodsExceptJSONv2 }{X: &allMethodsExceptJSONv2{allMethods: allMethods{method: "UnmarshalJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		name:  "Methods/AllMethodsExceptJSONv1",
+		name:  name("Methods/AllMethodsExceptJSONv1"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethodsExceptJSONv1 }),
 		want:  addr(struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		name:  "Methods/AllMethodsExceptText",
+		name:  name("Methods/AllMethodsExceptText"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethodsExceptText }),
 		want:  addr(struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		name:  "Methods/OnlyMethodJSONv2",
+		name:  name("Methods/OnlyMethodJSONv2"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *onlyMethodJSONv2 }),
 		want:  addr(struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		name:  "Methods/OnlyMethodJSONv1",
+		name:  name("Methods/OnlyMethodJSONv1"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *onlyMethodJSONv1 }),
 		want:  addr(struct{ X *onlyMethodJSONv1 }{X: &onlyMethodJSONv1{allMethods: allMethods{method: "UnmarshalJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		name:  "Methods/OnlyMethodText",
+		name:  name("Methods/OnlyMethodText"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *onlyMethodText }),
 		want:  addr(struct{ X *onlyMethodText }{X: &onlyMethodText{allMethods: allMethods{method: "UnmarshalText", value: []byte(`hello`)}}}),
 	}, {
-		name:  "Methods/IP",
+		name:  name("Methods/IP"),
 		inBuf: `"192.168.0.100"`,
 		inVal: new(net.IP),
 		want:  addr(net.IPv4(192, 168, 0, 100)),
 	}, {
 		// NOTE: Fixes https://golang.org/issue/46516.
-		name:  "Methods/Anonymous",
+		name:  name("Methods/Anonymous"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X struct{ allMethods } }),
 		want:  addr(struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
 	}, {
 		// NOTE: Fixes https://golang.org/issue/22967.
-		name:  "Methods/Addressable",
+		name:  name("Methods/Addressable"),
 		inBuf: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
 		inVal: addr(struct {
 			V allMethods
@@ -6132,36 +6153,36 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		// NOTE: Fixes https://golang.org/issue/29732.
-		name:  "Methods/MapKey/JSONv2",
+		name:  name("Methods/MapKey/JSONv2"),
 		inBuf: `{"k1":"v1b","k2":"v2"}`,
 		inVal: addr(map[structMethodJSONv2]string{{"k1"}: "v1a", {"k3"}: "v3"}),
 		want:  addr(map[structMethodJSONv2]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
 	}, {
 		// NOTE: Fixes https://golang.org/issue/29732.
-		name:  "Methods/MapKey/JSONv1",
+		name:  name("Methods/MapKey/JSONv1"),
 		inBuf: `{"k1":"v1b","k2":"v2"}`,
 		inVal: addr(map[structMethodJSONv1]string{{"k1"}: "v1a", {"k3"}: "v3"}),
 		want:  addr(map[structMethodJSONv1]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
 	}, {
-		name:  "Methods/MapKey/Text",
+		name:  name("Methods/MapKey/Text"),
 		inBuf: `{"k1":"v1b","k2":"v2"}`,
 		inVal: addr(map[structMethodText]string{{"k1"}: "v1a", {"k3"}: "v3"}),
 		want:  addr(map[structMethodText]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
 	}, {
-		name:  "Methods/Invalid/JSONv2/Error",
+		name:  name("Methods/Invalid/JSONv2/Error"),
 		inBuf: `{}`,
 		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
-		name: "Methods/Invalid/JSONv2/TooFew",
+		name: name("Methods/Invalid/JSONv2/TooFew"),
 		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
 			return nil // do nothing
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
 	}, {
-		name:  "Methods/Invalid/JSONv2/TooMany",
+		name:  name("Methods/Invalid/JSONv2/TooMany"),
 		inBuf: `{}{}`,
 		inVal: addr(unmarshalJSONv2Func(func(uo UnmarshalOptions, dec *Decoder) error {
 			dec.ReadValue()
@@ -6170,49 +6191,49 @@ func TestUnmarshal(t *testing.T) {
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
 	}, {
-		name:  "Methods/Invalid/JSONv2/SkipFunc",
+		name:  name("Methods/Invalid/JSONv2/SkipFunc"),
 		inBuf: `{}`,
 		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
 			return SkipFunc
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
-		name:  "Methods/Invalid/JSONv1/Error",
+		name:  name("Methods/Invalid/JSONv1/Error"),
 		inBuf: `{}`,
 		inVal: addr(unmarshalJSONv1Func(func([]byte) error {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalJSONv1FuncType, Err: errors.New("some error")},
 	}, {
-		name:  "Methods/Invalid/JSONv1/SkipFunc",
+		name:  name("Methods/Invalid/JSONv1/SkipFunc"),
 		inBuf: `{}`,
 		inVal: addr(unmarshalJSONv1Func(func([]byte) error {
 			return SkipFunc
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalJSONv1FuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
-		name:  "Methods/Invalid/Text/Error",
+		name:  name("Methods/Invalid/Text/Error"),
 		inBuf: `"value"`,
 		inVal: addr(unmarshalTextFunc(func([]byte) error {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: unmarshalTextFuncType, Err: errors.New("some error")},
 	}, {
-		name:  "Methods/Invalid/Text/Syntax",
+		name:  name("Methods/Invalid/Text/Syntax"),
 		inBuf: `{}`,
 		inVal: addr(unmarshalTextFunc(func([]byte) error {
 			panic("should not be called")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: unmarshalTextFuncType, Err: errors.New("JSON value must be string type")},
 	}, {
-		name:  "Methods/Invalid/Text/SkipFunc",
+		name:  name("Methods/Invalid/Text/SkipFunc"),
 		inBuf: `"value"`,
 		inVal: addr(unmarshalTextFunc(func([]byte) error {
 			return SkipFunc
 		})),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: unmarshalTextFuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
-		name: "Functions/String/V1",
+		name: name("Functions/String/V1"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
 				if string(b) != `""` {
@@ -6226,7 +6247,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/NamedString/V1/NoMatch",
+		name: name("Functions/NamedString/V1/NoMatch"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
 				panic("should not be called")
@@ -6236,7 +6257,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
-		name: "Functions/NamedString/V1/Match",
+		name: name("Functions/NamedString/V1/Match"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
 				if string(b) != `""` {
@@ -6250,7 +6271,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(namedString("")),
 		want:  addr(namedString("called")),
 	}, {
-		name: "Functions/String/V2",
+		name: name("Functions/String/V2"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				switch b, err := dec.ReadValue(); {
@@ -6267,7 +6288,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/NamedString/V2/NoMatch",
+		name: name("Functions/NamedString/V2/NoMatch"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
 				panic("should not be called")
@@ -6277,7 +6298,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
-		name: "Functions/NamedString/V2/Match",
+		name: name("Functions/NamedString/V2/Match"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
 				switch t, err := dec.ReadToken(); {
@@ -6294,7 +6315,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(namedString("")),
 		want:  addr(namedString("called")),
 	}, {
-		name: "Functions/String/Empty1/NoMatch",
+		name: name("Functions/String/Empty1/NoMatch"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: new(Unmarshalers),
 		},
@@ -6302,7 +6323,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
-		name: "Functions/String/Empty2/NoMatch",
+		name: name("Functions/String/Empty2/NoMatch"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(),
 		},
@@ -6310,7 +6331,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
-		name: "Functions/String/V1/DirectError",
+		name: name("Functions/String/V1/DirectError"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
 				return errors.New("some error")
@@ -6321,7 +6342,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
 	}, {
-		name: "Functions/String/V1/SkipError",
+		name: name("Functions/String/V1/SkipError"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
 				return SkipFunc
@@ -6332,7 +6353,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("unmarshal function of type func([]byte, T) error cannot be skipped")},
 	}, {
-		name: "Functions/String/V2/DirectError",
+		name: name("Functions/String/V2/DirectError"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				return errors.New("some error")
@@ -6343,7 +6364,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
 	}, {
-		name: "Functions/String/V2/TooFew",
+		name: name("Functions/String/V2/TooFew"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				return nil
@@ -6354,7 +6375,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
 	}, {
-		name: "Functions/String/V2/TooMany",
+		name: name("Functions/String/V2/TooMany"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
@@ -6371,7 +6392,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr([]string{""}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
 	}, {
-		name: "Functions/String/V2/Skipped",
+		name: name("Functions/String/V2/Skipped"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				return SkipFunc
@@ -6381,7 +6402,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
-		name: "Functions/String/V2/ProcessBeforeSkip",
+		name: name("Functions/String/V2/ProcessBeforeSkip"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
@@ -6395,7 +6416,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must not read any JSON tokens when skipping")},
 	}, {
-		name: "Functions/String/V2/WrappedSkipError",
+		name: name("Functions/String/V2/WrappedSkipError"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
@@ -6406,7 +6427,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(""),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: fmt.Errorf("wrap: %w", SkipFunc)},
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V1",
+		name: name("Functions/Map/Key/NoCaseString/V1"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
 				if string(b) != `"hello"` {
@@ -6420,7 +6441,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
-		name: "Functions/Map/Key/TextMarshaler/V1",
+		name: name("Functions/Map/Key/TextMarshaler/V1"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
 				if string(b) != `"hello"` {
@@ -6434,7 +6455,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
-		name: "Functions/Map/Key/NoCaseString/V2",
+		name: name("Functions/Map/Key/NoCaseString/V2"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
 				switch t, err := dec.ReadToken(); {
@@ -6451,7 +6472,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
-		name: "Functions/Map/Key/TextMarshaler/V2",
+		name: name("Functions/Map/Key/TextMarshaler/V2"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
 				switch b, err := dec.ReadValue(); {
@@ -6468,7 +6489,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
-		name: "Functions/Map/Key/String/V1/DuplicateName",
+		name: name("Functions/Map/Key/String/V1/DuplicateName"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
@@ -6483,7 +6504,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(map[string]string{"1-1": "1-2"}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: (&SyntacticError{str: `duplicate name "name" in object`}).withOffset(int64(len(`{"name":"value",`)))},
 	}, {
-		name: "Functions/Map/Value/NoCaseString/V1",
+		name: name("Functions/Map/Value/NoCaseString/V1"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
 				if string(b) != `"world"` {
@@ -6497,7 +6518,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
-		name: "Functions/Map/Value/TextMarshaler/V1",
+		name: name("Functions/Map/Value/TextMarshaler/V1"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
 				if string(b) != `"world"` {
@@ -6511,7 +6532,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
-		name: "Functions/Map/Value/NoCaseString/V2",
+		name: name("Functions/Map/Value/NoCaseString/V2"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
 				switch t, err := dec.ReadToken(); {
@@ -6528,7 +6549,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
-		name: "Functions/Map/Value/TextMarshaler/V2",
+		name: name("Functions/Map/Value/TextMarshaler/V2"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
 				switch b, err := dec.ReadValue(); {
@@ -6545,7 +6566,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
-		name: "Funtions/Struct/Fields",
+		name: name("Funtions/Struct/Fields"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *bool) error {
@@ -6588,7 +6609,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(structScalars{}),
 		want:  addr(structScalars{Bool: true, String: "called2", Bytes: []byte("called3"), Int: 123, Uint: 456, Float: 789}),
 	}, {
-		name: "Functions/Struct/Inlined",
+		name: name("Functions/Struct/Inlined"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV1(func([]byte, *structInlinedL1) error {
@@ -6609,7 +6630,7 @@ func TestUnmarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		}),
 	}, {
-		name: "Functions/Slice/Elem",
+		name: name("Functions/Slice/Elem"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
 				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
@@ -6620,7 +6641,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr([]string{}),
 		want:  addr([]string{"HELLO", "WORLD"}),
 	}, {
-		name: "Functions/Array/Elem",
+		name: name("Functions/Array/Elem"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
 				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
@@ -6631,7 +6652,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr([2]string{}),
 		want:  addr([2]string{"HELLO", "WORLD"}),
 	}, {
-		name: "Functions/Pointer/Nil",
+		name: name("Functions/Pointer/Nil"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				t, err := dec.ReadToken()
@@ -6643,7 +6664,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X *string }{nil}),
 		want:  addr(struct{ X *string }{addr("HELLO")}),
 	}, {
-		name: "Functions/Pointer/NonNil",
+		name: name("Functions/Pointer/NonNil"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
 				t, err := dec.ReadToken()
@@ -6655,7 +6676,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X *string }{addr("")}),
 		want:  addr(struct{ X *string }{addr("HELLO")}),
 	}, {
-		name: "Functions/Interface/Nil",
+		name: name("Functions/Interface/Nil"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v fmt.Stringer) error {
 				panic("should not be called")
@@ -6666,7 +6687,7 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(struct{ X fmt.Stringer }{nil}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: fmtStringerType, Err: errors.New("cannot derive concrete type for non-empty interface")},
 	}, {
-		name: "Functions/Interface/NetIP",
+		name: name("Functions/Interface/NetIP"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
 				*v = net.IP{}
@@ -6677,7 +6698,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{net.IPv4(1, 1, 1, 1)}),
 	}, {
-		name: "Functions/Interface/NewPointerNetIP",
+		name: name("Functions/Interface/NewPointerNetIP"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
 				*v = new(net.IP)
@@ -6688,7 +6709,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
 	}, {
-		name: "Functions/Interface/NilPointerNetIP",
+		name: name("Functions/Interface/NilPointerNetIP"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
 				*v = (*net.IP)(nil)
@@ -6699,7 +6720,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
 	}, {
-		name: "Functions/Interface/NilPointerNetIP/Override",
+		name: name("Functions/Interface/NilPointerNetIP/Override"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
@@ -6716,7 +6737,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(8, 8, 8, 8))}),
 	}, {
-		name:  "Functions/Interface/Any",
+		name:  name("Functions/Interface/Any"),
 		inBuf: `[null,{},{},{},{},{},{},{},{},{},{},{},{},"LAST"]`,
 		inVal: addr([...]any{
 			nil,                           // nil
@@ -6935,7 +6956,7 @@ func TestUnmarshal(t *testing.T) {
 			}(),
 		},
 	}, {
-		name: "Functions/Precedence/V1First",
+		name: name("Functions/Precedence/V1First"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *string) error {
@@ -6954,7 +6975,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/Precedence/V2First",
+		name: name("Functions/Precedence/V2First"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
@@ -6976,7 +6997,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/Precedence/V2Skipped",
+		name: name("Functions/Precedence/V2Skipped"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
@@ -6995,7 +7016,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/Precedence/NestedFirst",
+		name: name("Functions/Precedence/NestedFirst"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				NewUnmarshalers(
@@ -7016,7 +7037,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name: "Functions/Precedence/NestedLast",
+		name: name("Functions/Precedence/NestedLast"),
 		uopts: UnmarshalOptions{
 			Unmarshalers: NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *string) error {
@@ -7037,7 +7058,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
-		name:  "Duration/Null",
+		name:  name("Duration/Null"),
 		inBuf: `{"D1":null,"D2":null}`,
 		inVal: addr(struct {
 			D1 time.Duration
@@ -7048,7 +7069,7 @@ func TestUnmarshal(t *testing.T) {
 			D2 time.Duration `json:",format:nanos"`
 		}{0, 0}),
 	}, {
-		name:  "Duration/Zero",
+		name:  name("Duration/Zero"),
 		inBuf: `{"D1":"0s","D2":0}`,
 		inVal: addr(struct {
 			D1 time.Duration
@@ -7059,7 +7080,7 @@ func TestUnmarshal(t *testing.T) {
 			D2 time.Duration `json:",format:nanos"`
 		}{0, 0}),
 	}, {
-		name:  "Duration/Positive",
+		name:  name("Duration/Positive"),
 		inBuf: `{"D1":"34293h33m9.123456789s","D2":123456789123456789}`,
 		inVal: new(struct {
 			D1 time.Duration
@@ -7073,7 +7094,7 @@ func TestUnmarshal(t *testing.T) {
 			123456789123456789,
 		}),
 	}, {
-		name:  "Duration/Negative",
+		name:  name("Duration/Negative"),
 		inBuf: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
 		inVal: new(struct {
 			D1 time.Duration
@@ -7087,7 +7108,7 @@ func TestUnmarshal(t *testing.T) {
 			-123456789123456789,
 		}),
 	}, {
-		name:  "Duration/Nanos/Mismatch",
+		name:  name("Duration/Nanos/Mismatch"),
 		inBuf: `{"D":"34293h33m9.123456789s"}`,
 		inVal: addr(struct {
 			D time.Duration `json:",format:nanos"`
@@ -7097,7 +7118,7 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType},
 	}, {
-		name:  "Duration/Nanos/Invalid",
+		name:  name("Duration/Nanos/Invalid"),
 		inBuf: `{"D":1.324}`,
 		inVal: addr(struct {
 			D time.Duration `json:",format:nanos"`
@@ -7110,7 +7131,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Duration/String/Mismatch",
+		name:  name("Duration/String/Mismatch"),
 		inBuf: `{"D":-123456789123456789}`,
 		inVal: addr(struct {
 			D time.Duration
@@ -7120,7 +7141,7 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType},
 	}, {
-		name:  "Duration/String/Invalid",
+		name:  name("Duration/String/Invalid"),
 		inBuf: `{"D":"5minkutes"}`,
 		inVal: addr(struct {
 			D time.Duration
@@ -7133,7 +7154,7 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Duration/Syntax/Invalid",
+		name:  name("Duration/Syntax/Invalid"),
 		inBuf: `{"D":x}`,
 		inVal: addr(struct {
 			D time.Duration
@@ -7143,7 +7164,7 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: newInvalidCharacterError([]byte("x"), "at start of value").withOffset(int64(len(`{"D":`))),
 	}, {
-		name:  "Duration/Format/Invalid",
+		name:  name("Duration/Format/Invalid"),
 		inBuf: `{"D":"0s"}`,
 		inVal: addr(struct {
 			D time.Duration `json:",format:invalid"`
@@ -7153,13 +7174,13 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:  "Duration/IgnoreInvalidFormat",
+		name:  name("Duration/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `"1s"`,
 		inVal: addr(time.Duration(0)),
 		want:  addr(time.Duration(time.Second)),
 	}, {
-		name:  "Time/Zero",
+		name:  name("Time/Zero"),
 		inBuf: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,
 		inVal: new(struct {
 			T1 time.Time
@@ -7182,7 +7203,7 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(time.RFC3339Nano, "0001-01-01T00:00:00Z"),
 		}),
 	}, {
-		name: "Time/Format",
+		name: name("Time/Format"),
 		inBuf: `{
 			"T1": "1234-01-02T03:04:05.000000006Z",
 			"T2": "Mon Jan  2 03:04:05 1234",
@@ -7225,7 +7246,7 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
 		}),
 	}, {
-		name:  "Time/Format/Null",
+		name:  name("Time/Format/Null"),
 		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null}`,
 		inVal: addr(structTimeFormat{
 			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
@@ -7249,14 +7270,14 @@ func TestUnmarshal(t *testing.T) {
 		}),
 		want: new(structTimeFormat),
 	}, {
-		name:  "Time/RFC3339/Mismatch",
+		name:  name("Time/RFC3339/Mismatch"),
 		inBuf: `{"T":1234}`,
 		inVal: new(struct {
 			T time.Time
 		}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeTimeType},
 	}, {
-		name:  "Time/RFC3339/ParseError",
+		name:  name("Time/RFC3339/ParseError"),
 		inBuf: `{"T":"2021-09-29T12:44:52"}`,
 		inVal: new(struct {
 			T time.Time
@@ -7266,21 +7287,21 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
-		name:  "Time/Format/Invalid",
+		name:  name("Time/Format/Invalid"),
 		inBuf: `{"T":""}`,
 		inVal: new(struct {
 			T time.Time `json:",format:UndefinedConstant"`
 		}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
 	}, {
-		name:  "Time/Syntax/Invalid",
+		name:  name("Time/Syntax/Invalid"),
 		inBuf: `{"T":x}`,
 		inVal: new(struct {
 			T time.Time
 		}),
 		wantErr: newInvalidCharacterError([]byte("x"), "at start of value").withOffset(int64(len(`{"D":`))),
 	}, {
-		name:  "Time/IgnoreInvalidFormat",
+		name:  name("Time/IgnoreInvalidFormat"),
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `"2000-01-01T00:00:00Z"`,
 		inVal: addr(time.Time{}),
@@ -7288,14 +7309,14 @@ func TestUnmarshal(t *testing.T) {
 	}}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name.name, func(t *testing.T) {
 			got := tt.inVal
 			gotErr := tt.uopts.Unmarshal(tt.dopts, []byte(tt.inBuf), got)
 			if !reflect.DeepEqual(got, tt.want) && tt.want != nil {
-				t.Errorf("Unmarshal output mismatch:\ngot  %v\nwant %v", got, tt.want)
+				t.Errorf("%s: Unmarshal output mismatch:\ngot  %v\nwant %v", tt.name.where, got, tt.want)
 			}
 			if !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("Unmarshal error mismatch:\ngot  %v\nwant %v", gotErr, tt.wantErr)
+				t.Errorf("%s: Unmarshal error mismatch:\ngot  %v\nwant %v", tt.name.where, gotErr, tt.wantErr)
 			}
 		})
 	}
@@ -7303,26 +7324,26 @@ func TestUnmarshal(t *testing.T) {
 
 func TestMarshalInvalidNamespace(t *testing.T) {
 	tests := []struct {
-		name string
+		name testName
 		val  any
 	}{
-		{"Map", map[string]string{"X": "\xde\xad\xbe\xef"}},
-		{"Struct", struct{ X string }{"\xde\xad\xbe\xef"}},
+		{name("Map"), map[string]string{"X": "\xde\xad\xbe\xef"}},
+		{name("Struct"), struct{ X string }{"\xde\xad\xbe\xef"}},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name.name, func(t *testing.T) {
 			enc := NewEncoder(new(bytes.Buffer))
 			if err := (MarshalOptions{}).MarshalNext(enc, tt.val); err == nil {
-				t.Fatal("MarshalNext error is nil, want non-nil")
+				t.Fatalf("%s: MarshalNext error is nil, want non-nil", tt.name.where)
 			}
 			for _, tok := range []Token{Null, String(""), Int(0), ObjectStart, ObjectEnd, ArrayStart, ArrayEnd} {
 				if err := enc.WriteToken(tok); err == nil {
-					t.Error("WriteToken error is nil, want non-nil")
+					t.Fatalf("%s: WriteToken error is nil, want non-nil", tt.name.where)
 				}
 			}
 			for _, val := range []string{`null`, `""`, `0`, `{}`, `[]`} {
 				if err := enc.WriteValue([]byte(val)); err == nil {
-					t.Error("WriteToken error is nil, want non-nil")
+					t.Fatalf("%s: WriteToken error is nil, want non-nil", tt.name.where)
 				}
 			}
 		})
@@ -7331,23 +7352,23 @@ func TestMarshalInvalidNamespace(t *testing.T) {
 
 func TestUnmarshalInvalidNamespace(t *testing.T) {
 	tests := []struct {
-		name string
+		name testName
 		val  any
 	}{
-		{"Map", addr(map[string]int{})},
-		{"Struct", addr(struct{ X int }{})},
+		{name("Map"), addr(map[string]int{})},
+		{name("Struct"), addr(struct{ X int }{})},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name.name, func(t *testing.T) {
 			dec := NewDecoder(strings.NewReader(`{"X":""}`))
 			if err := (UnmarshalOptions{}).UnmarshalNext(dec, tt.val); err == nil {
-				t.Fatal("UnmarshalNext error is nil, want non-nil")
+				t.Fatalf("%s: UnmarshalNext error is nil, want non-nil", tt.name.where)
 			}
 			if _, err := dec.ReadToken(); err == nil {
-				t.Error("ReadToken error is nil, want non-nil")
+				t.Fatalf("%s: ReadToken error is nil, want non-nil", tt.name.where)
 			}
 			if _, err := dec.ReadValue(); err == nil {
-				t.Error("ReadValue error is nil, want non-nil")
+				t.Fatalf("%s: ReadValue error is nil, want non-nil", tt.name.where)
 			}
 		})
 	}

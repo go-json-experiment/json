@@ -11,7 +11,7 @@ import (
 )
 
 type rawValueTestdataEntry struct {
-	name                string
+	name                testName
 	in                  string
 	wantValid           bool
 	wantCompacted       string
@@ -27,7 +27,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	for _, td := range coderTestdata {
 		// NOTE: The Compact method preserves the raw formatting of strings,
 		// while the Encoder (by default) does not.
-		if td.name == "ComplicatedString" {
+		if td.name.name == "ComplicatedString" {
 			td.outCompacted = strings.TrimSpace(td.in)
 		}
 		out = append(out, rawValueTestdataEntry{
@@ -41,7 +41,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}
 	return out
 }(), []rawValueTestdataEntry{{
-	name: "RFC8785/Primitives",
+	name: name("RFC8785/Primitives"),
 	in: `{
 		"numbers": [333333333.33333329, 1E30, 4.50,
 					2e-3, 0.000000000000000000000000001],
@@ -67,7 +67,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalized: `{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}`,
 }, {
-	name: "RFC8785/ObjectOrdering",
+	name: name("RFC8785/ObjectOrdering"),
 	in: `{
 		"\u20ac": "Euro Sign",
 		"\r": "Carriage Return",
@@ -90,7 +90,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalized: `{"\r":"Carriage Return","1":"One","":"Control","ö":"Latin Small Letter O With Diaeresis","€":"Euro Sign","😀":"Emoji: Grinning Face","דּ":"Hebrew Letter Dalet With Dagesh"}`,
 }, {
-	name:          "LargeIntegers",
+	name:          name("LargeIntegers"),
 	in:            ` [ -9223372036854775808 , 9223372036854775807 ] `,
 	wantValid:     true,
 	wantCompacted: `[-9223372036854775808,9223372036854775807]`,
@@ -100,25 +100,25 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	]`,
 	wantCanonicalized: `[-9223372036854776000,9223372036854776000]`, // NOTE: Loss of precision due to numbers being treated as floats.
 }, {
-	name:                "InvalidUTF8",
+	name:                name("InvalidUTF8"),
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
 	wantCanonicalizeErr: &SyntacticError{str: "invalid UTF-8 within string"},
 }, {
-	name:                "InvalidUTF8/SurrogateHalf",
+	name:                name("InvalidUTF8/SurrogateHalf"),
 	in:                  `"\ud800"`,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"\ud800"`,
 	wantCanonicalizeErr: &SyntacticError{str: `invalid escape sequence "\"" within string`},
 }, {
-	name:              "UppercaseEscaped",
+	name:              name("UppercaseEscaped"),
 	in:                `"\u000B"`,
 	wantValid:         true,
 	wantCompacted:     `"\u000B"`,
 	wantCanonicalized: `"\u000b"`,
 }, {
-	name:          "DuplicateNames",
+	name:          name("DuplicateNames"),
 	in:            ` { "0" : 0 , "1" : 1 , "0" : 0 }`,
 	wantValid:     false, // uses RFC 7493 as the definition; which does check for object uniqueness
 	wantCompacted: `{"0":0,"1":1,"0":0}`,
@@ -132,7 +132,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 
 func TestRawValueMethods(t *testing.T) {
 	for _, td := range rawValueTestdata {
-		t.Run(td.name, func(t *testing.T) {
+		t.Run(td.name.name, func(t *testing.T) {
 			if td.wantIndented == "" {
 				td.wantIndented = td.wantCompacted
 			}
@@ -152,34 +152,34 @@ func TestRawValueMethods(t *testing.T) {
 			v := RawValue(td.in)
 			gotValid := v.IsValid()
 			if gotValid != td.wantValid {
-				t.Errorf("RawValue.IsValid = %v, want %v", gotValid, td.wantValid)
+				t.Errorf("%s: RawValue.IsValid = %v, want %v", td.name.where, gotValid, td.wantValid)
 			}
 
 			gotCompacted := RawValue(td.in)
 			gotCompactErr := gotCompacted.Compact()
 			if string(gotCompacted) != td.wantCompacted {
-				t.Errorf("RawValue.Compact = %s, want %s", gotCompacted, td.wantCompacted)
+				t.Errorf("%s: RawValue.Compact = %s, want %s", td.name.where, gotCompacted, td.wantCompacted)
 			}
 			if !reflect.DeepEqual(gotCompactErr, td.wantCompactErr) {
-				t.Errorf("RawValue.Compact error mismatch: got %#v, want %#v", gotCompactErr, td.wantCompactErr)
+				t.Errorf("%s: RawValue.Compact error mismatch: got %#v, want %#v", td.name.where, gotCompactErr, td.wantCompactErr)
 			}
 
 			gotIndented := RawValue(td.in)
 			gotIndentErr := gotIndented.Indent("\t", "    ")
 			if string(gotIndented) != td.wantIndented {
-				t.Errorf("RawValue.Indent = %s, want %s", gotIndented, td.wantIndented)
+				t.Errorf("%s: RawValue.Indent = %s, want %s", td.name.where, gotIndented, td.wantIndented)
 			}
 			if !reflect.DeepEqual(gotIndentErr, td.wantIndentErr) {
-				t.Errorf("RawValue.Indent error mismatch: got %#v, want %#v", gotIndentErr, td.wantIndentErr)
+				t.Errorf("%s: RawValue.Indent error mismatch: got %#v, want %#v", td.name.where, gotIndentErr, td.wantIndentErr)
 			}
 
 			gotCanonicalized := RawValue(td.in)
 			gotCanonicalizeErr := gotCanonicalized.Canonicalize()
 			if string(gotCanonicalized) != td.wantCanonicalized {
-				t.Errorf("RawValue.Canonicalize = %s, want %s", gotCanonicalized, td.wantCanonicalized)
+				t.Errorf("%s: RawValue.Canonicalize = %s, want %s", td.name.where, gotCanonicalized, td.wantCanonicalized)
 			}
 			if !reflect.DeepEqual(gotCanonicalizeErr, td.wantCanonicalizeErr) {
-				t.Errorf("RawValue.Canonicalize error mismatch: got %#v, want %#v", gotCanonicalizeErr, td.wantCanonicalizeErr)
+				t.Errorf("%s: RawValue.Canonicalize error mismatch: got %#v, want %#v", td.name.where, gotCanonicalizeErr, td.wantCanonicalizeErr)
 			}
 		})
 	}

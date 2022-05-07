@@ -24,7 +24,7 @@ var (
 type tokOrVal interface{ Kind() Kind }
 
 type coderTestdataEntry struct {
-	name             string
+	name             testName
 	in               string
 	outCompacted     string
 	outEscaped       string // outCompacted if empty; escapes all runes in a string
@@ -35,85 +35,85 @@ type coderTestdataEntry struct {
 }
 
 var coderTestdata = []coderTestdataEntry{{
-	name:         "Null",
+	name:         name("Null"),
 	in:           ` null `,
 	outCompacted: `null`,
 	tokens:       []Token{Null},
 	pointers:     []string{""},
 }, {
-	name:         "False",
+	name:         name("False"),
 	in:           ` false `,
 	outCompacted: `false`,
 	tokens:       []Token{False},
 }, {
-	name:         "True",
+	name:         name("True"),
 	in:           ` true `,
 	outCompacted: `true`,
 	tokens:       []Token{True},
 }, {
-	name:         "EmptyString",
+	name:         name("EmptyString"),
 	in:           ` "" `,
 	outCompacted: `""`,
 	tokens:       []Token{String("")},
 }, {
-	name:         "SimpleString",
+	name:         name("SimpleString"),
 	in:           ` "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" `,
 	outCompacted: `"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"`,
 	outEscaped:   `"\u0061\u0062\u0063\u0064\u0065\u0066\u0067\u0068\u0069\u006a\u006b\u006c\u006d\u006e\u006f\u0070\u0071\u0072\u0073\u0074\u0075\u0076\u0077\u0078\u0079\u007a\u0041\u0042\u0043\u0044\u0045\u0046\u0047\u0048\u0049\u004a\u004b\u004c\u004d\u004e\u004f\u0050\u0051\u0052\u0053\u0054\u0055\u0056\u0057\u0058\u0059\u005a"`,
 	tokens:       []Token{String("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")},
 }, {
-	name:             "ComplicatedString",
+	name:             name("ComplicatedString"),
 	in:               " \"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + ` \ud800\udead \"\\\/\b\f\n\r\t \u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009" `,
 	outCompacted:     "\"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + " 𐊭 \\\"\\\\/\\b\\f\\n\\r\\t \\\"\\\\/\\b\\f\\n\\r\\t\"",
 	outEscaped:       `"\u0048\u0065\u006c\u006c\u006f\u002c\u0020\u4e16\u754c\u0020\ud83c\udf1f\u2605\u2606\u2729\ud83c\udf20\u0020\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02\u0020\ud800\udead\u0020\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009\u0020\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`,
 	outCanonicalized: `"Hello, 世界 🌟★☆✩🌠 ö€힙דּ�😂 𐊭 \"\\/\b\f\n\r\t \"\\/\b\f\n\r\t"`,
 	tokens:           []Token{rawToken("\"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + " 𐊭 \\\"\\\\/\\b\\f\\n\\r\\t \\\"\\\\/\\b\\f\\n\\r\\t\"")},
 }, {
-	name:         "ZeroNumber",
+	name:         name("ZeroNumber"),
 	in:           ` 0 `,
 	outCompacted: `0`,
 	tokens:       []Token{Uint(0)},
 }, {
-	name:         "SimpleNumber",
+	name:         name("SimpleNumber"),
 	in:           ` 123456789 `,
 	outCompacted: `123456789`,
 	tokens:       []Token{Uint(123456789)},
 }, {
-	name:         "NegativeNumber",
+	name:         name("NegativeNumber"),
 	in:           ` -123456789 `,
 	outCompacted: `-123456789`,
 	tokens:       []Token{Int(-123456789)},
 }, {
-	name:         "FractionalNumber",
+	name:         name("FractionalNumber"),
 	in:           " 0.123456789 ",
 	outCompacted: `0.123456789`,
 	tokens:       []Token{Float(0.123456789)},
 }, {
-	name:             "ExponentNumber",
+	name:             name("ExponentNumber"),
 	in:               " 0e12456789 ",
 	outCompacted:     `0e12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e12456789`)},
 }, {
-	name:             "ExponentNumberP",
+	name:             name("ExponentNumberP"),
 	in:               " 0e+12456789 ",
 	outCompacted:     `0e+12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e+12456789`)},
 }, {
-	name:             "ExponentNumberN",
+	name:             name("ExponentNumberN"),
 	in:               " 0e-12456789 ",
 	outCompacted:     `0e-12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e-12456789`)},
 }, {
-	name:             "ComplicatedNumber",
+	name:             name("ComplicatedNumber"),
 	in:               ` -123456789.987654321E+0123456789 `,
 	outCompacted:     `-123456789.987654321E+0123456789`,
 	outCanonicalized: `-1.7976931348623157e+308`,
 	tokens:           []Token{rawToken(`-123456789.987654321E+0123456789`)},
 }, {
-	name: "Numbers",
+	name: name("Numbers"),
 	in: ` [
 		0, -0, 0.0, -0.0, 1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001, 1e1000,
 		-5e-324, 1e+100, 1.7976931348623157e+308,
@@ -154,13 +154,13 @@ var coderTestdata = []coderTestdataEntry{{
 		"", "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10", "/11", "/12", "/13", "/14", "/15", "/16", "/17", "",
 	},
 }, {
-	name:         "ObjectN0",
+	name:         name("ObjectN0"),
 	in:           ` { } `,
 	outCompacted: `{}`,
 	tokens:       []Token{ObjectStart, ObjectEnd},
 	pointers:     []string{"", ""},
 }, {
-	name:         "ObjectN1",
+	name:         name("ObjectN1"),
 	in:           ` { "0" : 0 } `,
 	outCompacted: `{"0":0}`,
 	outEscaped:   `{"\u0030":0}`,
@@ -170,7 +170,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
 	pointers: []string{"", "/0", "/0", ""},
 }, {
-	name:         "ObjectN2",
+	name:         name("ObjectN2"),
 	in:           ` { "0" : 0 , "1" : 1 } `,
 	outCompacted: `{"0":0,"1":1}`,
 	outEscaped:   `{"\u0030":0,"\u0031":1}`,
@@ -181,7 +181,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
 	pointers: []string{"", "/0", "/0", "/1", "/1", ""},
 }, {
-	name:         "ObjectNested",
+	name:         name("ObjectNested"),
 	in:           ` { "0" : { "1" : { "2" : { "3" : { "4" : {  } } } } } } `,
 	outCompacted: `{"0":{"1":{"2":{"3":{"4":{}}}}}}`,
 	outEscaped:   `{"\u0030":{"\u0031":{"\u0032":{"\u0033":{"\u0034":{}}}}}}`,
@@ -212,7 +212,7 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name: "ObjectSuperNested",
+	name: name("ObjectSuperNested"),
 	in: `{"": {
 		"44444": {
 			"6666666":  "ccccccc",
@@ -278,13 +278,13 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name:         "ArrayN0",
+	name:         name("ArrayN0"),
 	in:           ` [ ] `,
 	outCompacted: `[]`,
 	tokens:       []Token{ArrayStart, ArrayEnd},
 	pointers:     []string{"", ""},
 }, {
-	name:         "ArrayN1",
+	name:         name("ArrayN1"),
 	in:           ` [ 0 ] `,
 	outCompacted: `[0]`,
 	outIndented: `[
@@ -293,7 +293,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ArrayStart, Uint(0), ArrayEnd},
 	pointers: []string{"", "/0", ""},
 }, {
-	name:         "ArrayN2",
+	name:         name("ArrayN2"),
 	in:           ` [ 0 , 1 ] `,
 	outCompacted: `[0,1]`,
 	outIndented: `[
@@ -302,7 +302,7 @@ var coderTestdata = []coderTestdataEntry{{
 	]`,
 	tokens: []Token{ArrayStart, Uint(0), Uint(1), ArrayEnd},
 }, {
-	name:         "ArrayNested",
+	name:         name("ArrayNested"),
 	in:           ` [ [ [ [ [ ] ] ] ] ] `,
 	outCompacted: `[[[[[]]]]]`,
 	outIndented: `[
@@ -328,7 +328,7 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name: "Everything",
+	name: name("Everything"),
 	in: ` {
 		"literals" : [ null , false , true ],
 		"string" : "Hello, 世界" ,
@@ -418,13 +418,13 @@ func TestCoderInterleaved(t *testing.T) {
 		// In TokenFirst and ValueFirst, alternate between tokens and values.
 		// In TokenDelims, only use tokens for object and array delimiters.
 		for _, modeName := range []string{"TokenFirst", "ValueFirst", "TokenDelims"} {
-			t.Run(path.Join(td.name, modeName), func(t *testing.T) {
-				testCoderInterleaved(t, modeName, td)
+			t.Run(path.Join(td.name.name, modeName), func(t *testing.T) {
+				testCoderInterleaved(t, td.name.where, modeName, td)
 			})
 		}
 	}
 }
-func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) {
+func testCoderInterleaved(t *testing.T, where pc, modeName string, td coderTestdataEntry) {
 	src := strings.NewReader(td.in)
 	dst := new(bytes.Buffer)
 	dec := NewDecoder(src)
@@ -445,10 +445,10 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 				if err == io.EOF {
 					break
 				}
-				t.Fatalf("Decoder.ReadToken error: %v", err)
+				t.Fatalf("%s: Decoder.ReadToken error: %v", where, err)
 			}
 			if err := enc.WriteToken(tok); err != nil {
-				t.Fatalf("Encoder.WriteToken error: %v", err)
+				t.Fatalf("%s: Encoder.WriteToken error: %v", where, err)
 			}
 		} else {
 			val, err := dec.ReadValue()
@@ -459,7 +459,7 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 				expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
 				if expectError {
 					if !errors.As(err, new(*SyntacticError)) {
-						t.Errorf("Decoder.ReadToken error is %T, want %T", err, new(SyntacticError))
+						t.Fatalf("%s: Decoder.ReadToken error is %T, want %T", where, err, new(SyntacticError))
 					}
 					tickTock = !tickTock
 					continue
@@ -468,10 +468,10 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 				if err == io.EOF {
 					break
 				}
-				t.Fatalf("Decoder.ReadValue error: %v", err)
+				t.Fatalf("%s: Decoder.ReadValue error: %v", where, err)
 			}
 			if err := enc.WriteValue(val); err != nil {
-				t.Fatalf("Encoder.WriteValue error: %v", err)
+				t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)
 			}
 		}
 		tickTock = !tickTock
@@ -480,7 +480,7 @@ func testCoderInterleaved(t *testing.T, modeName string, td coderTestdataEntry) 
 	got := dst.String()
 	want := td.outCompacted + "\n"
 	if got != want {
-		t.Errorf("output mismatch:\ngot  %q\nwant %q", got, want)
+		t.Fatalf("%s: output mismatch:\ngot  %q\nwant %q", where, got, want)
 	}
 }
 

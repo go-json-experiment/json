@@ -35,13 +35,13 @@ func equalTokens(xs, ys []Token) bool {
 func TestDecoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value", "TokenDelims"} {
-			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
-				testDecoder(t, typeName, td)
+			t.Run(path.Join(td.name.name, typeName), func(t *testing.T) {
+				testDecoder(t, td.name.where, typeName, td)
 			})
 		}
 	}
 }
-func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
+func testDecoder(t *testing.T, where pc, typeName string, td coderTestdataEntry) {
 	dec := NewDecoder(bytes.NewBufferString(td.in))
 	switch typeName {
 	case "Token":
@@ -53,7 +53,7 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 				if err == io.EOF {
 					break
 				}
-				t.Fatalf("Decoder.ReadToken error: %v", err)
+				t.Fatalf("%s: Decoder.ReadToken error: %v", where, err)
 			}
 			tokens = append(tokens, tok.Clone())
 			if td.pointers != nil {
@@ -61,20 +61,20 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 			}
 		}
 		if !equalTokens(tokens, td.tokens) {
-			t.Fatalf("tokens mismatch:\ngot  %v\nwant %v", tokens, td.tokens)
+			t.Fatalf("%s: tokens mismatch:\ngot  %v\nwant %v", where, tokens, td.tokens)
 		}
 		if !reflect.DeepEqual(pointers, td.pointers) {
-			t.Fatalf("pointers mismatch:\ngot  %q\nwant %q", pointers, td.pointers)
+			t.Fatalf("%s: pointers mismatch:\ngot  %q\nwant %q", where, pointers, td.pointers)
 		}
 	case "Value":
 		val, err := dec.ReadValue()
 		if err != nil {
-			t.Fatalf("Decoder.ReadValue error: %v", err)
+			t.Fatalf("%s: Decoder.ReadValue error: %v", where, err)
 		}
 		got := string(val)
 		want := strings.TrimSpace(td.in)
 		if got != want {
-			t.Fatalf("Decoder.ReadValue = %s, want %s", got, want)
+			t.Fatalf("%s: Decoder.ReadValue = %s, want %s", where, got, want)
 		}
 	case "TokenDelims":
 		// Use ReadToken for object/array delimiters, ReadValue otherwise.
@@ -88,7 +88,7 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 					if err == io.EOF {
 						break loop
 					}
-					t.Fatalf("Decoder.ReadToken error: %v", err)
+					t.Fatalf("%s: Decoder.ReadToken error: %v", where, err)
 				}
 				tokens = append(tokens, tok.Clone())
 			default:
@@ -97,13 +97,13 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 					if err == io.EOF {
 						break loop
 					}
-					t.Fatalf("Decoder.ReadValue error: %v", err)
+					t.Fatalf("%s: Decoder.ReadValue error: %v", where, err)
 				}
 				tokens = append(tokens, rawToken(string(val)))
 			}
 		}
 		if !equalTokens(tokens, td.tokens) {
-			t.Fatalf("tokens mismatch:\ngot  %v\nwant %v", tokens, td.tokens)
+			t.Fatalf("%s: tokens mismatch:\ngot  %v\nwant %v", where, tokens, td.tokens)
 		}
 	}
 }
@@ -112,13 +112,13 @@ func testDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 func TestFaultyDecoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
-			t.Run(path.Join(td.name, typeName), func(t *testing.T) {
-				testFaultyDecoder(t, typeName, td)
+			t.Run(path.Join(td.name.name, typeName), func(t *testing.T) {
+				testFaultyDecoder(t, td.name.where, typeName, td)
 			})
 		}
 	}
 }
-func testFaultyDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
+func testFaultyDecoder(t *testing.T, where pc, typeName string, td coderTestdataEntry) {
 	b := &FaultyBuffer{
 		B:        []byte(td.in),
 		MaxBytes: 1,
@@ -140,14 +140,14 @@ func testFaultyDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 					break
 				}
 				if !errors.Is(err, io.ErrNoProgress) {
-					t.Fatalf("%d: Decoder.ReadToken error: %v", len(tokens), err)
+					t.Fatalf("%s: %d: Decoder.ReadToken error: %v", where, len(tokens), err)
 				}
 				continue
 			}
 			tokens = append(tokens, tok.Clone())
 		}
 		if !equalTokens(tokens, td.tokens) {
-			t.Fatalf("tokens mismatch:\ngot  %s\nwant %s", tokens, td.tokens)
+			t.Fatalf("%s: tokens mismatch:\ngot  %s\nwant %s", where, tokens, td.tokens)
 		}
 	case "Value":
 		for {
@@ -157,14 +157,14 @@ func testFaultyDecoder(t *testing.T, typeName string, td coderTestdataEntry) {
 					break
 				}
 				if !errors.Is(err, io.ErrNoProgress) {
-					t.Fatalf("Decoder.ReadValue error: %v", err)
+					t.Fatalf("%s: Decoder.ReadValue error: %v", where, err)
 				}
 				continue
 			}
 			got := string(val)
 			want := strings.TrimSpace(td.in)
 			if got != want {
-				t.Fatalf("Decoder.ReadValue = %s, want %s", got, want)
+				t.Fatalf("%s: Decoder.ReadValue = %s, want %s", where, got, want)
 			}
 		}
 	}
@@ -178,27 +178,27 @@ type decoderMethodCall struct {
 }
 
 var decoderErrorTestdata = []struct {
-	name       string
+	name       testName
 	opts       DecodeOptions
 	in         string
 	calls      []decoderMethodCall
 	wantOffset int
 }{{
-	name: "InvalidStart",
+	name: name("InvalidStart"),
 	in:   ` #`,
 	calls: []decoderMethodCall{
 		{'#', zeroToken, newInvalidCharacterError([]byte("#"), "at start of token").withOffset(int64(len(" "))), ""},
 		{'#', zeroValue, newInvalidCharacterError([]byte("#"), "at start of value").withOffset(int64(len(" "))), ""},
 	},
 }, {
-	name: "StreamN0",
+	name: name("StreamN0"),
 	in:   ` `,
 	calls: []decoderMethodCall{
 		{0, zeroToken, io.EOF, ""},
 		{0, zeroValue, io.EOF, ""},
 	},
 }, {
-	name: "StreamN1",
+	name: name("StreamN1"),
 	in:   ` null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -207,7 +207,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` null`),
 }, {
-	name: "StreamN2",
+	name: name("StreamN2"),
 	in:   ` nullnull `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -217,7 +217,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` nullnull`),
 }, {
-	name: "StreamN2/ExtraComma", // stream is whitespace delimited, not comma delimited
+	name: name("StreamN2/ExtraComma"), // stream is whitespace delimited, not comma delimited
 	in:   ` null , null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -226,63 +226,63 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` null`),
 }, {
-	name: "TruncatedNull",
+	name: name("TruncatedNull"),
 	in:   `nul`,
 	calls: []decoderMethodCall{
 		{'n', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'n', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidNull",
+	name: name("InvalidNull"),
 	in:   `nulL`,
 	calls: []decoderMethodCall{
 		{'n', zeroToken, newInvalidCharacterError([]byte("L"), `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
 		{'n', zeroValue, newInvalidCharacterError([]byte("L"), `within literal null (expecting 'l')`).withOffset(int64(len(`nul`))), ""},
 	},
 }, {
-	name: "TruncatedFalse",
+	name: name("TruncatedFalse"),
 	in:   `fals`,
 	calls: []decoderMethodCall{
 		{'f', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'f', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidFalse",
+	name: name("InvalidFalse"),
 	in:   `falsE`,
 	calls: []decoderMethodCall{
 		{'f', zeroToken, newInvalidCharacterError([]byte("E"), `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
 		{'f', zeroValue, newInvalidCharacterError([]byte("E"), `within literal false (expecting 'e')`).withOffset(int64(len(`fals`))), ""},
 	},
 }, {
-	name: "TruncatedTrue",
+	name: name("TruncatedTrue"),
 	in:   `tru`,
 	calls: []decoderMethodCall{
 		{'t', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'t', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidTrue",
+	name: name("InvalidTrue"),
 	in:   `truE`,
 	calls: []decoderMethodCall{
 		{'t', zeroToken, newInvalidCharacterError([]byte("E"), `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
 		{'t', zeroValue, newInvalidCharacterError([]byte("E"), `within literal true (expecting 'e')`).withOffset(int64(len(`tru`))), ""},
 	},
 }, {
-	name: "TruncatedString",
+	name: name("TruncatedString"),
 	in:   `"start`,
 	calls: []decoderMethodCall{
 		{'"', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'"', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidString",
+	name: name("InvalidString"),
 	in:   `"ok` + "\x00",
 	calls: []decoderMethodCall{
 		{'"', zeroToken, newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
 		{'"', zeroValue, newInvalidCharacterError([]byte("\x00"), `within string (expecting non-control character)`).withOffset(int64(len(`"ok`))), ""},
 	},
 }, {
-	name: "ValidString/AllowInvalidUTF8/Token",
+	name: name("ValidString/AllowInvalidUTF8/Token"),
 	opts: DecodeOptions{AllowInvalidUTF8: true},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -290,7 +290,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
-	name: "ValidString/AllowInvalidUTF8/Value",
+	name: name("ValidString/AllowInvalidUTF8/Value"),
 	opts: DecodeOptions{AllowInvalidUTF8: true},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -298,7 +298,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
-	name: "InvalidString/RejectInvalidUTF8",
+	name: name("InvalidString/RejectInvalidUTF8"),
 	opts: DecodeOptions{AllowInvalidUTF8: false},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -306,21 +306,21 @@ var decoderErrorTestdata = []struct {
 		{'"', zeroValue, (&SyntacticError{str: "invalid UTF-8 within string"}).withOffset(int64(len("\"living\xde\xad"))), ""},
 	},
 }, {
-	name: "TruncatedNumber",
+	name: name("TruncatedNumber"),
 	in:   `0.`,
 	calls: []decoderMethodCall{
 		{'0', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'0', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: "InvalidNumber",
+	name: name("InvalidNumber"),
 	in:   `0.e`,
 	calls: []decoderMethodCall{
 		{'0', zeroToken, newInvalidCharacterError([]byte("e"), "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
 		{'0', zeroValue, newInvalidCharacterError([]byte("e"), "within number (expecting digit)").withOffset(int64(len(`0.`))), ""},
 	},
 }, {
-	name: "TruncatedObject/AfterStart",
+	name: name("TruncatedObject/AfterStart"),
 	in:   `{`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -330,7 +330,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{`),
 }, {
-	name: "TruncatedObject/AfterName",
+	name: name("TruncatedObject/AfterName"),
 	in:   `{"0"`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -341,7 +341,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0"`),
 }, {
-	name: "TruncatedObject/AfterColon",
+	name: name("TruncatedObject/AfterColon"),
 	in:   `{"0":`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -352,7 +352,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0"`),
 }, {
-	name: "TruncatedObject/AfterValue",
+	name: name("TruncatedObject/AfterValue"),
 	in:   `{"0":0`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -364,7 +364,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0`),
 }, {
-	name: "TruncatedObject/AfterComma",
+	name: name("TruncatedObject/AfterComma"),
 	in:   `{"0":0,`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -376,7 +376,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0`),
 }, {
-	name: "InvalidObject/MissingColon",
+	name: name("InvalidObject/MissingColon"),
 	in:   ` { "fizz" "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("\""), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
@@ -387,7 +387,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: "InvalidObject/MissingColon/GotComma",
+	name: name("InvalidObject/MissingColon/GotComma"),
 	in:   ` { "fizz" , "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte(","), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
@@ -398,7 +398,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: "InvalidObject/MissingColon/GotHash",
+	name: name("InvalidObject/MissingColon/GotHash"),
 	in:   ` { "fizz" # "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("#"), "after object name (expecting ':')").withOffset(int64(len(` { "fizz" `))), ""},
@@ -409,7 +409,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: "InvalidObject/MissingComma",
+	name: name("InvalidObject/MissingComma"),
 	in:   ` { "fizz" : "buzz" "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("\""), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
@@ -421,7 +421,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: "InvalidObject/MissingComma/GotColon",
+	name: name("InvalidObject/MissingComma/GotColon"),
 	in:   ` { "fizz" : "buzz" : "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte(":"), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
@@ -433,7 +433,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: "InvalidObject/MissingComma/GotHash",
+	name: name("InvalidObject/MissingComma/GotHash"),
 	in:   ` { "fizz" : "buzz" # "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("#"), "after object value (expecting ',' or '}')").withOffset(int64(len(` { "fizz" : "buzz" `))), ""},
@@ -445,7 +445,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: "InvalidObject/ExtraComma/AfterStart",
+	name: name("InvalidObject/ExtraComma/AfterStart"),
 	in:   ` { , } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte(","), `at start of string (expecting '"')`).withOffset(int64(len(` { `))), ""},
@@ -455,7 +455,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/ExtraComma/AfterValue",
+	name: name("InvalidObject/ExtraComma/AfterValue"),
 	in:   ` { "fizz" : "buzz" , } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("}"), `at start of string (expecting '"')`).withOffset(int64(len(` { "fizz" : "buzz" , `))), ""},
@@ -467,7 +467,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: "InvalidObject/InvalidName/GotNull",
+	name: name("InvalidObject/InvalidName/GotNull"),
 	in:   ` { null : null } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("n"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -477,7 +477,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/InvalidName/GotFalse",
+	name: name("InvalidObject/InvalidName/GotFalse"),
 	in:   ` { false : false } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("f"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -487,7 +487,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/InvalidName/GotTrue",
+	name: name("InvalidObject/InvalidName/GotTrue"),
 	in:   ` { true : true } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("t"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -497,7 +497,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/InvalidName/GotNumber",
+	name: name("InvalidObject/InvalidName/GotNumber"),
 	in:   ` { 0 : 0 } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("0"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -507,7 +507,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/InvalidName/GotObject",
+	name: name("InvalidObject/InvalidName/GotObject"),
 	in:   ` { {} : {} } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("{"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -517,7 +517,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/InvalidName/GotArray",
+	name: name("InvalidObject/InvalidName/GotArray"),
 	in:   ` { [] : [] } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("["), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -527,7 +527,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "InvalidObject/MismatchingDelim",
+	name: name("InvalidObject/MismatchingDelim"),
 	in:   ` { ] `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError([]byte("]"), "at start of string (expecting '\"')").withOffset(int64(len(` { `))), ""},
@@ -537,7 +537,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "ValidObject/InvalidValue",
+	name: name("ValidObject/InvalidValue"),
 	in:   ` { } `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -545,7 +545,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: "ValidObject/UniqueNames",
+	name: name("ValidObject/UniqueNames"),
 	in:   `{"0":0,"1":1} `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -557,7 +557,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0,"1":1}`),
 }, {
-	name: "ValidObject/DuplicateNames",
+	name: name("ValidObject/DuplicateNames"),
 	opts: DecodeOptions{AllowDuplicateNames: true},
 	in:   `{"0":0,"0":0} `,
 	calls: []decoderMethodCall{
@@ -570,7 +570,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0,"0":0}`),
 }, {
-	name: "InvalidObject/DuplicateNames",
+	name: name("InvalidObject/DuplicateNames"),
 	in:   `{"0":{},"1":{},"0":{}} `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, (&SyntacticError{str: `duplicate name "0" in object`}).withOffset(int64(len(`{"0":{},"1":{},`))), ""},
@@ -586,7 +586,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":{},"1":{}`),
 }, {
-	name: "TruncatedArray/AfterStart",
+	name: name("TruncatedArray/AfterStart"),
 	in:   `[`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -596,7 +596,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[`),
 }, {
-	name: "TruncatedArray/AfterValue",
+	name: name("TruncatedArray/AfterValue"),
 	in:   `[0`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -607,7 +607,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[0`),
 }, {
-	name: "TruncatedArray/AfterComma",
+	name: name("TruncatedArray/AfterComma"),
 	in:   `[0,`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -618,7 +618,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[0`),
 }, {
-	name: "InvalidArray/MissingComma",
+	name: name("InvalidArray/MissingComma"),
 	in:   ` [ "fizz" "buzz" ] `,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, newInvalidCharacterError([]byte("\""), "after array value (expecting ',' or ']')").withOffset(int64(len(` [ "fizz" `))), ""},
@@ -629,7 +629,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` [ "fizz"`),
 }, {
-	name: "InvalidArray/MismatchingDelim",
+	name: name("InvalidArray/MismatchingDelim"),
 	in:   ` [ } `,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, newInvalidCharacterError([]byte("}"), "at start of value").withOffset(int64(len(` [ `))), ""},
@@ -639,7 +639,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` [`),
 }, {
-	name: "ValidArray/InvalidValue",
+	name: name("ValidArray/InvalidValue"),
 	in:   ` [ ] `,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
@@ -652,18 +652,18 @@ var decoderErrorTestdata = []struct {
 // leaves the Decoder in a consistent state.
 func TestDecoderErrors(t *testing.T) {
 	for _, td := range decoderErrorTestdata {
-		t.Run(path.Join(td.name), func(t *testing.T) {
-			testDecoderErrors(t, td.opts, td.in, td.calls, td.wantOffset)
+		t.Run(path.Join(td.name.name), func(t *testing.T) {
+			testDecoderErrors(t, td.name.where, td.opts, td.in, td.calls, td.wantOffset)
 		})
 	}
 }
-func testDecoderErrors(t *testing.T, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
+func testDecoderErrors(t *testing.T, where pc, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
 	src := bytes.NewBufferString(in)
 	dec := opts.NewDecoder(src)
 	for i, call := range calls {
 		gotKind := dec.PeekKind()
 		if gotKind != call.wantKind {
-			t.Fatalf("%d: Decoder.PeekKind = %v, want %v", i, gotKind, call.wantKind)
+			t.Fatalf("%s: %d: Decoder.PeekKind = %v, want %v", where, i, gotKind, call.wantKind)
 		}
 
 		var gotErr error
@@ -672,33 +672,33 @@ func testDecoderErrors(t *testing.T, opts DecodeOptions, in string, calls []deco
 			var gotOut Token
 			gotOut, gotErr = dec.ReadToken()
 			if gotOut.String() != wantOut.String() {
-				t.Fatalf("%d: Decoder.ReadToken = %v, want %v", i, gotOut, wantOut)
+				t.Fatalf("%s: %d: Decoder.ReadToken = %v, want %v", where, i, gotOut, wantOut)
 			}
 		case RawValue:
 			var gotOut RawValue
 			gotOut, gotErr = dec.ReadValue()
 			if string(gotOut) != string(wantOut) {
-				t.Fatalf("%d: Decoder.ReadValue = %s, want %s", i, gotOut, wantOut)
+				t.Fatalf("%s: %d: Decoder.ReadValue = %s, want %s", where, i, gotOut, wantOut)
 			}
 		}
 		if !reflect.DeepEqual(gotErr, call.wantErr) {
-			t.Fatalf("%d: error mismatch: got %#v, want %#v", i, gotErr, call.wantErr)
+			t.Fatalf("%s: %d: error mismatch: got %#v, want %#v", where, i, gotErr, call.wantErr)
 		}
 		if call.wantPointer != "" {
 			gotPointer := dec.StackPointer()
 			if gotPointer != call.wantPointer {
-				t.Fatalf("%d: Decoder.StackPointer = %s, want %s", i, gotPointer, call.wantPointer)
+				t.Fatalf("%s: %d: Decoder.StackPointer = %s, want %s", where, i, gotPointer, call.wantPointer)
 			}
 		}
 	}
 	gotOffset := int(dec.InputOffset())
 	if gotOffset != wantOffset {
-		t.Errorf("Decoder.InputOffset = %v, want %v", gotOffset, wantOffset)
+		t.Fatalf("%s: Decoder.InputOffset = %v, want %v", where, gotOffset, wantOffset)
 	}
 	gotUnread := string(dec.unreadBuffer()) // should be a prefix of wantUnread
 	wantUnread := in[wantOffset:]
 	if !strings.HasPrefix(wantUnread, gotUnread) {
-		t.Errorf("Decoder.UnreadBuffer = %v, want %v", gotUnread, wantUnread)
+		t.Fatalf("%s: Decoder.UnreadBuffer = %v, want %v", where, gotUnread, wantUnread)
 	}
 }
 
@@ -747,7 +747,7 @@ func TestBufferDecoder(t *testing.T) {
 	}
 	want := &ioError{action: "read", err: errBufferWriteAfterNext}
 	if !reflect.DeepEqual(err, want) {
-		t.Errorf("error mismatch: got %v, want %v", err, want)
+		t.Fatalf("error mismatch: got %v, want %v", err, want)
 	}
 }
 
@@ -793,7 +793,7 @@ func TestBlockingDecoder(t *testing.T) {
 
 		tok, err := dec.ReadToken()
 		if err != nil {
-			t.Errorf("Decoder.ReadToken error: %v", err)
+			t.Fatalf("Decoder.ReadToken error: %v", err)
 		}
 		got := tok.String()
 		switch tok.Kind() {
@@ -802,16 +802,16 @@ func TestBlockingDecoder(t *testing.T) {
 		case '{', '[':
 			tok, err := dec.ReadToken()
 			if err != nil {
-				t.Errorf("Decoder.ReadToken error: %v", err)
+				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
 			got += tok.String()
 		}
 		if string(got) != string(want) {
-			t.Errorf("ReadTokens = %s, want %s", got, want)
+			t.Fatalf("ReadTokens = %s, want %s", got, want)
 		}
 
 		if err := <-errCh; err != nil {
-			t.Errorf("Encoder.WriteValue error: %v", err)
+			t.Fatalf("Encoder.WriteValue error: %v", err)
 		}
 	}
 
@@ -823,14 +823,14 @@ func TestBlockingDecoder(t *testing.T) {
 
 		got, err := dec.ReadValue()
 		if err != nil {
-			t.Errorf("Decoder.ReadValue error: %v", err)
+			t.Fatalf("Decoder.ReadValue error: %v", err)
 		}
 		if string(got) != string(want) {
-			t.Errorf("ReadValue = %s, want %s", got, want)
+			t.Fatalf("ReadValue = %s, want %s", got, want)
 		}
 
 		if err := <-errCh; err != nil {
-			t.Errorf("Encoder.WriteValue error: %v", err)
+			t.Fatalf("Encoder.WriteValue error: %v", err)
 		}
 	}
 }

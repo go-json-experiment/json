@@ -163,19 +163,19 @@ func TestStateMachine(t *testing.T) {
 					}
 					want := []int(op)
 					if !reflect.DeepEqual(got, want) {
-						t.Errorf("%s: stack lengths mismatch:\ngot  %v\nwant %v", sequence, got, want)
+						t.Fatalf("%s: stack lengths mismatch:\ngot  %v\nwant %v", sequence, got, want)
 					}
 				case appendToken:
 					got := state.append(op.kind)
 					if !reflect.DeepEqual(got, op.want) {
-						t.Errorf("%s: append('%c') = %v, want %v", sequence, op.kind, got, op.want)
+						t.Fatalf("%s: append('%c') = %v, want %v", sequence, op.kind, got, op.want)
 					}
 					if got == nil {
 						sequence = append(sequence, op.kind)
 					}
 				case needDelim:
 					if got := state.needDelim(op.next); got != op.want {
-						t.Errorf("%s: needDelim('%c') = '%c', want '%c'", sequence, op.next, got, op.want)
+						t.Fatalf("%s: needDelim('%c') = '%c', want '%c'", sequence, op.next, got, op.want)
 					}
 				default:
 					panic(fmt.Sprintf("unknown operation: %T", op))
