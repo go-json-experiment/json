@@ -1334,6 +1334,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		if mo.Marshalers != nil {
 			marshal, _ = mo.Marshalers.lookup(marshal, v.Type())
 		}
+		// Optimize for the any type if there are no special options.
+		if t == anyType && !mo.StringifyNumbers && mo.format == "" && (mo.Marshalers == nil || !mo.Marshalers.fromAny) {
+			return marshalValueAny(mo, enc, va.Elem().Interface())
+		}
 		return marshal(mo, enc, v)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
@@ -1349,6 +1353,21 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		}
 		var v addressableValue
 		if va.IsNil() {
+			// Optimize for the any type if there are no special options.
+			// We do not care about stringified numbers since JSON strings
+			// are always unmarshaled into an any value as Go strings.
+			// Duplicate name check must be enforced since unmarshalValueAny
+			// does not implement merge semantics.
+			if t == anyType && uo.format == "" && (uo.Unmarshalers == nil || !uo.Unmarshalers.fromAny) && !dec.options.AllowDuplicateNames {
+				v, err := unmarshalValueAny(uo, dec)
+				// We must check for nil interface values up front.
+				// See https://golang.org/issue/52310.
+				if v != nil {
+					va.Set(reflect.ValueOf(v))
+				}
+				return err
+			}
+
 			k := dec.PeekKind()
 			if !isAnyType(t) {
 				err := errors.New("cannot derive concrete type for non-empty interface")

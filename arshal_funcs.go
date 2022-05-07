@@ -63,8 +63,20 @@ type typedMarshalers = typedArshalers[MarshalOptions, Encoder]
 type typedUnmarshalers = typedArshalers[UnmarshalOptions, Decoder]
 type typedArshalers[Options, Coder any] struct {
 	nonComparable
+
 	fncVals  []typedArshaler[Options, Coder]
 	fncCache sync.Map // map[reflect.Type]arshaler
+
+	// fromAny reports whether any of Go types used to represent arbitrary JSON
+	// (i.e., any, bool, string, float64, map[string]any, or []any) matches
+	// any of the provided type-specific arshalers.
+	//
+	// This bit of information is needed in arshal_default.go to determine
+	// whether to use the specialized logic in arshal_any.go to handle
+	// the any interface type. The logic in arshal_any.go does not support
+	// type-specific arshal functions, so we must avoid using that logic
+	// if this is true.
+	fromAny bool
 }
 type typedMarshaler = typedArshaler[MarshalOptions, Encoder]
 type typedUnmarshaler = typedArshaler[UnmarshalOptions, Decoder]
@@ -81,6 +93,7 @@ func newTypedArshalers[Options, Coder any](as ...*typedArshalers[Options, Coder]
 	for _, a2 := range as {
 		if a2 != nil {
 			a.fncVals = append(a.fncVals, a2.fncVals...)
+			a.fromAny = a.fromAny || a2.fromAny
 		}
 	}
 	if len(a.fncVals) == 0 {
@@ -162,7 +175,7 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 			return nil
 		},
 	}
-	return &Marshalers{fncVals: []typedMarshaler{typFnc}}
+	return &Marshalers{fncVals: []typedMarshaler{typFnc}, fromAny: castableToFromAny(t)}
 }
 
 // MarshalFuncV2 constructs a type-specific marshaler that
@@ -203,7 +216,7 @@ func MarshalFuncV2[T any](fn func(MarshalOptions, *Encoder, T) error) *Marshaler
 		},
 		maySkip: true,
 	}
-	return &Marshalers{fncVals: []typedMarshaler{typFnc}}
+	return &Marshalers{fncVals: []typedMarshaler{typFnc}, fromAny: castableToFromAny(t)}
 }
 
 // UnmarshalFuncV1 constructs a type-specific unmarshaler that
@@ -234,7 +247,7 @@ func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 			return nil
 		},
 	}
-	return &Unmarshalers{fncVals: []typedUnmarshaler{typFnc}}
+	return &Unmarshalers{fncVals: []typedUnmarshaler{typFnc}, fromAny: castableToFromAny(t)}
 }
 
 // UnmarshalFuncV2 constructs a type-specific unmarshaler that
@@ -274,7 +287,7 @@ func UnmarshalFuncV2[T any](fn func(UnmarshalOptions, *Decoder, T) error) *Unmar
 		},
 		maySkip: true,
 	}
-	return &Unmarshalers{fncVals: []typedUnmarshaler{typFnc}}
+	return &Unmarshalers{fncVals: []typedUnmarshaler{typFnc}, fromAny: castableToFromAny(t)}
 }
 
 // assertCastableTo asserts that "to" is a valid type to be casted to.
@@ -353,6 +366,17 @@ func (va addressableValue) castTo(to reflect.Type) reflect.Value {
 	default:
 		return va.Value
 	}
+}
+
+// castableToFromAny reports whether "to" can be casted to from any
+// of the dynamic types used to represent arbitrary JSON.
+func castableToFromAny(to reflect.Type) bool {
+	for _, from := range []reflect.Type{anyType, boolType, stringType, float64Type, mapStringAnyType, sliceAnyType} {
+		if castableTo(from, to) {
+			return true
+		}
+	}
+	return false
 }
 
 func wrapSkipFunc(err error, what string) error {

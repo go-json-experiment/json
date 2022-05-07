@@ -2207,6 +2207,128 @@ func TestMarshal(t *testing.T) {
 		in:    [1]io.Reader{nil},
 		want:  `[null]`,
 	}, {
+		name: "Interfaces/Any",
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}, [8]byte{}}},
+		want: `{"X":[null,false,"",0,{},[],"AAAAAAAAAAA="]}`,
+	}, {
+		name: "Interfaces/Any/Named",
+		in:   struct{ X namedAny }{[]namedAny{nil, false, "", 0.0, map[string]namedAny{}, []namedAny{}, [8]byte{}}},
+		want: `{"X":[null,false,"",0,{},[],"AAAAAAAAAAA="]}`,
+	}, {
+		name:  "Interfaces/Any/Stringified",
+		mopts: MarshalOptions{StringifyNumbers: true},
+		in:    struct{ X any }{0.0},
+		want:  `{"X":"0"}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/Any",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v any) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `"called"`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/Bool",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `{"X":[null,"called","",0,{},[]]}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/String",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `{"X":[null,false,"called",0,{},[]]}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/Float64",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v float64) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `{"X":[null,false,"","called",{},[]]}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/MapStringAny",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v map[string]any) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `{"X":[null,false,"",0,"called",[]]}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/SliceAny",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v []any) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Interfaces/Any/MarshalFunc/Bytes",
+		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v [8]byte) ([]byte, error) {
+			return []byte(`"called"`), nil
+		})},
+		in:   struct{ X any }{[8]byte{}},
+		want: `{"X":"called"}`,
+	}, {
+		name: "Interfaces/Any/Maps/Empty",
+		in:   struct{ X any }{map[string]any{}},
+		want: `{"X":{}}`,
+	}, {
+		name:  "Interfaces/Any/Maps/Empty/Multiline",
+		eopts: EncodeOptions{multiline: true},
+		in:    struct{ X any }{map[string]any{}},
+		want:  "{\n\"X\": {}\n}",
+	}, {
+		name: "Interfaces/Any/Maps/NonEmpty",
+		in:   struct{ X any }{map[string]any{"fizz": "buzz"}},
+		want: `{"X":{"fizz":"buzz"}}`,
+	}, {
+		name:    "Interfaces/Any/Maps/RejectInvalidUTF8",
+		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
+		want:    `{"X":{`,
+		wantErr: &SyntacticError{str: "invalid UTF-8 within string"},
+	}, {
+		name:    "Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames",
+		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
+		want:    `{"X":{"�":""`,
+		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
+	}, {
+		name:  "Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames",
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		in:    struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
+		want:  `{"X":{"�":"","�":""}}`,
+	}, {
+		name: "Interfaces/Any/Maps/Cyclic",
+		in: func() any {
+			m := map[string]any{}
+			m[""] = m
+			return struct{ X any }{m}
+		}(),
+		want:    `{"X"` + strings.Repeat(`:{""`, startDetectingCyclesAfter),
+		wantErr: &SemanticError{action: "marshal", GoType: mapStringAnyType, Err: errors.New("encountered a cycle")},
+	}, {
+		name: "Interfaces/Any/Slices/Empty",
+		in:   struct{ X any }{[]any{}},
+		want: `{"X":[]}`,
+	}, {
+		name:  "Interfaces/Any/Slices/Empty/Multiline",
+		eopts: EncodeOptions{multiline: true},
+		in:    struct{ X any }{[]any{}},
+		want:  "{\n\"X\": []\n}",
+	}, {
+		name: "Interfaces/Any/Slices/NonEmpty",
+		in:   struct{ X any }{[]any{"fizz", "buzz"}},
+		want: `{"X":["fizz","buzz"]}`,
+	}, {
+		name: "Interfaces/Any/Slices/Cyclic",
+		in: func() any {
+			s := make([]any, 1)
+			s[0] = s
+			return struct{ X any }{s}
+		}(),
+		want:    `{"X":` + strings.Repeat(`[`, startDetectingCyclesAfter),
+		wantErr: &SemanticError{action: "marshal", GoType: sliceAnyType, Err: errors.New("encountered a cycle")},
+	}, {
 		name: "Methods/NilPointer",
 		in:   struct{ X *allMethods }{X: (*allMethods)(nil)}, // method should not be called
 		want: `{"X":null}`,
@@ -2887,7 +3009,6 @@ func TestMarshal(t *testing.T) {
 					P P
 					V any
 				}
-				type namedAny any
 
 				var lastChecks []func() error
 				checkLast := func() error {
@@ -5831,6 +5952,99 @@ func TestUnmarshal(t *testing.T) {
 			return &vi
 		}(),
 	}, {
+		name:  "Interfaces/Any",
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{nil, false, true, "", 0.0, map[string]any{}, []any{}}}),
+	}, {
+		name:  "Interfaces/Any/Named",
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X namedAny }),
+		want:  addr(struct{ X namedAny }{[]any{nil, false, true, "", 0.0, map[string]any{}, []any{}}}),
+	}, {
+		name:  "Interfaces/Any/Stringified",
+		uopts: UnmarshalOptions{StringifyNumbers: true},
+		inBuf: `{"X":"0"}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{"0"}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/Any",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *any) error {
+			*v = "called"
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{"called"}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/Bool",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *bool) error {
+			*v = string(b) != "true"
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{nil, true, false, "", 0.0, map[string]any{}, []any{}}}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/String",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+			*v = "called"
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{nil, false, true, "called", 0.0, map[string]any{}, []any{}}}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/Float64",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *float64) error {
+			*v = 3.14159
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{nil, false, true, "", 3.14159, map[string]any{}, []any{}}}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/MapStringAny",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *map[string]any) error {
+			*v = map[string]any{"called": nil}
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{nil, false, true, "", 0.0, map[string]any{"called": nil}, []any{}}}),
+	}, {
+		name: "Interfaces/Any/UnmarshalFunc/SliceAny",
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *[]any) error {
+			*v = []any{"called"}
+			return nil
+		})},
+		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{"called"}}),
+	}, {
+		name:  "Interfaces/Any/Maps/NonEmpty",
+		inBuf: `{"X":{"fizz":"buzz"}}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
+	}, {
+		name:    "Interfaces/Any/Maps/RejectDuplicateNames",
+		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
+		inVal:   new(struct{ X any }),
+		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
+		wantErr: (&SyntacticError{str: `duplicate name "fizz" in object`}).withOffset(int64(len(`{"X":{"fizz":"buzz",`))),
+	}, {
+		name:    "Interfaces/Any/Maps/AllowDuplicateNames",
+		dopts:   DecodeOptions{AllowDuplicateNames: true},
+		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
+		inVal:   new(struct{ X any }),
+		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: stringType},
+	}, {
+		name:  "Interfaces/Any/Slices/NonEmpty",
+		inBuf: `{"X":["fizz","buzz"]}`,
+		inVal: new(struct{ X any }),
+		want:  addr(struct{ X any }{[]any{"fizz", "buzz"}}),
+	}, {
 		name:  "Methods/NilPointer/Null",
 		inBuf: `{"X":null}`,
 		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
@@ -6527,7 +6741,6 @@ func TestUnmarshal(t *testing.T) {
 					P P
 					V any
 				}
-				type namedAny any
 
 				var lastChecks []func() error
 				checkLast := func() error {
