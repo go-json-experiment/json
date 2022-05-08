@@ -70,8 +70,9 @@ its addition to the standard library.
 ## Development
 
 This module is primarily developed by
-[@dsnet](https://github.com/dsnet) and
-[@mvdan](https://github.com/mvdan)
+[@dsnet](https://github.com/dsnet),
+[@mvdan](https://github.com/mvdan), and
+[@johanbrandhorst](https://github.com/johanbrandhorst)
 with feedback provided by
 [@rogpeppe](https://github.com/rogpeppe),
 [@ChrisHines](https://github.com/ChrisHines), and
