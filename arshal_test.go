@@ -4874,6 +4874,25 @@ func TestUnmarshal(t *testing.T) {
 			Array:     []byte{1, 2, 3, 4},
 		}),
 	}, {
+		name: name("Structs/Format/Bytes/Array"),
+		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *byte) error {
+			if string(b) == "true" {
+				*v = 1
+			} else {
+				*v = 0
+			}
+			return nil
+		})},
+		inBuf: `{"Array":[false,true,false,true,false,true]}`,
+		inVal: new(struct {
+			Array []byte `json:",format:array"`
+		}),
+		want: addr(struct {
+			Array []byte `json:",format:array"`
+		}{
+			Array: []byte{0, 1, 0, 1, 0, 1},
+		}),
+	}, {
 		name:    name("Structs/Format/Bytes/Invalid/Base16/WrongKind"),
 		inBuf:   `{"Base16": [1,2,3,4]}`,
 		inVal:   new(structFormatBytes),
