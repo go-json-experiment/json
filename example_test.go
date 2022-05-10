@@ -15,7 +15,7 @@ import (
 // preserved when unmarshaling. This can be accomplished using a type-specific
 // marshal function that intercepts all any types and pre-populates the
 // interface value with a RawValue, which can represent a JSON number exactly.
-func ExampleValue_unmarshalRawNumber() {
+func ExampleRawValue_unmarshalRawNumber() {
 	opts := json.UnmarshalOptions{
 		Unmarshalers: json.UnmarshalFuncV2(func(opts json.UnmarshalOptions, dec *json.Decoder, val *any) error {
 			if dec.PeekKind() == '0' {
