@@ -976,8 +976,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						}
 					}
 					if f == nil {
-						if uo.RejectUnknownNames && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
-							return &SemanticError{action: "unmarshal", GoType: t, Err: ErrUnknownName}
+						if uo.RejectUnknownMembers && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
+							return &SemanticError{action: "unmarshal", GoType: t, Err: fmt.Errorf("unknown name %s", val)}
 						}
 						if !dec.options.AllowDuplicateNames && !dec.namespaces.last().insertUnquoted(name) {
 							// TODO: Unread the object name.

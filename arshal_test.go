@@ -5491,8 +5491,8 @@ func TestUnmarshal(t *testing.T) {
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		}),
 	}, {
-		name:  name("Structs/InlinedFallback/RejectUnknownNames"),
-		uopts: UnmarshalOptions{RejectUnknownNames: true},
+		name:  name("Structs/InlinedFallback/RejectUnknownMembers"),
+		uopts: UnmarshalOptions{RejectUnknownMembers: true},
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlineRawValue),
 		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
@@ -5502,12 +5502,12 @@ func TestUnmarshal(t *testing.T) {
 			B: 2,
 		}),
 	}, {
-		name:    name("Structs/UnknownFallback/RejectUnknownNames"),
-		uopts:   UnmarshalOptions{RejectUnknownNames: true},
+		name:    name("Structs/UnknownFallback/RejectUnknownMembers"),
+		uopts:   UnmarshalOptions{RejectUnknownMembers: true},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
 		inVal:   new(structUnknownRawValue),
 		want:    addr(structUnknownRawValue{A: 1}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structUnknownRawValueType, Err: ErrUnknownName},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structUnknownRawValueType, Err: errors.New(`unknown name "fizz"`)},
 	}, {
 		name:  name("Structs/UnknownFallback"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
@@ -5519,17 +5519,17 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name:  name("Structs/UnknownIgnored"),
-		uopts: UnmarshalOptions{RejectUnknownNames: false},
+		uopts: UnmarshalOptions{RejectUnknownMembers: false},
 		inBuf: `{"unknown":"fizzbuzz"}`,
 		inVal: new(structAll),
 		want:  new(structAll),
 	}, {
-		name:    name("Structs/RejectUnknownNames"),
-		uopts:   UnmarshalOptions{RejectUnknownNames: true},
+		name:    name("Structs/RejectUnknownMembers"),
+		uopts:   UnmarshalOptions{RejectUnknownMembers: true},
 		inBuf:   `{"unknown":"fizzbuzz"}`,
 		inVal:   new(structAll),
 		want:    new(structAll),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: ErrUnknownName},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structAllType, Err: errors.New(`unknown name "unknown"`)},
 	}, {
 		name:  name("Structs/UnexportedIgnored"),
 		inBuf: `{"ignored":"unused"}`,

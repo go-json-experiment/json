@@ -11,11 +11,6 @@ import (
 	"sync"
 )
 
-// ErrUnknownName is a sentinel error indicating that
-// an unknown name was encountered while unmarshaling a JSON object.
-// It is usually wrapped within a SemanticError.
-const ErrUnknownName = jsonError("unknown name")
-
 // MarshalOptions configures how Go data is serialized as JSON data.
 // The zero value is equivalent to the default marshal settings.
 type MarshalOptions struct {
@@ -132,12 +127,10 @@ type UnmarshalOptions struct {
 	// could not be found.
 	MatchCaseInsensitiveNames bool
 
-	// RejectUnknownNames specifies that unknown names should be rejected
+	// RejectUnknownMembers specifies that unknown members should be rejected
 	// when unmarshaling a JSON object, regardless of whether there is a field
-	// to store unknown members. When an unknown name is encountered,
-	// an unmarshal implementation should return an error that matches
-	// ErrUnknownName according to errors.Is.
-	RejectUnknownNames bool
+	// to store unknown members.
+	RejectUnknownMembers bool
 
 	// formatDepth is the depth at which we respect the format flag.
 	formatDepth int
