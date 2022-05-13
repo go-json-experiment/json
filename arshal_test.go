@@ -1902,6 +1902,15 @@ func TestMarshal(t *testing.T) {
 		in:   structInlinePointerInlineMapStringAny{},
 		want: `{}`,
 	}, {
+		name: name("Structs/InlinedFallback/MapStringAny/MarshalFuncV1"),
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v float64) ([]byte, error) {
+				return []byte(fmt.Sprintf(`"%v"`, v)), nil
+			}),
+		},
+		in:   structInlineMapStringAny{X: jsonObject{"fizz": 3.14159}},
+		want: `{"fizz":"3.14159"}`,
+	}, {
 		name: name("Structs/InlinedFallback/PointerMapStringAny/Nil"),
 		in:   structInlinePointerMapStringAny{X: nil},
 		want: `{}`,
@@ -1923,6 +1932,18 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name:  name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		mopts: MarshalOptions{StringifyNumbers: true},
+		in: structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		},
+		want:         `{"one":"1","two":"2","zero":"0"}`,
+		canonicalize: true,
+	}, {
+		name: name("Structs/InlinedFallback/MapStringInt/MarshalFuncV1"),
+		mopts: MarshalOptions{
+			Marshalers: MarshalFuncV1(func(v int) ([]byte, error) {
+				return []byte(fmt.Sprintf(`"%v"`, v)), nil
+			}),
+		},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		},
@@ -5387,6 +5408,18 @@ func TestUnmarshal(t *testing.T) {
 			}{A: 1, X: jsonObject{"fizz": "buzz"}},
 		}),
 	}, {
+		name: name("Structs/InlinedFallback/MapStringInt/UnmarshalFuncV1"),
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *any) error {
+				var err error
+				*v, err = strconv.ParseFloat(string(bytes.Trim(b, `"`)), 64)
+				return err
+			}),
+		},
+		inBuf: `{"D":"1.1","E":"2.2","F":"3.3"}`,
+		inVal: new(structInlineMapStringAny),
+		want:  addr(structInlineMapStringAny{X: jsonObject{"D": 1.1, "E": 2.2, "F": 3.3}}),
+	}, {
 		name:  name("Structs/InlinedFallback/PointerMapStringAny/Noop"),
 		inBuf: `{"A":1,"B":2}`,
 		inVal: new(structInlinePointerMapStringAny),
@@ -5436,6 +5469,23 @@ func TestUnmarshal(t *testing.T) {
 		name:  name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `{"zero": 0, "one": "1", "two": 2}`,
+		inVal: new(structInlineMapStringInt),
+		want: addr(structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		}),
+	}, {
+		name: name("Structs/InlinedFallback/MapStringInt/UnmarshalFuncV1"),
+		uopts: UnmarshalOptions{
+			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *int) error {
+				i, err := strconv.ParseInt(string(bytes.Trim(b, `"`)), 10, 64)
+				if err != nil {
+					return err
+				}
+				*v = int(i)
+				return nil
+			}),
+		},
+		inBuf: `{"zero": "0", "one": "1", "two": "2"}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},

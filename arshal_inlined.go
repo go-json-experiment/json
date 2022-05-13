@@ -111,8 +111,11 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			}
 
 			mv.Set(iter.Value())
-			marshalVal := f.fncs.marshal // TODO: Handle custom arshalers.
-			if err := marshalVal(mo, enc, mv); err != nil {
+			marshal := f.fncs.marshal
+			if mo.Marshalers != nil {
+				marshal, _ = mo.Marshalers.lookup(marshal, mv.Type())
+			}
+			if err := marshal(mo, enc, mv); err != nil {
 				return err
 			}
 		}
@@ -169,7 +172,10 @@ func unmarshalInlinedFallbackNext(uo UnmarshalOptions, dec *Decoder, va addressa
 			mv.Set(v2)
 		}
 
-		unmarshal := f.fncs.unmarshal // TODO: Handle custom arshalers.
+		unmarshal := f.fncs.unmarshal
+		if uo.Unmarshalers != nil {
+			unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, mv.Type())
+		}
 		err := unmarshal(uo, dec, mv)
 		m.SetMapIndex(mk, mv.Value)
 		if err != nil {
