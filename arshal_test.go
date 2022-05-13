@@ -2092,7 +2092,7 @@ func TestMarshal(t *testing.T) {
 		name:    name("Structs/Invalid/NoneExported"),
 		in:      structNoneExported{},
 		want:    ``,
-		wantErr: &SemanticError{action: "marshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
+		wantErr: &SemanticError{action: "marshal", GoType: structNoneExportedType, Err: errors.New("Go struct has no exported fields")},
 	}, {
 		name:    name("Structs/Invalid/MalformedTag"),
 		in:      structMalformedTag{},
@@ -5647,7 +5647,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{}`,
 		inVal:   addr(structNoneExported{}),
 		want:    addr(structNoneExported{}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: structNoneExportedType, Err: errors.New("Go struct kind has no exported fields")},
+		wantErr: &SemanticError{action: "unmarshal", GoType: structNoneExportedType, Err: errors.New("Go struct has no exported fields")},
 	}, {
 		name:    name("Structs/Invalid/MalformedTag"),
 		inBuf:   `{}`,

@@ -226,7 +226,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		// errors returned by errors.New would fail to serialize.
 		isEmptyStruct := t.NumField() == 0
 		if !isEmptyStruct && !hasAnyJSONTag && !hasAnyJSONField {
-			err := errors.New("Go struct kind has no exported fields")
+			err := errors.New("Go struct has no exported fields")
 			return structFields{}, &SemanticError{GoType: t, Err: err}
 		}
 	}
