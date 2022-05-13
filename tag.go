@@ -56,10 +56,11 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	// Setup a queue for a breath-first search.
 	var queueIndex int
 	type queueEntry struct {
-		typ   reflect.Type
-		index []int
+		typ           reflect.Type
+		index         []int
+		visitChildren bool // whether to recursively visit inlined field in this struct
 	}
-	queue := []queueEntry{{root, nil}}
+	queue := []queueEntry{{root, nil, true}}
 	seen := map[reflect.Type]bool{root: true}
 
 	// Perform a breadth-first search over all reachable fields.
@@ -135,8 +136,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 						err := fmt.Errorf("inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a json.RawValue", sf.Name, tf)
 						return structFields{}, &SemanticError{GoType: t, Err: err}
 					}
-					if !seen[tf] {
-						queue = append(queue, queueEntry{tf, f.index})
+					if qe.visitChildren {
+						queue = append(queue, queueEntry{tf, f.index, !seen[tf]})
 					}
 					seen[tf] = true
 					continue

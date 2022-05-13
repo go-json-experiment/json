@@ -432,6 +432,15 @@ type (
 
 	valueStringer   struct{}
 	pointerStringer struct{}
+
+	cyclicA struct {
+		B1 cyclicB `json:",inline"`
+		B2 cyclicB `json:",inline"`
+	}
+	cyclicB struct {
+		F int
+		A *cyclicA `json:",inline"`
+	}
 )
 
 func (p *allMethods) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
@@ -1766,6 +1775,13 @@ func TestMarshal(t *testing.T) {
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		},
 		want: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+	}, {
+		name: name("Structs/Inline/DualCycle"),
+		in: cyclicA{
+			B1: cyclicB{F: 1}, // B1.F ignored since it conflicts with B2.F
+			B2: cyclicB{F: 2}, // B2.F ignored since it conflicts with B1.F
+		},
+		want: `{}`,
 	}, {
 		name: name("Structs/InlinedFallback/RawValue/Nil"),
 		in:   structInlineRawValue{X: RawValue(nil)},
