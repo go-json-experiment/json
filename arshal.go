@@ -122,11 +122,6 @@ type UnmarshalOptions struct {
 	// without any surrounding whitespace.
 	StringifyNumbers bool
 
-	// MatchCaseInsensitiveNames specifies that unmarshaling into a Go struct
-	// should fallback on a case insensitive match of the name if an exact match
-	// could not be found.
-	MatchCaseInsensitiveNames bool
-
 	// RejectUnknownMembers specifies that unknown members should be rejected
 	// when unmarshaling a JSON object, regardless of whether there is a field
 	// to store unknown members.

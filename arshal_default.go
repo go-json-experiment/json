@@ -970,7 +970,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				f := fields.byActualName[string(name)]
 				if f == nil {
 					for _, f2 := range fields.byFoldedName[string(foldName(name))] {
-						if f2.nocase || uo.MatchCaseInsensitiveNames {
+						if f2.nocase {
 							f = f2
 							break
 						}
