@@ -13,15 +13,19 @@ import (
 
 // In some applications, the exact precision of JSON numbers needs to be
 // preserved when unmarshaling. This can be accomplished using a type-specific
-// marshal function that intercepts all any types and pre-populates the
+// unmarshal function that intercepts all any types and pre-populates the
 // interface value with a RawValue, which can represent a JSON number exactly.
-func ExampleRawValue_unmarshalRawNumber() {
+func ExampleUnmarshalers_rawNumber() {
 	opts := json.UnmarshalOptions{
+		// Intercept every attempt to unmarshal into the any type.
 		Unmarshalers: json.UnmarshalFuncV2(func(opts json.UnmarshalOptions, dec *json.Decoder, val *any) error {
+			// If the next value to be decoded is a JSON number,
+			// then provide a concrete Go type to unmarshal into.
 			if dec.PeekKind() == '0' {
-				*val = json.RawValue(nil) // provide concrete Go type to unmarshal a JSON number into
+				*val = json.RawValue(nil)
 			}
-			return json.SkipFunc // fall back to default unmarshal behavior
+			// Return SkipFunc to fallback on default unmarshal behavior.
+			return json.SkipFunc
 		}),
 	}
 
