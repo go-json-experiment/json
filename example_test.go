@@ -5,12 +5,14 @@
 package json_test
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"net/netip"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -315,4 +317,66 @@ func ExampleUnmarshalers_rawNumber() {
 
 	// Output:
 	// [false 1e-1000 3.141592653589793238462643383279 1e+1000 true]
+}
+
+// When using JSON for parsing configuration files,
+// the parsing logic often needs to report an error with a line and column
+// indicating where in the input an error occurred.
+func ExampleUnmarshalers_recordOffsets() {
+	// Hypothetical configuration file.
+	const input = `[
+		{"Source": "192.168.0.100:1234", "Destination": "192.168.0.1:80"},
+		{"Source": "192.168.0.251:4004"},
+		{"Source": "192.168.0.165:8080", "Destination": "0.0.0.0:80"}
+	]`
+	type Tunnel struct {
+		Source      netip.AddrPort
+		Destination netip.AddrPort
+
+		// ByteOffset is populated during unmarshal with the byte offset
+		// within the JSON input of the JSON object for this Go struct.
+		ByteOffset int64 `json:"-"` // metadata to be ignored for JSON serialization
+	}
+
+	var tunnels []Tunnel
+	err := json.UnmarshalOptions{
+		// Intercept every attempt to unmarshal into the Tunnel type.
+		Unmarshalers: json.UnmarshalFuncV2(func(opts json.UnmarshalOptions, dec *json.Decoder, tunnel *Tunnel) error {
+			// Decoder.InputOffset reports the offset after the last token,
+			// but we want to record the offset before the next token.
+			//
+			// Call Decoder.PeekKind to buffer enough to reach the next token.
+			// Add the number of leading whitespace, commas, and colons
+			// to locate the start of the next token.
+			dec.PeekKind()
+			unread := dec.UnreadBuffer()
+			n := len(unread) - len(bytes.TrimLeft(unread, " \n\r\t,:"))
+			tunnel.ByteOffset = dec.InputOffset() + int64(n)
+
+			// Return SkipFunc to fallback on default unmarshal behavior.
+			return json.SkipFunc
+		}),
+	}.Unmarshal(json.DecodeOptions{}, []byte(input), &tunnels)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// lineColumn converts a byte offset into a one-indexed line and column.
+	// The offset must be within the bounds of the input.
+	lineColumn := func(input string, offset int) (line, column int) {
+		line = 1 + strings.Count(input[:offset], "\n")
+		column = 1 + offset - (strings.LastIndex(input[:offset], "\n") + len("\n"))
+		return line, column
+	}
+
+	// Verify that the configuration file is valid.
+	for _, tunnel := range tunnels {
+		if !tunnel.Source.IsValid() || !tunnel.Destination.IsValid() {
+			line, column := lineColumn(input, int(tunnel.ByteOffset))
+			fmt.Printf("%d:%d: source and destination must both be specified", line, column)
+		}
+	}
+
+	// Output:
+	// 3:3: source and destination must both be specified
 }
