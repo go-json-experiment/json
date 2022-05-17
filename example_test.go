@@ -8,11 +8,52 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/netip"
 	"reflect"
 	"time"
 
 	"github.com/go-json-experiment/json"
 )
+
+// If a type implements encoding.TextMarshaler and/or encoding.TextUnmarshaler,
+// then the MarshalText and UnmarshalText methods are used to encode/decode
+// the value to/from a JSON string.
+func Example_textMarshal() {
+	// Round-trip marshal and unmarshal a hostname map where the netip.Addr type
+	// implements both encoding.TextMarshaler and encoding.TextUnmarshaler.
+	want := map[netip.Addr]string{
+		netip.MustParseAddr("192.168.0.100"): "carbonite",
+		netip.MustParseAddr("192.168.0.101"): "obsidian",
+		netip.MustParseAddr("192.168.0.102"): "diamond",
+	}
+	b, err := json.Marshal(&want)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var got map[netip.Addr]string
+	err = json.Unmarshal(b, &got)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Sanity check.
+	if !reflect.DeepEqual(got, want) {
+		log.Fatalf("roundtrip mismatch: got %v, want %v", got, want)
+	}
+
+	// Print the serialized JSON object. Canonicalize the JSON first since
+	// Go map entries are not serialized in a deterministic order.
+	(*json.RawValue)(&b).Canonicalize()
+	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
+	fmt.Println(string(b))
+
+	// Output:
+	// {
+	// 	"192.168.0.100": "carbonite",
+	// 	"192.168.0.101": "obsidian",
+	// 	"192.168.0.102": "diamond"
+	// }
+}
 
 // The "format" tag option can be used to alter the formatting of certain types.
 func Example_formatFlags() {
