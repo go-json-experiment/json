@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"net/netip"
 	"reflect"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-json-experiment/json"
@@ -104,6 +106,39 @@ func Example_formatFlags() {
 	// 	"TimeDateOnly": "2000-01-01",
 	// 	"DurationNanos": 1001001001
 	// }
+}
+
+// When implementing HTTP endpoints, it is common to be operating with an
+// io.Reader and an io.Writer. The UnmarshalFull and MarshalFull functions
+// assist in operating on such input/output types.
+// UnmarshalFull reads the entirety of the io.Reader to ensure that io.EOF
+// is encountered without any unexpected bytes after the top-level JSON value.
+func Example_serveHTTP() {
+	// Some global state maintained by the server.
+	var n int64
+
+	// The "add" endpoint accepts a POST request with a JSON object
+	// containing a number to atomically add to the server's global counter.
+	// It returns the updated value of the counter.
+	http.HandleFunc("/api/add", func(w http.ResponseWriter, r *http.Request) {
+		// Unmarshal the request from the client.
+		var val struct{ N int64 }
+		if err := json.UnmarshalFull(r.Body, &val); err != nil {
+			// Inability to unmarshal the input suggests a client-side problem.
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Marshal a response from the server.
+		val.N = atomic.AddInt64(&n, val.N)
+		if err := json.MarshalFull(w, &val); err != nil {
+			// Inability to marshal the output suggests a server-side problem.
+			// This error is not always observable by the client since
+			// json.MarshalFull may have already written to the output.
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
 }
 
 // Directly embedding JSON within HTML requires special handling for safety.
