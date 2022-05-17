@@ -106,6 +106,49 @@ func Example_formatFlags() {
 	// }
 }
 
+// Directly embedding JSON within HTML requires special handling for safety.
+// Escape certain runes to prevent JSON directly treated as HTML
+// from being able to perform <script> injection.
+//
+// This example shows how to obtain equivalent behavior provided by the
+// "encoding/json" package that is no longer directly supported by this package.
+// Newly written code that intermix JSON and HTML should instead be using the
+// "github.com/google/safehtml" module for safety purposes.
+func Example_escapeHTML() {
+	page := struct {
+		Title string
+		Body  string
+	}{
+		Title: "Example Embedded Javascript",
+		Body:  `<script> console.log("Hello, world!"); </script>`,
+	}
+
+	b, err := json.MarshalOptions{}.Marshal(json.EncodeOptions{
+		// Escape certain runes within a JSON string so that
+		// JSON will be safe to directly embed inside HTML.
+		EscapeRune: func(r rune) bool {
+			switch r {
+			case '&', '<', '>', '\u2028', '\u2029':
+				return true
+			default:
+				return false
+			}
+		},
+		// Indent the output for readability.
+		Indent: "\t",
+	}, &page)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(b))
+
+	// Output:
+	// {
+	// 	"Title": "Example Embedded Javascript",
+	// 	"Body": "\u003cscript\u003e console.log(\"Hello, world!\"); \u003c/script\u003e"
+	// }
+}
+
 // In some applications, the exact precision of JSON numbers needs to be
 // preserved when unmarshaling. This can be accomplished using a type-specific
 // unmarshal function that intercepts all any types and pre-populates the
