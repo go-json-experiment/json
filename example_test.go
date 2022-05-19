@@ -59,104 +59,6 @@ func Example_textMarshal() {
 	// }
 }
 
-// ObjectOrdered is an ordered sequence of name/value members in a JSON object.
-//
-// RFC 8259 defines an object as an "unordered collection".
-// JSON implementations need not make "ordering of object members visible"
-// to applications nor will they agree on the semantic meaning of an object if
-// "the names within an object are not unique". For maximum compatibility,
-// applications should avoid relying on ordering or duplicity of object names.
-type OrderedObject[V any] []ObjectMember[V]
-
-// ObjectMember is a JSON object member.
-type ObjectMember[V any] struct {
-	Name  string
-	Value V
-}
-
-func (obj *OrderedObject[V]) MarshalNextJSON(opts json.MarshalOptions, enc *json.Encoder) error {
-	if err := enc.WriteToken(json.ObjectStart); err != nil {
-		return err
-	}
-	for i := range *obj {
-		member := &(*obj)[i]
-		if err := opts.MarshalNext(enc, &member.Name); err != nil {
-			return err
-		}
-		if err := opts.MarshalNext(enc, &member.Value); err != nil {
-			return err
-		}
-	}
-	if err := enc.WriteToken(json.ObjectEnd); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (obj *OrderedObject[V]) UnmarshalNextJSON(opts json.UnmarshalOptions, dec *json.Decoder) error {
-	if k := dec.PeekKind(); k != '{' {
-		return fmt.Errorf("expected object start, but encountered %v", k)
-	}
-	if _, err := dec.ReadToken(); err != nil {
-		return err
-	}
-	for dec.PeekKind() != '}' {
-		*obj = append(*obj, ObjectMember[V]{})
-		member := &(*obj)[len(*obj)-1]
-		if err := opts.UnmarshalNext(dec, &member.Name); err != nil {
-			return err
-		}
-		if err := opts.UnmarshalNext(dec, &member.Value); err != nil {
-			return err
-		}
-	}
-	if _, err := dec.ReadToken(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// The exact order of JSON object can be preserved through the use of a
-// specialized type that implements MarshalerV2 and UnmarshalerV2.
-func Example_orderedObject() {
-	// Round-trip marshal and unmarshal an ordered object.
-	// We expect the order and duplicity of JSON object members to be preserved.
-	want := OrderedObject[string]{
-		{"fizz", "buzz"},
-		{"hello", "world"},
-		{"fizz", "wuzz"},
-	}
-	b, err := json.MarshalOptions{}.Marshal(json.EncodeOptions{
-		AllowDuplicateNames: true, // since the object contains "fizz" twice
-	}, &want)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var got OrderedObject[string]
-	err = json.UnmarshalOptions{}.Unmarshal(json.DecodeOptions{
-		AllowDuplicateNames: true, // since the object contains "fizz" twice
-	}, b, &got)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Sanity check.
-	if !reflect.DeepEqual(got, want) {
-		log.Fatalf("roundtrip mismatch: got %v, want %v", got, want)
-	}
-
-	// Print the serialized JSON object.
-	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
-	fmt.Println(string(b))
-
-	// Output:
-	// {
-	// 	"fizz": "buzz",
-	// 	"hello": "world",
-	// 	"fizz": "wuzz"
-	// }
-}
-
 // The "format" tag option can be used to alter the formatting of certain types.
 func Example_formatFlags() {
 	value := struct {
@@ -249,7 +151,7 @@ func Example_serveHTTP() {
 // "encoding/json" package that is no longer directly supported by this package.
 // Newly written code that intermix JSON and HTML should instead be using the
 // "github.com/google/safehtml" module for safety purposes.
-func Example_escapeHTML() {
+func ExampleEncodeOptions_escapeHTML() {
 	page := struct {
 		Title string
 		Body  string
@@ -288,7 +190,7 @@ func Example_escapeHTML() {
 // preserved when unmarshaling. This can be accomplished using a type-specific
 // unmarshal function that intercepts all any types and pre-populates the
 // interface value with a RawValue, which can represent a JSON number exactly.
-func ExampleUnmarshalers_rawNumber() {
+func ExampleUnmarshalOptions_rawNumber() {
 	opts := json.UnmarshalOptions{
 		// Intercept every attempt to unmarshal into the any type.
 		Unmarshalers: json.UnmarshalFuncV2(func(opts json.UnmarshalOptions, dec *json.Decoder, val *any) error {
@@ -322,7 +224,7 @@ func ExampleUnmarshalers_rawNumber() {
 // When using JSON for parsing configuration files,
 // the parsing logic often needs to report an error with a line and column
 // indicating where in the input an error occurred.
-func ExampleUnmarshalers_recordOffsets() {
+func ExampleUnmarshalOptions_recordOffsets() {
 	// Hypothetical configuration file.
 	const input = `[
 		{"Source": "192.168.0.100:1234", "Destination": "192.168.0.1:80"},
