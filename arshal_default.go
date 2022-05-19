@@ -16,6 +16,11 @@ import (
 	"sync"
 )
 
+// optimizeCommon specifies whether to use optimizations targeted for certain
+// common patterns, rather than using the slower, but more general logic.
+// All tests should pass regardless of whether this is true or not.
+const optimizeCommon = true
+
 var (
 	// Most natural Go type that correspond with each JSON type.
 	anyType          = reflect.TypeOf((*any)(nil)).Elem()            // JSON value
@@ -101,7 +106,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace.
-		if !enc.options.multiline && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && !enc.options.multiline && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, 't')
 			if va.Bool() {
 				enc.buf = append(enc.buf, "true"...)
@@ -323,7 +328,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
 			enc.buf = strconv.AppendInt(enc.buf, va.Int(), 10)
 			enc.tokens.last.increment()
@@ -397,7 +402,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
 			enc.buf = strconv.AppendUint(enc.buf, va.Uint(), 10)
 			enc.tokens.last.increment()
@@ -476,7 +481,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && !enc.options.multiline && !mo.StringifyNumbers && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '0')
 			enc.buf = appendNumber(enc.buf, fv, bits)
 			enc.tokens.last.increment()
@@ -598,7 +603,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling an empty map without any preceding whitespace.
 		n := va.Len()
-		if n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
 			enc.buf = append(enc.buf, "{}"...)
 			enc.tokens.last.increment()
@@ -852,7 +857,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			//	3. The object name is guaranteed to be valid and pre-escaped.
 			//	4. There is no need to flush the buffer (for unwrite purposes).
 			//	5. There is no possibility of an error occuring.
-			{
+			if optimizeCommon {
 				// Append any delimiters or optional whitespace.
 				if enc.tokens.last.length() > 0 {
 					enc.buf = append(enc.buf, ',')
@@ -872,6 +877,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					enc.names.replaceLastQuotedOffset(n0)
 				}
 				enc.tokens.last.increment()
+			} else {
+				if err := enc.WriteToken(String(f.name)); err != nil {
+					return err
+				}
 			}
 
 			// Write the object member value.
@@ -1091,7 +1100,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling an empty slice without any preceding whitespace.
 		n := va.Len()
-		if n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+		if optimizeCommon && n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
 			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
 			enc.buf = append(enc.buf, "[]"...)
 			enc.tokens.last.increment()
@@ -1335,7 +1344,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			marshal, _ = mo.Marshalers.lookup(marshal, v.Type())
 		}
 		// Optimize for the any type if there are no special options.
-		if t == anyType && !mo.StringifyNumbers && mo.format == "" && (mo.Marshalers == nil || !mo.Marshalers.fromAny) {
+		if optimizeCommon && t == anyType && !mo.StringifyNumbers && mo.format == "" && (mo.Marshalers == nil || !mo.Marshalers.fromAny) {
 			return marshalValueAny(mo, enc, va.Elem().Interface())
 		}
 		return marshal(mo, enc, v)
@@ -1358,7 +1367,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			// are always unmarshaled into an any value as Go strings.
 			// Duplicate name check must be enforced since unmarshalValueAny
 			// does not implement merge semantics.
-			if t == anyType && uo.format == "" && (uo.Unmarshalers == nil || !uo.Unmarshalers.fromAny) && !dec.options.AllowDuplicateNames {
+			if optimizeCommon && t == anyType && uo.format == "" && (uo.Unmarshalers == nil || !uo.Unmarshalers.fromAny) && !dec.options.AllowDuplicateNames {
 				v, err := unmarshalValueAny(uo, dec)
 				// We must check for nil interface values up front.
 				// See https://golang.org/issue/52310.
