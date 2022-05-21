@@ -191,7 +191,11 @@ func ExampleEncodeOptions_escapeHTML() {
 // unmarshal function that intercepts all any types and pre-populates the
 // interface value with a RawValue, which can represent a JSON number exactly.
 func ExampleUnmarshalOptions_rawNumber() {
-	opts := json.UnmarshalOptions{
+	// Input with JSON numbers beyond the representation of a float64.
+	const input = `[false, 1e-1000, 3.141592653589793238462643383279, 1e+1000, true]`
+
+	var value any
+	err := json.UnmarshalOptions{
 		// Intercept every attempt to unmarshal into the any type.
 		Unmarshalers: json.UnmarshalFuncV2(func(opts json.UnmarshalOptions, dec *json.Decoder, val *any) error {
 			// If the next value to be decoded is a JSON number,
@@ -202,19 +206,16 @@ func ExampleUnmarshalOptions_rawNumber() {
 			// Return SkipFunc to fallback on default unmarshal behavior.
 			return json.SkipFunc
 		}),
+	}.Unmarshal(json.DecodeOptions{}, []byte(input), &value)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	in := []byte(`[false, 1e-1000, 3.141592653589793238462643383279, 1e+1000, true]`)
-	var val any
-	if err := opts.Unmarshal(json.DecodeOptions{}, in, &val); err != nil {
-		panic(err)
-	}
-	fmt.Println(val)
+	fmt.Println(value)
 
 	// Sanity check.
 	want := []any{false, json.RawValue("1e-1000"), json.RawValue("3.141592653589793238462643383279"), json.RawValue("1e+1000"), true}
-	if !reflect.DeepEqual(val, want) {
-		panic(fmt.Sprintf("value mismatch:\ngot  %v\nwant %v", val, want))
+	if !reflect.DeepEqual(value, want) {
+		log.Fatalf("value mismatch:\ngot  %v\nwant %v", value, want)
 	}
 
 	// Output:
