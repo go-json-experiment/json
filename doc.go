@@ -65,8 +65,8 @@
 //
 // A Go struct is naturally represented as a JSON object,
 // where each Go struct field corresponds with a JSON object member.
-// When marshaling, all Go struct fields are recursively encoded as
-// JSON object members except those that are ignored or omitted.
+// When marshaling, all Go struct fields are recursively encoded in depth-first
+// order as JSON object members except those that are ignored or omitted.
 // When unmarshaling, JSON object members are recursively decoded
 // into the corresponding Go struct fields.
 // Object members that do not match any struct fields,

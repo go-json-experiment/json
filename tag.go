@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,14 +25,14 @@ type isZeroer interface {
 var isZeroerType = reflect.TypeOf((*isZeroer)(nil)).Elem()
 
 type structFields struct {
-	flattened       []structField
+	flattened       []structField // listed in depth-first ordering
 	byActualName    map[string]*structField
 	byFoldedName    map[string][]*structField
 	inlinedFallback *structField
 }
 
 type structField struct {
-	id      int   // unique numeric ID; index into structFields.flattened
+	id      int   // unique numeric ID in breadth-first ordering
 	index   []int // index into a struct according to reflect.Type.FieldByIndex
 	typ     reflect.Type
 	fncs    *arshaler
@@ -257,10 +258,42 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		panic(fmt.Sprintf("BUG: flattened list of fields mismatches fields mapped by name: %d != %d", len(fs.flattened), len(fs.byActualName)))
 	}
 
+	// Sort the fields according to a depth-first ordering.
+	// This operation will cause pointers in byActualName to become incorrect,
+	// which we will correct in another loop shortly thereafter.
+	sort.Slice(fs.flattened, func(i, j int) bool {
+		si := fs.flattened[i].index
+		sj := fs.flattened[j].index
+		for len(si) > 0 && len(sj) > 0 {
+			switch {
+			case si[0] < sj[0]:
+				return true
+			case si[0] > sj[0]:
+				return false
+			default:
+				si = si[1:]
+				sj = sj[1:]
+			}
+		}
+		return len(si) < len(sj)
+	})
+
+	// Recompute the mapping of fields in the byActualName map.
 	// Pre-fold all names so that we can lookup folded names quickly.
 	for i, f := range fs.flattened {
 		foldedName := string(foldName([]byte(f.name)))
+		fs.byActualName[f.name] = &fs.flattened[i]
 		fs.byFoldedName[foldedName] = append(fs.byFoldedName[foldedName], &fs.flattened[i])
+	}
+	for foldedName, fields := range fs.byFoldedName {
+		if len(fields) > 1 {
+			// The precedence order for conflicting nocase names
+			// is by breadth-first order, rather than depth-first order.
+			sort.Slice(fields, func(i, j int) bool {
+				return fields[i].id < fields[j].id
+			})
+			fs.byFoldedName[foldedName] = fields
+		}
 	}
 
 	return fs, nil

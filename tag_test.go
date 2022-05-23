@@ -68,14 +68,14 @@ func TestMakeStructFields(t *testing.T) {
 		want: structFields{
 			flattened: []structField{
 				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "L1A", quotedName: `"L1A"`}},
-				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "L1C", quotedName: `"L1C"`}},
-				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "L1E", quotedName: `"L1E"`}},
 				{id: 3, index: []int{1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2A", quotedName: `"L2A"`}},
-				{id: 4, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2C", quotedName: `"L2C"`}},
-				{id: 5, index: []int{3, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2D", quotedName: `"L2D"`}},
-				{id: 6, index: []int{3, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2F", quotedName: `"L2F"`}},
 				{id: 7, index: []int{1, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3A", quotedName: `"L3A"`}},
+				{id: 4, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2C", quotedName: `"L2C"`}},
+				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "L1C", quotedName: `"L1C"`}},
+				{id: 5, index: []int{3, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L2D", quotedName: `"L2D"`}},
 				{id: 8, index: []int{3, 1, 0}, typ: stringType, fieldOptions: fieldOptions{name: "L3B", quotedName: `"L3B"`}},
+				{id: 6, index: []int{3, 2}, typ: stringType, fieldOptions: fieldOptions{name: "L2F", quotedName: `"L2F"`}},
+				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "L1E", quotedName: `"L1E"`}},
 			},
 		},
 	}, {
@@ -100,9 +100,9 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
+				{id: 2, index: []int{1, 0, 1}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
 				{id: 0, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "A", quotedName: `"A"`}},
 				{id: 1, index: []int{3}, typ: stringType, fieldOptions: fieldOptions{name: "D", quotedName: `"D"`}},
-				{id: 2, index: []int{1, 0, 1}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
 			},
 		},
 	}, {
@@ -135,8 +135,8 @@ func TestMakeStructFields(t *testing.T) {
 		want: structFields{
 			flattened: []structField{
 				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "A", quotedName: `"A"`}},
-				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
 				{id: 2, index: []int{1, 2}, typ: stringType, fieldOptions: fieldOptions{name: "B", quotedName: `"B"`}},
+				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "C", quotedName: `"C"`}},
 			},
 		},
 	}, {

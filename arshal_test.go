@@ -1764,7 +1764,7 @@ func TestMarshal(t *testing.T) {
 			},
 			StructEmbed2: &StructEmbed2{},
 		},
-		want: `{"E":"","F":"","G":"","A":"","B":"","D":""}`,
+		want: `{"A":"","B":"","D":"","E":"","F":"","G":""}`,
 	}, {
 		name: name("Structs/Inline/NonZero"),
 		in: structInlined{
@@ -1774,7 +1774,7 @@ func TestMarshal(t *testing.T) {
 			},
 			StructEmbed2: &StructEmbed2{E: "E3", F: "F3", G: "G3"},
 		},
-		want: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
+		want: `{"A":"A1","B":"B1","D":"D2","E":"E3","F":"F3","G":"G3"}`,
 	}, {
 		name: name("Structs/Inline/DualCycle"),
 		in: cyclicA{
