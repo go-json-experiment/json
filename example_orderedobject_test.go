@@ -12,7 +12,7 @@ import (
 	"github.com/go-json-experiment/json"
 )
 
-// ObjectOrdered is an ordered sequence of name/value members in a JSON object.
+// OrderedObject is an ordered sequence of name/value members in a JSON object.
 //
 // RFC 8259 defines an object as an "unordered collection".
 // JSON implementations need not make "ordering of object members visible"
@@ -27,6 +27,7 @@ type ObjectMember[V any] struct {
 	Value V
 }
 
+// MarshalNextJSON encodes obj as a JSON object into enc.
 func (obj *OrderedObject[V]) MarshalNextJSON(opts json.MarshalOptions, enc *json.Encoder) error {
 	if err := enc.WriteToken(json.ObjectStart); err != nil {
 		return err
@@ -46,6 +47,7 @@ func (obj *OrderedObject[V]) MarshalNextJSON(opts json.MarshalOptions, enc *json
 	return nil
 }
 
+// UnmarshalNextJSON decodes a JSON object from dec into obj.
 func (obj *OrderedObject[V]) UnmarshalNextJSON(opts json.UnmarshalOptions, dec *json.Decoder) error {
 	if k := dec.PeekKind(); k != '{' {
 		return fmt.Errorf("expected object start, but encountered %v", k)
