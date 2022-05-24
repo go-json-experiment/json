@@ -59,6 +59,48 @@ func Example_textMarshal() {
 	// }
 }
 
+// Unmarshal matches JSON object names with Go struct fields using
+// a case-sensitive match, but can be configured to use a case-insensitive
+// match with the "nocase" option. This permits unmarshaling from inputs that
+// use naming conventions such as camelCase, snake_case, or kebab-case.
+func Example_caseSensitivity() {
+	// JSON input using various naming conventions.
+	const input = `[
+		{"firstname": true},
+		{"firstName": true},
+		{"FirstName": true},
+		{"FIRSTNAME": true},
+		{"first_name": true},
+		{"FIRST_NAME": true},
+		{"first-name": true},
+		{"FIRST-NAME": true},
+		{"unknown": true}
+	]`
+
+	// Without "nocase", Unmarshal looks for an exact match.
+	var withcase []struct {
+		X bool `json:"firstName"`
+	}
+	if err := json.Unmarshal([]byte(input), &withcase); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(withcase) // exactly 1 match found
+
+	// With "nocase", Unmarshal looks first for an exact match,
+	// then for a case-insensitive match if none found.
+	var nocase []struct {
+		X bool `json:"firstName,nocase"`
+	}
+	if err := json.Unmarshal([]byte(input), &nocase); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(nocase) // 8 matches found
+
+	// Output:
+	// [{false} {true} {false} {false} {false} {false} {false} {false} {false}]
+	// [{true} {true} {true} {true} {true} {true} {true} {true} {false}]
+}
+
 // The "format" tag option can be used to alter the formatting of certain types.
 func Example_formatFlags() {
 	value := struct {
