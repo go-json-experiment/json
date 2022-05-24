@@ -59,6 +59,51 @@ func Example_textMarshal() {
 	// }
 }
 
+// By default, JSON object names for Go struct fields are derived from
+// the Go field name, but may be specified in the `json` tag.
+// Due to JSON's heritage in JavaScript, the most common naming convention
+// used for JSON object names is camelCase.
+func Example_fieldNames() {
+	var value struct {
+		// This field is explicitly ignored with the special "-" name.
+		Ignored any `json:"-"`
+		// No JSON name is not provided, so the Go field name is used.
+		GoName any
+		// A JSON name is provided without any special characters.
+		JSONName any `json:"jsonName"`
+		// No JSON name is not provided, so the Go field name is used.
+		Option any `json:",nocase"`
+		// An empty JSON name specified using an single-quoted string literal.
+		Empty any `json:"''"`
+		// A dash JSON name specified using an single-quoted string literal.
+		Dash any `json:"'-'"`
+		// A comma JSON name specified using an single-quoted string literal.
+		Comma any `json:"','"`
+		// JSON name with quotes specified using a single-quoted string literal.
+		Quote any `json:"'\"\\''"`
+		// An unexported field is always ignored.
+		unexported any
+	}
+
+	b, err := json.Marshal(value)
+	if err != nil {
+		log.Fatal(err)
+	}
+	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
+	fmt.Println(string(b))
+
+	// Output:
+	// {
+	// 	"GoName": null,
+	// 	"jsonName": null,
+	// 	"Option": null,
+	// 	"": null,
+	// 	"-": null,
+	// 	",": null,
+	// 	"\"'": null
+	// }
+}
+
 // Unmarshal matches JSON object names with Go struct fields using
 // a case-sensitive match, but can be configured to use a case-insensitive
 // match with the "nocase" option. This permits unmarshaling from inputs that
