@@ -6,6 +6,7 @@ package json_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -312,6 +313,70 @@ func Example_inlinedFields() {
 
 	// Output:
 	// {"ID":"","Type":0,"User":"","uuid":"","other":{"Cost":0}}
+}
+
+// Due to version skew, the set of JSON object members known at compile-time
+// may differ from the set of members encountered at execution-time.
+// As such, it may be useful to have finer grain handling of unknown members.
+// This package supports preserving, rejecting, or discarding such members.
+func Example_unknownMembers() {
+	const input = `{
+		"Name": "Teal",
+		"Value": "#008080",
+		"WebSafe": false
+	}`
+	type Color struct {
+		Name  string
+		Value string
+
+		// Unknown is a Go struct field that holds unknown JSON object members.
+		// It is marked as having this behavior with the "unknown" tag option.
+		//
+		// The type may be a RawValue or map[string]T.
+		Unknown json.RawValue `json:",unknown"`
+	}
+
+	// By default, unknown members are stored in a Go field marked as "unknown"
+	// or ignored if no such field exists.
+	var color Color
+	err := json.Unmarshal([]byte(input), &color)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Unknown members:", string(color.Unknown))
+
+	// Specifying UnmarshalOptions.RejectUnknownMembers causes
+	// Unmarshal to reject the presence of any unknown members.
+	err = json.UnmarshalOptions{
+		RejectUnknownMembers: true,
+	}.Unmarshal(json.DecodeOptions{}, []byte(input), new(Color))
+	if err != nil {
+		fmt.Println("Unmarshal error:", errors.Unwrap(err))
+	}
+
+	// By default, Marshal preserves unknown members stored in
+	// a Go struct field marked as "unknown".
+	b, err := json.Marshal(color)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Output with unknown members:   ", string(b))
+
+	// Specifying MarshalOptions.DiscardUnknownMembers causes
+	// Marshal to discard any unknown members.
+	b, err = json.MarshalOptions{
+		DiscardUnknownMembers: true,
+	}.Marshal(json.EncodeOptions{}, color)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Output without unknown members:", string(b))
+
+	// Output:
+	// Unknown members: {"WebSafe":false}
+	// Unmarshal error: unknown name "WebSafe"
+	// Output with unknown members:    {"Name":"Teal","Value":"#008080","WebSafe":false}
+	// Output without unknown members: {"Name":"Teal","Value":"#008080"}
 }
 
 // The "format" tag option can be used to alter the formatting of certain types.
