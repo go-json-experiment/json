@@ -146,6 +146,53 @@ func Example_caseSensitivity() {
 	// [{true} {true} {true} {true} {true} {true} {true} {true} {false}]
 }
 
+// JSON objects can be inlined within a parent object similar to
+// how Go structs can be embedded within a parent struct.
+// The inlining rules are similar to those of Go embedding,
+// but operates upon the JSON namespace.
+func Example_inlinedFields() {
+	// Base is embedded within Container.
+	type Base struct {
+		// ID is promoted into the JSON object for Container.
+		ID string
+		// Type is ignored due to presence of Container.Type.
+		Type string
+		// Time cancels out with Container.Inlined.Time.
+		Time time.Time
+	}
+	// Other is embedded within Container.
+	type Other struct{ Cost float64 }
+	// Container embeds Base and Other.
+	type Container struct {
+		// Base is an embedded struct and is implicitly JSON inlined.
+		Base
+		// Type takes precedence over Base.Type.
+		Type int
+		// Inlined is a named Go field, but is explicitly JSON inlined.
+		Inlined struct {
+			// User is promoted into the JSON object for Container.
+			User string
+			// Time cancels out with Base.Time.
+			Time string
+		} `json:",inline"`
+		// ID does not conflict with Base.ID since the JSON name is different.
+		ID string `json:"uuid"`
+		// Other is not JSON inlined since it has an explicit JSON name.
+		Other `json:"other"`
+	}
+
+	// Format an empty Container to show what fields are JSON serializable.
+	var input Container
+	b, err := json.Marshal(&input)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(b))
+
+	// Output:
+	// {"ID":"","Type":0,"User":"","uuid":"","other":{"Cost":0}}
+}
+
 // The "format" tag option can be used to alter the formatting of certain types.
 func Example_formatFlags() {
 	value := struct {
