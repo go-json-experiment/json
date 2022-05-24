@@ -146,6 +146,126 @@ func Example_caseSensitivity() {
 	// [{true} {true} {true} {true} {true} {true} {true} {true} {false}]
 }
 
+// Go struct fields can be omitted from the output depending on either
+// the input Go value or the output JSON encoding of the value.
+// The "omitzero" option omits a field if it is the zero Go value or
+// implements a "IsZero() bool" method that reports true.
+// The "omitempty" option omits a field if it encodes as an empty JSON value,
+// which we define as a JSON null or empty JSON string, object, or array.
+// In many cases, the behavior of "omitzero" and "omitempty" are equivalent.
+// If both provide the desired effect, then using "omitzero" is preferred.
+func Example_omitFields() {
+	type MyStruct struct {
+		Foo string `json:",omitzero"`
+		Bar []int  `json:",omitempty"`
+		// Both "omitzero" and "omitempty" can be specified together,
+		// in which case the field is omitted if either would take effect.
+		// This omits the Baz field either if it is a nil pointer or
+		// if it would have encoded as an empty JSON object.
+		Baz *MyStruct `json:",omitzero,omitempty"`
+	}
+
+	// Demonstrate behavior of "omitzero".
+	b, err := json.Marshal(struct {
+		Bool         bool        `json:",omitzero"`
+		Int          int         `json:",omitzero"`
+		String       string      `json:",omitzero"`
+		Time         time.Time   `json:",omitzero"`
+		Addr         netip.Addr  `json:",omitzero"`
+		Struct       MyStruct    `json:",omitzero"`
+		SliceNil     []int       `json:",omitzero"`
+		Slice        []int       `json:",omitzero"`
+		MapNil       map[int]int `json:",omitzero"`
+		Map          map[int]int `json:",omitzero"`
+		PointerNil   *string     `json:",omitzero"`
+		Pointer      *string     `json:",omitzero"`
+		InterfaceNil any         `json:",omitzero"`
+		Interface    any         `json:",omitzero"`
+	}{
+		// Bool is omitted since false is the zero value for a Go bool.
+		Bool: false,
+		// Int is omitted since 0 is the zero value for a Go int.
+		Int: 0,
+		// String is omitted since "" is the zero value for a Go string.
+		String: "",
+		// Time is omitted since time.Time.IsZero reports true.
+		Time: time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
+		// Addr is omitted since netip.Addr{} is the zero value for a Go struct.
+		Addr: netip.Addr{},
+		// Struct is NOT omitted since it is not the zero value for a Go struct.
+		Struct: MyStruct{Bar: []int{}, Baz: new(MyStruct)},
+		// SliceNil is omitted since nil is the zero value for a Go slice.
+		SliceNil: nil,
+		// Slice is NOT omitted since []int{} is not the zero value for a Go slice.
+		Slice: []int{},
+		// MapNil is omitted since nil is the zero value for a Go map.
+		MapNil: nil,
+		// Map is NOT omitted since map[int]int{} is not the zero value for a Go map.
+		Map: map[int]int{},
+		// PointerNil is omitted since nil is the zero value for a Go pointer.
+		PointerNil: nil,
+		// Pointer is NOT omitted since new(string) is not the zero value for a Go pointer.
+		Pointer: new(string),
+		// InterfaceNil is omitted since nil is the zero value for a Go interface.
+		InterfaceNil: nil,
+		// Interface is NOT omitted since (*string)(nil) is not the zero value for a Go interface.
+		Interface: (*string)(nil),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("OmitZero: ", string(b)) // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
+
+	// Demonstrate behavior of "omitempty".
+	b, err = json.Marshal(struct {
+		Bool         bool        `json:",omitempty"`
+		Int          int         `json:",omitempty"`
+		String       string      `json:",omitempty"`
+		Time         time.Time   `json:",omitempty"`
+		Addr         netip.Addr  `json:",omitempty"`
+		Struct       MyStruct    `json:",omitempty"`
+		Slice        []int       `json:",omitempty"`
+		Map          map[int]int `json:",omitempty"`
+		PointerNil   *string     `json:",omitempty"`
+		Pointer      *string     `json:",omitempty"`
+		InterfaceNil any         `json:",omitempty"`
+		Interface    any         `json:",omitempty"`
+	}{
+		// Bool is NOT omitted since false is not an empty JSON value.
+		Bool: false,
+		// Int is NOT omitted since 0 is not a empty JSON value.
+		Int: 0,
+		// String is omitted since "" is an empty JSON string.
+		String: "",
+		// Time is NOT omitted since this encodes as a non-empty JSON string.
+		Time: time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
+		// Addr is omitted since this encodes as an empty JSON string.
+		Addr: netip.Addr{},
+		// Struct is omitted since {} is an empty JSON object.
+		Struct: MyStruct{Bar: []int{}, Baz: new(MyStruct)},
+		// Slice is omitted since [] is an empty JSON array.
+		Slice: []int{},
+		// Map is omitted since {} is an empty JSON object.
+		Map: map[int]int{},
+		// PointerNil is ommited since null is an empty JSON value.
+		PointerNil: nil,
+		// Pointer is omitted since "" is an empty JSON string.
+		Pointer: new(string),
+		// InterfaceNil is omitted since null is an empty JSON value.
+		InterfaceNil: nil,
+		// Interface is omitted since null is an empty JSON value.
+		Interface: (*string)(nil),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("OmitEmpty:", string(b)) // outputs "Bool", "Int", and "Time"
+
+	// Output:
+	// OmitZero:  {"Struct":{},"Slice":[],"Map":{},"Pointer":"","Interface":null}
+	// OmitEmpty: {"Bool":false,"Int":0,"Time":"0001-01-01T00:00:00Z"}
+}
+
 // JSON objects can be inlined within a parent object similar to
 // how Go structs can be embedded within a parent struct.
 // The inlining rules are similar to those of Go embedding,
