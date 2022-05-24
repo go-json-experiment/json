@@ -13,7 +13,9 @@ import (
 	"math"
 	"net/http"
 	"net/netip"
+	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -634,6 +636,59 @@ func ExampleEncodeOptions_escapeHTML() {
 	// 	"Title": "Example Embedded Javascript",
 	// 	"Body": "\u003cscript\u003e console.log(\"Hello, world!\"); \u003c/script\u003e"
 	// }
+}
+
+// Many error types are not serializable since they tend to be Go structs
+// without any exported fields (e.g., errors constructed with errors.New).
+// Some applications, may desire to marshal an error as a JSON string
+// even if these errors cannot be unmarshaled.
+func ExampleMarshalOptions_errors() {
+	// Response to serialize with some Go errors encountered.
+	response := []struct {
+		Result string `json:",omitzero"`
+		Error  error  `json:",omitzero"`
+	}{
+		{Result: "Oranges are a good source of Vitamin C."},
+		{Error: &strconv.NumError{Func: "ParseUint", Num: "-1234", Err: strconv.ErrSyntax}},
+		{Error: &os.PathError{Op: "ReadFile", Path: "/path/to/secret/file", Err: os.ErrPermission}},
+	}
+
+	b, err := json.MarshalOptions{
+		// Intercept every attempt to marshal an error type.
+		Marshalers: json.NewMarshalers(
+			// Suppose we consider strconv.NumError to be a safe to serialize:
+			// this type-specific marshal function intercepts this type
+			// and encodes the error message as a JSON string.
+			json.MarshalFuncV2(func(opts json.MarshalOptions, enc *json.Encoder, err *strconv.NumError) error {
+				return enc.WriteToken(json.String(err.Error()))
+			}),
+			// Error messages may contain sensitive information that may not
+			// be appropriate to serialize. For all errors not handled above,
+			// report some generic error message.
+			json.MarshalFuncV1(func(error) ([]byte, error) {
+				return []byte(`"internal server error"`), nil
+			}),
+		),
+	}.Marshal(json.EncodeOptions{
+		Indent: "\t", // indent for readability
+	}, &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(b))
+
+	// Output:
+	// [
+	// 	{
+	// 		"Result": "Oranges are a good source of Vitamin C."
+	// 	},
+	// 	{
+	// 		"Error": "strconv.ParseUint: parsing \"-1234\": invalid syntax"
+	// 	},
+	// 	{
+	// 		"Error": "internal server error"
+	// 	}
+	// ]
 }
 
 // In some applications, the exact precision of JSON numbers needs to be
