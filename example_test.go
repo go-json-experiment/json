@@ -397,6 +397,59 @@ func Example_serveHTTP() {
 	})
 }
 
+// Some Go types have a custom JSON represention where the implementation
+// is delegated to some external package. Consequentely, the "json" package
+// will not know how to use that external implementation.
+// For example, the "google.golang.org/protobuf/encoding/protojson" package
+// implements JSON for all "google.golang.org/protobuf/proto".Message types.
+// MarshalOptions.Marshalers and UnmarshalOptions.Unmarshalers can be used
+// to configure "json" and "protojson" to cooperate together.
+func Example_protoJSON() {
+	// Let protoMessage be "google.golang.org/protobuf/proto".Message.
+	type protoMessage interface{ ProtoReflect() }
+	// Let foopbMyMessage be a concrete implementation of proto.Message.
+	type foopbMyMessage struct{ protoMessage }
+	// Let protojson be an import of "google.golang.org/protobuf/encoding/protojson".
+	var protojson struct {
+		Marshal   func(protoMessage) ([]byte, error)
+		Unmarshal func([]byte, protoMessage) error
+	}
+
+	// This value mixes both non-proto.Message types and proto.Message types.
+	// It should use the "json" package to handle non-proto.Message types and
+	// should use the "protojson" package to handle proto.Message types.
+	var value struct {
+		// GoStruct does not implement proto.Message and
+		// should use the default behavior of the "json" package.
+		GoStruct struct {
+			Name string
+			Age  int
+		}
+
+		// ProtoMessage implements proto.Message and
+		// should be handled using protojson.Marshal.
+		ProtoMessage *foopbMyMessage
+	}
+
+	// Marshal using protojson.Marshal for proto.Message types.
+	b, err := json.MarshalOptions{
+		// Use protojson.Marshal as a type-specific marshaler.
+		Marshalers: json.MarshalFuncV1(protojson.Marshal),
+	}.Marshal(json.EncodeOptions{}, &value)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Unmarshal using protojson.Unmarshal for proto.Message types.
+	err = json.UnmarshalOptions{
+		// Use protojson.Unmarshal as a type-specific unmarshaler.
+		Unmarshalers: json.UnmarshalFuncV1(protojson.Unmarshal),
+	}.Unmarshal(json.DecodeOptions{}, b, &value)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 // Directly embedding JSON within HTML requires special handling for safety.
 // Escape certain runes to prevent JSON directly treated as HTML
 // from being able to perform <script> injection.
