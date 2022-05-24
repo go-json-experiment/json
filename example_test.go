@@ -7,6 +7,7 @@ package json_test
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -448,6 +449,83 @@ func Example_protoJSON() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// This example demonstrates the use of the Encoder and Decoder to
+// parse and modify JSON without unmarshaling it into a concrete Go type.
+func Example_stringReplace() {
+	// Example input with non-idiomatic use of "Golang" instead of "Go".
+	const input = `{
+		"title": "Golang version 1 is released",
+		"author": "Andrew Gerrand",
+		"date": "2012-03-28",
+		"text": "Today marks a major milestone in the development of the Golang programming language.",
+		"otherArticles": [
+			"Twelve Years of Golang",
+			"The Laws of Reflection",
+			"Learn Golang from your browser"
+		]
+	}`
+
+	// Using a Decoder and Encoder, we can parse through every token,
+	// check and modify the token if necessary, and
+	// write the token to the output.
+	var replacements []string
+	in := strings.NewReader(input)
+	dec := json.NewDecoder(in)
+	out := new(bytes.Buffer)
+	enc := json.EncodeOptions{Indent: "\t"}.NewEncoder(out) // indent for readability
+	for {
+		// Read a token from the input.
+		tok, err := dec.ReadToken()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+
+		// Check whether the token contains the string "Golang" and
+		// replace each occurence with "Go" instead.
+		if tok.Kind() == '"' && strings.Contains(tok.String(), "Golang") {
+			replacements = append(replacements, dec.StackPointer())
+			tok = json.String(strings.ReplaceAll(tok.String(), "Golang", "Go"))
+		}
+
+		// Write the (possibly modified) token to the output.
+		if err := enc.WriteToken(tok); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	// Print the list of replacements and the adjusted JSON output.
+	if len(replacements) > 0 {
+		fmt.Println(`Replaced "Golang" with "Go" in:`)
+		for _, where := range replacements {
+			fmt.Println("\t" + where)
+		}
+		fmt.Println()
+	}
+	fmt.Println("Result:", out.String())
+
+	// Output:
+	// Replaced "Golang" with "Go" in:
+	// 	/title
+	// 	/text
+	// 	/otherArticles/0
+	// 	/otherArticles/2
+	//
+	// Result: {
+	// 	"title": "Go version 1 is released",
+	// 	"author": "Andrew Gerrand",
+	// 	"date": "2012-03-28",
+	// 	"text": "Today marks a major milestone in the development of the Go programming language.",
+	// 	"otherArticles": [
+	// 		"Twelve Years of Go",
+	// 		"The Laws of Reflection",
+	// 		"Learn Go from your browser"
+	// 	]
+	// }
 }
 
 // Directly embedding JSON within HTML requires special handling for safety.
