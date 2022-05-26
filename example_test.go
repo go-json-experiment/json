@@ -218,7 +218,8 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("OmitZero: ", string(b)) // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
+	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
+	fmt.Println("OmitZero:", string(b))   // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
 
 	// Demonstrate behavior of "omitempty".
 	b, err = json.Marshal(struct {
@@ -263,11 +264,22 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("OmitEmpty:", string(b)) // outputs "Bool", "Int", and "Time"
+	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
+	fmt.Println("OmitEmpty:", string(b))  // outputs "Bool", "Int", and "Time"
 
 	// Output:
-	// OmitZero:  {"Struct":{},"Slice":[],"Map":{},"Pointer":"","Interface":null}
-	// OmitEmpty: {"Bool":false,"Int":0,"Time":"0001-01-01T00:00:00Z"}
+	// OmitZero: {
+	// 	"Struct": {},
+	// 	"Slice": [],
+	// 	"Map": {},
+	// 	"Pointer": "",
+	// 	"Interface": null
+	// }
+	// OmitEmpty: {
+	// 	"Bool": false,
+	// 	"Int": 0,
+	// 	"Time": "0001-01-01T00:00:00Z"
+	// }
 }
 
 // JSON objects can be inlined within a parent object similar to
@@ -311,10 +323,19 @@ func Example_inlinedFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
 	fmt.Println(string(b))
 
 	// Output:
-	// {"ID":"","Type":0,"User":"","uuid":"","other":{"Cost":0}}
+	// {
+	// 	"ID": "",
+	// 	"Type": 0,
+	// 	"User": "",
+	// 	"uuid": "",
+	// 	"other": {
+	// 		"Cost": 0
+	// 	}
+	// }
 }
 
 // Due to version skew, the set of JSON object members known at compile-time
