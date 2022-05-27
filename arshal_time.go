@@ -7,7 +7,6 @@ package json
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -29,11 +28,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	switch t {
 	case timeDurationType:
 		fncs.nonDefault = true
+		marshalNanos := fncs.marshal
 		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-			var nanos bool
 			if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
 				if mo.format == "nanos" {
-					nanos = true
+					mo.format = ""
+					return marshalNanos(mo, enc, va)
 				} else {
 					return newInvalidFormatError("marshal", t, mo.format)
 				}
@@ -41,22 +41,19 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 			td := va.Interface().(time.Duration)
 			b := enc.UnusedBuffer()
-			if !nanos {
-				b = append(b, '"')
-				b = append(b, td.String()...) // never contains special characters
-				b = append(b, '"')
-			} else {
-				b = strconv.AppendInt(b, int64(td), 10)
-			}
+			b = append(b, '"')
+			b = append(b, td.String()...) // never contains special characters
+			b = append(b, '"')
 			return enc.WriteValue(b)
 		}
+		unmarshalNanos := fncs.unmarshal
 		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 			// TODO: Should there be a flag that specifies that we can unmarshal
 			// from either form since there would be no ambiguity?
-			var nanos bool
 			if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 				if uo.format == "nanos" {
-					nanos = true
+					uo.format = ""
+					return unmarshalNanos(uo, dec, va)
 				} else {
 					return newInvalidFormatError("unmarshal", t, uo.format)
 				}
@@ -68,25 +65,17 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			if err != nil {
 				return err
 			}
-			k := val.Kind()
-			switch {
-			case k == 'n':
+			switch k := val.Kind(); k {
+			case 'n':
 				*td = time.Duration(0)
 				return nil
-			case k == '"' && !nanos:
+			case '"':
 				val = unescapeStringMayCopy(val, flags.isVerbatim())
 				td2, err := time.ParseDuration(string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 				*td = td2
-				return nil
-			case k == '0' && nanos:
-				n, err := strconv.ParseInt(string(val), 10, 64)
-				if err != nil {
-					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
-				}
-				*td = time.Duration(n)
 				return nil
 			default:
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}

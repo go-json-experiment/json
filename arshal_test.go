@@ -3363,6 +3363,18 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
 	}, {
+		name: name("Duration/Nanos/String"),
+		in: struct {
+			D1 time.Duration `json:",string,format:nanos"`
+			D2 time.Duration `json:",string,format:nanos"`
+			D3 time.Duration `json:",string,format:nanos"`
+		}{
+			math.MinInt64,
+			0,
+			math.MaxInt64,
+		},
+		want: `{"D1":"-9223372036854775808","D2":"0","D3":"9223372036854775807"}`,
+	}, {
 		name: name("Duration/Format/Invalid"),
 		in: struct {
 			D time.Duration `json:",format:invalid"`
@@ -7156,6 +7168,25 @@ func TestUnmarshal(t *testing.T) {
 			-123456789123456789,
 		}),
 	}, {
+		name:  name("Duration/Nanos/String"),
+		inBuf: `{"D":"12345"}`,
+		inVal: addr(struct {
+			D time.Duration `json:",string,format:nanos"`
+		}{1}),
+		want: addr(struct {
+			D time.Duration `json:",string,format:nanos"`
+		}{12345}),
+	}, {
+		name:  name("Duration/Nanos/String/Invalid"),
+		inBuf: `{"D":"+12345"}`,
+		inVal: addr(struct {
+			D time.Duration `json:",string,format:nanos"`
+		}{1}),
+		want: addr(struct {
+			D time.Duration `json:",string,format:nanos"`
+		}{1}),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType, Err: fmt.Errorf(`cannot parse "+12345" as signed integer: %w`, strconv.ErrSyntax)},
+	}, {
 		name:  name("Duration/Nanos/Mismatch"),
 		inBuf: `{"D":"34293h33m9.123456789s"}`,
 		inVal: addr(struct {
@@ -7174,10 +7205,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(struct {
 			D time.Duration `json:",format:nanos"`
 		}{1}),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType, Err: func() error {
-			_, err := strconv.ParseInt("1.324", 10, 64)
-			return err
-		}()},
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType, Err: fmt.Errorf(`cannot parse "1.324" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:  name("Duration/String/Mismatch"),
 		inBuf: `{"D":-123456789123456789}`,
