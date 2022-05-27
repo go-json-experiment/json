@@ -107,7 +107,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			tt := va.Interface().(time.Time)
 			if y := tt.Year(); y < 0 || y >= 10000 {
 				// RFC 3339 is clear that years are 4 digits exactly.
-				// See https://golang.org/issue/4556#c15 for more discussion.
+				// See https://go.dev/issue/4556#c15 for more discussion.
 				err := fmt.Errorf("year %d outside of range [0,9999]", y)
 				return &SemanticError{action: "marshal", GoType: t, Err: err}
 			}

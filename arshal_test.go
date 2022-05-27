@@ -2428,12 +2428,12 @@ func TestMarshal(t *testing.T) {
 		in:   net.IPv4(192, 168, 0, 100),
 		want: `"192.168.0.100"`,
 	}, {
-		// NOTE: Fixes https://golang.org/issue/46516.
+		// NOTE: Fixes https://go.dev/issue/46516.
 		name: name("Methods/Anonymous"),
 		in:   struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
-		// NOTE: Fixes https://golang.org/issue/22967.
+		// NOTE: Fixes https://go.dev/issue/22967.
 		name: name("Methods/Addressable"),
 		in: struct {
 			V allMethods
@@ -2446,13 +2446,13 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
 	}, {
-		// NOTE: Fixes https://golang.org/issue/29732.
+		// NOTE: Fixes https://go.dev/issue/29732.
 		name:         name("Methods/MapKey/JSONv2"),
 		in:           map[structMethodJSONv2]string{{"k1"}: "v1", {"k2"}: "v2"},
 		want:         `{"k1":"v1","k2":"v2"}`,
 		canonicalize: true,
 	}, {
-		// NOTE: Fixes https://golang.org/issue/29732.
+		// NOTE: Fixes https://go.dev/issue/29732.
 		name:         name("Methods/MapKey/JSONv1"),
 		in:           map[structMethodJSONv1]string{{"k1"}: "v1", {"k2"}: "v2"},
 		want:         `{"k1":"v1","k2":"v2"}`,
@@ -4503,7 +4503,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
-		// See https://golang.org/issue/31924.
+		// See https://go.dev/issue/31924.
 		name:  name("Maps/Merge"),
 		dopts: DecodeOptions{AllowDuplicateNames: true},
 		inBuf: `{"k1":{"k2":"v2"},"k2":{"k1":"v1"},"k2":{"k2":"v2"}}`,
@@ -5704,7 +5704,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		// NOTE: The semantics differs from v1, where the slice length is reset
 		// and new elements are appended to the end.
-		// See https://golang.org/issue/21092.
+		// See https://go.dev/issue/21092.
 		name:  name("Slices/Merge"),
 		inBuf: `[{"k3":"v3"},{"k4":"v4"}]`,
 		inVal: addr([]map[string]string{{"k1": "v1"}, {"k2": "v2"}}[:1]),
@@ -5977,8 +5977,8 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
-		// See https://golang.org/issue/26946.
-		// See https://golang.org/issue/33993.
+		// See https://go.dev/issue/26946.
+		// See https://go.dev/issue/33993.
 		name:  name("Interfaces/Merge/Map"),
 		inBuf: `{"k2":"v2"}`,
 		inVal: func() any {
@@ -6174,13 +6174,13 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(net.IP),
 		want:  addr(net.IPv4(192, 168, 0, 100)),
 	}, {
-		// NOTE: Fixes https://golang.org/issue/46516.
+		// NOTE: Fixes https://go.dev/issue/46516.
 		name:  name("Methods/Anonymous"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X struct{ allMethods } }),
 		want:  addr(struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
 	}, {
-		// NOTE: Fixes https://golang.org/issue/22967.
+		// NOTE: Fixes https://go.dev/issue/22967.
 		name:  name("Methods/Addressable"),
 		inBuf: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
 		inVal: addr(struct {
@@ -6200,13 +6200,13 @@ func TestUnmarshal(t *testing.T) {
 			I: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
 		}),
 	}, {
-		// NOTE: Fixes https://golang.org/issue/29732.
+		// NOTE: Fixes https://go.dev/issue/29732.
 		name:  name("Methods/MapKey/JSONv2"),
 		inBuf: `{"k1":"v1b","k2":"v2"}`,
 		inVal: addr(map[structMethodJSONv2]string{{"k1"}: "v1a", {"k3"}: "v3"}),
 		want:  addr(map[structMethodJSONv2]string{{"k1"}: "v1b", {"k2"}: "v2", {"k3"}: "v3"}),
 	}, {
-		// NOTE: Fixes https://golang.org/issue/29732.
+		// NOTE: Fixes https://go.dev/issue/29732.
 		name:  name("Methods/MapKey/JSONv1"),
 		inBuf: `{"k1":"v1b","k2":"v2"}`,
 		inVal: addr(map[structMethodJSONv1]string{{"k1"}: "v1a", {"k3"}: "v3"}),

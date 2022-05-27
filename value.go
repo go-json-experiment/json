@@ -275,7 +275,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		if isSorted {
 			return
 		}
-		// TODO(https://golang.org/issue/47619): Use slices.Sort.
+		// TODO(https://go.dev/issue/47619): Use slices.Sort.
 		sort.Sort(members)
 
 		// Append the reordered members to a new buffer,

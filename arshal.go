@@ -60,7 +60,7 @@ func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err erro
 	defer putBufferedEncoder(enc)
 	enc.options.omitTopLevelNewline = true
 	err = mo.MarshalNext(enc, in)
-	// TODO(https://golang.org/issue/45038): Use bytes.Clone.
+	// TODO(https://go.dev/issue/45038): Use bytes.Clone.
 	return append([]byte(nil), enc.buf...), err
 }
 

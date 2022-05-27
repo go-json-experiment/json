@@ -183,7 +183,7 @@ func (t Token) Clone() Token {
 		if uint64(raw.previousOffsetStart()) != t.num {
 			panic(invalidTokenPanic)
 		}
-		// TODO(https://golang.org/issue/45038): Use bytes.Clone.
+		// TODO(https://go.dev/issue/45038): Use bytes.Clone.
 		buf := append([]byte(nil), raw.previousBuffer()...)
 		return Token{raw: &decodeBuffer{buf: buf, prevStart: 0, prevEnd: len(buf)}}
 	}

@@ -1551,7 +1551,7 @@ beforeExponent:
 
 // parseHexUint16 is similar to strconv.ParseUint,
 // but operates directly on []byte and is optimized for base-16.
-// See https://golang.org/issue/42429.
+// See https://go.dev/issue/42429.
 func parseHexUint16(b []byte) (v uint16, ok bool) {
 	if len(b) != 4 {
 		return 0, false
@@ -1576,7 +1576,7 @@ func parseHexUint16(b []byte) (v uint16, ok bool) {
 // but operates directly on []byte and is optimized for base-10.
 // If the number is syntactically valid but overflows uint64,
 // then it returns (math.MaxUint64, false).
-// See https://golang.org/issue/42429.
+// See https://go.dev/issue/42429.
 func parseDecUint(b []byte) (v uint64, ok bool) {
 	// Overflow logic is based on strconv/atoi.go:138-149 from Go1.15, where:
 	//   - cutoff is equal to math.MaxUint64/10+1, and
@@ -1622,7 +1622,7 @@ func parseFloat(b []byte, bits int) (v float64, ok bool) {
 	}
 
 	// Note that the []byte->string conversion unfortunately allocates.
-	// See https://golang.org/issue/42429 for more information.
+	// See https://go.dev/issue/42429 for more information.
 	fv, err := strconv.ParseFloat(string(b), bits)
 	if math.IsInf(fv, 0) {
 		switch {

@@ -35,7 +35,7 @@ var jsonPackages = []struct {
 // incurs significant performance cost when unmarshaling unknown fields.
 // In v2, we switch the default and provide the ability to opt into v1 behavior.
 //
-// Related issue: https://golang.org/issue/14750
+// Related issue: https://go.dev/issue/14750
 func TestCaseSensitivity(t *testing.T) {
 	type Fields struct {
 		FieldA bool
@@ -112,8 +112,8 @@ func TestCaseSensitivity(t *testing.T) {
 //
 // Related issues:
 //
-//	https://golang.org/issue/27589
-//	https://golang.org/issue/37711
+//	https://go.dev/issue/27589
+//	https://go.dev/issue/37711
 func TestNilSlicesAndMaps(t *testing.T) {
 	type Composites struct {
 		B []byte            // always serialized in v2 as a JSON string
@@ -244,7 +244,7 @@ func TestPointerReceiver(t *testing.T) {
 // the guarantee that marshaling operates primarily in a streaming manner.
 // The v2 API provides RawValue.Canonicalize if stability is needed.
 //
-// Related issue: https://golang.org/issue/33714
+// Related issue: https://go.dev/issue/33714
 func TestMapDeterminism(t *testing.T) {
 	const iterations = 10
 	in := map[int]int{0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9}

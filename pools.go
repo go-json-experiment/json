@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-// TODO(https://golang.org/issue/47657): Use sync.PoolOf.
+// TODO(https://go.dev/issue/47657): Use sync.PoolOf.
 
 var (
 	// This owns the internal buffer since there is no io.Writer to output to.
@@ -33,7 +33,7 @@ var (
 
 // bufferStatistics is statistics to track buffer utilization.
 // It is used to determine whether to recycle a buffer or not
-// to avoid https://golang.org/issue/23199.
+// to avoid https://go.dev/issue/23199.
 type bufferStatistics struct {
 	strikes int // number of times the buffer was under-utilized
 	prevLen int // length of previous buffer
@@ -65,7 +65,7 @@ func putBufferedEncoder(e *Encoder) {
 	// the absolute worst-case utilization. Without this check,
 	// this would be theoretically 0%, which is infinitely worse.
 	//
-	// See https://golang.org/issue/27735.
+	// See https://go.dev/issue/27735.
 	switch {
 	case cap(e.buf) <= 4<<10: // always recycle buffers smaller than 4KiB
 		e.bufStats.strikes = 0

@@ -408,7 +408,7 @@ func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 		enc := jsonv1.NewEncoder(bytes.NewBuffer(buffer[:0]))
 		switch typeName {
 		case "Token":
-			t.Skip("no support for encoding tokens in v1; see https://golang.org/issue/40127")
+			t.Skip("no support for encoding tokens in v1; see https://go.dev/issue/40127")
 		case "Value":
 			val := jsonv1.RawMessage(data)
 			if err := enc.Encode(val); err != nil {

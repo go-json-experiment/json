@@ -230,7 +230,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		val := enc.UnusedBuffer()
 		var b []byte
 		if va.Kind() == reflect.Array {
-			// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
+			// TODO(https://go.dev/issue/47066): Avoid reflect.Value.Slice.
 			b = va.Slice(0, va.Len()).Bytes()
 		} else {
 			b = va.Bytes()
@@ -292,7 +292,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			n = decodedLen(n)
 			var b []byte
 			if va.Kind() == reflect.Array {
-				// TODO(https://golang.org/issue/47066): Avoid reflect.Value.Slice.
+				// TODO(https://go.dev/issue/47066): Avoid reflect.Value.Slice.
 				b = va.Slice(0, va.Len()).Bytes()
 				if n != len(b) {
 					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, len(b))
@@ -645,7 +645,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// Users that need stable output should call RawValue.Canonicalize.
 			// TODO(go1.19): Remove use of a sync.Pool with reflect.MapIter.
 			// Calling reflect.Value.MapRange no longer allocates.
-			// See https://golang.org/cl/400675.
+			// See https://go.dev/cl/400675.
 			iter := getMapIter(va.Value)
 			defer putMapIter(iter)
 			for iter.Next() {
@@ -1161,7 +1161,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			var i int
 			for dec.PeekKind() != ']' {
 				if i == cap {
-					// TODO(https://golang.org/issue/48000): Use reflect.Value.Append.
+					// TODO(https://go.dev/issue/48000): Use reflect.Value.Append.
 					va.Set(reflect.Append(va.Value, reflect.Zero(t.Elem())))
 					cap = va.Cap()
 					va.SetLen(cap)
@@ -1370,7 +1370,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			if optimizeCommon && t == anyType && uo.format == "" && (uo.Unmarshalers == nil || !uo.Unmarshalers.fromAny) && !dec.options.AllowDuplicateNames {
 				v, err := unmarshalValueAny(uo, dec)
 				// We must check for nil interface values up front.
-				// See https://golang.org/issue/52310.
+				// See https://go.dev/issue/52310.
 				if v != nil {
 					va.Set(reflect.ValueOf(v))
 				}
@@ -1424,7 +1424,7 @@ func isAnyType(t reflect.Type) bool {
 	// This is forward compatible if the Go language permits type sets within
 	// ordinary interfaces where an interface with zero methods does not
 	// necessarily mean it can hold every possible Go type.
-	// See https://golang.org/issue/45346.
+	// See https://go.dev/issue/45346.
 	return t == anyType || anyType.Implements(t)
 }
 

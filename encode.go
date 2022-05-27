@@ -215,7 +215,7 @@ func (e *Encoder) flush() error {
 		// If e.buf already aliases the internal buffer of bb,
 		// then the Write call simply increments the internal offset,
 		// otherwise Write operates as expected.
-		// See https://golang.org/issue/42986.
+		// See https://go.dev/issue/42986.
 		n, _ := bb.Write(e.buf) // never fails unless bb is nil
 		e.baseOffset += int64(n)
 
@@ -1077,7 +1077,7 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 
 // appendNumber appends src to dst as a JSON number per RFC 7159, section 6.
 // It formats numbers similar to the ES6 number-to-string conversion.
-// See https://golang.org/issue/14135.
+// See https://go.dev/issue/14135.
 //
 // The output is identical to ECMA-262, 6th edition, section 7.1.12.1 and with
 // RFC 8785, section 3.2.2.3 for 64-bit floating-point numbers except for -0,

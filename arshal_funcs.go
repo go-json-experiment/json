@@ -339,7 +339,7 @@ func castableTo(from, to reflect.Type) bool {
 		// TODO: This breaks when ordinary interfaces can have type sets
 		// since interfaces now exist where only the value form of a type (T)
 		// implements the interface, but not the pointer variant (*T).
-		// See https://golang.org/issue/45346.
+		// See https://go.dev/issue/45346.
 		return reflect.PointerTo(from).Implements(to)
 	case reflect.Pointer:
 		// Common case for unmarshaling.

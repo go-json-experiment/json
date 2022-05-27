@@ -51,7 +51,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	// This follows the same rules as selecting a field on embedded structs
 	// where the shallowest field takes precedence. If more than one field
 	// exists at the shallowest depth, then the selection is illegal.
-	// See https://golang.org/ref/spec#Selectors.
+	// See https://go.dev/ref/spec#Selectors.
 	ambiguous := new(structField)
 
 	// Setup a queue for a breath-first search.
@@ -242,7 +242,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 			delete(fs.byActualName, f.name)
 		case f2 == nil:
 			continue // may be nil due to previous delete
-		// TODO(https://golang.org/issue/45955): Use slices.Equal.
+		// TODO(https://go.dev/issue/45955): Use slices.Equal.
 		case reflect.DeepEqual(f.index, f2.index):
 			f.id = n
 			fs.flattened[n] = f
@@ -330,7 +330,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		// embedded fields of unexported types since Go reflection does not
 		// allow the same set of operations that are available in normal cases
 		// of purely exported fields.
-		// See https://golang.org/issue/21357 and https://golang.org/issue/24153.
+		// See https://go.dev/issue/21357 and https://go.dev/issue/24153.
 		if sf.Anonymous {
 			return fieldOptions{}, fmt.Errorf("embedded Go struct field %s of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name())
 		}
@@ -344,7 +344,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	// Determine the JSON member name for this Go field. A user-specified name
 	// may be provided as either an identifier or a single-quoted string.
 	// The single-quoted string allows arbitrary characters in the name.
-	// See https://golang.org/issue/2718 and https://golang.org/issue/3546.
+	// See https://go.dev/issue/2718 and https://go.dev/issue/3546.
 	out.name = sf.Name // always starts with an uppercase character
 	if len(tag) > 0 && !strings.HasPrefix(tag, ",") {
 		// For better compatibility with v1, accept almost any unescaped name.
