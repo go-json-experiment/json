@@ -1129,6 +1129,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
+	emptySlice := reflect.MakeSlice(t, 0, 0)
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			if uo.format == "emitnull" {
@@ -1178,7 +1179,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				}
 			}
 			if i == 0 {
-				va.Set(reflect.MakeSlice(va.Type(), 0, 0))
+				va.Set(emptySlice)
 			} else {
 				va.SetLen(i)
 			}
