@@ -985,29 +985,25 @@ func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(run
 		for uint(len(src)) > uint(n) {
 			// Handle single-byte ASCII.
 			if c := src[n]; c <= unicode.MaxASCII {
+				n++
 				if c < ' ' || c == '"' || c == '\\' {
-					dst = append(dst, src[i:n]...)
+					dst = append(dst, src[i:n-1]...)
 					dst = appendEscapedASCII(dst, c)
-					n++
 					i = n
-				} else {
-					n++
 				}
 				continue
 			}
 
 			// Handle multi-byte Unicode.
-			r, rn := utf8.DecodeRuneInString(src[n:])
-			if r == utf8.RuneError && rn == 1 {
-				dst = append(dst, src[i:n]...)
+			_, rn := utf8.DecodeRuneInString(src[n:])
+			n += rn
+			if rn == 1 { // must be utf8.RuneError since we already checked for single-byte ASCII
+				dst = append(dst, src[i:n-rn]...)
 				if validateUTF8 {
 					return dst, &SyntacticError{str: "invalid UTF-8 within string"}
 				}
 				dst = append(dst, "\ufffd"...)
-				n += rn
 				i = n
-			} else {
-				n += rn
 			}
 		}
 		dst = append(dst, src[i:n]...)
