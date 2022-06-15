@@ -189,6 +189,9 @@ and uses just-in-time compilation to generate machine code specialized
 for the Go type being marshaled or unmarshaled.
 Also, `SonicJSON` does not validate JSON strings for valid UTF-8,
 and so gains a notable performance boost on datasets with multi-byte Unicode.
+Benchmarks are performed based on the default marshal and unmarshal behavior
+of each package. Note that `JSONv2` aims to be safe and correct by default,
+which may not be the most performant strategy.
 
 `JSONv2` has several semantic changes relative to `JSONv1` that
 impacts performance:
@@ -209,7 +212,10 @@ All of the charts are unit-less since the values are normalized
 relative to `JSONv1`, which is why `JSONv1` always has a value of 1.
 A lower value is better (i.e., runs faster).
 
-The code for the benchmarks is located at https://github.com/dsnet/jsonbench.
+Benchmarks were performed on an AMD Ryzen 9 5900X.
+
+The code for the benchmarks is located at
+https://github.com/go-json-experiment/jsonbench.
 
 ### Marshal Performance
 
@@ -241,9 +247,9 @@ The code for the benchmarks is located at https://github.com/dsnet/jsonbench.
 * Relative to `GoJSON`, `JSONv2` is about 1.1x to 2.5x faster.
 * Relative to `SonicJSON`, `JSONv2` is up to 1.5x slower
   (ignoring `StringUnicode` since `SonicJSON` does not validate UTF-8).
-* `JSONv2` is faster than all other alternatives (except `SonicJSON`)
-  because it does not sort the keys for a `map[string]any`,
-  while the alternatives (except `SonicJSON`) do sort the keys.
+* `JSONv2` is faster than the alternatives.
+  One advantange is because it does not sort the keys for a `map[string]any`,
+  while alternatives (except `SonicJSON` and `JSONIterator`) do sort the keys.
 
 #### RawValue types
 
