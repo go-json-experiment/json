@@ -91,8 +91,9 @@
 // After the name, the following tag options are supported:
 //
 //   - omitzero: When marshaling, the "omitzero" option specifies that
-//     the struct field should be omitted if the field value is
-//     the zero Go value or has an "IsZero() bool" method that reports true.
+//     the struct field should be omitted if the field value is zero
+//     as determined by the "IsZero() bool" method if present,
+//     otherwise based on whether the field is the zero Go value.
 //     This option has no effect when unmarshaling.
 //
 //   - omitempty: When marshaling, the "omitempty" option specifies that

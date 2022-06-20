@@ -175,18 +175,26 @@ type (
 		Interface     any                `json:",omitzero"`
 	}
 	structOmitZeroMethodAll struct {
-		ValAlwaysZero                   valueAlwaysZero     `json:",omitzero"`
-		ValNeverZero                    valueNeverZero      `json:",omitzero"`
+		ValueAlwaysZero                 valueAlwaysZero     `json:",omitzero"`
+		ValueNeverZero                  valueNeverZero      `json:",omitzero"`
 		PointerAlwaysZero               pointerAlwaysZero   `json:",omitzero"`
 		PointerNeverZero                pointerNeverZero    `json:",omitzero"`
-		PointerValAlwaysZero            *valueAlwaysZero    `json:",omitzero"`
-		PointerValNeverZero             *valueNeverZero     `json:",omitzero"`
+		PointerValueAlwaysZero          *valueAlwaysZero    `json:",omitzero"`
+		PointerValueNeverZero           *valueNeverZero     `json:",omitzero"`
 		PointerPointerAlwaysZero        *pointerAlwaysZero  `json:",omitzero"`
 		PointerPointerNeverZero         *pointerNeverZero   `json:",omitzero"`
-		PointerPointerValAlwaysZero     **valueAlwaysZero   `json:",omitzero"`
-		PointerPointerValNeverZero      **valueNeverZero    `json:",omitzero"`
+		PointerPointerValueAlwaysZero   **valueAlwaysZero   `json:",omitzero"`
+		PointerPointerValueNeverZero    **valueNeverZero    `json:",omitzero"`
 		PointerPointerPointerAlwaysZero **pointerAlwaysZero `json:",omitzero"`
 		PointerPointerPointerNeverZero  **pointerNeverZero  `json:",omitzero"`
+	}
+	structOmitZeroMethodInterfaceAll struct {
+		ValueAlwaysZero          isZeroer `json:",omitzero"`
+		ValueNeverZero           isZeroer `json:",omitzero"`
+		PointerValueAlwaysZero   isZeroer `json:",omitzero"`
+		PointerValueNeverZero    isZeroer `json:",omitzero"`
+		PointerPointerAlwaysZero isZeroer `json:",omitzero"`
+		PointerPointerNeverZero  isZeroer `json:",omitzero"`
 	}
 	structOmitEmptyAll struct {
 		Bool                  bool                    `json:",omitempty"`
@@ -1316,33 +1324,68 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: name("Structs/OmitZeroMethod/Zero"),
 		in:   structOmitZeroMethodAll{},
-		want: `{}`,
+		want: `{"ValueNeverZero":"","PointerNeverZero":""}`,
 	}, {
 		name:  name("Structs/OmitZeroMethod/NonZero"),
 		eopts: EncodeOptions{Indent: "\t"},
 		in: structOmitZeroMethodAll{
-			ValAlwaysZero:                   valueAlwaysZero("nonzero"),
-			ValNeverZero:                    valueNeverZero("nonzero"),
+			ValueAlwaysZero:                 valueAlwaysZero("nonzero"),
+			ValueNeverZero:                  valueNeverZero("nonzero"),
 			PointerAlwaysZero:               pointerAlwaysZero("nonzero"),
 			PointerNeverZero:                pointerNeverZero("nonzero"),
-			PointerValAlwaysZero:            addr(valueAlwaysZero("nonzero")),
-			PointerValNeverZero:             addr(valueNeverZero("nonzero")),
+			PointerValueAlwaysZero:          addr(valueAlwaysZero("nonzero")),
+			PointerValueNeverZero:           addr(valueNeverZero("nonzero")),
 			PointerPointerAlwaysZero:        addr(pointerAlwaysZero("nonzero")),
 			PointerPointerNeverZero:         addr(pointerNeverZero("nonzero")),
-			PointerPointerValAlwaysZero:     addr(addr(valueAlwaysZero("nonzero"))), // marshaled since **valueAlwaysZero does not implement IsZero
-			PointerPointerValNeverZero:      addr(addr(valueNeverZero("nonzero"))),
+			PointerPointerValueAlwaysZero:   addr(addr(valueAlwaysZero("nonzero"))), // marshaled since **valueAlwaysZero does not implement IsZero
+			PointerPointerValueNeverZero:    addr(addr(valueNeverZero("nonzero"))),
 			PointerPointerPointerAlwaysZero: addr(addr(pointerAlwaysZero("nonzero"))), // marshaled since **pointerAlwaysZero does not implement IsZero
 			PointerPointerPointerNeverZero:  addr(addr(pointerNeverZero("nonzero"))),
 		},
 		want: `{
-	"ValNeverZero": "nonzero",
+	"ValueNeverZero": "nonzero",
 	"PointerNeverZero": "nonzero",
-	"PointerValNeverZero": "nonzero",
+	"PointerValueNeverZero": "nonzero",
 	"PointerPointerNeverZero": "nonzero",
-	"PointerPointerValAlwaysZero": "nonzero",
-	"PointerPointerValNeverZero": "nonzero",
+	"PointerPointerValueAlwaysZero": "nonzero",
+	"PointerPointerValueNeverZero": "nonzero",
 	"PointerPointerPointerAlwaysZero": "nonzero",
 	"PointerPointerPointerNeverZero": "nonzero"
+}`,
+	}, {
+		name:  name("Structs/OmitZeroMethod/Interface/Zero"),
+		eopts: EncodeOptions{Indent: "\t"},
+		in:    structOmitZeroMethodInterfaceAll{},
+		want:  `{}`,
+	}, {
+		name:  name("Structs/OmitZeroMethod/Interface/PartialZero"),
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structOmitZeroMethodInterfaceAll{
+			ValueAlwaysZero:          valueAlwaysZero(""),
+			ValueNeverZero:           valueNeverZero(""),
+			PointerValueAlwaysZero:   (*valueAlwaysZero)(nil),
+			PointerValueNeverZero:    (*valueNeverZero)(nil), // nil pointer, so method not called
+			PointerPointerAlwaysZero: (*pointerAlwaysZero)(nil),
+			PointerPointerNeverZero:  (*pointerNeverZero)(nil), // nil pointer, so method not called
+		},
+		want: `{
+	"ValueNeverZero": ""
+}`,
+	}, {
+		name:  name("Structs/OmitZeroMethod/Interface/NonZero"),
+		eopts: EncodeOptions{Indent: "\t"},
+		in: structOmitZeroMethodInterfaceAll{
+			ValueAlwaysZero:          valueAlwaysZero("nonzero"),
+			ValueNeverZero:           valueNeverZero("nonzero"),
+			PointerValueAlwaysZero:   addr(valueAlwaysZero("nonzero")),
+			PointerValueNeverZero:    addr(valueNeverZero("nonzero")),
+			PointerPointerAlwaysZero: addr(pointerAlwaysZero("nonzero")),
+			PointerPointerNeverZero:  addr(pointerNeverZero("nonzero")),
+		},
+		want: `{
+	"ValueNeverZero": "nonzero",
+	"PointerValueNeverZero": "nonzero",
+	"PointerPointerNeverZero": "nonzero"
 }`,
 	}, {
 		name:  name("Structs/OmitEmpty/Zero"),

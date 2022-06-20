@@ -828,7 +828,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 			// OmitZero skips the field if the Go value is zero,
 			// which we can determine up front without calling the marshaler.
-			if f.omitzero && (v.IsZero() || (f.isZero != nil && f.isZero(v))) {
+			if f.omitzero && ((f.isZero == nil && v.IsZero()) || (f.isZero != nil && f.isZero(v))) {
 				continue
 			}
 

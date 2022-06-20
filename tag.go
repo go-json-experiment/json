@@ -176,6 +176,17 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 
 				// Provide a function that uses a type's IsZero method.
 				switch {
+				case sf.Type.Kind() == reflect.Interface && sf.Type.Implements(isZeroerType):
+					f.isZero = func(va addressableValue) bool {
+						// Avoid panics calling IsZero on a nil interface or
+						// non-nil interface with nil pointer.
+						return va.IsNil() || (va.Elem().Kind() == reflect.Pointer && va.Elem().IsNil()) || va.Interface().(isZeroer).IsZero()
+					}
+				case sf.Type.Kind() == reflect.Pointer && sf.Type.Implements(isZeroerType):
+					f.isZero = func(va addressableValue) bool {
+						// Avoid panics calling IsZero on nil pointer.
+						return va.IsNil() || va.Interface().(isZeroer).IsZero()
+					}
 				case sf.Type.Implements(isZeroerType):
 					f.isZero = func(va addressableValue) bool { return va.Interface().(isZeroer).IsZero() }
 				case reflect.PointerTo(sf.Type).Implements(isZeroerType):
