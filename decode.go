@@ -1180,22 +1180,13 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 		}
 
 		switch r, rn := utf8.DecodeRune(b[n:]); {
-		case r == utf8.RuneError && rn == 1: // invalid UTF-8
-			if !utf8.FullRune(b[n:]) {
-				return n, io.ErrUnexpectedEOF
-			}
-			flags.set(stringNonVerbatim | stringNonCanonical)
-			if validateUTF8 {
-				return n, &SyntacticError{str: "invalid UTF-8 within string"}
-			}
-			n++
-		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
-			if r < ' ' {
-				flags.set(stringNonVerbatim | stringNonCanonical)
-				return n, newInvalidCharacterError(b[n:], "within string (expecting non-control character)")
-			}
-
-			// Handle escape sequence.
+		// Handle UTF-8 encoded byte sequence.
+		// Due to specialized handling of ASCII above, we know that
+		// all normal sequences at this point must be 2 bytes or larger.
+		case rn > 1:
+			n += rn
+		// Handle escape sequence.
+		case r == '\\':
 			flags.set(stringNonVerbatim)
 			resumeOffset = n
 			if uint(len(b)) < uint(n+2) {
@@ -1267,8 +1258,22 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 				flags.set(stringNonCanonical)
 				return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+2])) + " within string"}
 			}
+		// Handle invalid UTF-8.
+		case r == utf8.RuneError:
+			if !utf8.FullRune(b[n:]) {
+				return n, io.ErrUnexpectedEOF
+			}
+			flags.set(stringNonVerbatim | stringNonCanonical)
+			if validateUTF8 {
+				return n, &SyntacticError{str: "invalid UTF-8 within string"}
+			}
+			n++
+		// Handle invalid control characters.
+		case r < ' ':
+			flags.set(stringNonVerbatim | stringNonCanonical)
+			return n, newInvalidCharacterError(b[n:], "within string (expecting non-control character)")
 		default:
-			n += rn
+			panic("BUG: unhandled character " + quoteRune(b[n:]))
 		}
 	}
 	return n, io.ErrUnexpectedEOF
@@ -1321,14 +1326,13 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 		}
 
 		switch r, rn := utf8.DecodeRune(src[n:]); {
-		case r == utf8.RuneError && rn == 1:
-			// NOTE: An unescaped string may be longer than the escaped string
-			// because invalid UTF-8 bytes are being replaced.
-			dst = append(dst, src[i:n]...)
-			dst = append(dst, "\uFFFD"...)
+		// Handle UTF-8 encoded byte sequence.
+		// Due to specialized handling of ASCII above, we know that
+		// all normal sequences at this point must be 2 bytes or larger.
+		case rn > 1:
 			n += rn
-			i = n
-		case r <= unicode.MaxASCII && (r < ' ' || r == '\\'):
+		// Handle escape sequence.
+		case r == '\\':
 			dst = append(dst, src[i:n]...)
 			if r < ' ' {
 				return dst, false // invalid control character or unescaped quote
@@ -1385,8 +1389,20 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 				return dst, false // invalid escape sequence
 			}
 			i = n
-		default:
+		// Handle invalid UTF-8.
+		case r == utf8.RuneError:
+			// NOTE: An unescaped string may be longer than the escaped string
+			// because invalid UTF-8 bytes are being replaced.
+			dst = append(dst, src[i:n]...)
+			dst = append(dst, "\uFFFD"...)
 			n += rn
+			i = n
+		// Handle invalid control characters.
+		case r < ' ':
+			dst = append(dst, src[i:n]...)
+			return dst, false // invalid control character or unescaped quote
+		default:
+			panic("BUG: unhandled character " + quoteRune(src[n:]))
 		}
 	}
 	dst = append(dst, src[i:n]...)
