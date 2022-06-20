@@ -553,7 +553,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",format=fizzbuzz"`
 		}{},
-		wantErr: errors.New("Go struct field FieldName is missing value for `json` tag option format"),
+		wantErr: errors.New("Go struct field FieldName is missing value for `format` tag option"),
 	}, {
 		name: name("FormatOptionColon"),
 		in: struct {
@@ -571,13 +571,13 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",format:'2006-01-02"`
 		}{},
-		wantErr: errors.New("Go struct field FieldName has malformed value for `json` tag option format: single-quoted string not terminated: '2006-01-0..."),
+		wantErr: errors.New("Go struct field FieldName has malformed value for `format` tag option: single-quoted string not terminated: '2006-01-0..."),
 	}, {
-		name: name("DuplicateFormatOptions"),
+		name: name("FormatOptionNotLast"),
 		in: struct {
-			FieldName int `json:",format:alpha,format:bravo"`
+			FieldName int `json:",format:alpha,ordered"`
 		}{},
-		wantErr: errors.New("Go struct field FieldName has duplicate appearance of `json` tag option format"),
+		wantErr: errors.New("Go struct field FieldName has `format` tag option that was not specified last"),
 	}, {
 		name: name("AllOptions"),
 		in: struct {
@@ -599,13 +599,13 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",'nocase','inline','unknown','omitzero','omitempty','string','format':'format'"`
 		}{},
-		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `json` tag option 'nocase'; specify nocase instead"),
+		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `'nocase'` tag option; specify `nocase` instead"),
 	}, {
 		name: name("AllOptionsCaseSensitive"),
 		in: struct {
 			FieldName int `json:",NOCASE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT:FORMAT"`
 		}{},
-		wantErr: errors.New("Go struct field FieldName has invalid appearance of `json` tag option NOCASE; specify nocase instead"),
+		wantErr: errors.New("Go struct field FieldName has invalid appearance of `NOCASE` tag option; specify `nocase` instead"),
 	}, {
 		name: name("AllOptionsSpaceSensitive"),
 		in: struct {

@@ -378,6 +378,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	out.quotedName = string(b)
 
 	// Handle any additional tag options (if any).
+	var wasFormat bool
 	seenOpts := make(map[string]bool)
 	for len(tag) > 0 {
 		// Consume comma delimiter.
@@ -396,8 +397,11 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		}
 		rawOpt := tag[:n]
 		tag = tag[n:]
-		if strings.HasPrefix(rawOpt, "'") && strings.TrimFunc(opt, isLetterOrDigit) == "" {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `json` tag option %s; specify %s instead", sf.Name, rawOpt, opt)
+		switch {
+		case wasFormat:
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has `format` tag option that was not specified last", sf.Name)
+		case strings.HasPrefix(rawOpt, "'") && strings.TrimFunc(opt, isLetterOrDigit) == "":
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `%s` tag option; specify `%s` instead", sf.Name, rawOpt, opt)
 		}
 		switch opt {
 		case "nocase":
@@ -414,22 +418,23 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			out.string = true
 		case "format":
 			if !strings.HasPrefix(tag, ":") {
-				return fieldOptions{}, fmt.Errorf("Go struct field %s is missing value for `json` tag option format", sf.Name)
+				return fieldOptions{}, fmt.Errorf("Go struct field %s is missing value for `format` tag option", sf.Name)
 			}
 			tag = tag[len(":"):]
 			opt, n, err := consumeTagOption(tag)
 			if err != nil {
-				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed value for `json` tag option format: %v", sf.Name, err)
+				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed value for `format` tag option: %v", sf.Name, err)
 			}
 			tag = tag[n:]
 			out.format = opt
+			wasFormat = true
 		default:
 			// Reject keys that resemble one of the supported options.
 			// This catches invalid mutants such as "omitEmpty" or "omit_empty".
 			normOpt := strings.ReplaceAll(strings.ToLower(opt), "_", "")
 			switch normOpt {
 			case "nocase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
-				return fieldOptions{}, fmt.Errorf("Go struct field %s has invalid appearance of `json` tag option %s; specify %s instead", sf.Name, opt, normOpt)
+				return fieldOptions{}, fmt.Errorf("Go struct field %s has invalid appearance of `%s` tag option; specify `%s` instead", sf.Name, opt, normOpt)
 			}
 
 			// NOTE: Everything else is ignored. This does not mean it is
@@ -439,7 +444,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 
 		// Reject duplicates.
 		if seenOpts[opt] {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has duplicate appearance of `json` tag option %s", sf.Name, rawOpt)
+			return fieldOptions{}, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt)
 		}
 		seenOpts[opt] = true
 	}
