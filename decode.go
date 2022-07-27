@@ -10,7 +10,6 @@ import (
 	"io"
 	"math"
 	"strconv"
-	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -1125,7 +1124,7 @@ func consumeSimpleString(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlineable.
 	if len(b) > 0 && b[0] == '"' {
 		n++
-		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] <= unicode.MaxASCII) {
+		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] < utf8.RuneSelf) {
 			n++
 		}
 		if len(b) > n && b[n] == '"' {
@@ -1164,7 +1163,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 	for uint(len(b)) > uint(n) {
 		// Optimize for long sequences of unescaped characters.
 		noEscape := func(c byte) bool {
-			return c <= unicode.MaxASCII && ' ' <= c && c != '\\' && c != '"'
+			return c < utf8.RuneSelf && ' ' <= c && c != '\\' && c != '"'
 		}
 		for uint(len(b)) > uint(n) && noEscape(b[n]) {
 			n++
@@ -1249,7 +1248,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 					if !ok {
 						return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
 					}
-					if utf16.DecodeRune(rune(v1), rune(v2)) == unicode.ReplacementChar {
+					if utf16.DecodeRune(rune(v1), rune(v2)) == utf8.RuneError {
 						return n, &SyntacticError{str: "invalid surrogate pair in string"}
 					}
 					n += 6
@@ -1309,7 +1308,7 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 	for uint(len(src)) > uint(n) {
 		// Optimize for long sequences of unescaped characters.
 		noEscape := func(c byte) bool {
-			return c <= unicode.MaxASCII && ' ' <= c && c != '\\' && c != '"'
+			return c < utf8.RuneSelf && ' ' <= c && c != '\\' && c != '"'
 		}
 		for uint(len(src)) > uint(n) && noEscape(src[n]) {
 			n++
@@ -1374,10 +1373,10 @@ func unescapeString(dst, src []byte) (v []byte, ok bool) {
 				// Check whether this is a surrogate half.
 				r := rune(v1)
 				if utf16.IsSurrogate(r) {
-					r = unicode.ReplacementChar // assume failure unless the following succeeds
+					r = utf8.RuneError // assume failure unless the following succeeds
 					if uint(len(src)) >= uint(n+6) && src[n+0] == '\\' && src[n+1] == 'u' {
 						if v2, ok := parseHexUint16(src[n+2 : n+6]); ok {
-							if r = utf16.DecodeRune(rune(v1), rune(v2)); r != unicode.ReplacementChar {
+							if r = utf16.DecodeRune(rune(v1), rune(v2)); r != utf8.RuneError {
 								n += 6
 							}
 						}

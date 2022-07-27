@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/bits"
 	"strconv"
-	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -984,7 +983,7 @@ func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(run
 		dst = append(dst, '"')
 		for uint(len(src)) > uint(n) {
 			// Handle single-byte ASCII.
-			if c := src[n]; c <= unicode.MaxASCII {
+			if c := src[n]; c < utf8.RuneSelf {
 				n++
 				if c < ' ' || c == '"' || c == '\\' {
 					dst = append(dst, src[i:n-1]...)
