@@ -228,13 +228,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			}
 		}
 		val := enc.UnusedBuffer()
-		var b []byte
-		if va.Kind() == reflect.Array {
-			// TODO(https://go.dev/issue/47066): Avoid reflect.Value.Slice.
-			b = va.Slice(0, va.Len()).Bytes()
-		} else {
-			b = va.Bytes()
-		}
+		b := va.Bytes()
 		n := len(`"`) + encodedLen(len(b)) + len(`"`)
 		if cap(val) < n {
 			val = make([]byte, n)
@@ -290,16 +284,13 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				n--
 			}
 			n = decodedLen(n)
-			var b []byte
+			b := va.Bytes()
 			if va.Kind() == reflect.Array {
-				// TODO(https://go.dev/issue/47066): Avoid reflect.Value.Slice.
-				b = va.Slice(0, va.Len()).Bytes()
 				if n != len(b) {
 					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, len(b))
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
 			} else {
-				b = va.Bytes()
 				if b == nil || cap(b) < n {
 					b = make([]byte, n)
 				} else {
