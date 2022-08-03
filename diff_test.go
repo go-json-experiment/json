@@ -43,6 +43,7 @@ var jsonPackages = []struct {
 // snake_case, camelCase, or kebab-case.
 //
 // Related issue:
+//
 //	https://go.dev/issue/14750
 func TestCaseSensitivity(t *testing.T) {
 	type Fields struct {
@@ -125,6 +126,7 @@ func TestCaseSensitivity(t *testing.T) {
 // but now defined in terms of the JSON type system in v2.
 //
 // Related issues:
+//
 //	https://go.dev/issue/11939
 //	https://go.dev/issue/22480
 //	https://go.dev/issue/29310
@@ -284,6 +286,7 @@ func addr[T any](v T) *T {
 // is removed in v2 because this behavior was surprising and inconsistent in v1.
 //
 // Related issues:
+//
 //	https://go.dev/issue/15624
 //	https://go.dev/issue/20651
 //	https://go.dev/issue/22177
@@ -468,6 +471,7 @@ func TestStringOption(t *testing.T) {
 // The non-zero values of those types always marshal as JSON strings.
 //
 // Related issues:
+//
 //	https://go.dev/issue/27589
 //	https://go.dev/issue/37711
 func TestNilSlicesAndMaps(t *testing.T) {
@@ -610,6 +614,7 @@ func (v *CallCheck) UnmarshalJSON([]byte) error {
 // Unfortunately, it cannot be changed without breaking existing usages.
 //
 // Related issues:
+//
 //	https://go.dev/issue/27722
 //	https://go.dev/issue/33993
 //	https://go.dev/issue/42508
@@ -694,6 +699,7 @@ func TestPointerReceiver(t *testing.T) {
 //	(*json.RawValue)(&b).Canonicalize()
 //
 // Related issue:
+//
 //	https://go.dev/issue/7872
 //	https://go.dev/issue/33714
 func TestMapDeterminism(t *testing.T) {
@@ -833,6 +839,7 @@ func TestInvalidUTF8(t *testing.T) {
 // See https://labs.bishopfox.com/tech-blog/an-exploration-of-json-interoperability-vulnerabilities
 //
 // Related issue:
+//
 //	https://go.dev/issue/48298
 func TestDuplicateNames(t *testing.T) {
 	for _, json := range jsonPackages {
@@ -862,6 +869,7 @@ func TestDuplicateNames(t *testing.T) {
 // when Unmarshaling into a empty value.
 //
 // Related issues:
+//
 //	https://go.dev/issue/22177
 //	https://go.dev/issue/33835
 func TestMergeNull(t *testing.T) {
@@ -937,6 +945,7 @@ func TestMergeNull(t *testing.T) {
 // In v2, merging follows behavior based on RFC 7396.
 //
 // Related issues:
+//
 //	https://go.dev/issue/21092
 //	https://go.dev/issue/26946
 //	https://go.dev/issue/27172
@@ -1028,6 +1037,7 @@ func TestMergeComposite(t *testing.T) {
 //	}
 //
 // Related issue:
+//
 //	https://go.dev/issue/10275
 func TestTimeDurations(t *testing.T) {
 	for _, json := range jsonPackages {
@@ -1168,6 +1178,7 @@ func TestEmptyStructs(t *testing.T) {
 // explicitly mark such fields as being ignored with `json:"-"`.
 //
 // Related issues:
+//
 //	https://go.dev/issue/21353
 //	https://go.dev/issue/21357
 //	https://go.dev/issue/24153
