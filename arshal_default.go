@@ -968,7 +968,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 						if fields.inlinedFallback == nil {
 							// Skip unknown value since we have no place to store it.
-							if err := dec.skipValue(); err != nil {
+							if err := dec.SkipValue(); err != nil {
 								return err
 							}
 						} else {

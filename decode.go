@@ -347,9 +347,9 @@ func (d *Decoder) PeekKind() Kind {
 	return next
 }
 
-// skipValue is semantically equivalent to calling ReadValue and discarding
+// SkipValue is semantically equivalent to calling ReadValue and discarding
 // the result except that memory is not wasted trying to hold the entire result.
-func (d *Decoder) skipValue() error {
+func (d *Decoder) SkipValue() error {
 	switch d.PeekKind() {
 	case '{', '[':
 		// For JSON objects and arrays, keep skipping all tokens
