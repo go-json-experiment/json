@@ -1213,7 +1213,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 					return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
 				}
 				// Only certain control characters can use the \uFFFF notation
-				// for canonical formating (per RFC 8785, section 3.2.2.2.).
+				// for canonical formatting (per RFC 8785, section 3.2.2.2.).
 				switch v1 {
 				// \uFFFF notation not permitted for these characters.
 				case '\b', '\f', '\n', '\r', '\t':

@@ -62,7 +62,7 @@ func unmarshalValueAny(uo UnmarshalOptions, dec *Decoder) (any, error) {
 			}
 			return dec.stringCache.make(val), nil
 		case '0':
-			fv, _ := parseFloat(val, 64) // ignore error since readValue gaurantees val is valid
+			fv, _ := parseFloat(val, 64) // ignore error since readValue guarantees val is valid
 			return fv, nil
 		default:
 			panic("BUG: invalid kind: " + k.String())

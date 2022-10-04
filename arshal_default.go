@@ -542,7 +542,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 
 func makeMapArshaler(t reflect.Type) *arshaler {
 	// NOTE: The logic below disables namespaces for tracking duplicate names
-	// when handling map keys with a unique represention.
+	// when handling map keys with a unique representation.
 
 	// NOTE: Values retrieved from a map are not addressable,
 	// so we shallow copy the values to make them addressable and
@@ -828,7 +828,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			//	2. The object namespace is guaranteed to be disabled.
 			//	3. The object name is guaranteed to be valid and pre-escaped.
 			//	4. There is no need to flush the buffer (for unwrite purposes).
-			//	5. There is no possibility of an error occuring.
+			//	5. There is no possibility of an error occurring.
 			if optimizeCommon {
 				// Append any delimiters or optional whitespace.
 				if enc.tokens.last.length() > 0 {

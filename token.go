@@ -225,7 +225,7 @@ func (t Token) appendString(dst []byte, validateUTF8, preserveRaw bool, escapeRu
 }
 
 // String returns the unescaped string value for a JSON string.
-// For other JSON kinds, this returns the raw JSON represention.
+// For other JSON kinds, this returns the raw JSON representation.
 func (t Token) String() string {
 	// This is inlinable to take advantage of "function outlining".
 	// This avoids an allocation for the string(b) conversion
