@@ -5014,6 +5014,30 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
+		name:  name("Structs/Format/Bytes/Invalid/Base16/NonAlphabet/LineFeed"),
+		inBuf: `{"Base16": "aa\naa"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 9), []byte("aa\naa"))
+			return err
+		}()},
+	}, {
+		name:  name("Structs/Format/Bytes/Invalid/Base16/NonAlphabet/CarriageReturn"),
+		inBuf: `{"Base16": "aa\raa"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 9), []byte("aa\raa"))
+			return err
+		}()},
+	}, {
+		name:  name("Structs/Format/Bytes/Invalid/Base16/NonAlphabet/Space"),
+		inBuf: `{"Base16": "aa aa"}`,
+		inVal: new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: func() error {
+			_, err := hex.Decode(make([]byte, 9), []byte("aa aa"))
+			return err
+		}()},
+	}, {
 		name: name("Structs/Format/Bytes/Invalid/Base32/Padding"),
 		inBuf: `[
 			{"Base32": "NA======"},
@@ -5061,6 +5085,21 @@ func TestUnmarshal(t *testing.T) {
 			return err
 		}()},
 	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/LineFeed"),
+		inBuf:   `{"Base32": "AAAA\nAAAA"}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: errors.New("illegal data at input byte 4")},
+	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/CarriageReturn"),
+		inBuf:   `{"Base32": "AAAA\rAAAA"}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: errors.New("illegal data at input byte 4")},
+	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/Space"),
+		inBuf:   `{"Base32": "AAAA AAAA"}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: base32.CorruptInputError(4)},
+	}, {
 		name:  name("Structs/Format/Bytes/Invalid/Base64/WrongAlphabet"),
 		inBuf: `{"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"}`,
 		inVal: new(structFormatBytes),
@@ -5076,6 +5115,21 @@ func TestUnmarshal(t *testing.T) {
 			_, err := base64.URLEncoding.Decode(make([]byte, 48), []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"))
 			return err
 		}()},
+	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/LineFeed"),
+		inBuf:   `{"Base64": "aa=\n="}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: errors.New("illegal data at input byte 3")},
+	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/CarriageReturn"),
+		inBuf:   `{"Base64": "aa=\r="}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: errors.New("illegal data at input byte 3")},
+	}, {
+		name:    name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/Space"),
+		inBuf:   `{"Base64": "aa= ="}`,
+		inVal:   new(structFormatBytes),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: bytesType, Err: base64.CorruptInputError(2)},
 	}, {
 		name: name("Structs/Format/Floats"),
 		inBuf: `[

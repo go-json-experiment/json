@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -242,19 +243,19 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	}
 	unmarshalDefault := fncs.unmarshal
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
-		decode, decodedLen := decodeBase64, decodedLenBase64
+		decode, decodedLen, encodedLen := decodeBase64, decodedLenBase64, encodedLenBase64
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
 			switch uo.format {
 			case "base64":
-				decode, decodedLen = decodeBase64, decodedLenBase64
+				decode, decodedLen, encodedLen = decodeBase64, decodedLenBase64, encodedLenBase64
 			case "base64url":
-				decode, decodedLen = decodeBase64URL, decodedLenBase64URL
+				decode, decodedLen, encodedLen = decodeBase64URL, decodedLenBase64URL, encodedLenBase64URL
 			case "base32":
-				decode, decodedLen = decodeBase32, decodedLenBase32
+				decode, decodedLen, encodedLen = decodeBase32, decodedLenBase32, encodedLenBase32
 			case "base32hex":
-				decode, decodedLen = decodeBase32Hex, decodedLenBase32Hex
+				decode, decodedLen, encodedLen = decodeBase32Hex, decodedLenBase32Hex, encodedLenBase32Hex
 			case "base16", "hex":
-				decode, decodedLen = decodeBase16, decodedLenBase16
+				decode, decodedLen, encodedLen = decodeBase16, decodedLenBase16, encodedLenBase16
 			case "array":
 				uo.format = ""
 				return unmarshalDefault(uo, dec, va)
@@ -297,7 +298,15 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 					b = b[:n]
 				}
 			}
-			if _, err := decode(b, val); err != nil {
+			n2, err := decode(b, val)
+			if err == nil && len(val) != encodedLen(n2) {
+				// TODO(https://go.dev/issue/53845): RFC 4648, section 3.3,
+				// specifies that non-alphabet characters must be rejected.
+				// Unfortunately, the "base32" and "base64" packages allow
+				// '\r' and '\n' characters by default.
+				err = errors.New("illegal data at input byte " + strconv.Itoa(bytes.IndexAny(val, "\r\n")))
+			}
+			if err != nil {
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
 			if va.Kind() == reflect.Slice {
