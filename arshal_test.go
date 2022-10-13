@@ -3498,7 +3498,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{"T"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
 	}, {
-		name: name("Time/Format/Overflow"),
+		name: name("Time/Format/YearOverflow"),
 		in: struct {
 			T1 time.Time
 			T2 time.Time
@@ -3507,9 +3507,9 @@ func TestMarshal(t *testing.T) {
 			time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		want:    `{"T1":"9999-12-31T23:59:59Z","T2"`,
-		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year 10000 outside of range [0,9999]`)},
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year outside of range [0,9999]`)},
 	}, {
-		name: name("Time/Format/Underflow"),
+		name: name("Time/Format/YearUnderflow"),
 		in: struct {
 			T1 time.Time
 			T2 time.Time
@@ -3518,7 +3518,26 @@ func TestMarshal(t *testing.T) {
 			time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second),
 		},
 		want:    `{"T1":"0000-01-01T00:00:00Z","T2"`,
-		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year -1 outside of range [0,9999]`)},
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year outside of range [0,9999]`)},
+	}, {
+		name:    name("Time/Format/YearUnderflow"),
+		in:      struct{ T time.Time }{time.Date(-998, 1, 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)},
+		want:    `{"T"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`year outside of range [0,9999]`)},
+	}, {
+		name: name("Time/Format/ZoneExact"),
+		in:   struct{ T time.Time }{time.Date(2020, 1, 1, 0, 0, 0, 0, time.FixedZone("", 23*60*60+59*60))},
+		want: `{"T":"2020-01-01T00:00:00+23:59"}`,
+	}, {
+		name:    name("Time/Format/ZoneHourOverflow"),
+		in:      struct{ T time.Time }{time.Date(2020, 1, 1, 0, 0, 0, 0, time.FixedZone("", 24*60*60))},
+		want:    `{"T"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`timezone hour outside of range [0,23]`)},
+	}, {
+		name:    name("Time/Format/ZoneHourOverflow"),
+		in:      struct{ T time.Time }{time.Date(2020, 1, 1, 0, 0, 0, 0, time.FixedZone("", 123*60*60))},
+		want:    `{"T"`,
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`timezone hour outside of range [0,23]`)},
 	}, {
 		name:  name("Time/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
@@ -7456,7 +7475,7 @@ func TestUnmarshal(t *testing.T) {
 			T time.Time
 		}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: func() error {
-			_, err := time.Parse(time.RFC3339Nano, "2021-09-29T12:44:52")
+			_, err := time.Parse(time.RFC3339, "2021-09-29T12:44:52")
 			return err
 		}()},
 	}, {
@@ -7466,6 +7485,26 @@ func TestUnmarshal(t *testing.T) {
 			T time.Time `json:",format:UndefinedConstant"`
 		}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
+	}, {
+		name:    name("Time/Format/SingleDigitHour"),
+		inBuf:   `{"T":"2000-01-01T1:12:34Z"}`,
+		inVal:   new(struct{ T time.Time }),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: &time.ParseError{time.RFC3339, "2000-01-01T1:12:34Z", "15", "1", ""}},
+	}, {
+		name:    name("Time/Format/SubsecondComma"),
+		inBuf:   `{"T":"2000-01-01T00:00:00,000Z"}`,
+		inVal:   new(struct{ T time.Time }),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: &time.ParseError{time.RFC3339, "2000-01-01T00:00:00,000Z", ".", ",", ""}},
+	}, {
+		name:    name("Time/Format/TimezoneHourOverflow"),
+		inBuf:   `{"T":"2000-01-01T00:00:00+24:00"}`,
+		inVal:   new(struct{ T time.Time }),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: &time.ParseError{time.RFC3339, "2000-01-01T00:00:00+24:00", "Z07:00", "+24:00", ": timezone hour out of range"}},
+	}, {
+		name:    name("Time/Format/TimezoneMinuteOverflow"),
+		inBuf:   `{"T":"2000-01-01T00:00:00+00:60"}`,
+		inVal:   new(struct{ T time.Time }),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType, Err: &time.ParseError{time.RFC3339, "2000-01-01T00:00:00+00:60", "Z07:00", "+00:60", ": timezone minute out of range"}},
 	}, {
 		name:  name("Time/Syntax/Invalid"),
 		inBuf: `{"T":x}`,
