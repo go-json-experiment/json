@@ -112,7 +112,7 @@ func Bool(b bool) Token {
 	return False
 }
 
-// String construct a Token representing a JSON string.
+// String constructs a Token representing a JSON string.
 // The provided string should contain valid UTF-8, otherwise invalid characters
 // may be mangled as the Unicode replacement character.
 func String(s string) Token {
