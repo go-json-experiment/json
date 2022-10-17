@@ -158,17 +158,20 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					// the parsing functionality in "time" is too loose and
 					// incorrectly accepts invalid timestamps as valid.
 					// Remove these manual checks when "time" checks it for us.
+					newParseError := func(layout, value, layoutElem, valueElem, message string) error {
+						return &time.ParseError{Layout: layout, Value: value, LayoutElem: layoutElem, ValueElem: valueElem, Message: message}
+					}
 					switch {
 					case val[len("2006-01-02T")+1] == ':': // hour must be two digits
-						err = &time.ParseError{format, string(val), "15", string(val[len("2006-01-02T"):][:1]), ""}
+						err = newParseError(format, string(val), "15", string(val[len("2006-01-02T"):][:1]), "")
 					case val[len("2006-01-02T15:04:05")] == ',': // sub-second separator must be a period
-						err = &time.ParseError{format, string(val), ".", ",", ""}
+						err = newParseError(format, string(val), ".", ",", "")
 					case val[len(val)-1] != 'Z':
 						switch {
 						case parseDec2(val[len(val)-len("07:00"):]) >= 24: // timezone hour must be in range
-							err = &time.ParseError{format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone hour out of range"}
+							err = newParseError(format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone hour out of range")
 						case parseDec2(val[len(val)-len("00"):]) >= 60: // timezone minute must be in range
-							err = &time.ParseError{format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone minute out of range"}
+							err = newParseError(format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone minute out of range")
 						}
 					}
 				}
