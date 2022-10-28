@@ -806,7 +806,7 @@ func TestBlockingDecoder(t *testing.T) {
 			}
 			got += tok.String()
 		}
-		if string(got) != string(want) {
+		if got != want {
 			t.Fatalf("ReadTokens = %s, want %s", got, want)
 		}
 
@@ -825,7 +825,7 @@ func TestBlockingDecoder(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Decoder.ReadValue error: %v", err)
 		}
-		if string(got) != string(want) {
+		if string(got) != want {
 			t.Fatalf("ReadValue = %s, want %s", got, want)
 		}
 

@@ -2254,7 +2254,7 @@ func TestMarshal(t *testing.T) {
 		want: `null`,
 	}, {
 		name: name("Pointers/NilL1"),
-		in:   (**int)(new(*int)),
+		in:   new(*int),
 		want: `null`,
 	}, {
 		name: name("Pointers/Bool"),
@@ -5981,7 +5981,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  name("Pointers/NullL1"),
 		inBuf: `null`,
-		inVal: addr((**string)(new(*string))),
+		inVal: addr(new(*string)),
 		want:  addr((**string)(nil)),
 	}, {
 		name:  name("Pointers/Bool"),
@@ -7370,7 +7370,7 @@ func TestUnmarshal(t *testing.T) {
 		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
 		inBuf: `"1s"`,
 		inVal: addr(time.Duration(0)),
-		want:  addr(time.Duration(time.Second)),
+		want:  addr(time.Second),
 	}, {
 		name:  name("Time/Zero"),
 		inBuf: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T4":"0001-01-01T00:00:00Z","T5":"0001-01-01T00:00:00Z"}`,

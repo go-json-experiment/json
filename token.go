@@ -373,10 +373,10 @@ func (t Token) Int() int64 {
 		case 'i':
 			return int64(t.num)
 		case 'u':
-			if uint64(t.num) > maxInt64 {
+			if t.num > maxInt64 {
 				return maxInt64
 			}
-			return int64(uint64(t.num))
+			return int64(t.num)
 		}
 	}
 
@@ -425,7 +425,7 @@ func (t Token) Uint() uint64 {
 		// Handle exact integer value.
 		switch t.str[0] {
 		case 'u':
-			return uint64(t.num)
+			return t.num
 		case 'i':
 			if int64(t.num) < minUint64 {
 				return minUint64

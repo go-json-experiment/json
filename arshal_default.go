@@ -412,7 +412,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		x := math.Float64frombits(uint64(va.Uint()))
+		x := math.Float64frombits(va.Uint())
 		return enc.writeNumber(x, rawUintNumber, mo.StringifyNumbers)
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
@@ -450,7 +450,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 				err := fmt.Errorf("cannot parse %q as unsigned integer: %w", val, strconv.ErrRange)
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 			}
-			va.SetUint(uint64(n))
+			va.SetUint(n)
 			return nil
 		}
 		return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}

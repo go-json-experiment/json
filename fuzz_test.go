@@ -27,7 +27,7 @@ func FuzzCoder(f *testing.F) {
 		f.Add(int64(0), []byte(td.wantOut))
 	}
 	for _, td := range jsonTestdata() {
-		f.Add(int64(0), []byte(td.data))
+		f.Add(int64(0), td.data)
 	}
 
 	f.Fuzz(func(t *testing.T, seed int64, b []byte) {
