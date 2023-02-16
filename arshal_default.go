@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"sync"
 )
@@ -627,19 +628,76 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				enc.tokens.last.disableNamespace()
 			}
 
-			// NOTE: Map entries are serialized in a non-deterministic order.
-			// Users that need stable output should call RawValue.Canonicalize.
-			for iter := va.Value.MapRange(); iter.Next(); {
-				k.SetIterKey(iter)
-				if err := marshalKey(mko, enc, k); err != nil {
-					// TODO: If err is errMissingName, then wrap it as a
-					// SemanticError since this key type cannot be serialized
-					// as a JSON string.
-					return err
+			switch {
+			case !mo.Deterministic || n <= 1:
+				for iter := va.Value.MapRange(); iter.Next(); {
+					k.SetIterKey(iter)
+					if err := marshalKey(mko, enc, k); err != nil {
+						// TODO: If err is errMissingName, then wrap it as a
+						// SemanticError since this key type cannot be serialized
+						// as a JSON string.
+						return err
+					}
+					v.SetIterValue(iter)
+					if err := marshalVal(mo, enc, v); err != nil {
+						return err
+					}
 				}
-				v.SetIterValue(iter)
-				if err := marshalVal(mo, enc, v); err != nil {
-					return err
+			case !nonDefaultKey && t.Key().Kind() == reflect.String:
+				names := getStrings(n)
+				for i, iter := 0, va.Value.MapRange(); i < n && iter.Next(); i++ {
+					k.SetIterKey(iter)
+					(*names)[i] = k.String()
+				}
+				names.Sort()
+				for _, name := range *names {
+					if err := enc.WriteToken(String(name)); err != nil {
+						return err
+					}
+					// TODO(https://go.dev/issue/57061): Use v.SetMapIndexOf.
+					k.SetString(name)
+					v.Set(va.MapIndex(k.Value))
+					if err := marshalVal(mo, enc, v); err != nil {
+						return err
+					}
+				}
+				putStrings(names)
+			default:
+				type member struct {
+					name string // unquoted name
+					key  addressableValue
+				}
+				members := make([]member, n)
+				keys := reflect.MakeSlice(reflect.SliceOf(t.Key()), n, n)
+				for i, iter := 0, va.Value.MapRange(); i < n && iter.Next(); i++ {
+					// Marshal the member name.
+					k := addressableValue{keys.Index(i)} // indexed slice element is always addressable
+					k.SetIterKey(iter)
+					if err := marshalKey(mko, enc, k); err != nil {
+						// TODO: If err is errMissingName, then wrap it as a
+						// SemanticError since this key type cannot be serialized
+						// as a JSON string.
+						return err
+					}
+					name := enc.unwriteOnlyObjectMemberName()
+					members[i] = member{name, k}
+				}
+				// TODO: If AllowDuplicateNames is enabled, then sort according
+				// to reflect.Value as well if the names are equal.
+				// See internal/fmtsort.
+				// TODO(https://go.dev/issue/47619): Use slices.SortFunc instead.
+				sort.Slice(members, func(i, j int) bool {
+					return lessUTF16(members[i].name, members[j].name)
+				})
+				for _, member := range members {
+					if err := enc.WriteToken(String(member.name)); err != nil {
+						return err
+					}
+					// TODO(https://go.dev/issue/57061): Use v.SetMapIndexOf.
+					v.Set(va.MapIndex(member.key.Value))
+					if err := marshalVal(mo, enc, v); err != nil {
+						return err
+					}
 				}
 			}
 		}

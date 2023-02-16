@@ -11,8 +11,6 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
-	"unicode/utf16"
-	"unicode/utf8"
 )
 
 func FuzzCoder(f *testing.F) {
@@ -223,45 +221,6 @@ func FuzzRawValueReformat(f *testing.F) {
 	})
 }
 
-func FuzzLessUTF16(f *testing.F) {
-	for _, td1 := range lessUTF16Testdata {
-		for _, td2 := range lessUTF16Testdata {
-			f.Add([]byte(td1), []byte(td2))
-		}
-	}
-
-	// lessUTF16Simple is identical to lessUTF16,
-	// but relies on naively converting a string to a []uint16 codepoints.
-	// It is easy to verify as correct, but is slow.
-	lessUTF16Simple := func(x, y []byte) bool {
-		ux := utf16.Encode([]rune(string(x)))
-		uy := utf16.Encode([]rune(string(y)))
-		for {
-			if len(ux) == 0 || len(uy) == 0 {
-				return len(ux) < len(uy)
-			}
-			if ux[0] != uy[0] {
-				return ux[0] < uy[0]
-			}
-			ux, uy = ux[1:], uy[1:]
-		}
-	}
-
-	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
-		// The strings must be valid UTF-8 for lessUTF8 to work.
-		if !utf8.Valid(s1) || !utf8.Valid(s2) {
-			t.Skipf("invalid UTF-8 input")
-		}
-
-		// Compare the optimized and simplified implementations.
-		got := lessUTF16(s1, s2)
-		want := lessUTF16Simple(s1, s2)
-		if got != want {
-			t.Errorf("lessUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
-		}
-	})
-}
-
 func FuzzEqualFold(f *testing.F) {
 	for _, tt := range equalFoldTestdata {
 		f.Add([]byte(tt.in1), []byte(tt.in2))
@@ -280,11 +239,6 @@ func FuzzEqualFold(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
-		// The strings must be valid UTF-8 for equalFold to work.
-		if !utf8.Valid(s1) || !utf8.Valid(s2) {
-			t.Skipf("invalid UTF-8 input")
-		}
-
 		// Compare the optimized and simplified implementations.
 		got := equalFold(s1, s2)
 		want := equalFoldSimple(s1, s2)

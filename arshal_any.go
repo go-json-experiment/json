@@ -99,13 +99,32 @@ func marshalObjectAny(mo MarshalOptions, enc *Encoder, obj map[string]any) error
 	if !enc.options.AllowInvalidUTF8 {
 		enc.tokens.last.disableNamespace()
 	}
-	for name, val := range obj {
-		if err := enc.WriteToken(String(name)); err != nil {
-			return err
+	if !mo.Deterministic || len(obj) <= 1 {
+		for name, val := range obj {
+			if err := enc.WriteToken(String(name)); err != nil {
+				return err
+			}
+			if err := marshalValueAny(mo, enc, val); err != nil {
+				return err
+			}
 		}
-		if err := marshalValueAny(mo, enc, val); err != nil {
-			return err
+	} else {
+		names := getStrings(len(obj))
+		var i int
+		for name := range obj {
+			(*names)[i] = name
+			i++
 		}
+		names.Sort()
+		for _, name := range *names {
+			if err := enc.WriteToken(String(name)); err != nil {
+				return err
+			}
+			if err := marshalValueAny(mo, enc, obj[name]); err != nil {
+				return err
+			}
+		}
+		putStrings(names)
 	}
 	if err := enc.WriteToken(ObjectEnd); err != nil {
 		return err

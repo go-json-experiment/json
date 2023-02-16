@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 type rawValueTestdataEntry struct {
@@ -197,4 +198,42 @@ func TestLessUTF16(t *testing.T) {
 			}
 		}
 	}
+}
+
+func FuzzLessUTF16(f *testing.F) {
+	for _, td1 := range lessUTF16Testdata {
+		for _, td2 := range lessUTF16Testdata {
+			f.Add([]byte(td1), []byte(td2))
+		}
+	}
+
+	// lessUTF16Simple is identical to lessUTF16,
+	// but relies on naively converting a string to a []uint16 codepoints.
+	// It is easy to verify as correct, but is slow.
+	lessUTF16Simple := func(x, y []byte) bool {
+		ux := utf16.Encode([]rune(string(x)))
+		uy := utf16.Encode([]rune(string(y)))
+		// TODO(https://go.dev/issue/57433): Use slices.Compare.
+		for {
+			if len(ux) == 0 || len(uy) == 0 {
+				if len(ux) == len(uy) {
+					return string(x) < string(y)
+				}
+				return len(ux) < len(uy)
+			}
+			if ux[0] != uy[0] {
+				return ux[0] < uy[0]
+			}
+			ux, uy = ux[1:], uy[1:]
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
+		// Compare the optimized and simplified implementations.
+		got := lessUTF16(s1, s2)
+		want := lessUTF16Simple(s1, s2)
+		if got != want {
+			t.Errorf("lessUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
+		}
+	})
 }

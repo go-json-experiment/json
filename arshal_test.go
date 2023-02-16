@@ -868,6 +868,85 @@ func TestMarshal(t *testing.T) {
 		want:    `{"key"`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
+		name:  name("Maps/String/Deterministic"),
+		mopts: MarshalOptions{Deterministic: true},
+		in:    map[string]int{"a": 0, "b": 1, "c": 2},
+		want:  `{"a":0,"b":1,"c":2}`,
+	}, {
+		name:    name("Maps/String/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
+		mopts:   MarshalOptions{Deterministic: true},
+		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		in:      map[string]int{"\xff": 0, "\xfe": 1},
+		want:    `{"�":1`,
+		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
+	}, {
+		name:  name("Maps/String/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		mopts: MarshalOptions{Deterministic: true},
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		in:    map[string]int{"\xff": 0, "\xfe": 1},
+		want:  `{"�":1,"�":0}`,
+	}, {
+		name: name("Maps/String/Deterministic+MarshalFuncs"),
+		mopts: MarshalOptions{
+			Deterministic: true,
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+				if p := enc.StackPointer(); p != "/X" {
+					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
+				}
+				switch v {
+				case "a":
+					return enc.WriteToken(String("b"))
+				case "b":
+					return enc.WriteToken(String("a"))
+				default:
+					return fmt.Errorf("invalid value: %q", v)
+				}
+			}),
+		},
+		in:   map[namedString]map[string]int{"X": {"a": -1, "b": 1}},
+		want: `{"X":{"a":1,"b":-1}}`,
+	}, {
+		name: name("Maps/String/Deterministic+MarshalFuncs+RejectDuplicateNames"),
+		mopts: MarshalOptions{
+			Deterministic: true,
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+				if p := enc.StackPointer(); p != "/X" {
+					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
+				}
+				switch v {
+				case "a", "b":
+					return enc.WriteToken(String("x"))
+				default:
+					return fmt.Errorf("invalid value: %q", v)
+				}
+			}),
+		},
+		eopts:   EncodeOptions{AllowDuplicateNames: false},
+		in:      map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
+		want:    `{"X":{"x":1`,
+		wantErr: &SyntacticError{str: `duplicate name "x" in object`},
+	}, {
+		name: name("Maps/String/Deterministic+MarshalFuncs+AllowDuplicateNames"),
+		mopts: MarshalOptions{
+			Deterministic: true,
+			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+				if p := enc.StackPointer(); p != "/0" {
+					return fmt.Errorf("invalid stack pointer: got %s, want /0", p)
+				}
+				switch v {
+				case "a", "b":
+					return enc.WriteToken(String("x"))
+				default:
+					return fmt.Errorf("invalid value: %q", v)
+				}
+			}),
+		},
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in:    map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
+		// NOTE: Since the names are identical, the exact values may be
+		// non-deterministic since sort cannot distinguish between members.
+		want: `{"X":{"x":1,"x":1}}`,
+	}, {
 		name: name("Maps/RecursiveMap"),
 		in: recursiveMap{
 			"fizz": {
@@ -1989,6 +2068,30 @@ func TestMarshal(t *testing.T) {
 		want:         `{"one":1,"two":2,"zero":0}`,
 		canonicalize: true,
 	}, {
+		name:  name("Structs/InlinedFallback/MapStringInt/Deterministic"),
+		mopts: MarshalOptions{Deterministic: true},
+		in: structInlineMapStringInt{
+			X: map[string]int{"zero": 0, "one": 1, "two": 2},
+		},
+		want: `{"one":1,"two":2,"zero":0}`,
+	}, {
+		name:  name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
+		mopts: MarshalOptions{Deterministic: true},
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		in: structInlineMapStringInt{
+			X: map[string]int{"\xff": 0, "\xfe": 1},
+		},
+		want:    `{"�":1`,
+		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
+	}, {
+		name:  name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		mopts: MarshalOptions{Deterministic: true},
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		in: structInlineMapStringInt{
+			X: map[string]int{"\xff": 0, "\xfe": 1},
+		},
+		want: `{"�":1,"�":0}`,
+	}, {
 		name:  name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		mopts: MarshalOptions{StringifyNumbers: true},
 		in: structInlineMapStringInt{
@@ -1999,9 +2102,15 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: name("Structs/InlinedFallback/MapStringInt/MarshalFuncV1"),
 		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v int) ([]byte, error) {
-				return []byte(fmt.Sprintf(`"%v"`, v)), nil
-			}),
+			Marshalers: NewMarshalers(
+				// Marshalers do not affect the string key of inlined maps.
+				MarshalFuncV1(func(v string) ([]byte, error) {
+					return []byte(fmt.Sprintf(`"%q"`, strings.ToUpper(v))), nil
+				}),
+				MarshalFuncV1(func(v int) ([]byte, error) {
+					return []byte(fmt.Sprintf(`"%v"`, v)), nil
+				}),
+			),
 		},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
@@ -2382,6 +2491,24 @@ func TestMarshal(t *testing.T) {
 		name: name("Interfaces/Any/Maps/NonEmpty"),
 		in:   struct{ X any }{map[string]any{"fizz": "buzz"}},
 		want: `{"X":{"fizz":"buzz"}}`,
+	}, {
+		name:  name("Interfaces/Any/Maps/Deterministic"),
+		mopts: MarshalOptions{Deterministic: true},
+		in:    struct{ X any }{map[string]any{"alpha": "", "bravo": ""}},
+		want:  `{"X":{"alpha":"","bravo":""}}`,
+	}, {
+		name:    name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
+		mopts:   MarshalOptions{Deterministic: true},
+		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
+		want:    `{"X":{"�":""`,
+		wantErr: &SyntacticError{str: `duplicate name "�" in object`},
+	}, {
+		name:  name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		mopts: MarshalOptions{Deterministic: true},
+		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		in:    struct{ X any }{map[string]any{"\xff": "alpha", "\xfe": "bravo"}},
+		want:  `{"X":{"�":"bravo","�":"alpha"}}`,
 	}, {
 		name:    name("Interfaces/Any/Maps/RejectInvalidUTF8"),
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
