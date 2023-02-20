@@ -291,8 +291,11 @@ type (
 		T14 time.Time `json:",format:StampMilli"`
 		T15 time.Time `json:",format:StampMicro"`
 		T16 time.Time `json:",format:StampNano"`
-		T17 time.Time `json:",format:'2006-01-02'"`
-		T18 time.Time `json:",format:'\"weird\"2006'"`
+		T17 time.Time `json:",format:DateTime"`
+		T18 time.Time `json:",format:DateOnly"`
+		T19 time.Time `json:",format:TimeOnly"`
+		T20 time.Time `json:",format:'2006-01-02'"`
+		T21 time.Time `json:",format:'\"weird\"2006'"`
 	}
 	structInlined struct {
 		X             structInlinedL1 `json:",inline"`
@@ -3596,6 +3599,9 @@ func TestMarshal(t *testing.T) {
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 		},
 		want: `{
 	"T1": "1234-01-02T03:04:05.000000006Z",
@@ -3614,8 +3620,11 @@ func TestMarshal(t *testing.T) {
 	"T14": "Jan  2 03:04:05.000",
 	"T15": "Jan  2 03:04:05.000000",
 	"T16": "Jan  2 03:04:05.000000006",
-	"T17": "1234-01-02",
-	"T18": "\"weird\"1234"
+	"T17": "1234-01-02 03:04:05",
+	"T18": "1234-01-02",
+	"T19": "03:04:05",
+	"T20": "1234-01-02",
+	"T21": "\"weird\"1234"
 }`,
 	}, {
 		name: name("Time/Format/Invalid"),
@@ -7540,8 +7549,11 @@ func TestUnmarshal(t *testing.T) {
 			"T14": "Jan  2 03:04:05.000",
 			"T15": "Jan  2 03:04:05.000000",
 			"T16": "Jan  2 03:04:05.000000006",
-			"T17": "1234-01-02",
-			"T18": "\"weird\"1234"
+			"T17": "1234-01-02 03:04:05",
+			"T18": "1234-01-02",
+			"T19": "03:04:05",
+			"T20": "1234-01-02",
+			"T21": "\"weird\"1234"
 		}`,
 		inVal: new(structTimeFormat),
 		want: addr(structTimeFormat{
@@ -7561,12 +7573,15 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(time.StampMilli, "Jan  2 03:04:05.000"),
 			mustParseTime(time.StampMicro, "Jan  2 03:04:05.000000"),
 			mustParseTime(time.StampNano, "Jan  2 03:04:05.000000006"),
+			mustParseTime(time.DateTime, "1234-01-02 03:04:05"),
+			mustParseTime(time.DateOnly, "1234-01-02"),
+			mustParseTime(time.TimeOnly, "03:04:05"),
 			mustParseTime("2006-01-02", "1234-01-02"),
 			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
 		}),
 	}, {
 		name:  name("Time/Format/Null"),
-		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null}`,
+		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null,"T19": null,"T20": null,"T21": null}`,
 		inVal: addr(structTimeFormat{
 			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
 			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
@@ -7584,6 +7599,9 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(time.StampMilli, "Jan  2 03:04:05.000"),
 			mustParseTime(time.StampMicro, "Jan  2 03:04:05.000000"),
 			mustParseTime(time.StampNano, "Jan  2 03:04:05.000000006"),
+			mustParseTime(time.DateTime, "1234-01-02 03:04:05"),
+			mustParseTime(time.DateOnly, "1234-01-02"),
+			mustParseTime(time.TimeOnly, "03:04:05"),
 			mustParseTime("2006-01-02", "1234-01-02"),
 			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
 		}),

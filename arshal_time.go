@@ -223,6 +223,12 @@ func checkTimeFormat(format string) (string, bool, error) {
 			return time.StampMicro, false, nil
 		case "StampNano":
 			return time.StampNano, false, nil
+		case "DateTime":
+			return time.DateTime, false, nil
+		case "DateOnly":
+			return time.DateOnly, false, nil
+		case "TimeOnly":
+			return time.TimeOnly, false, nil
 		default:
 			// Reject any format that is an exported Go identifier in case
 			// new format constants are added to the time package.
