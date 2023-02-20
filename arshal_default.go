@@ -1201,11 +1201,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			var i int
 			for dec.PeekKind() != ']' {
 				if i == cap {
-					// TODO(https://go.dev/issue/48000): Use reflect.Value.Append.
-					va.Set(reflect.Append(va.Value, reflect.Zero(t.Elem())))
+					va.Value.Grow(1)
 					cap = va.Cap()
 					va.SetLen(cap)
-					mustZero = false // append guarantees that unused capacity is zero-initialized
+					mustZero = false // reflect.Value.Grow ensures new capacity is zero-initialized
 				}
 				v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 				i++
