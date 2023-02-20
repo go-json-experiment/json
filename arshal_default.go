@@ -272,7 +272,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		case '"':
 			val = unescapeStringMayCopy(val, flags.isVerbatim())
@@ -721,7 +721,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		case '{':
 			once.Do(init)
@@ -765,7 +765,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			}
 
 			for dec.PeekKind() != '}' {
-				k.Set(reflect.Zero(t.Key()))
+				k.SetZero()
 				if err := unmarshalKey(uko, dec, k); err != nil {
 					return err
 				}
@@ -783,7 +783,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					}
 					v.Set(v2)
 				} else {
-					v.Set(reflect.Zero(v.Type()))
+					v.SetZero()
 				}
 				err := unmarshalVal(uo, dec, v)
 				va.SetMapIndex(k.Value, v.Value)
@@ -996,7 +996,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		case '{':
 			once.Do(init)
@@ -1185,7 +1185,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		case '[':
 			once.Do(init)
@@ -1209,7 +1209,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 				i++
 				if mustZero {
-					v.Set(reflect.Zero(t.Elem()))
+					v.SetZero()
 				}
 				if err := unmarshal(uo, dec, v); err != nil {
 					va.SetLen(i)
@@ -1275,7 +1275,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		case '[':
 			once.Do(init)
@@ -1290,7 +1290,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}
 				v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
-				v.Set(reflect.Zero(v.Type()))
+				v.SetZero()
 				if err := unmarshal(uo, dec, v); err != nil {
 					return err
 				}
@@ -1346,7 +1346,7 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			if _, err := dec.ReadToken(); err != nil {
 				return err
 			}
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		}
 		once.Do(init)
@@ -1396,7 +1396,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			if _, err := dec.ReadToken(); err != nil {
 				return err
 			}
-			va.Set(reflect.Zero(t))
+			va.SetZero()
 			return nil
 		}
 		var v addressableValue
