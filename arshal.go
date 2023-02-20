@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"reflect"
@@ -67,8 +68,7 @@ func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err erro
 	defer putBufferedEncoder(enc)
 	enc.options.omitTopLevelNewline = true
 	err = mo.MarshalNext(enc, in)
-	// TODO(https://go.dev/issue/45038): Use bytes.Clone.
-	return append([]byte(nil), enc.buf...), err
+	return bytes.Clone(enc.buf), err
 }
 
 // MarshalFull serializes a Go value into an io.Writer according to the provided

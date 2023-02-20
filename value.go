@@ -29,10 +29,7 @@ type RawValue []byte
 
 // Clone returns a copy of v.
 func (v RawValue) Clone() RawValue {
-	if v == nil {
-		return nil
-	}
-	return append(RawValue{}, v...)
+	return bytes.Clone(v)
 }
 
 // String returns the string formatting of v.
