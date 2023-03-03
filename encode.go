@@ -968,39 +968,6 @@ func (e *Encoder) StackPointer() string {
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
 func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
-	appendEscapedASCII := func(dst []byte, c byte) []byte {
-		switch c {
-		case '"', '\\':
-			dst = append(dst, '\\', c)
-		case '\b':
-			dst = append(dst, "\\b"...)
-		case '\f':
-			dst = append(dst, "\\f"...)
-		case '\n':
-			dst = append(dst, "\\n"...)
-		case '\r':
-			dst = append(dst, "\\r"...)
-		case '\t':
-			dst = append(dst, "\\t"...)
-		default:
-			dst = append(dst, "\\u"...)
-			dst = appendHexUint16(dst, uint16(c))
-		}
-		return dst
-	}
-	appendEscapedUnicode := func(dst []byte, r rune) []byte {
-		if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
-			dst = append(dst, "\\u"...)
-			dst = appendHexUint16(dst, uint16(r1))
-			dst = append(dst, "\\u"...)
-			dst = appendHexUint16(dst, uint16(r2))
-		} else {
-			dst = append(dst, "\\u"...)
-			dst = appendHexUint16(dst, uint16(r))
-		}
-		return dst
-	}
-
 	// Optimize for when escapeRune is nil.
 	if escapeRune == nil {
 		var i, n int
@@ -1068,6 +1035,41 @@ func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(run
 	dst = append(dst, src[i:n]...)
 	dst = append(dst, '"')
 	return dst, nil
+}
+
+func appendEscapedASCII(dst []byte, c byte) []byte {
+	switch c {
+	case '"', '\\':
+		dst = append(dst, '\\', c)
+	case '\b':
+		dst = append(dst, "\\b"...)
+	case '\f':
+		dst = append(dst, "\\f"...)
+	case '\n':
+		dst = append(dst, "\\n"...)
+	case '\r':
+		dst = append(dst, "\\r"...)
+	case '\t':
+		dst = append(dst, "\\t"...)
+	default:
+		dst = appendEscapedUTF16(dst, uint16(c))
+	}
+	return dst
+}
+
+func appendEscapedUnicode(dst []byte, r rune) []byte {
+	if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
+		dst = appendEscapedUTF16(dst, uint16(r1))
+		dst = appendEscapedUTF16(dst, uint16(r2))
+	} else {
+		dst = appendEscapedUTF16(dst, uint16(r))
+	}
+	return dst
+}
+
+func appendEscapedUTF16(dst []byte, x uint16) []byte {
+	const hex = "0123456789abcdef"
+	return append(dst, '\\', 'u', hex[(x>>12)&0xf], hex[(x>>8)&0xf], hex[(x>>4)&0xf], hex[(x>>0)&0xf])
 }
 
 // reformatString consumes a JSON string from src and appends it to dst,
@@ -1160,11 +1162,4 @@ func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, []byte, error) 
 		fv = -math.MaxFloat64
 	}
 	return appendNumber(dst, fv, 64), src[n:], nil
-}
-
-// appendHexUint16 appends src to dst as a 4-byte hexadecimal number.
-func appendHexUint16(dst []byte, src uint16) []byte {
-	dst = append(dst, "0000"[1+(bits.Len16(src)-1)/4:]...)
-	dst = strconv.AppendUint(dst, uint64(src), 16)
-	return dst
 }
