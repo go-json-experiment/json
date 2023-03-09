@@ -314,7 +314,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 // to the UTF-16 codepoints of the UTF-8 encoded input strings.
 // This implements the ordering specified in RFC 8785, section 3.2.3.
 // The inputs must be valid UTF-8, otherwise this may panic.
-func lessUTF16[Bytes []byte | string](x, y Bytes) bool {
+func lessUTF16[Bytes ~[]byte | ~string](x, y Bytes) bool {
 	// NOTE: This is an optimized, allocation-free implementation
 	// of lessUTF16Simple in fuzz_test.go. FuzzLessUTF16 verifies that the
 	// two implementations agree on the result of comparing any two strings.
@@ -343,19 +343,8 @@ func lessUTF16[Bytes []byte | string](x, y Bytes) bool {
 		}
 
 		// Decode next pair of runes as UTF-8.
-		// TODO(https://go.dev/issue/56948): Use a generic implementation
-		// of utf8.DecodeRune, or rely on a compiler optimization to statically
-		// hide the cost of a type switch (https://go.dev/issue/57072).
-		var rx, ry rune
-		var nx, ny int
-		switch any(x).(type) {
-		case string:
-			rx, nx = utf8.DecodeRuneInString(string(x))
-			ry, ny = utf8.DecodeRuneInString(string(y))
-		case []byte:
-			rx, nx = utf8.DecodeRune([]byte(x))
-			ry, ny = utf8.DecodeRune([]byte(y))
-		}
+		rx, nx := utf8.DecodeRuneInString(string(truncateMaxUTF8(x)))
+		ry, ny := utf8.DecodeRuneInString(string(truncateMaxUTF8(y)))
 
 		selfx := isUTF16Self(rx)
 		selfy := isUTF16Self(ry)

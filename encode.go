@@ -967,11 +967,17 @@ func (e *Encoder) StackPointer() string {
 // Note that this API allows full control over the formatting of strings
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
-func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
-	// Optimize for when escapeRune is nil.
+func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
+	// TODO(https://go.dev/issue/57433): Use slices.Grow.
+	if dst == nil {
+		dst = make([]byte, 0, len(`"`)+len(src)+len(`"`))
+	}
+
+	var i, n int
+	var hasInvalidUTF8 bool
+	dst = append(dst, '"')
 	if escapeRune == nil {
-		var i, n int
-		dst = append(dst, '"')
+		// Optimize for when escapeRune is nil.
 		for uint(len(src)) > uint(n) {
 			// Handle single-byte ASCII.
 			if c := src[n]; c < utf8.RuneSelf {
@@ -985,55 +991,49 @@ func appendString(dst []byte, src string, validateUTF8 bool, escapeRune func(run
 			}
 
 			// Handle multi-byte Unicode.
-			_, rn := utf8.DecodeRuneInString(src[n:])
+			_, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:])))
 			n += rn
 			if rn == 1 { // must be utf8.RuneError since we already checked for single-byte ASCII
+				hasInvalidUTF8 = true
 				dst = append(dst, src[i:n-rn]...)
-				if validateUTF8 {
-					return dst, &SyntacticError{str: "invalid UTF-8 within string"}
-				}
 				dst = append(dst, "\ufffd"...)
 				i = n
 			}
 		}
-		dst = append(dst, src[i:n]...)
-		dst = append(dst, '"')
-		return dst, nil
-	}
-
-	// Slower implementation for when escapeRune is non-nil.
-	var i, n int
-	dst = append(dst, '"')
-	for uint(len(src)) > uint(n) {
-		switch r, rn := utf8.DecodeRuneInString(src[n:]); {
-		case r == utf8.RuneError && rn == 1:
-			dst = append(dst, src[i:n]...)
-			if validateUTF8 {
-				return dst, &SyntacticError{str: "invalid UTF-8 within string"}
+	} else {
+		// Slower implementation for when escapeRune is non-nil.
+		for uint(len(src)) > uint(n) {
+			switch r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:]))); {
+			case r == utf8.RuneError && rn == 1:
+				hasInvalidUTF8 = true
+				dst = append(dst, src[i:n]...)
+				if escapeRune('\ufffd') {
+					dst = append(dst, `\ufffd`...)
+				} else {
+					dst = append(dst, "\ufffd"...)
+				}
+				n += rn
+				i = n
+			case escapeRune(r):
+				dst = append(dst, src[i:n]...)
+				dst = appendEscapedUnicode(dst, r)
+				n += rn
+				i = n
+			case r < ' ' || r == '"' || r == '\\':
+				dst = append(dst, src[i:n]...)
+				dst = appendEscapedASCII(dst, byte(r))
+				n += rn
+				i = n
+			default:
+				n += rn
 			}
-			if escapeRune('\ufffd') {
-				dst = append(dst, `\ufffd`...)
-			} else {
-				dst = append(dst, "\ufffd"...)
-			}
-			n += rn
-			i = n
-		case escapeRune(r):
-			dst = append(dst, src[i:n]...)
-			dst = appendEscapedUnicode(dst, r)
-			n += rn
-			i = n
-		case r < ' ' || r == '"' || r == '\\':
-			dst = append(dst, src[i:n]...)
-			dst = appendEscapedASCII(dst, byte(r))
-			n += rn
-			i = n
-		default:
-			n += rn
 		}
 	}
 	dst = append(dst, src[i:n]...)
 	dst = append(dst, '"')
+	if validateUTF8 && hasInvalidUTF8 {
+		return dst, errInvalidUTF8
+	}
 	return dst, nil
 }
 
@@ -1091,7 +1091,7 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 	// If the escapeRune option would have resulted in no changes to the output,
 	// it would be faster to simply append src to dst without going through
 	// an intermediary representation in a separate buffer.
-	b, _ := unescapeString(make([]byte, 0, n), src[:n])
+	b, _ := unescapeString(nil, src[:n])
 	dst, _ = appendString(dst, string(b), validateUTF8, escapeRune)
 	return dst, src[n:], nil
 }

@@ -111,7 +111,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	in:                  `"\ud800"`,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"\ud800"`,
-	wantCanonicalizeErr: &SyntacticError{str: `invalid escape sequence "\"" within string`},
+	wantCanonicalizeErr: &SyntacticError{str: `invalid surrogate pair "\\ud800\"" within string`},
 }, {
 	name:              name("UppercaseEscaped"),
 	in:                `"\u000B"`,

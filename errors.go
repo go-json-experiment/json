@@ -169,13 +169,13 @@ func (e *SyntacticError) withOffset(pos int64) error {
 	return &SyntacticError{ByteOffset: pos, str: e.str}
 }
 
-func newInvalidCharacterError(prefix []byte, where string) *SyntacticError {
+func newInvalidCharacterError[Bytes ~[]byte | ~string](prefix Bytes, where string) *SyntacticError {
 	what := quoteRune(prefix)
 	return &SyntacticError{str: "invalid character " + what + " " + where}
 }
 
-func quoteRune(b []byte) string {
-	r, n := utf8.DecodeRune(b)
+func quoteRune[Bytes ~[]byte | ~string](b Bytes) string {
+	r, n := utf8.DecodeRuneInString(string(truncateMaxUTF8(b)))
 	if r == utf8.RuneError && n == 1 {
 		return `'\x` + strconv.FormatUint(uint64(b[0]), 16) + `'`
 	}

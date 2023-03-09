@@ -1078,10 +1078,12 @@ func TestConsumeString(t *testing.T) {
 		{`"\uABCD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\uabcd", nil, nil},
 		{`"\uefX0"`, false, 1, stringNonVerbatim | stringNonCanonical, "", &SyntacticError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
 		{`"\uDEAD`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"\uDEAD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, &SyntacticError{str: `invalid escape sequence "\"" within string`}},
-		{`"\uDEAD______"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd______", nil, &SyntacticError{str: "invalid unpaired surrogate half within string"}},
-		{`"\uDEAD\uXXXX"`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, nil},
-		{`"\uDEAD\uBEEF"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair in string`}},
+		{`"\uDEAD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\"" within string`}},
+		{`"\uDEAD______"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd______", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD______" within string`}},
+		{`"\uDEAD\uXXXX"`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\\uXXXX" within string`}},
+		{`"\uDEAD\uBEEF"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\\uBEEF" within string`}},
+		{`"\uD800\udea`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
+		{`"\uD800\udb`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: `invalid surrogate pair "\\uD800\\udb" within string`}},
 		{`"\uD800\udead"`, false, 14, stringNonVerbatim | stringNonCanonical, "\U000102ad", nil, nil},
 		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, stringNonVerbatim | stringNonCanonical, "\"\\/\b\f\n\r\t", nil, nil},
 		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, stringNonVerbatim | stringNonCanonical, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
@@ -1111,13 +1113,17 @@ func TestConsumeString(t *testing.T) {
 				t.Errorf("consumeString(%q, true) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErrUTF8)
 			}
 
-			gotStr, gotOk := unescapeString(nil, []byte(tt.in[:got]))
-			wantOk := tt.wantErr == nil
-			if string(gotStr) != tt.wantStr || gotOk != wantOk {
-				t.Errorf("unescapeString(nil, %q) = (%q, %v), want (%q, %v)", tt.in[:got], gotStr, gotOk, tt.wantStr, wantOk)
+			in := tt.in
+			if tt.wantErr == nil {
+				in = in[:tt.want] // ignore junk after string
 			}
-			if _, gotOk := unescapeString(nil, []byte(tt.in)); got < len(tt.in) && gotOk {
-				t.Errorf("unescapeString(nil, %q) = (_, true), want (_, false)", tt.in)
+			gotStr, gotErr := unescapeString(nil, in)
+			wantErr := tt.wantErrUTF8
+			if wantErr == nil {
+				wantErr = tt.wantErr
+			}
+			if string(gotStr) != tt.wantStr || !reflect.DeepEqual(gotErr, wantErr) {
+				t.Errorf("unescapeString(nil, %q) = (%q, %v), want (%q, %v)", tt.in[:got], gotStr, gotErr, tt.wantStr, wantErr)
 			}
 		})
 	}
