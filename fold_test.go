@@ -124,7 +124,7 @@ func runUnmarshalUnknown(tb testing.TB) {
 		}
 		out := reflect.New(reflect.StructOf(fields)).Interface()
 
-		runTestOrBench(tb, fmt.Sprintf("N%d", n), int64(len(in)), func(tb testing.TB) {
+		runTestOrBench(tb, fmt.Sprintf("N%d", n), len64(in), func(tb testing.TB) {
 			if err := unmarshal(in, out); err != nil {
 				tb.Fatalf("Unmarshal error: %v", err)
 			}

@@ -263,7 +263,7 @@ func (e *Encoder) flush() error {
 	return nil
 }
 
-func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.buf)) }
+func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + len64(e.buf) }
 func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 
 // avoidFlush indicates whether to avoid flushing to ensure there is always
@@ -448,7 +448,7 @@ func (e *Encoder) WriteToken(t Token) error {
 				break
 			}
 			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
-				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+				err = newDuplicateNameError(b[n0:])
 				break
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
@@ -543,7 +543,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 				return errInvalidNamespace
 			}
 			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
-				return &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+				return newDuplicateNameError(b[n0:])
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
@@ -616,7 +616,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 				break
 			}
 			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
-				err = &SyntacticError{str: "duplicate name " + string(b[n0:]) + " in object"}
+				err = newDuplicateNameError(b[n0:])
 				break
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
@@ -773,7 +773,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, R
 			return dst, src, err
 		}
 		if !e.options.AllowDuplicateNames && !names.insertQuoted(dst[n0:], false) {
-			return dst, src, &SyntacticError{str: "duplicate name " + string(dst[n0:]) + " in object"}
+			return dst, src, newDuplicateNameError(dst[n0:])
 		}
 
 		// Append colon.

@@ -158,8 +158,8 @@ func unmarshalObjectAny(uo UnmarshalOptions, dec *Decoder) (map[string]any, erro
 			// Manually check for duplicate names.
 			if _, ok := obj[name]; ok {
 				name := dec.previousBuffer()
-				err := &SyntacticError{str: "duplicate name " + string(name) + " in object"}
-				return obj, err.withOffset(dec.InputOffset() - int64(len(name)))
+				err := newDuplicateNameError(name)
+				return obj, err.withOffset(dec.InputOffset() - len64(name))
 			}
 
 			val, err := unmarshalValueAny(uo, dec)

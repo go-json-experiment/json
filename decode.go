@@ -492,7 +492,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 				return Token{}, errInvalidNamespace
 			}
 			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
-				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+				err = newDuplicateNameError(d.buf[pos-n : pos])
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 			}
 			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
@@ -662,7 +662,7 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 				break
 			}
 			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
-				err = &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+				err = newDuplicateNameError(d.buf[pos-n : pos])
 				break
 			}
 			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
@@ -901,7 +901,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 			pos += n
 		}
 		if !d.options.AllowDuplicateNames && !names.insertQuoted(d.buf[pos-n:pos], flags2.isVerbatim()) {
-			return pos - n, &SyntacticError{str: "duplicate name " + string(d.buf[pos-n:pos]) + " in object"}
+			return pos - n, newDuplicateNameError(d.buf[pos-n : pos])
 		}
 
 		// Handle after name.

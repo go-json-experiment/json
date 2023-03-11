@@ -238,7 +238,7 @@ func runUnmarshal(tb testing.TB) {
 			}
 		}
 
-		runTestOrBench(tb, tt.name, int64(len(tt.raw)), run)
+		runTestOrBench(tb, tt.name, len64(tt.raw), run)
 	}
 }
 
@@ -289,7 +289,7 @@ func runMarshal(tb testing.TB) {
 			}
 		}
 
-		runTestOrBench(tb, tt.name, int64(len(tt.raw)), run)
+		runTestOrBench(tb, tt.name, len64(tt.raw), run)
 	}
 }
 
@@ -309,7 +309,7 @@ func runAllTestdata(tb testing.TB) {
 				}
 				value := mustUnmarshalValue(tb, td.data, newValue)
 				name := path.Join(td.name, arshalName, typeName)
-				runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+				runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
 					runArshal(tb, arshalName, newValue, td.data, value)
 				})
 			}
@@ -321,7 +321,7 @@ func runAllTestdata(tb testing.TB) {
 			for _, typeName := range []string{"Token", "Value"} {
 				for _, modeName := range []string{"Streaming", "Buffered"} {
 					name := path.Join(td.name, codeName, typeName, modeName)
-					runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+					runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
 						runCode(tb, codeName, typeName, modeName, buffer, td.data, tokens)
 					})
 				}
@@ -507,7 +507,7 @@ func runAllSlowStreamingDecode(tb testing.TB) {
 	for _, td := range slowStreamingDecodeTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
 			name := path.Join(td.name, typeName)
-			runTestOrBench(tb, name, int64(len(td.data)), func(tb testing.TB) {
+			runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
 				runSlowStreamingDecode(tb, typeName, td.data)
 			})
 		}
@@ -565,7 +565,7 @@ func runRawValue(tb testing.TB) {
 		}
 	}
 
-	runTestOrBench(tb, "IsValid", int64(len(data)), func(tb testing.TB) {
+	runTestOrBench(tb, "IsValid", len64(data), func(tb testing.TB) {
 		RawValue(data).IsValid()
 	})
 
@@ -580,7 +580,7 @@ func runRawValue(tb testing.TB) {
 
 	var v RawValue
 	for _, method := range methods {
-		runTestOrBench(tb, method.name, int64(len(data)), func(tb testing.TB) {
+		runTestOrBench(tb, method.name, len64(data), func(tb testing.TB) {
 			v = append(v[:0], data...) // reset with original input
 			if err := method.format(&v); err != nil {
 				tb.Errorf("RawValue.%v error: %v", method.name, err)
@@ -588,7 +588,7 @@ func runRawValue(tb testing.TB) {
 		})
 		v = append(v[:0], data...)
 		method.format(&v)
-		runTestOrBench(tb, method.name+"/Noop", int64(len(data)), func(tb testing.TB) {
+		runTestOrBench(tb, method.name+"/Noop", len64(data), func(tb testing.TB) {
 			if err := method.format(&v); err != nil {
 				tb.Errorf("RawValue.%v error: %v", method.name, err)
 			}

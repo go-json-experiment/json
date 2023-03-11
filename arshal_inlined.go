@@ -66,7 +66,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			if insertUnquotedName != nil {
 				name := unescapeStringMayCopy(val, flags.isVerbatim())
 				if !insertUnquotedName(name) {
-					return &SyntacticError{str: "duplicate name " + string(val) + " in object"}
+					return newDuplicateNameError(val)
 				}
 			}
 			if err := enc.WriteValue(val); err != nil {
@@ -106,7 +106,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 				isVerbatim := bytes.IndexByte(b, '\\') < 0
 				name := unescapeStringMayCopy(b, isVerbatim)
 				if !insertUnquotedName(name) {
-					return &SyntacticError{str: "duplicate name " + string(b) + " in object"}
+					return newDuplicateNameError(b)
 				}
 			}
 			return enc.WriteValue(b)

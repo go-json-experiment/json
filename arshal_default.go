@@ -63,6 +63,10 @@ func (m *seenPointers) leave(v reflect.Value) {
 	delete(*m, p)
 }
 
+func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
+	return int64(len(in))
+}
+
 func makeDefaultArshaler(t reflect.Type) *arshaler {
 	switch t.Kind() {
 	case reflect.Bool:
@@ -778,8 +782,8 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					if !dec.options.AllowDuplicateNames && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
 						// TODO: Unread the object name.
 						name := dec.previousBuffer()
-						err := &SyntacticError{str: "duplicate name " + string(name) + " in object"}
-						return err.withOffset(dec.InputOffset() - int64(len(name)))
+						err := newDuplicateNameError(name)
+						return err.withOffset(dec.InputOffset() - len64(name))
 					}
 					v.Set(v2)
 				} else {
@@ -1029,8 +1033,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						}
 						if !dec.options.AllowDuplicateNames && !dec.namespaces.last().insertUnquoted(name) {
 							// TODO: Unread the object name.
-							err := &SyntacticError{str: "duplicate name " + string(val) + " in object"}
-							return err.withOffset(dec.InputOffset() - int64(len(val)))
+							err := newDuplicateNameError(val)
+							return err.withOffset(dec.InputOffset() - len64(val))
 						}
 
 						if fields.inlinedFallback == nil {
@@ -1049,8 +1053,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 				if !dec.options.AllowDuplicateNames && !seenIdxs.insert(uint(f.id)) {
 					// TODO: Unread the object name.
-					err := &SyntacticError{str: "duplicate name " + string(val) + " in object"}
-					return err.withOffset(dec.InputOffset() - int64(len(val)))
+					err := newDuplicateNameError(val)
+					return err.withOffset(dec.InputOffset() - len64(val))
 				}
 
 				// Process the object member value.

@@ -169,6 +169,10 @@ func (e *SyntacticError) withOffset(pos int64) error {
 	return &SyntacticError{ByteOffset: pos, str: e.str}
 }
 
+func newDuplicateNameError[Bytes ~[]byte | ~string](quoted Bytes) *SyntacticError {
+	return &SyntacticError{str: "duplicate name " + string(quoted) + " in object"}
+}
+
 func newInvalidCharacterError[Bytes ~[]byte | ~string](prefix Bytes, where string) *SyntacticError {
 	what := quoteRune(prefix)
 	return &SyntacticError{str: "invalid character " + what + " " + where}
