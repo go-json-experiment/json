@@ -1205,12 +1205,12 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 						return resumeOffset, io.ErrUnexpectedEOF
 					}
 					flags.set(stringNonCanonical)
-					return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:])) + " within string"}
+					return n, newInvalidEscapeSequenceError(b[n:])
 				}
 				v1, ok := parseHexUint16(b[n+2 : n+6])
 				if !ok {
 					flags.set(stringNonCanonical)
-					return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+6])) + " within string"}
+					return n, newInvalidEscapeSequenceError(b[n : n+6])
 				}
 				// Only certain control characters can use the \uFFFF notation
 				// for canonical formatting (per RFC 8785, section 3.2.2.2.).
@@ -1240,20 +1240,20 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 							return resumeOffset, io.ErrUnexpectedEOF
 						}
 						flags.set(stringNonCanonical)
-						return n, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(b[n-6:])) + " within string"}
+						return n - 6, newInvalidEscapeSequenceError(b[n-6:])
 					} else if v2, ok := parseHexUint16(b[n+2 : n+6]); b[n] != '\\' || b[n+1] != 'u' || !ok {
 						flags.set(stringNonCanonical)
-						return n, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(b[n-6:n+6])) + " within string"}
+						return n - 6, newInvalidEscapeSequenceError(b[n-6 : n+6])
 					} else if r = utf16.DecodeRune(rune(v1), rune(v2)); r == utf8.RuneError {
 						flags.set(stringNonCanonical)
-						return n, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(b[n-6:n+6])) + " within string"}
+						return n - 6, newInvalidEscapeSequenceError(b[n-6 : n+6])
 					} else {
 						n += 6
 					}
 				}
 			default:
 				flags.set(stringNonCanonical)
-				return n, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(b[n:n+2])) + " within string"}
+				return n, newInvalidEscapeSequenceError(b[n : n+2])
 			}
 		// Handle invalid UTF-8.
 		case r == utf8.RuneError:
@@ -1281,13 +1281,6 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 // but the error will be specified as having encountered such an error.
 // The input must be an entire JSON string with no surrounding whitespace.
 func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, err error) {
-	firstErr := func(err1, err2 error) error {
-		if err1 != nil {
-			return err1
-		}
-		return err2
-	}
-
 	// TODO(https://go.dev/issue/57433): Use slices.Grow.
 	if dst == nil {
 		dst = make([]byte, 0, len(src))
@@ -1297,11 +1290,11 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 	var i, n int
 	switch {
 	case uint(len(src)) == 0:
-		return dst, firstErr(err, io.ErrUnexpectedEOF)
+		return dst, io.ErrUnexpectedEOF
 	case src[0] == '"':
 		i, n = 1, 1
 	default:
-		return dst, firstErr(err, newInvalidCharacterError(src, `at start of string (expecting '"')`))
+		return dst, newInvalidCharacterError(src, `at start of string (expecting '"')`)
 	}
 
 	// Consume every character in the string.
@@ -1315,7 +1308,7 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 		}
 		if uint(len(src)) <= uint(n) {
 			dst = append(dst, src[i:n]...)
-			return dst, firstErr(err, io.ErrUnexpectedEOF)
+			return dst, io.ErrUnexpectedEOF
 		}
 
 		// Check for terminating double quote.
@@ -1323,7 +1316,7 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 			dst = append(dst, src[i:n]...)
 			n++
 			if n < len(src) {
-				err = firstErr(err, newInvalidCharacterError(src[n:], "after string value"))
+				err = newInvalidCharacterError(src[n:], "after string value")
 			}
 			return dst, err
 		}
@@ -1340,7 +1333,7 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 
 			// Handle escape sequence.
 			if uint(len(src)) < uint(n+2) {
-				return dst, firstErr(err, io.ErrUnexpectedEOF)
+				return dst, io.ErrUnexpectedEOF
 			}
 			switch r := src[n+1]; r {
 			case '"', '\\', '/':
@@ -1364,13 +1357,13 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 			case 'u':
 				if uint(len(src)) < uint(n+6) {
 					if hasEscapedUTF16Prefix(src[n:], false) {
-						return dst, firstErr(err, io.ErrUnexpectedEOF)
+						return dst, io.ErrUnexpectedEOF
 					}
-					return dst, firstErr(err, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(src[n:])) + " within string"})
+					return dst, newInvalidEscapeSequenceError(src[n:])
 				}
 				v1, ok := parseHexUint16(src[n+2 : n+6])
 				if !ok {
-					return dst, firstErr(err, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(src[n:n+6])) + " within string"})
+					return dst, newInvalidEscapeSequenceError(src[n : n+6])
 				}
 				n += 6
 
@@ -1380,13 +1373,13 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 					r = utf8.RuneError // assume failure unless the following succeeds
 					if uint(len(src)) < uint(n+6) {
 						if hasEscapedUTF16Prefix(src[n:], true) {
-							return utf8.AppendRune(dst, r), firstErr(err, io.ErrUnexpectedEOF)
+							return utf8.AppendRune(dst, r), io.ErrUnexpectedEOF
 						}
-						err = firstErr(err, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(src[n-6:])) + " within string"})
+						err = newInvalidEscapeSequenceError(src[n-6:])
 					} else if v2, ok := parseHexUint16(src[n+2 : n+6]); src[n] != '\\' || src[n+1] != 'u' || !ok {
-						err = firstErr(err, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(src[n-6:n+6])) + " within string"})
+						err = newInvalidEscapeSequenceError(src[n-6 : n+6])
 					} else if r = utf16.DecodeRune(rune(v1), rune(v2)); r == utf8.RuneError {
-						err = firstErr(err, &SyntacticError{str: "invalid surrogate pair " + strconv.Quote(string(src[n-6:n+6])) + " within string"})
+						err = newInvalidEscapeSequenceError(src[n-6 : n+6])
 					} else {
 						n += 6
 					}
@@ -1394,14 +1387,14 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 
 				dst = utf8.AppendRune(dst, r)
 			default:
-				return dst, firstErr(err, &SyntacticError{str: "invalid escape sequence " + strconv.Quote(string(src[n:n+2])) + " within string"})
+				return dst, newInvalidEscapeSequenceError(src[n : n+2])
 			}
 			i = n
 		// Handle invalid UTF-8.
 		case r == utf8.RuneError:
 			dst = append(dst, src[i:n]...)
 			if !utf8.FullRuneInString(string(truncateMaxUTF8(src[n:]))) {
-				return dst, firstErr(err, io.ErrUnexpectedEOF)
+				return dst, io.ErrUnexpectedEOF
 			}
 			// NOTE: An unescaped string may be longer than the escaped string
 			// because invalid UTF-8 bytes are being replaced.
@@ -1412,13 +1405,13 @@ func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, e
 		// Handle invalid control characters.
 		case r < ' ':
 			dst = append(dst, src[i:n]...)
-			return dst, firstErr(err, newInvalidCharacterError(src[n:], "within string (expecting non-control character)"))
+			return dst, newInvalidCharacterError(src[n:], "within string (expecting non-control character)")
 		default:
 			panic("BUG: unhandled character " + quoteRune(src[n:]))
 		}
 	}
 	dst = append(dst, src[i:n]...)
-	return dst, firstErr(err, io.ErrUnexpectedEOF)
+	return dst, io.ErrUnexpectedEOF
 }
 
 // hasEscapedUTF16Prefix reports whether b is possibly

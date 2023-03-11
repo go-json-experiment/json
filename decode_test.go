@@ -1015,82 +1015,92 @@ func TestConsumeLiteral(t *testing.T) {
 }
 
 func TestConsumeString(t *testing.T) {
+	var errPrev = errors.New("same as previous error")
 	tests := []struct {
-		in          string
-		simple      bool
-		want        int
-		wantFlags   valueFlags
-		wantStr     string
-		wantErr     error
-		wantErrUTF8 error // error if validateUTF8 is specified
+		in             string
+		simple         bool
+		want           int
+		wantUTF8       int // consumed bytes if validateUTF8 is specified
+		wantFlags      valueFlags
+		wantUnquote    string
+		wantErr        error
+		wantErrUTF8    error // error if validateUTF8 is specified
+		wantErrUnquote error
 	}{
-		{``, false, 0, 0, "", io.ErrUnexpectedEOF, nil},
-		{`"`, false, 1, 0, "", io.ErrUnexpectedEOF, nil},
-		{`""`, true, 2, 0, "", nil, nil},
-		{`""x`, true, 2, 0, "", nil, nil},
-		{` ""x`, false, 0, 0, "", newInvalidCharacterError(" ", "at start of string (expecting '\"')"), nil},
-		{`"hello`, false, 6, 0, "hello", io.ErrUnexpectedEOF, nil},
-		{`"hello"`, true, 7, 0, "hello", nil, nil},
-		{"\"\x00\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError("\x00", "within string (expecting non-control character)"), nil},
-		{`"\u0000"`, false, 8, stringNonVerbatim, "\x00", nil, nil},
-		{"\"\x1f\"", false, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError("\x1f", "within string (expecting non-control character)"), nil},
-		{`"\u001f"`, false, 8, stringNonVerbatim, "\x1f", nil, nil},
-		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil},
-		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, 0, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil},
-		{"\"x\x80\"", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8},
-		{"\"x\xff\"", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8},
-		{"\"x\xc0", false, 3, stringNonVerbatim | stringNonCanonical, "x\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8},
-		{"\"x\xc0\x80\"", false, 5, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", nil, errInvalidUTF8},
-		{"\"x\xe0", false, 2, 0, "x", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xe0\x80", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8},
-		{"\"x\xe0\x80\x80\"", false, 6, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, errInvalidUTF8},
-		{"\"x\xf0", false, 2, 0, "x", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{"\"x\xf0\x80", false, 4, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8},
-		{"\"x\xf0\x80\x80", false, 5, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8},
-		{"\"x\xf0\x80\x80\x80\"", false, 7, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd\ufffd", nil, errInvalidUTF8},
-		{"\"x\xed\xba\xad\"", false, 6, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, errInvalidUTF8},
-		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, 0, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
-		{`"¢"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"¢"`[:3], false, 3, 0, "¢", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"¢"`[:4], false, 4, 0, "¢", nil, nil},
-		{`"€"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"€"`[:3], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"€"`[:4], false, 4, 0, "€", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"€"`[:5], false, 5, 0, "€", nil, nil},
-		{`"𐍈"`[:2], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:3], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:4], false, 1, 0, "", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"𐍈"`[:5], false, 5, 0, "𐍈", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF}, // missing terminating quote
-		{`"𐍈"`[:6], false, 6, 0, "𐍈", nil, nil},
-		{`"x\`, false, 2, stringNonVerbatim, "x", io.ErrUnexpectedEOF, nil},
-		{`"x\"`, false, 4, stringNonVerbatim, "x\"", io.ErrUnexpectedEOF, nil},
-		{`"x\x"`, false, 2, stringNonVerbatim | stringNonCanonical, "x", &SyntacticError{str: `invalid escape sequence "\\x" within string`}, nil},
-		{`"\"\\\b\f\n\r\t"`, false, 16, stringNonVerbatim, "\"\\\b\f\n\r\t", nil, nil},
-		{`"/"`, true, 3, 0, "/", nil, nil},
-		{`"\/"`, false, 4, stringNonVerbatim | stringNonCanonical, "/", nil, nil},
-		{`"\u002f"`, false, 8, stringNonVerbatim | stringNonCanonical, "/", nil, nil},
-		{`"\u`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
-		{`"\uf`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
-		{`"\uff`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
-		{`"\ufff`, false, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, nil},
-		{`"\ufffd`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, nil},
-		{`"\ufffd"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, nil},
-		{`"\uABCD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\uabcd", nil, nil},
-		{`"\uefX0"`, false, 1, stringNonVerbatim | stringNonCanonical, "", &SyntacticError{str: `invalid escape sequence "\\uefX0" within string`}, nil},
-		{`"\uDEAD`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"\uDEAD"`, false, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\"" within string`}},
-		{`"\uDEAD______"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd______", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD______" within string`}},
-		{`"\uDEAD\uXXXX"`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", &SyntacticError{str: `invalid escape sequence "\\uXXXX" within string`}, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\\uXXXX" within string`}},
-		{`"\uDEAD\uBEEF"`, false, 14, stringNonVerbatim | stringNonCanonical, "\ufffd\ubeef", nil, &SyntacticError{str: `invalid surrogate pair "\\uDEAD\\uBEEF" within string`}},
-		{`"\uD800\udea`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, io.ErrUnexpectedEOF},
-		{`"\uD800\udb`, false, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, &SyntacticError{str: `invalid surrogate pair "\\uD800\\udb" within string`}},
-		{`"\uD800\udead"`, false, 14, stringNonVerbatim | stringNonCanonical, "\U000102ad", nil, nil},
-		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, stringNonVerbatim | stringNonCanonical, "\"\\/\b\f\n\r\t", nil, nil},
-		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, stringNonVerbatim | stringNonCanonical, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil},
+		{``, false, 0, 0, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"`, false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`""`, true, 2, 2, 0, "", nil, nil, nil},
+		{`""x`, true, 2, 2, 0, "", nil, nil, newInvalidCharacterError("x", "after string value")},
+		{` ""x`, false, 0, 0, 0, "", newInvalidCharacterError(" ", "at start of string (expecting '\"')"), errPrev, errPrev},
+		{`"hello`, false, 6, 6, 0, "hello", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"hello"`, true, 7, 7, 0, "hello", nil, nil, nil},
+		{"\"\x00\"", false, 1, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError("\x00", "within string (expecting non-control character)"), errPrev, errPrev},
+		{`"\u0000"`, false, 8, 8, stringNonVerbatim, "\x00", nil, nil, nil},
+		{"\"\x1f\"", false, 1, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError("\x1f", "within string (expecting non-control character)"), errPrev, errPrev},
+		{`"\u001f"`, false, 8, 8, stringNonVerbatim, "\x1f", nil, nil, nil},
+		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, 54, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil, nil},
+		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, 44, 0, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil, nil},
+		{"\"x\x80\"", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"x\xff\"", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"x\xc0", false, 3, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8, io.ErrUnexpectedEOF},
+		{"\"x\xc0\x80\"", false, 5, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"x\xe0", false, 2, 2, 0, "x", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{"\"x\xe0\x80", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8, io.ErrUnexpectedEOF},
+		{"\"x\xe0\x80\x80\"", false, 6, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"x\xf0", false, 2, 2, 0, "x", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{"\"x\xf0\x80", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8, io.ErrUnexpectedEOF},
+		{"\"x\xf0\x80\x80", false, 5, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8, io.ErrUnexpectedEOF},
+		{"\"x\xf0\x80\x80\x80\"", false, 7, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"x\xed\xba\xad\"", false, 6, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd\ufffd\ufffd", nil, errInvalidUTF8, errPrev},
+		{"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", false, 25, 25, 0, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil, nil},
+		{`"¢"`[:2], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"¢"`[:3], false, 3, 3, 0, "¢", io.ErrUnexpectedEOF, errPrev, errPrev}, // missing terminating quote
+		{`"¢"`[:4], false, 4, 4, 0, "¢", nil, nil, nil},
+		{`"€"`[:2], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"€"`[:3], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"€"`[:4], false, 4, 4, 0, "€", io.ErrUnexpectedEOF, errPrev, errPrev}, // missing terminating quote
+		{`"€"`[:5], false, 5, 5, 0, "€", nil, nil, nil},
+		{`"𐍈"`[:2], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"𐍈"`[:3], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"𐍈"`[:4], false, 1, 1, 0, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"𐍈"`[:5], false, 5, 5, 0, "𐍈", io.ErrUnexpectedEOF, errPrev, errPrev}, // missing terminating quote
+		{`"𐍈"`[:6], false, 6, 6, 0, "𐍈", nil, nil, nil},
+		{`"x\`, false, 2, 2, stringNonVerbatim, "x", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"x\"`, false, 4, 4, stringNonVerbatim, "x\"", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"x\x"`, false, 2, 2, stringNonVerbatim | stringNonCanonical, "x", newInvalidEscapeSequenceError(`\x`), errPrev, errPrev},
+		{`"\"\\\b\f\n\r\t"`, false, 16, 16, stringNonVerbatim, "\"\\\b\f\n\r\t", nil, nil, nil},
+		{`"/"`, true, 3, 3, 0, "/", nil, nil, nil},
+		{`"\/"`, false, 4, 4, stringNonVerbatim | stringNonCanonical, "/", nil, nil, nil},
+		{`"\u002f"`, false, 8, 8, stringNonVerbatim | stringNonCanonical, "/", nil, nil, nil},
+		{`"\u`, false, 1, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\uf`, false, 1, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\uff`, false, 1, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\ufff`, false, 1, 1, stringNonVerbatim, "", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\ufffd`, false, 7, 7, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\ufffd"`, false, 8, 8, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, nil, nil},
+		{`"\uABCD"`, false, 8, 8, stringNonVerbatim | stringNonCanonical, "\uabcd", nil, nil, nil},
+		{`"\uefX0"`, false, 1, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidEscapeSequenceError(`\uefX0`), errPrev, errPrev},
+		{`"\uDEAD`, false, 7, 1, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\uDEAD"`, false, 8, 1, stringNonVerbatim | stringNonCanonical, "\ufffd", nil, newInvalidEscapeSequenceError(`\uDEAD"`), errPrev},
+		{`"\uDEAD______"`, false, 14, 1, stringNonVerbatim | stringNonCanonical, "\ufffd______", nil, newInvalidEscapeSequenceError(`\uDEAD______`), errPrev},
+		{`"\uDEAD\uXXXX"`, false, 7, 1, stringNonVerbatim | stringNonCanonical, "\ufffd", newInvalidEscapeSequenceError(`\uXXXX`), newInvalidEscapeSequenceError(`\uDEAD\uXXXX`), newInvalidEscapeSequenceError(`\uXXXX`)},
+		{`"\uDEAD\uBEEF"`, false, 14, 1, stringNonVerbatim | stringNonCanonical, "\ufffd\ubeef", nil, newInvalidEscapeSequenceError(`\uDEAD\uBEEF`), errPrev},
+		{`"\uD800\udea`, false, 7, 1, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, errPrev, errPrev},
+		{`"\uD800\udb`, false, 7, 1, stringNonVerbatim | stringNonCanonical, "\ufffd", io.ErrUnexpectedEOF, newInvalidEscapeSequenceError(`\uD800\udb`), io.ErrUnexpectedEOF},
+		{`"\uD800\udead"`, false, 14, 14, stringNonVerbatim | stringNonCanonical, "\U000102ad", nil, nil, nil},
+		{`"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, false, 50, 50, stringNonVerbatim | stringNonCanonical, "\"\\/\b\f\n\r\t", nil, nil, nil},
+		{`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, false, 56, 56, stringNonVerbatim | stringNonCanonical, "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, nil, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
+			if tt.wantErrUTF8 == errPrev {
+				tt.wantErrUTF8 = tt.wantErr
+			}
+			if tt.wantErrUnquote == errPrev {
+				tt.wantErrUnquote = tt.wantErrUTF8
+			}
+
 			switch got := consumeSimpleString([]byte(tt.in)); {
 			case tt.simple && got != tt.want:
 				t.Errorf("consumeSimpleString(%q) = %v, want %v", tt.in, got, tt.want)
@@ -1106,24 +1116,15 @@ func TestConsumeString(t *testing.T) {
 			if got != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr) {
 				t.Errorf("consumeString(%q, false) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
-			switch got, gotErr := consumeString(&gotFlags, []byte(tt.in), true); {
-			case tt.wantErrUTF8 == nil && (got != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr)):
-				t.Errorf("consumeString(%q, true) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
-			case tt.wantErrUTF8 != nil && (got > tt.want || !reflect.DeepEqual(gotErr, tt.wantErrUTF8)):
-				t.Errorf("consumeString(%q, true) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErrUTF8)
+
+			got, gotErr = consumeString(&gotFlags, []byte(tt.in), true)
+			if got != tt.wantUTF8 || !reflect.DeepEqual(gotErr, tt.wantErrUTF8) {
+				t.Errorf("consumeString(%q, false) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.wantUTF8, tt.wantErrUTF8)
 			}
 
-			in := tt.in
-			if tt.wantErr == nil {
-				in = in[:tt.want] // ignore junk after string
-			}
-			gotStr, gotErr := unescapeString(nil, in)
-			wantErr := tt.wantErrUTF8
-			if wantErr == nil {
-				wantErr = tt.wantErr
-			}
-			if string(gotStr) != tt.wantStr || !reflect.DeepEqual(gotErr, wantErr) {
-				t.Errorf("unescapeString(nil, %q) = (%q, %v), want (%q, %v)", tt.in[:got], gotStr, gotErr, tt.wantStr, wantErr)
+			gotUnquote, gotErr := unescapeString(nil, tt.in)
+			if string(gotUnquote) != tt.wantUnquote || !reflect.DeepEqual(gotErr, tt.wantErrUnquote) {
+				t.Errorf("unescapeString(nil, %q) = (%q, %v), want (%q, %v)", tt.in[:got], gotUnquote, gotErr, tt.wantUnquote, tt.wantErrUnquote)
 			}
 		})
 	}

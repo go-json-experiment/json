@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -176,6 +177,21 @@ func newDuplicateNameError[Bytes ~[]byte | ~string](quoted Bytes) *SyntacticErro
 func newInvalidCharacterError[Bytes ~[]byte | ~string](prefix Bytes, where string) *SyntacticError {
 	what := quoteRune(prefix)
 	return &SyntacticError{str: "invalid character " + what + " " + where}
+}
+
+func newInvalidEscapeSequenceError[Bytes ~[]byte | ~string](what Bytes) *SyntacticError {
+	label := "escape sequence"
+	if len(what) > 6 {
+		label = "surrogate pair"
+	}
+	needEscape := strings.IndexFunc(string(what), func(r rune) bool {
+		return r == '`' || r == utf8.RuneError || unicode.IsSpace(r) || !unicode.IsPrint(r)
+	}) >= 0
+	if needEscape {
+		return &SyntacticError{str: "invalid " + label + " " + strconv.Quote(string(what)) + " within string"}
+	} else {
+		return &SyntacticError{str: "invalid " + label + " `" + string(what) + "` within string"}
+	}
 }
 
 func quoteRune[Bytes ~[]byte | ~string](b Bytes) string {

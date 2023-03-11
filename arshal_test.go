@@ -2830,7 +2830,7 @@ func TestMarshal(t *testing.T) {
 			}),
 		},
 		in:      true,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: &SyntacticError{str: "invalid character 'i' at start of value"}},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: newInvalidCharacterError("i", "at start of value")},
 	}, {
 		name: name("Functions/Bool/V2/DirectError"),
 		mopts: MarshalOptions{
