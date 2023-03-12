@@ -324,18 +324,14 @@ func (d *Decoder) PeekKind() Kind {
 		pos += consumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
-				d.peekPos, d.peekErr = -1, err
+				d.peekPos, d.peekErr = -1, d.checkDelimBeforeIOError(delim, err)
 				return invalidKind
 			}
 		}
 	}
 	next := Kind(d.buf[pos]).normalize()
 	if d.tokens.needDelim(next) != delim {
-		pos = d.prevEnd // restore position to right after leading whitespace
-		pos += consumeWhitespace(d.buf[pos:])
-		err = d.tokens.checkDelim(delim, next)
-		err = d.injectSyntacticErrorWithPosition(err, pos)
-		d.peekPos, d.peekErr = -1, err
+		d.peekPos, d.peekErr = -1, d.checkDelim(delim, next)
 		return invalidKind
 	}
 
@@ -345,6 +341,29 @@ func (d *Decoder) PeekKind() Kind {
 	// recompute the next kind.
 	d.peekPos, d.peekErr = pos, nil
 	return next
+}
+
+// checkDelimBeforeIOError checks whether the delim is even valid
+// before returning an IO error, which occurs after the delim.
+func (d *Decoder) checkDelimBeforeIOError(delim byte, err error) error {
+	// Since an IO error occurred, we do not know what the next kind is.
+	// However, knowing the next kind is necessary to validate
+	// whether the current delim is at least potentially valid.
+	// Since a JSON string is always valid as the next token,
+	// conservatively assume that is the next kind for validation.
+	const next = Kind('"')
+	if d.tokens.needDelim(next) != delim {
+		err = d.checkDelim(delim, next)
+	}
+	return err
+}
+
+// checkDelim checks whether delim is valid for the given next kind.
+func (d *Decoder) checkDelim(delim byte, next Kind) error {
+	pos := d.prevEnd // restore position to right after leading whitespace
+	pos += consumeWhitespace(d.buf[pos:])
+	err := d.tokens.checkDelim(delim, next)
+	return d.injectSyntacticErrorWithPosition(err, pos)
 }
 
 // SkipValue is semantically equivalent to calling ReadValue and discarding
@@ -413,16 +432,13 @@ func (d *Decoder) ReadToken() (Token, error) {
 			pos += consumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
 				if pos, err = d.consumeWhitespace(pos); err != nil {
-					return Token{}, err
+					return Token{}, d.checkDelimBeforeIOError(delim, err)
 				}
 			}
 		}
 		next = Kind(d.buf[pos]).normalize()
 		if d.tokens.needDelim(next) != delim {
-			pos = d.prevEnd // restore position to right after leading whitespace
-			pos += consumeWhitespace(d.buf[pos:])
-			err = d.tokens.checkDelim(delim, next)
-			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
+			return Token{}, d.checkDelim(delim, next)
 		}
 	}
 
@@ -631,16 +647,13 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 			pos += consumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
 				if pos, err = d.consumeWhitespace(pos); err != nil {
-					return nil, err
+					return nil, d.checkDelimBeforeIOError(delim, err)
 				}
 			}
 		}
 		next = Kind(d.buf[pos]).normalize()
 		if d.tokens.needDelim(next) != delim {
-			pos = d.prevEnd // restore position to right after leading whitespace
-			pos += consumeWhitespace(d.buf[pos:])
-			err = d.tokens.checkDelim(delim, next)
-			return nil, d.injectSyntacticErrorWithPosition(err, pos)
+			return nil, d.checkDelim(delim, next)
 		}
 	}
 

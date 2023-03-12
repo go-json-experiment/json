@@ -646,6 +646,95 @@ var decoderErrorTestdata = []struct {
 		{']', zeroValue, newInvalidCharacterError("]", "at start of value").withOffset(len64(" [ ")), ""},
 	},
 	wantOffset: len(` [`),
+}, {
+	name: name("InvalidDelim/AfterTopLevel"),
+	in:   `"",`,
+	calls: []decoderMethodCall{
+		{'"', String(""), nil, ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`""`)), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`""`)), ""},
+	},
+	wantOffset: len(`""`),
+}, {
+	name: name("InvalidDelim/AfterObjectStart"),
+	in:   `{:`,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil, ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(":"), "before next token").withOffset(len64(`{`)), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(":"), "before next token").withOffset(len64(`{`)), ""},
+	},
+	wantOffset: len(`{`),
+}, {
+	name: name("InvalidDelim/AfterObjectName"),
+	in:   `{"",`,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, errMissingColon.withOffset(len64(`{""`)), ""},
+		{0, zeroValue, errMissingColon.withOffset(len64(`{""`)), ""},
+	},
+	wantOffset: len(`{""`),
+}, {
+	name: name("ValidDelim/AfterObjectName"),
+	in:   `{"":`,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, io.ErrUnexpectedEOF, ""},
+		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+	},
+	wantOffset: len(`{""`),
+}, {
+	name: name("InvalidDelim/AfterObjectValue"),
+	in:   `{"":"":`,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, errMissingComma.withOffset(len64(`{"":""`)), ""},
+		{0, zeroValue, errMissingComma.withOffset(len64(`{"":""`)), ""},
+	},
+	wantOffset: len(`{"":""`),
+}, {
+	name: name("ValidDelim/AfterObjectValue"),
+	in:   `{"":"",`,
+	calls: []decoderMethodCall{
+		{'{', ObjectStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, io.ErrUnexpectedEOF, ""},
+		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+	},
+	wantOffset: len(`{"":""`),
+}, {
+	name: name("InvalidDelim/AfterArrayStart"),
+	in:   `[,`,
+	calls: []decoderMethodCall{
+		{'[', ArrayStart, nil, ""},
+		{0, zeroToken, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`[`)), ""},
+		{0, zeroValue, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`[`)), ""},
+	},
+	wantOffset: len(`[`),
+}, {
+	name: name("InvalidDelim/AfterArrayValue"),
+	in:   `["":`,
+	calls: []decoderMethodCall{
+		{'[', ArrayStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, errMissingComma.withOffset(len64(`[""`)), ""},
+		{0, zeroValue, errMissingComma.withOffset(len64(`[""`)), ""},
+	},
+	wantOffset: len(`[""`),
+}, {
+	name: name("ValidDelim/AfterArrayValue"),
+	in:   `["",`,
+	calls: []decoderMethodCall{
+		{'[', ArrayStart, nil, ""},
+		{'"', String(""), nil, ""},
+		{0, zeroToken, io.ErrUnexpectedEOF, ""},
+		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+	},
+	wantOffset: len(`[""`),
 }}
 
 // TestDecoderErrors test that Decoder errors occur when we expect and
