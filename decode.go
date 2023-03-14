@@ -875,7 +875,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 	}
 
 	// Handle before start.
-	if d.buf[pos] != '{' {
+	if uint(pos) >= uint(len(d.buf)) || d.buf[pos] != '{' {
 		panic("BUG: consumeObject must be called with a buffer that starts with '{'")
 	}
 	pos++
@@ -965,7 +965,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 // It returns the new position in d.buf immediately after the array.
 func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err error) {
 	// Handle before start.
-	if d.buf[pos] != '[' {
+	if uint(pos) >= uint(len(d.buf)) || d.buf[pos] != '[' {
 		panic("BUG: consumeArray must be called with a buffer that starts with '['")
 	}
 	pos++
@@ -1140,7 +1140,7 @@ func consumeSimpleString(b []byte) (n int) {
 		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] < utf8.RuneSelf) {
 			n++
 		}
-		if len(b) > n && b[n] == '"' {
+		if uint(len(b)) > uint(n) && b[n] == '"' {
 			n++
 			return n
 		}
@@ -1477,7 +1477,7 @@ func consumeSimpleNumber(b []byte) (n int) {
 		} else {
 			return 0
 		}
-		if len(b) == n || !(b[n] == '.' || b[n] == 'e' || b[n] == 'E') {
+		if uint(len(b)) <= uint(n) || (b[n] != '.' && b[n] != 'e' && b[n] != 'E') {
 			return n
 		}
 	}
@@ -1517,10 +1517,10 @@ func consumeNumberResumable(b []byte, resumeOffset int, state consumeNumberState
 		switch state {
 		case withinIntegerDigits, withinFractionalDigits, withinExponentDigits:
 			// Consume leading digits.
-			for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+			for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
 				n++
 			}
-			if len(b) == n {
+			if uint(len(b)) <= uint(n) {
 				return n, state, nil // still within the same state
 			}
 			state++ // switches "withinX" to "beforeY" where Y is the state after X
@@ -1540,18 +1540,18 @@ func consumeNumberResumable(b []byte, resumeOffset int, state consumeNumberState
 	// Consume required integer component (with optional minus sign).
 beforeInteger:
 	resumeOffset = n
-	if len(b) > 0 && b[0] == '-' {
+	if uint(len(b)) > 0 && b[0] == '-' {
 		n++
 	}
 	switch {
-	case len(b) == n:
+	case uint(len(b)) <= uint(n):
 		return resumeOffset, beforeIntegerDigits, io.ErrUnexpectedEOF
 	case b[n] == '0':
 		n++
 		state = beforeFractionalDigits
 	case '1' <= b[n] && b[n] <= '9':
 		n++
-		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
 		state = withinIntegerDigits
@@ -1561,18 +1561,18 @@ beforeInteger:
 
 	// Consume optional fractional component.
 beforeFractional:
-	if len(b) > n && b[n] == '.' {
+	if uint(len(b)) > uint(n) && b[n] == '.' {
 		resumeOffset = n
 		n++
 		switch {
-		case len(b) == n:
+		case uint(len(b)) <= uint(n):
 			return resumeOffset, beforeFractionalDigits, io.ErrUnexpectedEOF
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
 			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
 		}
-		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
 		state = withinFractionalDigits
@@ -1580,21 +1580,21 @@ beforeFractional:
 
 	// Consume optional exponent component.
 beforeExponent:
-	if len(b) > n && (b[n] == 'e' || b[n] == 'E') {
+	if uint(len(b)) > uint(n) && (b[n] == 'e' || b[n] == 'E') {
 		resumeOffset = n
 		n++
-		if len(b) > n && (b[n] == '-' || b[n] == '+') {
+		if uint(len(b)) > uint(n) && (b[n] == '-' || b[n] == '+') {
 			n++
 		}
 		switch {
-		case len(b) == n:
+		case uint(len(b)) <= uint(n):
 			return resumeOffset, beforeExponentDigits, io.ErrUnexpectedEOF
 		case '0' <= b[n] && b[n] <= '9':
 			n++
 		default:
 			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
 		}
-		for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
+		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
 			n++
 		}
 		state = withinExponentDigits
