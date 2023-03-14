@@ -591,18 +591,19 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	if e.options.multiline {
 		b = e.appendWhitespace(b, k)
 	}
+	n0 := len(b) // offset before calling e.reformatValue
 
 	// Append the value the output.
-	var err error
-	v = v[consumeWhitespace(v):]
-	n0 := len(b) // offset before calling e.reformatValue
-	b, v, err = e.reformatValue(b, v, e.tokens.depth())
+	var n int
+	n += consumeWhitespace(v[n:])
+	b, m, err := e.reformatValue(b, v[n:], e.tokens.depth())
 	if err != nil {
 		return err
 	}
-	v = v[consumeWhitespace(v):]
-	if len(v) > 0 {
-		return newInvalidCharacterError(v[0:], "after top-level value")
+	n += m
+	n += consumeWhitespace(v[n:])
+	if len(v) > n {
+		return newInvalidCharacterError(v[n:], "after top-level value")
 	}
 
 	// Append the kind to the state machine.
@@ -676,37 +677,41 @@ func (e *Encoder) appendIndent(b []byte, n int) []byte {
 
 // reformatValue parses a JSON value from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
-// It returns the updated versions of dst and src.
-func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, RawValue, error) {
+// It returns the extended dst buffer and the number of consumed input bytes.
+func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, int, error) {
 	// TODO: Should this update valueFlags as input?
 	if len(src) == 0 {
-		return dst, src, io.ErrUnexpectedEOF
+		return dst, 0, io.ErrUnexpectedEOF
 	}
-	var n int
-	var err error
 	switch k := Kind(src[0]).normalize(); k {
 	case 'n':
-		if n = consumeNull(src); n == 0 {
-			n, err = consumeLiteral(src, "null")
+		if consumeNull(src) == 0 {
+			n, err := consumeLiteral(src, "null")
+			return dst, n, err
 		}
+		return append(dst, "null"...), len("null"), nil
 	case 'f':
-		if n = consumeFalse(src); n == 0 {
-			n, err = consumeLiteral(src, "false")
+		if consumeFalse(src) == 0 {
+			n, err := consumeLiteral(src, "false")
+			return dst, n, err
 		}
+		return append(dst, "false"...), len("false"), nil
 	case 't':
-		if n = consumeTrue(src); n == 0 {
-			n, err = consumeLiteral(src, "true")
+		if consumeTrue(src) == 0 {
+			n, err := consumeLiteral(src, "true")
+			return dst, n, err
 		}
+		return append(dst, "true"...), len("true"), nil
 	case '"':
 		if n := consumeSimpleString(src); n > 0 && e.options.EscapeRune == nil {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
-			return dst, src, nil
+			return dst, n, nil
 		}
 		return reformatString(dst, src, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
 	case '0':
 		if n := consumeSimpleNumber(src); n > 0 && !e.options.canonicalizeNumbers {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple numbers verbatim
-			return dst, src, nil
+			return dst, n, nil
 		}
 		return reformatNumber(dst, src, e.options.canonicalizeNumbers)
 	case '{':
@@ -714,33 +719,30 @@ func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, Ra
 	case '[':
 		return e.reformatArray(dst, src, depth)
 	default:
-		return dst, src, newInvalidCharacterError(src, "at start of value")
+		return dst, 0, newInvalidCharacterError(src, "at start of value")
 	}
-	if err != nil {
-		return dst, src, err
-	}
-	dst, src = append(dst, src[:n]...), src[n:]
-	return dst, src, nil
 }
 
 // reformatObject parses a JSON object from the start of src and
 // appends it to the end of src, reformatting whitespace and strings as needed.
-// It returns the updated versions of dst and src.
-func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, RawValue, error) {
+// It returns the extended dst buffer and the number of consumed input bytes.
+func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, int, error) {
 	// Append object start.
-	if src[0] != '{' {
+	if len(src) == 0 || src[0] != '{' {
 		panic("BUG: reformatObject must be called with a buffer that starts with '{'")
 	}
-	dst, src = append(dst, '{'), src[1:]
+	dst = append(dst, '{')
+	n := len("{")
 
 	// Append (possible) object end.
-	src = src[consumeWhitespace(src):]
-	if len(src) == 0 {
-		return dst, src, io.ErrUnexpectedEOF
+	n += consumeWhitespace(src[n:])
+	if uint(len(src)) <= uint(n) {
+		return dst, n, io.ErrUnexpectedEOF
 	}
-	if src[0] == '}' {
-		dst, src = append(dst, '}'), src[1:]
-		return dst, src, nil
+	if src[n] == '}' {
+		dst = append(dst, '}')
+		n += len("}")
+		return dst, n, nil
 	}
 
 	var err error
@@ -758,86 +760,94 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, R
 		}
 
 		// Append object name.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
 		n0 := len(dst) // offset before calling reformatString
-		n := consumeSimpleString(src)
-		if n > 0 && e.options.EscapeRune == nil {
-			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
+		m := consumeSimpleString(src[n:])
+		if m > 0 && e.options.EscapeRune == nil {
+			dst = append(dst, src[n:n+m]...)
 		} else {
-			dst, src, err = reformatString(dst, src, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
+			dst, m, err = reformatString(dst, src[n:], !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
+			if err != nil {
+				return dst, n + m, err
+			}
 		}
-		if err != nil {
-			return dst, src, err
+		// TODO: Specify whether the name is verbatim or not.
+		if !e.options.AllowDuplicateNames && !names.insertQuoted(src[n:n+m], false) {
+			return dst, n, newDuplicateNameError(dst[n0:])
 		}
-		if !e.options.AllowDuplicateNames && !names.insertQuoted(dst[n0:], false) {
-			return dst, src, newDuplicateNameError(dst[n0:])
-		}
+		n += m
 
 		// Append colon.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
-		if src[0] != ':' {
-			return dst, src, newInvalidCharacterError(src, "after object name (expecting ':')")
+		if src[n] != ':' {
+			return dst, n, newInvalidCharacterError(src[n:], "after object name (expecting ':')")
 		}
-		dst, src = append(dst, ':'), src[1:]
+		dst = append(dst, ':')
+		n += len(":")
 		if e.options.multiline {
 			dst = append(dst, ' ')
 		}
 
 		// Append object value.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
-		dst, src, err = e.reformatValue(dst, src, depth)
+		dst, m, err = e.reformatValue(dst, src[n:], depth)
 		if err != nil {
-			return dst, src, err
+			return dst, n + m, err
 		}
+		n += m
 
 		// Append comma or object end.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
-		switch src[0] {
+		switch src[n] {
 		case ',':
-			dst, src = append(dst, ','), src[1:]
+			dst = append(dst, ',')
+			n += len(",")
 			continue
 		case '}':
 			if e.options.multiline {
 				dst = e.appendIndent(dst, depth-1)
 			}
-			dst, src = append(dst, '}'), src[1:]
-			return dst, src, nil
+			dst = append(dst, '}')
+			n += len("}")
+			return dst, n, nil
 		default:
-			return dst, src, newInvalidCharacterError(src, "after object value (expecting ',' or '}')")
+			return dst, n, newInvalidCharacterError(src[n:], "after object value (expecting ',' or '}')")
 		}
 	}
 }
 
 // reformatArray parses a JSON array from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
-// It returns the updated versions of dst and src.
-func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, RawValue, error) {
+// It returns the extended dst buffer and the number of consumed input bytes.
+func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, int, error) {
 	// Append array start.
-	if src[0] != '[' {
+	if len(src) == 0 || src[0] != '[' {
 		panic("BUG: reformatArray must be called with a buffer that starts with '['")
 	}
-	dst, src = append(dst, '['), src[1:]
+	dst = append(dst, '[')
+	n := len("[")
 
 	// Append (possible) array end.
-	src = src[consumeWhitespace(src):]
-	if len(src) == 0 {
-		return dst, src, io.ErrUnexpectedEOF
+	n += consumeWhitespace(src[n:])
+	if uint(len(src)) <= uint(n) {
+		return dst, n, io.ErrUnexpectedEOF
 	}
-	if src[0] == ']' {
-		dst, src = append(dst, ']'), src[1:]
-		return dst, src, nil
+	if src[n] == ']' {
+		dst = append(dst, ']')
+		n += len("]")
+		return dst, n, nil
 	}
 
 	var err error
@@ -849,32 +859,36 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, Ra
 		}
 
 		// Append array value.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
-		dst, src, err = e.reformatValue(dst, src, depth)
+		var m int
+		dst, m, err = e.reformatValue(dst, src[n:], depth)
 		if err != nil {
-			return dst, src, err
+			return dst, n + m, err
 		}
+		n += m
 
 		// Append comma or array end.
-		src = src[consumeWhitespace(src):]
-		if len(src) == 0 {
-			return dst, src, io.ErrUnexpectedEOF
+		n += consumeWhitespace(src[n:])
+		if uint(len(src)) <= uint(n) {
+			return dst, n, io.ErrUnexpectedEOF
 		}
-		switch src[0] {
+		switch src[n] {
 		case ',':
-			dst, src = append(dst, ','), src[1:]
+			dst = append(dst, ',')
+			n += len(",")
 			continue
 		case ']':
 			if e.options.multiline {
 				dst = e.appendIndent(dst, depth-1)
 			}
-			dst, src = append(dst, ']'), src[1:]
-			return dst, src, nil
+			dst = append(dst, ']')
+			n += len("]")
+			return dst, n, nil
 		default:
-			return dst, src, newInvalidCharacterError(src, "after array value (expecting ',' or ']')")
+			return dst, n, newInvalidCharacterError(src[n:], "after array value (expecting ',' or ']')")
 		}
 	}
 }
@@ -1074,17 +1088,17 @@ func appendEscapedUTF16(dst []byte, x uint16) []byte {
 
 // reformatString consumes a JSON string from src and appends it to dst,
 // reformatting it if necessary for the given escapeRune parameter.
-// It returns the appended output and the remainder of the input.
-func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, []byte, error) {
+// It returns the appended output and the number of consumed input bytes.
+func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, int, error) {
 	// TODO: Should this update valueFlags as input?
 	var flags valueFlags
 	n, err := consumeString(&flags, src, validateUTF8)
 	if err != nil {
-		return dst, src[n:], err
+		return dst, n, err
 	}
 	if preserveRaw || (escapeRune == nil && flags.isCanonical()) {
 		dst = append(dst, src[:n]...) // copy the string verbatim
-		return dst, src[n:], nil
+		return dst, n, nil
 	}
 
 	// TODO: Implement a direct, raw-to-raw reformat for strings.
@@ -1093,7 +1107,7 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 	// an intermediary representation in a separate buffer.
 	b, _ := unescapeString(nil, src[:n])
 	dst, _ = appendString(dst, string(b), validateUTF8, escapeRune)
-	return dst, src[n:], nil
+	return dst, n, nil
 }
 
 // appendNumber appends src to dst as a JSON number per RFC 7159, section 6.
@@ -1134,15 +1148,15 @@ func appendNumber(dst []byte, src float64, bits int) []byte {
 
 // reformatNumber consumes a JSON string from src and appends it to dst,
 // canonicalizing it if specified.
-// It returns the appended output and the remainder of the input.
-func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, []byte, error) {
+// It returns the appended output and the number of consumed input bytes.
+func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, int, error) {
 	n, err := consumeNumber(src)
 	if err != nil {
-		return dst, src[n:], err
+		return dst, n, err
 	}
 	if !canonicalize {
 		dst = append(dst, src[:n]...) // copy the number verbatim
-		return dst, src[n:], nil
+		return dst, n, nil
 	}
 
 	// Canonicalize the number per RFC 8785, section 3.2.2.3.
@@ -1150,7 +1164,7 @@ func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, []byte, error) 
 	const maxExactIntegerDigits = 16 // len(strconv.AppendUint(nil, 1<<53, 10))
 	if n < maxExactIntegerDigits && consumeSimpleNumber(src[:n]) == n {
 		dst = append(dst, src[:n]...) // copy the number verbatim
-		return dst, src[n:], nil
+		return dst, n, nil
 	}
 	fv, _ := strconv.ParseFloat(string(src[:n]), 64)
 	switch {
@@ -1161,5 +1175,5 @@ func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, []byte, error) 
 	case math.IsInf(fv, -1):
 		fv = -math.MaxFloat64
 	}
-	return appendNumber(dst, fv, 64), src[n:], nil
+	return appendNumber(dst, fv, 64), n, nil
 }
