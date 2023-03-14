@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Whether a function is inlineable is dependent on the Go compiler version
+// Whether a function is inlinable is dependent on the Go compiler version
 // and also relies on the presence of the Go toolchain itself being installed.
 // This test is disabled by default and explicitly enabled with an
 // environment variable that is specified in our integration tests,
@@ -97,6 +97,6 @@ func TestInline(t *testing.T) {
 		}
 	}
 	for fnc := range fncs {
-		t.Errorf("%v is not inlineable, expected it to be", fnc)
+		t.Errorf("%v is not inlinable, expected it to be", fnc)
 	}
 }

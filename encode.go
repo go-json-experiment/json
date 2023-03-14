@@ -185,7 +185,7 @@ func (e *Encoder) Reset(w io.Writer) {
 
 // needFlush determines whether to flush at this point.
 func (e *Encoder) needFlush() bool {
-	// NOTE: This function is carefully written to be inlineable.
+	// NOTE: This function is carefully written to be inlinable.
 
 	// Avoid flushing if e.wr is nil since there is no underlying writer.
 	// Flush if less than 25% of the capacity remains.
@@ -372,7 +372,7 @@ func (e *Encoder) unwriteOnlyObjectMemberName() string {
 }
 
 func trimSuffixWhitespace(b []byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	n := len(b) - 1
 	for n >= 0 && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
 		n--
@@ -381,7 +381,7 @@ func trimSuffixWhitespace(b []byte) []byte {
 }
 
 func trimSuffixString(b []byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 && b[len(b)-1] == '"' {
 		b = b[:len(b)-1]
 	}
@@ -395,12 +395,12 @@ func trimSuffixString(b []byte) []byte {
 }
 
 func hasSuffixByte(b []byte, c byte) bool {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	return len(b) > 0 && b[len(b)-1] == c
 }
 
 func trimSuffixByte(b []byte, c byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 && b[len(b)-1] == c {
 		return b[:len(b)-1]
 	}

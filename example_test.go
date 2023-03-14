@@ -252,7 +252,7 @@ func Example_omitFields() {
 		Slice: []int{},
 		// Map is omitted since {} is an empty JSON object.
 		Map: map[int]int{},
-		// PointerNil is ommited since null is an empty JSON value.
+		// PointerNil is omitted since null is an empty JSON value.
 		PointerNil: nil,
 		// Pointer is omitted since "" is an empty JSON string.
 		Pointer: new(string),
@@ -486,8 +486,8 @@ func Example_serveHTTP() {
 	})
 }
 
-// Some Go types have a custom JSON represention where the implementation
-// is delegated to some external package. Consequentely, the "json" package
+// Some Go types have a custom JSON representation where the implementation
+// is delegated to some external package. Consequently, the "json" package
 // will not know how to use that external implementation.
 // For example, the "google.golang.org/protobuf/encoding/protojson" package
 // implements JSON for all "google.golang.org/protobuf/proto".Message types.
@@ -574,7 +574,7 @@ func Example_stringReplace() {
 		}
 
 		// Check whether the token contains the string "Golang" and
-		// replace each occurence with "Go" instead.
+		// replace each occurrence with "Go" instead.
 		if tok.Kind() == '"' && strings.Contains(tok.String(), "Golang") {
 			replacements = append(replacements, dec.StackPointer())
 			tok = json.String(strings.ReplaceAll(tok.String(), "Golang", "Go"))

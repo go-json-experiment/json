@@ -92,7 +92,7 @@ func (s state) appendStackPointer(b []byte) []byte {
 // The top-level virtual JSON array is special in that it doesn't require commas
 // between each JSON value.
 //
-// For performance, most methods are carefully written to be inlineable.
+// For performance, most methods are carefully written to be inlinable.
 // The zero value is a valid state machine ready for use.
 type stateMachine struct {
 	stack []stateEntry
@@ -728,7 +728,7 @@ func (s *uintSet) has(i uint) bool {
 
 // insert inserts i into the set and reports whether it was the first insertion.
 func (s *uintSet) insert(i uint) bool {
-	// TODO: Make this inlineable at least for the lower 64-bit case.
+	// TODO: Make this inlinable at least for the lower 64-bit case.
 	if i < 64 {
 		has := s.lo.has(i)
 		s.lo.set(i)

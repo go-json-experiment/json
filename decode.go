@@ -24,7 +24,7 @@ import (
 //     If the buffer appears truncated, then it returns io.ErrUnexpectedEOF.
 //     The consumeSimpleXXX functions are so named because they only handle
 //     a subset of the grammar for the JSON token being parsed.
-//     They do not handle the full grammar to keep these functions inlineable.
+//     They do not handle the full grammar to keep these functions inlinable.
 //
 //   - Decoder.consumeXXX methods parse the next JSON token from Decoder.buf,
 //     automatically fetching more input if necessary. These methods take
@@ -39,7 +39,7 @@ import (
 //     responsible for updated Decoder.prevStart and Decoder.prevEnd.
 //
 //   - For performance, much of the implementation uses the pattern of calling
-//     the inlineable consumeXXX functions first, and if more work is necessary,
+//     the inlinable consumeXXX functions first, and if more work is necessary,
 //     then it calls the slower Decoder.consumeXXX methods.
 //     TODO: Revisit this pattern if the Go compiler provides finer control
 //     over exactly which calls are inlined or not.
@@ -273,7 +273,7 @@ func (d *decodeBuffer) invalidatePreviousRead() {
 
 // needMore reports whether there are no more unread bytes.
 func (d *decodeBuffer) needMore(pos int) bool {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	return pos == len(d.buf)
 }
 
@@ -1075,7 +1075,7 @@ func (d *Decoder) StackPointer() string {
 
 // consumeWhitespace consumes leading JSON whitespace per RFC 7159, section 2.
 func consumeWhitespace(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	for len(b) > n && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
 		n++
 	}
@@ -1085,7 +1085,7 @@ func consumeWhitespace(b []byte) (n int) {
 // consumeNull consumes the next JSON null literal per RFC 7159, section 3.
 // It returns 0 if it is invalid, in which case consumeLiteral should be used.
 func consumeNull(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	const literal = "null"
 	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
 		return len(literal)
@@ -1096,7 +1096,7 @@ func consumeNull(b []byte) int {
 // consumeFalse consumes the next JSON false literal per RFC 7159, section 3.
 // It returns 0 if it is invalid, in which case consumeLiteral should be used.
 func consumeFalse(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	const literal = "false"
 	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
 		return len(literal)
@@ -1107,7 +1107,7 @@ func consumeFalse(b []byte) int {
 // consumeTrue consumes the next JSON true literal per RFC 7159, section 3.
 // It returns 0 if it is invalid, in which case consumeLiteral should be used.
 func consumeTrue(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	const literal = "true"
 	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
 		return len(literal)
@@ -1134,7 +1134,7 @@ func consumeLiteral(b []byte, lit string) (n int, err error) {
 // It returns 0 if it is invalid or more complicated than a simple string,
 // in which case consumeString should be called.
 func consumeSimpleString(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 && b[0] == '"' {
 		n++
 		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] < utf8.RuneSelf) {
@@ -1452,7 +1452,7 @@ func hasEscapedUTF16Prefix[Bytes ~[]byte | ~string](b Bytes, lowerSurrogateHalf 
 // the input with the surrounding quotes removed.
 // Otherwise, a new buffer is allocated for the output.
 func unescapeStringMayCopy(b []byte, isVerbatim bool) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if isVerbatim {
 		return b[len(`"`) : len(b)-len(`"`)]
 	}
@@ -1465,7 +1465,7 @@ func unescapeStringMayCopy(b []byte, isVerbatim bool) []byte {
 // It returns 0 if it is invalid or more complicated than a simple integer,
 // in which case consumeNumber should be called.
 func consumeSimpleNumber(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlineable.
+	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 {
 		if b[0] == '0' {
 			n++
