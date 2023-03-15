@@ -5,6 +5,7 @@
 package json
 
 import (
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -105,13 +106,13 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
-	wantCanonicalizeErr: errInvalidUTF8,
+	wantCanonicalizeErr: errInvalidUTF8.withOffset(len64(`  "living` + "\xde\xad")),
 }, {
 	name:                name("InvalidUTF8/SurrogateHalf"),
 	in:                  `"\ud800"`,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"\ud800"`,
-	wantCanonicalizeErr: newInvalidEscapeSequenceError(`\ud800"`),
+	wantCanonicalizeErr: newInvalidEscapeSequenceError(`\ud800"`).withOffset(len64(`"`)),
 }, {
 	name:              name("UppercaseEscaped"),
 	in:                `"\u000B"`,
@@ -128,7 +129,15 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	    "1": 1,
 	    "0": 0
 	}`,
-	wantCanonicalizeErr: newDuplicateNameError(`"0"`),
+	wantCanonicalizeErr: newDuplicateNameError(`"0"`).withOffset(len64(` { "0" : 0 , "1" : 1 , `)),
+}, {
+	name:                name("Whitespace"),
+	in:                  " \n\r\t",
+	wantValid:           false,
+	wantCompacted:       " \n\r\t",
+	wantCompactErr:      io.ErrUnexpectedEOF,
+	wantIndentErr:       io.ErrUnexpectedEOF,
+	wantCanonicalizeErr: io.ErrUnexpectedEOF,
 }}...)
 
 func TestRawValueMethods(t *testing.T) {
@@ -162,7 +171,7 @@ func TestRawValueMethods(t *testing.T) {
 				t.Errorf("%s: RawValue.Compact = %s, want %s", td.name.where, gotCompacted, td.wantCompacted)
 			}
 			if !reflect.DeepEqual(gotCompactErr, td.wantCompactErr) {
-				t.Errorf("%s: RawValue.Compact error mismatch: got %#v, want %#v", td.name.where, gotCompactErr, td.wantCompactErr)
+				t.Errorf("%s: RawValue.Compact error mismatch:\ngot  %v\nwant %v", td.name.where, gotCompactErr, td.wantCompactErr)
 			}
 
 			gotIndented := RawValue(td.in)
@@ -171,7 +180,7 @@ func TestRawValueMethods(t *testing.T) {
 				t.Errorf("%s: RawValue.Indent = %s, want %s", td.name.where, gotIndented, td.wantIndented)
 			}
 			if !reflect.DeepEqual(gotIndentErr, td.wantIndentErr) {
-				t.Errorf("%s: RawValue.Indent error mismatch: got %#v, want %#v", td.name.where, gotIndentErr, td.wantIndentErr)
+				t.Errorf("%s: RawValue.Indent error mismatch:\ngot  %v\nwant %v", td.name.where, gotIndentErr, td.wantIndentErr)
 			}
 
 			gotCanonicalized := RawValue(td.in)
@@ -180,7 +189,7 @@ func TestRawValueMethods(t *testing.T) {
 				t.Errorf("%s: RawValue.Canonicalize = %s, want %s", td.name.where, gotCanonicalized, td.wantCanonicalized)
 			}
 			if !reflect.DeepEqual(gotCanonicalizeErr, td.wantCanonicalizeErr) {
-				t.Errorf("%s: RawValue.Canonicalize error mismatch: got %#v, want %#v", td.name.where, gotCanonicalizeErr, td.wantCanonicalizeErr)
+				t.Errorf("%s: RawValue.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.where, gotCanonicalizeErr, td.wantCanonicalizeErr)
 			}
 		})
 	}

@@ -7,6 +7,7 @@ package json
 import (
 	"bytes"
 	"errors"
+	"io"
 	"reflect"
 )
 
@@ -50,6 +51,9 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 
 		tok, err := dec.ReadToken()
 		if err != nil {
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
 			return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
 		}
 		if tok.Kind() != '{' {

@@ -771,7 +771,7 @@ func testDecoderErrors(t *testing.T, where pc, opts DecodeOptions, in string, ca
 			}
 		}
 		if !reflect.DeepEqual(gotErr, call.wantErr) {
-			t.Fatalf("%s: %d: error mismatch: got %#v, want %#v", where, i, gotErr, call.wantErr)
+			t.Fatalf("%s: %d: error mismatch:\ngot  %v\nwant %v", where, i, gotErr, call.wantErr)
 		}
 		if call.wantPointer != "" {
 			gotPointer := dec.StackPointer()

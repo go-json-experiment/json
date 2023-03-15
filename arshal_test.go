@@ -787,17 +787,17 @@ func TestMarshal(t *testing.T) {
 		name:    name("Maps/InvalidKey/Bool"),
 		in:      map[bool]string{false: "value"},
 		want:    `{`,
-		wantErr: errMissingName,
+		wantErr: errMissingName.withOffset(len64(`{`)),
 	}, {
 		name:    name("Maps/InvalidKey/NamedBool"),
 		in:      map[namedBool]string{false: "value"},
 		want:    `{`,
-		wantErr: errMissingName,
+		wantErr: errMissingName.withOffset(len64(`{`)),
 	}, {
 		name:    name("Maps/InvalidKey/Array"),
 		in:      map[[1]string]string{{"key"}: "value"},
 		want:    `{`,
-		wantErr: errMissingName,
+		wantErr: errMissingName.withOffset(len64(`{`)),
 	}, {
 		name:    name("Maps/InvalidKey/Channel"),
 		in:      map[chan string]string{make(chan string): "value"},
@@ -852,7 +852,7 @@ func TestMarshal(t *testing.T) {
 		eopts:   EncodeOptions{AllowInvalidUTF8: true},
 		in:      map[string]string{"\x80": "", "\x81": ""},
 		want:    `{"�":""`,
-		wantErr: newDuplicateNameError(`"�"`),
+		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"�":"",`)),
 	}, {
 		name:  name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowDuplicateNames: true},
@@ -862,7 +862,7 @@ func TestMarshal(t *testing.T) {
 		name:    name("Maps/DuplicateName/NoCaseString"),
 		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
 		want:    `{"hello":""`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: newDuplicateNameError(`"hello"`)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: newDuplicateNameError(`"hello"`).withOffset(len64(`{"hello":"",`))},
 	}, {
 		name: name("Maps/InvalidValue/Channel"),
 		in: map[string]chan string{
@@ -881,7 +881,7 @@ func TestMarshal(t *testing.T) {
 		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
 		in:      map[string]int{"\xff": 0, "\xfe": 1},
 		want:    `{"�":1`,
-		wantErr: newDuplicateNameError(`"�"`),
+		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"�":1,`)),
 	}, {
 		name:  name("Maps/String/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
 		mopts: MarshalOptions{Deterministic: true},
@@ -927,7 +927,7 @@ func TestMarshal(t *testing.T) {
 		eopts:   EncodeOptions{AllowDuplicateNames: false},
 		in:      map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
 		want:    `{"X":{"x":1`,
-		wantErr: newDuplicateNameError(`"x"`),
+		wantErr: newDuplicateNameError(`"x"`).withOffset(len64(`{"X":{"x":1,`)),
 	}, {
 		name: name("Maps/String/Deterministic+MarshalFuncs+AllowDuplicateNames"),
 		mopts: MarshalOptions{
@@ -1948,7 +1948,7 @@ func TestMarshal(t *testing.T) {
 		eopts:   EncodeOptions{AllowInvalidUTF8: false},
 		in:      structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
 		want:    `{`,
-		wantErr: errInvalidUTF8,
+		wantErr: errInvalidUTF8.withOffset(len64(`{"` + "\xde\xad")),
 	}, {
 		name:  name("Structs/InlinedFallback/RawValue/AllowInvalidUTF8"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true},
@@ -1958,7 +1958,7 @@ func TestMarshal(t *testing.T) {
 		name:    name("Structs/InlinedFallback/RawValue/InvalidWhitespace"),
 		in:      structInlineRawValue{X: RawValue("\n\r\t ")},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: io.EOF},
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: io.ErrUnexpectedEOF},
 	}, {
 		name:    name("Structs/InlinedFallback/RawValue/InvalidObject"),
 		in:      structInlineRawValue{X: RawValue(` true `)},
@@ -1978,7 +1978,7 @@ func TestMarshal(t *testing.T) {
 		name:    name("Structs/InlinedFallback/RawValue/InvalidDualObject"),
 		in:      structInlineRawValue{X: RawValue(`{}{}`)},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError("{", "after top-level value")},
+		wantErr: &SemanticError{action: "marshal", GoType: rawValueType, Err: newInvalidCharacterError("{", "after top-level value").withOffset(len64(`{}`))},
 	}, {
 		name: name("Structs/InlinedFallback/RawValue/Nested/Nil"),
 		in:   structInlinePointerInlineRawValue{},
@@ -2505,7 +2505,7 @@ func TestMarshal(t *testing.T) {
 		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
-		wantErr: newDuplicateNameError(`"�"`),
+		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"X":{"�":"",`)),
 	}, {
 		name:  name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
 		mopts: MarshalOptions{Deterministic: true},
@@ -2516,13 +2516,13 @@ func TestMarshal(t *testing.T) {
 		name:    name("Interfaces/Any/Maps/RejectInvalidUTF8"),
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{`,
-		wantErr: errInvalidUTF8,
+		wantErr: errInvalidUTF8.withOffset(len64(`{"X":{`)),
 	}, {
 		name:    name("Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames"),
 		eopts:   EncodeOptions{AllowInvalidUTF8: true},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
-		wantErr: newDuplicateNameError(`"�"`),
+		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"X":{"�":"",`)),
 	}, {
 		name:  name("Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames"),
 		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
@@ -2706,7 +2706,7 @@ func TestMarshal(t *testing.T) {
 			})): "invalid",
 		},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Methods/Invalid/MapKey/JSONv1/Syntax"),
 		in: map[any]string{
@@ -2715,7 +2715,7 @@ func TestMarshal(t *testing.T) {
 			})): "invalid",
 		},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Functions/Bool/V1"),
 		mopts: MarshalOptions{
@@ -2928,7 +2928,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Functions/Map/Key/NoCaseString/V2/InvalidKind"),
 		mopts: MarshalOptions{
@@ -2938,7 +2938,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Functions/Map/Key/String/V1/DuplicateName"),
 		mopts: MarshalOptions{
@@ -2948,7 +2948,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[string]string{"name1": "value", "name2": "value"},
 		want:    `{"name":"name"`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: newDuplicateNameError(`"name"`)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: newDuplicateNameError(`"name"`).withOffset(len64(`{"name":"name",`))},
 	}, {
 		name: name("Functions/Map/Key/NoCaseString/V2"),
 		mopts: MarshalOptions{
@@ -2987,7 +2987,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Functions/Map/Key/NoCaseString/V2/InvalidValue"),
 		mopts: MarshalOptions{
@@ -2997,7 +2997,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName},
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: name("Functions/Map/Value/NoCaseString/V1"),
 		mopts: MarshalOptions{
@@ -3735,7 +3735,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `falsetrue`,
 		inVal:   addr(true),
 		want:    addr(false),
-		wantErr: newInvalidCharacterError("t", "after top-level value"),
+		wantErr: newInvalidCharacterError("t", "after top-level value").withOffset(len64(`false`)),
 	}, {
 		name:  name("Bools/Null"),
 		inBuf: `null`,

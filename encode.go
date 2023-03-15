@@ -263,6 +263,16 @@ func (e *Encoder) flush() error {
 	return nil
 }
 
+// injectSyntacticErrorWithPosition wraps a SyntacticError with the position,
+// otherwise it returns the error as is.
+// It takes a position relative to the start of the start of e.buf.
+func (e *encodeBuffer) injectSyntacticErrorWithPosition(err error, pos int) error {
+	if serr, ok := err.(*SyntacticError); ok {
+		return serr.withOffset(e.baseOffset + int64(pos))
+	}
+	return err
+}
+
 func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + len64(e.buf) }
 func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
 
@@ -415,6 +425,7 @@ func trimSuffixByte(b []byte, c byte) []byte {
 // to provide an end object delimiter when the encoder is finishing an array.
 // If the provided token is invalid, then it reports a SyntacticError and
 // the internal state remains unchanged.
+// The offset reported in SyntacticError will be relative to the OutputOffset.
 func (e *Encoder) WriteToken(t Token) error {
 	k := t.Kind()
 	b := e.buf // use local variable to avoid mutating e in case of error
@@ -424,6 +435,7 @@ func (e *Encoder) WriteToken(t Token) error {
 	if e.options.multiline {
 		b = e.appendWhitespace(b, k)
 	}
+	pos := len(b) // offset before the token
 
 	// Append the token to the output and to the state machine.
 	var err error
@@ -484,10 +496,10 @@ func (e *Encoder) WriteToken(t Token) error {
 		b = append(b, ']')
 		err = e.tokens.popArray()
 	default:
-		return &SyntacticError{str: "invalid json.Token"}
+		err = &SyntacticError{str: "invalid json.Token"}
 	}
 	if err != nil {
-		return err
+		return e.injectSyntacticErrorWithPosition(err, pos)
 	}
 
 	// Finish off the buffer and store it back into e.
@@ -515,6 +527,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 	if e.options.multiline {
 		b = e.appendWhitespace(b, '0')
 	}
+	pos := len(b) // offset before the token
 
 	if quote {
 		// Append the value to the output.
@@ -543,12 +556,13 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 				return errInvalidNamespace
 			}
 			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
-				return newDuplicateNameError(b[n0:])
+				err := newDuplicateNameError(b[n0:])
+				return e.injectSyntacticErrorWithPosition(err, pos)
 			}
 			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
 		if err := e.tokens.appendString(); err != nil {
-			return err
+			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
 	} else {
 		switch bits {
@@ -560,7 +574,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 			b = appendNumber(b, v, bits)
 		}
 		if err := e.tokens.appendNumber(); err != nil {
-			return err
+			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
 	}
 
@@ -580,6 +594,8 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 // The provided value kind must be consistent with the JSON grammar
 // (see examples on Encoder.WriteToken). If the provided value is invalid,
 // then it reports a SyntacticError and the internal state remains unchanged.
+// The offset reported in SyntacticError will be relative to the OutputOffset
+// plus the offset into v of any encountered syntax error.
 func (e *Encoder) WriteValue(v RawValue) error {
 	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
 
@@ -591,19 +607,20 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	if e.options.multiline {
 		b = e.appendWhitespace(b, k)
 	}
-	n0 := len(b) // offset before calling e.reformatValue
+	pos := len(b) // offset before the value
 
 	// Append the value the output.
 	var n int
 	n += consumeWhitespace(v[n:])
 	b, m, err := e.reformatValue(b, v[n:], e.tokens.depth())
 	if err != nil {
-		return err
+		return e.injectSyntacticErrorWithPosition(err, pos+n+m)
 	}
 	n += m
 	n += consumeWhitespace(v[n:])
 	if len(v) > n {
-		return newInvalidCharacterError(v[n:], "after top-level value")
+		err = newInvalidCharacterError(v[n:], "after top-level value")
+		return e.injectSyntacticErrorWithPosition(err, pos+n)
 	}
 
 	// Append the kind to the state machine.
@@ -616,11 +633,11 @@ func (e *Encoder) WriteValue(v RawValue) error {
 				err = errInvalidNamespace
 				break
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
-				err = newDuplicateNameError(b[n0:])
+			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[pos:], false) {
+				err = newDuplicateNameError(b[pos:])
 				break
 			}
-			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+			e.names.replaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
 		err = e.tokens.appendString()
 	case '0':
@@ -641,7 +658,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 		}
 	}
 	if err != nil {
-		return err
+		return e.injectSyntacticErrorWithPosition(err, pos)
 	}
 
 	// Finish off the buffer and store it back into e.
@@ -764,7 +781,6 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
-		n0 := len(dst) // offset before calling reformatString
 		m := consumeSimpleString(src[n:])
 		if m > 0 && e.options.EscapeRune == nil {
 			dst = append(dst, src[n:n+m]...)
@@ -776,7 +792,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 		}
 		// TODO: Specify whether the name is verbatim or not.
 		if !e.options.AllowDuplicateNames && !names.insertQuoted(src[n:n+m], false) {
-			return dst, n, newDuplicateNameError(dst[n0:])
+			return dst, n, newDuplicateNameError(src[n : n+m])
 		}
 		n += m
 

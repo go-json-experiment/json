@@ -710,7 +710,8 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 func (d *Decoder) checkEOF() error {
 	switch pos, err := d.consumeWhitespace(d.prevEnd); err {
 	case nil:
-		return newInvalidCharacterError(d.buf[pos:], "after top-level value")
+		err := newInvalidCharacterError(d.buf[pos:], "after top-level value")
+		return d.injectSyntacticErrorWithPosition(err, pos)
 	case io.ErrUnexpectedEOF:
 		return nil
 	default:
