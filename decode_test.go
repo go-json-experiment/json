@@ -791,6 +791,23 @@ func testDecoderErrors(t *testing.T, where pc, opts DecodeOptions, in string, ca
 	}
 }
 
+// TestBufferDecoder tests that we detect misuses of bytes.Buffer with Decoder.
+func TestBufferDecoder(t *testing.T) {
+	bb := bytes.NewBufferString("[null, false, true]")
+	dec := NewDecoder(bb)
+	var err error
+	for {
+		if _, err = dec.ReadToken(); err != nil {
+			break
+		}
+		bb.WriteByte(' ') // not allowed to write to the buffer while reading
+	}
+	want := &ioError{action: "read", err: errBufferWriteAfterNext}
+	if !reflect.DeepEqual(err, want) {
+		t.Fatalf("error mismatch: got %v, want %v", err, want)
+	}
+}
+
 var resumableDecoderTestdata = []string{
 	`0`,
 	`123456789`,
@@ -821,23 +838,6 @@ var resumableDecoderTestdata = []string{
 	`"\ud800\udead"`,
 	"\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"",
 	`"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`,
-}
-
-// TestBufferDecoder tests that we detect misuses of bytes.Buffer with Decoder.
-func TestBufferDecoder(t *testing.T) {
-	bb := bytes.NewBufferString("[null, false, true]")
-	dec := NewDecoder(bb)
-	var err error
-	for {
-		if _, err = dec.ReadToken(); err != nil {
-			break
-		}
-		bb.WriteByte(' ') // not allowed to write to the buffer while reading
-	}
-	want := &ioError{action: "read", err: errBufferWriteAfterNext}
-	if !reflect.DeepEqual(err, want) {
-		t.Fatalf("error mismatch: got %v, want %v", err, want)
-	}
 }
 
 // TestResumableDecoder tests that resume logic for parsing a
