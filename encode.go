@@ -747,6 +747,8 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 	// Append object start.
 	if len(src) == 0 || src[0] != '{' {
 		panic("BUG: reformatObject must be called with a buffer that starts with '{'")
+	} else if depth == maxNestingDepth+1 {
+		return dst, 0, errMaxDepth
 	}
 	dst = append(dst, '{')
 	n := len("{")
@@ -851,6 +853,8 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 	// Append array start.
 	if len(src) == 0 || src[0] != '[' {
 		panic("BUG: reformatArray must be called with a buffer that starts with '['")
+	} else if depth == maxNestingDepth+1 {
+		return dst, 0, errMaxDepth
 	}
 	dst = append(dst, '[')
 	n := len("[")

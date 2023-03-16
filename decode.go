@@ -659,7 +659,7 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 
 	// Handle the next value.
 	oldAbsPos := d.baseOffset + int64(pos)
-	pos, err = d.consumeValue(flags, pos)
+	pos, err = d.consumeValue(flags, pos, d.tokens.depth())
 	newAbsPos := d.baseOffset + int64(pos)
 	n := int(newAbsPos - oldAbsPos)
 	if err != nil {
@@ -754,7 +754,7 @@ func (d *Decoder) consumeWhitespace(pos int) (newPos int, err error) {
 
 // consumeValue consumes a single JSON value starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the value.
-func (d *Decoder) consumeValue(flags *valueFlags, pos int) (newPos int, err error) {
+func (d *Decoder) consumeValue(flags *valueFlags, pos, depth int) (newPos int, err error) {
 	for {
 		var n int
 		var err error
@@ -782,9 +782,9 @@ func (d *Decoder) consumeValue(flags *valueFlags, pos int) (newPos int, err erro
 				return d.consumeNumber(pos)
 			}
 		case '{':
-			return d.consumeObject(flags, pos)
+			return d.consumeObject(flags, pos, depth)
 		case '[':
-			return d.consumeArray(flags, pos)
+			return d.consumeArray(flags, pos, depth)
 		default:
 			return pos, newInvalidCharacterError(d.buf[pos:], "at start of value")
 		}
@@ -866,7 +866,7 @@ func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
 
 // consumeObject consumes a single JSON object starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the object.
-func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err error) {
+func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, err error) {
 	var n int
 	var names *objectNamespace
 	if !d.options.AllowDuplicateNames {
@@ -878,6 +878,8 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 	// Handle before start.
 	if uint(pos) >= uint(len(d.buf)) || d.buf[pos] != '{' {
 		panic("BUG: consumeObject must be called with a buffer that starts with '{'")
+	} else if depth == maxNestingDepth+1 {
+		return pos, errMaxDepth
 	}
 	pos++
 
@@ -893,6 +895,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 		return pos, nil
 	}
 
+	depth++
 	for {
 		// Handle before name.
 		pos += consumeWhitespace(d.buf[pos:])
@@ -937,7 +940,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 				return pos, err
 			}
 		}
-		pos, err = d.consumeValue(flags, pos)
+		pos, err = d.consumeValue(flags, pos, depth)
 		if err != nil {
 			return pos, err
 		}
@@ -964,10 +967,12 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos int) (newPos int, err err
 
 // consumeArray consumes a single JSON array starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the array.
-func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err error) {
+func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, err error) {
 	// Handle before start.
 	if uint(pos) >= uint(len(d.buf)) || d.buf[pos] != '[' {
 		panic("BUG: consumeArray must be called with a buffer that starts with '['")
+	} else if depth == maxNestingDepth+1 {
+		return pos, errMaxDepth
 	}
 	pos++
 
@@ -983,6 +988,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err erro
 		return pos, nil
 	}
 
+	depth++
 	for {
 		// Handle before value.
 		pos += consumeWhitespace(d.buf[pos:])
@@ -991,7 +997,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos int) (newPos int, err erro
 				return pos, err
 			}
 		}
-		pos, err = d.consumeValue(flags, pos)
+		pos, err = d.consumeValue(flags, pos, depth)
 		if err != nil {
 			return pos, err
 		}

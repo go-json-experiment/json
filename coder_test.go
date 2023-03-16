@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -629,6 +630,175 @@ func TestCoderBufferGrowth(t *testing.T) {
 		t.Fatalf("UnmarshalFull error: %v", err)
 	}
 	checkGrowth(readSizes)
+}
+
+func TestCoderMaxDepth(t *testing.T) {
+	trimArray := func(b []byte) []byte { return b[len(`[`) : len(b)-len(`]`)] }
+	maxArrays := []byte(strings.Repeat(`[`, maxNestingDepth+1) + strings.Repeat(`]`, maxNestingDepth+1))
+	trimObject := func(b []byte) []byte { return b[len(`{"":`) : len(b)-len(`}`)] }
+	maxObjects := []byte(strings.Repeat(`{"":`, maxNestingDepth+1) + `""` + strings.Repeat(`}`, maxNestingDepth+1))
+
+	t.Run("Decoder", func(t *testing.T) {
+		var dec Decoder
+		checkReadToken := func(t *testing.T, wantKind Kind, wantErr error) {
+			t.Helper()
+			if tok, err := dec.ReadToken(); tok.Kind() != wantKind || !reflect.DeepEqual(err, wantErr) {
+				t.Fatalf("Decoder.ReadToken = (%q, %v), want (%q, %v)", byte(tok.Kind()), err, byte(wantKind), wantErr)
+			}
+		}
+		checkReadValue := func(t *testing.T, wantLen int, wantErr error) {
+			t.Helper()
+			if val, err := dec.ReadValue(); len(val) != wantLen || !reflect.DeepEqual(err, wantErr) {
+				t.Fatalf("Decoder.ReadValue = (%d, %v), want (%d, %v)", len(val), err, wantLen, wantErr)
+			}
+		}
+
+		t.Run("ArraysValid/SingleValue", func(t *testing.T) {
+			dec.reset(trimArray(maxArrays), nil, DecodeOptions{})
+			checkReadValue(t, maxNestingDepth*len(`[]`), nil)
+		})
+		t.Run("ArraysValid/TokenThenValue", func(t *testing.T) {
+			dec.reset(trimArray(maxArrays), nil, DecodeOptions{})
+			checkReadToken(t, '[', nil)
+			checkReadValue(t, (maxNestingDepth-1)*len(`[]`), nil)
+			checkReadToken(t, ']', nil)
+		})
+		t.Run("ArraysValid/AllTokens", func(t *testing.T) {
+			dec.reset(trimArray(maxArrays), nil, DecodeOptions{})
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, '[', nil)
+			}
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, ']', nil)
+			}
+		})
+
+		t.Run("ArraysInvalid/SingleValue", func(t *testing.T) {
+			dec.reset(maxArrays, nil, DecodeOptions{})
+			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+		})
+		t.Run("ArraysInvalid/TokenThenValue", func(t *testing.T) {
+			dec.reset(maxArrays, nil, DecodeOptions{})
+			checkReadToken(t, '[', nil)
+			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+		})
+		t.Run("ArraysInvalid/AllTokens", func(t *testing.T) {
+			dec.reset(maxArrays, nil, DecodeOptions{})
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, '[', nil)
+			}
+			checkReadToken(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+		})
+
+		t.Run("ObjectsValid/SingleValue", func(t *testing.T) {
+			dec.reset(trimObject(maxObjects), nil, DecodeOptions{})
+			checkReadValue(t, maxNestingDepth*len(`{"":}`)+len(`""`), nil)
+		})
+		t.Run("ObjectsValid/TokenThenValue", func(t *testing.T) {
+			dec.reset(trimObject(maxObjects), nil, DecodeOptions{})
+			checkReadToken(t, '{', nil)
+			checkReadToken(t, '"', nil)
+			checkReadValue(t, (maxNestingDepth-1)*len(`{"":}`)+len(`""`), nil)
+			checkReadToken(t, '}', nil)
+		})
+		t.Run("ObjectsValid/AllTokens", func(t *testing.T) {
+			dec.reset(trimObject(maxObjects), nil, DecodeOptions{})
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, '{', nil)
+				checkReadToken(t, '"', nil)
+			}
+			checkReadToken(t, '"', nil)
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, '}', nil)
+			}
+		})
+
+		t.Run("ObjectsInvalid/SingleValue", func(t *testing.T) {
+			dec.reset(maxObjects, nil, DecodeOptions{})
+			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+		})
+		t.Run("ObjectsInvalid/TokenThenValue", func(t *testing.T) {
+			dec.reset(maxObjects, nil, DecodeOptions{})
+			checkReadToken(t, '{', nil)
+			checkReadToken(t, '"', nil)
+			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+		})
+		t.Run("ObjectsInvalid/AllTokens", func(t *testing.T) {
+			dec.reset(maxObjects, nil, DecodeOptions{})
+			for i := 0; i < maxNestingDepth; i++ {
+				checkReadToken(t, '{', nil)
+				checkReadToken(t, '"', nil)
+			}
+			checkReadToken(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+		})
+	})
+
+	t.Run("Encoder", func(t *testing.T) {
+		var enc Encoder
+		checkWriteToken := func(t *testing.T, tok Token, wantErr error) {
+			t.Helper()
+			if err := enc.WriteToken(tok); !reflect.DeepEqual(err, wantErr) {
+				t.Fatalf("Encoder.WriteToken = %v, want %v", err, wantErr)
+			}
+		}
+		checkWriteValue := func(t *testing.T, val RawValue, wantErr error) {
+			t.Helper()
+			if err := enc.WriteValue(val); !reflect.DeepEqual(err, wantErr) {
+				t.Fatalf("Encoder.WriteValue = %v, want %v", err, wantErr)
+			}
+		}
+
+		t.Run("Arrays/SingleValue", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			checkWriteValue(t, maxArrays, errMaxDepth.withOffset(maxNestingDepth))
+			checkWriteValue(t, trimArray(maxArrays), nil)
+		})
+		t.Run("Arrays/TokenThenValue", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			checkWriteToken(t, ArrayStart, nil)
+			checkWriteValue(t, trimArray(maxArrays), errMaxDepth.withOffset(maxNestingDepth))
+			checkWriteValue(t, trimArray(trimArray(maxArrays)), nil)
+			checkWriteToken(t, ArrayEnd, nil)
+		})
+		t.Run("Arrays/AllTokens", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			for i := 0; i < maxNestingDepth; i++ {
+				checkWriteToken(t, ArrayStart, nil)
+			}
+			checkWriteToken(t, ArrayStart, errMaxDepth.withOffset(maxNestingDepth))
+			for i := 0; i < maxNestingDepth; i++ {
+				checkWriteToken(t, ArrayEnd, nil)
+			}
+		})
+
+		t.Run("Objects/SingleValue", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			checkWriteValue(t, maxObjects, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteValue(t, trimObject(maxObjects), nil)
+		})
+		t.Run("Objects/TokenThenValue", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			checkWriteToken(t, ObjectStart, nil)
+			checkWriteToken(t, String(""), nil)
+			checkWriteValue(t, trimObject(maxObjects), errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteValue(t, trimObject(trimObject(maxObjects)), nil)
+			checkWriteToken(t, ObjectEnd, nil)
+		})
+		t.Run("Objects/AllTokens", func(t *testing.T) {
+			enc.reset(enc.buf[:0], nil, EncodeOptions{})
+			for i := 0; i < maxNestingDepth-1; i++ {
+				checkWriteToken(t, ObjectStart, nil)
+				checkWriteToken(t, String(""), nil)
+			}
+			checkWriteToken(t, ObjectStart, nil)
+			checkWriteToken(t, String(""), nil)
+			checkWriteToken(t, ObjectStart, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteToken(t, String(""), nil)
+			for i := 0; i < maxNestingDepth; i++ {
+				checkWriteToken(t, ObjectEnd, nil)
+			}
+		})
+	})
 }
 
 type ReaderFunc func([]byte) (int, error)

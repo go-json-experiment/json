@@ -15,9 +15,14 @@ var (
 	errMissingValue  = &SyntacticError{str: "missing value after object name"}
 	errMissingComma  = &SyntacticError{str: "missing character ',' after object or array value"}
 	errMismatchDelim = &SyntacticError{str: "mismatching structural token for object or array"}
+	errMaxDepth      = &SyntacticError{str: "exceeded max depth"}
 )
 
 const errInvalidNamespace = jsonError("object namespace is in an invalid state")
+
+// Per RFC 8259, section 9, implementations may enforce a maximum depth.
+// Such a limit is necessary to prevent stack overflows.
+const maxNestingDepth = 10000
 
 type state struct {
 	// tokens validates whether the next token kind is valid.
@@ -170,6 +175,8 @@ func (m *stateMachine) pushObject() error {
 		return errMissingName
 	case !m.last.isValidNamespace():
 		return errInvalidNamespace
+	case len(m.stack) == maxNestingDepth:
+		return errMaxDepth
 	default:
 		m.last.increment()
 		m.stack = append(m.stack, m.last)
@@ -203,6 +210,8 @@ func (m *stateMachine) pushArray() error {
 		return errMissingName
 	case !m.last.isValidNamespace():
 		return errInvalidNamespace
+	case len(m.stack) == maxNestingDepth:
+		return errMaxDepth
 	default:
 		m.last.increment()
 		m.stack = append(m.stack, m.last)
