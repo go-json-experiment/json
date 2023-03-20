@@ -79,12 +79,11 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 			sf := t.Field(i)
 			_, hasTag := sf.Tag.Lookup("json")
 			hasAnyJSONTag = hasAnyJSONTag || hasTag
-			options, err := parseFieldOptions(sf)
+			options, ignored, err := parseFieldOptions(sf)
 			if err != nil {
-				if err == errIgnoredField {
-					continue
-				}
 				return structFields{}, &SemanticError{GoType: t, Err: err}
+			} else if ignored {
+				continue
 			}
 			hasAnyJSONField = true
 			f := structField{
@@ -326,13 +325,12 @@ type fieldOptions struct {
 // parseFieldOptions parses the `json` tag in a Go struct field as
 // a structured set of options configuring parameters such as
 // the JSON member name and other features.
-// As a special case, it returns errIgnoredField if the field is ignored.
-func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
+func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, err error) {
 	tag, hasTag := sf.Tag.Lookup("json")
 
 	// Check whether this field is explicitly ignored.
 	if tag == "-" {
-		return fieldOptions{}, errIgnoredField
+		return fieldOptions{}, true, nil
 	}
 
 	// Check whether this field is unexported.
@@ -343,13 +341,13 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		// of purely exported fields.
 		// See https://go.dev/issue/21357 and https://go.dev/issue/24153.
 		if sf.Anonymous {
-			return fieldOptions{}, fmt.Errorf("embedded Go struct field %s of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name())
+			err = firstError(err, fmt.Errorf("embedded Go struct field %s of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name()))
 		}
 		// Tag options specified on an unexported field suggests user error.
 		if hasTag {
-			return fieldOptions{}, fmt.Errorf("unexported Go struct field %s cannot have non-ignored `json:%q` tag", sf.Name, tag)
+			err = firstError(err, fmt.Errorf("unexported Go struct field %s cannot have non-ignored `json:%q` tag", sf.Name, tag))
 		}
-		return fieldOptions{}, errIgnoredField
+		return fieldOptions{}, true, err
 	}
 
 	// Determine the JSON member name for this Go field. A user-specified name
@@ -365,9 +363,10 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 		opt := tag[:n]
 		if n == 0 {
 			// Allow a single quoted string for arbitrary names.
-			opt, n, err = consumeTagOption(tag)
-			if err != nil {
-				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
+			var err2 error
+			opt, n, err2 = consumeTagOption(tag)
+			if err2 != nil {
+				err = firstError(err, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err2))
 			}
 		}
 		out.hasName = true
@@ -383,25 +382,27 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 	for len(tag) > 0 {
 		// Consume comma delimiter.
 		if tag[0] != ',' {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid character %q before next option (expecting ',')", sf.Name, tag[0])
-		}
-		tag = tag[len(","):]
-		if len(tag) == 0 {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid trailing ',' character", sf.Name)
+			err = firstError(err, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid character %q before next option (expecting ',')", sf.Name, tag[0]))
+		} else {
+			tag = tag[len(","):]
+			if len(tag) == 0 {
+				err = firstError(err, fmt.Errorf("Go struct field %s has malformed `json` tag: invalid trailing ',' character", sf.Name))
+				break
+			}
 		}
 
 		// Consume and process the tag option.
-		opt, n, err := consumeTagOption(tag)
-		if err != nil {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err)
+		opt, n, err2 := consumeTagOption(tag)
+		if err2 != nil {
+			err = firstError(err, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err2))
 		}
 		rawOpt := tag[:n]
 		tag = tag[n:]
 		switch {
 		case wasFormat:
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has `format` tag option that was not specified last", sf.Name)
+			err = firstError(err, fmt.Errorf("Go struct field %s has `format` tag option that was not specified last", sf.Name))
 		case strings.HasPrefix(rawOpt, "'") && strings.TrimFunc(opt, isLetterOrDigit) == "":
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `%s` tag option; specify `%s` instead", sf.Name, rawOpt, opt)
+			err = firstError(err, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `%s` tag option; specify `%s` instead", sf.Name, rawOpt, opt))
 		}
 		switch opt {
 		case "nocase":
@@ -418,12 +419,14 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			out.string = true
 		case "format":
 			if !strings.HasPrefix(tag, ":") {
-				return fieldOptions{}, fmt.Errorf("Go struct field %s is missing value for `format` tag option", sf.Name)
+				err = firstError(err, fmt.Errorf("Go struct field %s is missing value for `format` tag option", sf.Name))
+				break
 			}
 			tag = tag[len(":"):]
-			opt, n, err := consumeTagOption(tag)
-			if err != nil {
-				return fieldOptions{}, fmt.Errorf("Go struct field %s has malformed value for `format` tag option: %v", sf.Name, err)
+			opt, n, err2 := consumeTagOption(tag)
+			if err2 != nil {
+				err = firstError(err, fmt.Errorf("Go struct field %s has malformed value for `format` tag option: %v", sf.Name, err2))
+				break
 			}
 			tag = tag[n:]
 			out.format = opt
@@ -434,7 +437,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 			normOpt := strings.ReplaceAll(strings.ToLower(opt), "_", "")
 			switch normOpt {
 			case "nocase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
-				return fieldOptions{}, fmt.Errorf("Go struct field %s has invalid appearance of `%s` tag option; specify `%s` instead", sf.Name, opt, normOpt)
+				err = firstError(err, fmt.Errorf("Go struct field %s has invalid appearance of `%s` tag option; specify `%s` instead", sf.Name, opt, normOpt))
 			}
 
 			// NOTE: Everything else is ignored. This does not mean it is
@@ -444,14 +447,20 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, err error) {
 
 		// Reject duplicates.
 		if seenOpts[opt] {
-			return fieldOptions{}, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt)
+			err = firstError(err, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt))
 		}
 		seenOpts[opt] = true
 	}
-	return out, nil
+	return out, false, err
 }
 
 func consumeTagOption(in string) (string, int, error) {
+	// For legacy compatibility with v1, assume options are comma-separated.
+	i := strings.IndexByte(in, ',')
+	if i < 0 {
+		i = len(in)
+	}
+
 	switch r, _ := utf8.DecodeRuneInString(in); {
 	// Option as a Go identifier.
 	case r == '_' || unicode.IsLetter(r):
@@ -486,7 +495,7 @@ func consumeTagOption(in string) (string, int, error) {
 				n += len(`'`)
 				out, err := strconv.Unquote(string(b))
 				if err != nil {
-					return "", 0, fmt.Errorf("invalid single-quoted string: %s", in[:n])
+					return in[:i], i, fmt.Errorf("invalid single-quoted string: %s", in[:n])
 				}
 				return out, n, nil
 			}
@@ -496,11 +505,11 @@ func consumeTagOption(in string) (string, int, error) {
 		if n > 10 {
 			n = 10 // limit the amount of context printed in the error
 		}
-		return "", 0, fmt.Errorf("single-quoted string not terminated: %s...", in[:n])
+		return in[:i], i, fmt.Errorf("single-quoted string not terminated: %s...", in[:n])
 	case len(in) == 0:
-		return "", 0, io.ErrUnexpectedEOF
+		return in[:i], i, io.ErrUnexpectedEOF
 	default:
-		return "", 0, fmt.Errorf("invalid character %q at start of option (expecting Unicode letter or single quote)", r)
+		return in[:i], i, fmt.Errorf("invalid character %q at start of option (expecting Unicode letter or single quote)", r)
 	}
 }
 

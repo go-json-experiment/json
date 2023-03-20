@@ -201,3 +201,12 @@ func quoteRune[Bytes ~[]byte | ~string](b Bytes) string {
 	}
 	return strconv.QuoteRune(r)
 }
+
+func firstError(errs ...error) error {
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
