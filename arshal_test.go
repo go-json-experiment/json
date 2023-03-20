@@ -737,9 +737,9 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: name("Uints"),
 		in: []any{
-			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
+			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464), uintptr(1234),
 		},
-		want: `[0,255,65535,4294967295,18446744073709551615,6464]`,
+		want: `[0,255,65535,4294967295,18446744073709551615,6464,1234]`,
 	}, {
 		name:  name("Uints/Stringified"),
 		mopts: MarshalOptions{StringifyNumbers: true},
@@ -4369,6 +4369,11 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   addr(uint64(1)),
 		want:    addr(uint64(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uint64Type, Err: fmt.Errorf(`cannot parse "18446744073709551616" as unsigned integer: %w`, strconv.ErrRange)},
+	}, {
+		name:  name("Uints/Uintptr"),
+		inBuf: `1`,
+		inVal: addr(uintptr(0)),
+		want:  addr(uintptr(1)),
 	}, {
 		name:  name("Uints/Named"),
 		inBuf: `6464`,

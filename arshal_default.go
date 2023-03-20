@@ -75,7 +75,7 @@ func makeDefaultArshaler(t reflect.Type) *arshaler {
 		return makeStringArshaler(t)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return makeIntArshaler(t)
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return makeUintArshaler(t)
 	case reflect.Float32, reflect.Float64:
 		return makeFloatArshaler(t)
@@ -816,7 +816,7 @@ func mapKeyWithUniqueRepresentation(k reflect.Kind, allowInvalidUTF8 bool) bool 
 	switch k {
 	case reflect.Bool,
 		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return true
 	case reflect.String:
 		// For strings, we have to be careful since names with invalid UTF-8
