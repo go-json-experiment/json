@@ -670,13 +670,17 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				type member struct {
 					name string // unquoted name
 					key  addressableValue
+					val  addressableValue
 				}
 				members := make([]member, n)
 				keys := reflect.MakeSlice(reflect.SliceOf(t.Key()), n, n)
+				vals := reflect.MakeSlice(reflect.SliceOf(t.Elem()), n, n)
 				for i, iter := 0, va.Value.MapRange(); i < n && iter.Next(); i++ {
 					// Marshal the member name.
 					k := addressableValue{keys.Index(i)} // indexed slice element is always addressable
 					k.SetIterKey(iter)
+					v := addressableValue{vals.Index(i)} // indexed slice element is always addressable
+					v.SetIterValue(iter)
 					if err := marshalKey(mko, enc, k); err != nil {
 						// TODO: If err is errMissingName, then wrap it as a
 						// SemanticError since this key type cannot be serialized
@@ -684,7 +688,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 						return err
 					}
 					name := enc.unwriteOnlyObjectMemberName()
-					members[i] = member{name, k}
+					members[i] = member{name, k, v}
 				}
 				// TODO: If AllowDuplicateNames is enabled, then sort according
 				// to reflect.Value as well if the names are equal.
@@ -697,9 +701,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					if err := enc.WriteToken(String(member.name)); err != nil {
 						return err
 					}
-					// TODO(https://go.dev/issue/57061): Use v.SetMapIndexOf.
-					v.Set(va.MapIndex(member.key.Value))
-					if err := marshalVal(mo, enc, v); err != nil {
+					if err := marshalVal(mo, enc, member.val); err != nil {
 						return err
 					}
 				}

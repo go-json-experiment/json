@@ -875,6 +875,15 @@ func TestMarshal(t *testing.T) {
 		want:    `{"hello":""`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: newDuplicateNameError(`"hello"`).withOffset(len64(`{"hello":"",`))},
 	}, {
+		name: name("Maps/DuplicateName/NaNs/Deterministic+AllowDuplicateNames"),
+		mopts: MarshalOptions{
+			Deterministic: true,
+			Marshalers:    MarshalFuncV1(func(v float64) ([]byte, error) { return []byte(`"NaN"`), nil }),
+		},
+		eopts: EncodeOptions{AllowDuplicateNames: true},
+		in:    map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
+		want:  `{"NaN":"NaN","NaN":"NaN"}`,
+	}, {
 		name: name("Maps/InvalidValue/Channel"),
 		in: map[string]chan string{
 			"key": nil,
