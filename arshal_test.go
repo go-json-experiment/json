@@ -809,6 +809,17 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
 	}, {
+		name:         name("Maps/ValidKey/PointerInt"),
+		in:           map[*int64]string{addr(int64(math.MinInt64)): "MinInt64", addr(int64(0)): "Zero", addr(int64(math.MaxInt64)): "MaxInt64"},
+		canonicalize: true,
+		want:         `{"-9223372036854775808":"MinInt64","0":"Zero","9223372036854775807":"MaxInt64"}`,
+	}, {
+		name:         name("Maps/DuplicateName/PointerInt"),
+		in:           map[*int64]string{addr(int64(0)): "0", addr(int64(0)): "0"},
+		canonicalize: true,
+		want:         `{"0":"0"`,
+		wantErr:      newDuplicateNameError(`"0"`).withOffset(len64(`{"0":"0",`)),
+	}, {
 		name:         name("Maps/ValidKey/NamedInt"),
 		in:           map[namedInt64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
 		canonicalize: true,
