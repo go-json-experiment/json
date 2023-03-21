@@ -167,8 +167,10 @@
 // at shallowest depth takes precedence and the other fields at deeper depths
 // are excluded from the list of JSON representable fields.
 // If multiple fields at the shallowest depth have the same JSON name,
-// then all of those fields are excluded from the list. This is analogous to
-// Go visibility rules for struct field selection with embedded struct types.
+// but exactly one is explicitly tagged with a JSON name,
+// then that field takes precedence and all others are excluded from the list.
+// This is analogous to Go visibility rules for struct field selection
+// with embedded struct types.
 //
 // Marshaling or unmarshaling a non-empty struct
 // without any JSON representable fields results in a SemanticError.

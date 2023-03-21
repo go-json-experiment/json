@@ -106,6 +106,38 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
+		name: name("NameResolution/ExplicitNameUniquePrecedence"),
+		in: struct {
+			X1 struct {
+				A string // loses in precedence to X2.A
+			} `json:",inline"`
+			X2 struct {
+				A string `json:"A"`
+			} `json:",inline"`
+			X3 struct {
+				A string // loses in precedence to X2.A
+			} `json:",inline"`
+		}{},
+		want: structFields{
+			flattened: []structField{
+				{id: 0, index: []int{1, 0}, typ: stringType, fieldOptions: fieldOptions{hasName: true, name: "A", quotedName: `"A"`}},
+			},
+		},
+	}, {
+		name: name("NameResolution/ExplicitNameCancelsOut"),
+		in: struct {
+			X1 struct {
+				A string // loses in precedence to X2.A or X3.A
+			} `json:",inline"`
+			X2 struct {
+				A string `json:"A"` // cancels out with X3.A
+			} `json:",inline"`
+			X3 struct {
+				A string `json:"A"` // cancels out with X2.A
+			} `json:",inline"`
+		}{},
+		want: structFields{flattened: []structField{}},
+	}, {
 		name: name("Embed/Implicit"),
 		in: struct {
 			Embed
