@@ -21,6 +21,19 @@ type MarshalOptions struct {
 	// Marshalers is a list of type-specific marshalers to use.
 	Marshalers *Marshalers
 
+	// EmitNilSliceAsNull specifies that nil Go slices should marshal as a
+	// JSON null instead of the default representation as an empty JSON array
+	// (or a empty JSON string in the case of ~[]byte).
+	// Slice fields explicitly marked with `format:emitempty` still marshal
+	// as an empty JSON array.
+	EmitNilSliceAsNull bool
+
+	// EmitNilMapAsNull specifies that nil Go maps should marshal as a
+	// JSON null instead of the default representation as an empty JSON object.
+	// Map fields explicitly marked with `format:emitempty` still marshal
+	// as an empty JSON object.
+	EmitNilMapAsNull bool
+
 	// StringifyNumbers specifies that numeric Go types should be serialized
 	// as a JSON string containing the equivalent JSON number value.
 	//
@@ -158,6 +171,8 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 //     The Go map is traversed in a non-deterministic order.
 //     For deterministic encoding, consider using RawValue.Canonicalize.
 //     If the format is "emitnull", then a nil map is encoded as a JSON null.
+//     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
+//     regardless of whether MarshalOptions.EmitNilMapAsNull is specified.
 //     Otherwise by default, a nil map is encoded as an empty JSON object.
 //
 //   - A Go struct is encoded as a JSON object.
@@ -167,6 +182,8 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 //   - A Go slice is encoded as a JSON array, where each Go slice element
 //     is recursively JSON-encoded as the elements of the JSON array.
 //     If the format is "emitnull", then a nil slice is encoded as a JSON null.
+//     If the format is "emitempty", then a nil slice is encoded as an empty JSON array,
+//     regardless of whether MarshalOptions.EmitNilSliceAsNull is specified.
 //     Otherwise by default, a nil slice is encoded as an empty JSON array.
 //
 //   - A Go array is encoded as a JSON array, where each Go array element
@@ -385,7 +402,7 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 //     If the Go map is nil, then a new map is allocated to decode into.
 //     If the decoded key matches an existing Go map entry, the entry value
 //     is reused by decoding the JSON object value into it.
-//     The only supported format is "emitnull" and has no effect when decoding.
+//     The formats "emitnull" and "emitempty" have no effect when decoding.
 //
 //   - A Go struct is decoded from a JSON object.
 //     See the “JSON Representation of Go structs” section
@@ -395,7 +412,7 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 //     is recursively decoded and appended to the Go slice.
 //     Before appending into a Go slice, a new slice is allocated if it is nil,
 //     otherwise the slice length is reset to zero.
-//     The only supported format is "emitnull" and has no effect when decoding.
+//     The formats "emitnull" and "emitempty" have no effect when decoding.
 //
 //   - A Go array is decoded from a JSON array, where each JSON array element
 //     is recursively decoded as each corresponding Go array element.

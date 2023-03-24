@@ -254,12 +254,20 @@ type (
 		PointerNonFinite *float64 `json:",format:nonfinite"`
 	}
 	structFormatMaps struct {
-		EmitNull        map[string]string  `json:",format:emitnull"`
-		PointerEmitNull *map[string]string `json:",format:emitnull"`
+		EmitNull           map[string]string  `json:",format:emitnull"`
+		PointerEmitNull    *map[string]string `json:",format:emitnull"`
+		EmitEmpty          map[string]string  `json:",format:emitempty"`
+		PointerEmitEmpty   *map[string]string `json:",format:emitempty"`
+		EmitDefault        map[string]string
+		PointerEmitDefault *map[string]string
 	}
 	structFormatSlices struct {
-		EmitNull        []string  `json:",format:emitnull"`
-		PointerEmitNull *[]string `json:",format:emitnull"`
+		EmitNull           []string  `json:",format:emitnull"`
+		PointerEmitNull    *[]string `json:",format:emitnull"`
+		EmitEmpty          []string  `json:",format:emitempty"`
+		PointerEmitEmpty   *[]string `json:",format:emitempty"`
+		EmitDefault        []string
+		PointerEmitDefault *[]string
 	}
 	structFormatInvalid struct {
 		Bool      bool              `json:",omitzero,format:invalid"`
@@ -680,6 +688,11 @@ func TestMarshal(t *testing.T) {
 		name: name("Bytes"),
 		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
+	}, {
+		name:  name("Bytes/EmitNilSliceAsNull"),
+		mopts: MarshalOptions{EmitNilSliceAsNull: true},
+		in:    [][]byte{nil, {}},
+		want:  `[null,""]`,
 	}, {
 		name: name("Bytes/Large"),
 		in:   []byte("the quick brown fox jumped over the lazy dog and ate the homework that I spent so much time on."),
@@ -1792,19 +1805,35 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name:  name("Structs/Format/Maps"),
 		eopts: EncodeOptions{Indent: "\t"},
-		in: []structFormatMaps{
-			{EmitNull: nil, PointerEmitNull: new(map[string]string)},
-			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{})},
-			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"})},
-		},
+		in: []structFormatMaps{{
+			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
+			EmitEmpty: map[string]string(nil), PointerEmitEmpty: addr(map[string]string(nil)),
+			EmitDefault: map[string]string(nil), PointerEmitDefault: addr(map[string]string(nil)),
+		}, {
+			EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}),
+			EmitEmpty: map[string]string{}, PointerEmitEmpty: addr(map[string]string{}),
+			EmitDefault: map[string]string{}, PointerEmitDefault: addr(map[string]string{}),
+		}, {
+			EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}),
+			EmitEmpty: map[string]string{"k": "v"}, PointerEmitEmpty: addr(map[string]string{"k": "v"}),
+			EmitDefault: map[string]string{"k": "v"}, PointerEmitDefault: addr(map[string]string{"k": "v"}),
+		}},
 		want: `[
 	{
 		"EmitNull": null,
-		"PointerEmitNull": null
+		"PointerEmitNull": null,
+		"EmitEmpty": {},
+		"PointerEmitEmpty": {},
+		"EmitDefault": {},
+		"PointerEmitDefault": {}
 	},
 	{
 		"EmitNull": {},
-		"PointerEmitNull": {}
+		"PointerEmitNull": {},
+		"EmitEmpty": {},
+		"PointerEmitEmpty": {},
+		"EmitDefault": {},
+		"PointerEmitDefault": {}
 	},
 	{
 		"EmitNull": {
@@ -1812,31 +1841,126 @@ func TestMarshal(t *testing.T) {
 		},
 		"PointerEmitNull": {
 			"k": "v"
+		},
+		"EmitEmpty": {
+			"k": "v"
+		},
+		"PointerEmitEmpty": {
+			"k": "v"
+		},
+		"EmitDefault": {
+			"k": "v"
+		},
+		"PointerEmitDefault": {
+			"k": "v"
+		}
+	}
+]`,
+	}, {
+		name:  name("Structs/Format/Maps/EmitNilMapAsNull"),
+		mopts: MarshalOptions{EmitNilMapAsNull: true},
+		eopts: EncodeOptions{Indent: "\t"},
+		in: []structFormatMaps{{
+			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
+			EmitEmpty: map[string]string(nil), PointerEmitEmpty: addr(map[string]string(nil)),
+			EmitDefault: map[string]string(nil), PointerEmitDefault: addr(map[string]string(nil)),
+		}, {
+			EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}),
+			EmitEmpty: map[string]string{}, PointerEmitEmpty: addr(map[string]string{}),
+			EmitDefault: map[string]string{}, PointerEmitDefault: addr(map[string]string{}),
+		}, {
+			EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}),
+			EmitEmpty: map[string]string{"k": "v"}, PointerEmitEmpty: addr(map[string]string{"k": "v"}),
+			EmitDefault: map[string]string{"k": "v"}, PointerEmitDefault: addr(map[string]string{"k": "v"}),
+		}},
+		want: `[
+	{
+		"EmitNull": null,
+		"PointerEmitNull": null,
+		"EmitEmpty": {},
+		"PointerEmitEmpty": {},
+		"EmitDefault": null,
+		"PointerEmitDefault": null
+	},
+	{
+		"EmitNull": {},
+		"PointerEmitNull": {},
+		"EmitEmpty": {},
+		"PointerEmitEmpty": {},
+		"EmitDefault": {},
+		"PointerEmitDefault": {}
+	},
+	{
+		"EmitNull": {
+			"k": "v"
+		},
+		"PointerEmitNull": {
+			"k": "v"
+		},
+		"EmitEmpty": {
+			"k": "v"
+		},
+		"PointerEmitEmpty": {
+			"k": "v"
+		},
+		"EmitDefault": {
+			"k": "v"
+		},
+		"PointerEmitDefault": {
+			"k": "v"
 		}
 	}
 ]`,
 	}, {
 		name:  name("Structs/Format/Slices"),
 		eopts: EncodeOptions{Indent: "\t"},
-		in: []structFormatSlices{
-			{EmitNull: nil, PointerEmitNull: new([]string)},
-			{EmitNull: []string{}, PointerEmitNull: addr([]string{})},
-			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"})},
-		},
+		in: []structFormatSlices{{
+			EmitNull: []string(nil), PointerEmitNull: addr([]string(nil)),
+			EmitEmpty: []string(nil), PointerEmitEmpty: addr([]string(nil)),
+			EmitDefault: []string(nil), PointerEmitDefault: addr([]string(nil)),
+		}, {
+			EmitNull: []string{}, PointerEmitNull: addr([]string{}),
+			EmitEmpty: []string{}, PointerEmitEmpty: addr([]string{}),
+			EmitDefault: []string{}, PointerEmitDefault: addr([]string{}),
+		}, {
+			EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}),
+			EmitEmpty: []string{"v"}, PointerEmitEmpty: addr([]string{"v"}),
+			EmitDefault: []string{"v"}, PointerEmitDefault: addr([]string{"v"}),
+		}},
 		want: `[
 	{
 		"EmitNull": null,
-		"PointerEmitNull": null
+		"PointerEmitNull": null,
+		"EmitEmpty": [],
+		"PointerEmitEmpty": [],
+		"EmitDefault": [],
+		"PointerEmitDefault": []
 	},
 	{
 		"EmitNull": [],
-		"PointerEmitNull": []
+		"PointerEmitNull": [],
+		"EmitEmpty": [],
+		"PointerEmitEmpty": [],
+		"EmitDefault": [],
+		"PointerEmitDefault": []
 	},
 	{
 		"EmitNull": [
 			"v"
 		],
 		"PointerEmitNull": [
+			"v"
+		],
+		"EmitEmpty": [
+			"v"
+		],
+		"PointerEmitEmpty": [
+			"v"
+		],
+		"EmitDefault": [
+			"v"
+		],
+		"PointerEmitDefault": [
 			"v"
 		]
 	}
@@ -2513,6 +2637,15 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X any }{[8]byte{}},
 		want: `{"X":"called"}`,
 	}, {
+		name: name("Interfaces/Any/Maps/Nil"),
+		in:   struct{ X any }{map[string]any(nil)},
+		want: `{"X":{}}`,
+	}, {
+		name:  name("Interfaces/Any/Maps/Nil/EmitNilMapAsNull"),
+		mopts: MarshalOptions{EmitNilMapAsNull: true},
+		in:    struct{ X any }{map[string]any(nil)},
+		want:  `{"X":null}`,
+	}, {
 		name: name("Interfaces/Any/Maps/Empty"),
 		in:   struct{ X any }{map[string]any{}},
 		want: `{"X":{}}`,
@@ -2568,6 +2701,15 @@ func TestMarshal(t *testing.T) {
 		}(),
 		want:    `{"X"` + strings.Repeat(`:{""`, startDetectingCyclesAfter),
 		wantErr: &SemanticError{action: "marshal", GoType: mapStringAnyType, Err: errors.New("encountered a cycle")},
+	}, {
+		name: name("Interfaces/Any/Slices/Nil"),
+		in:   struct{ X any }{[]any(nil)},
+		want: `{"X":[]}`,
+	}, {
+		name:  name("Interfaces/Any/Slices/Nil/EmitNilSliceAsNull"),
+		mopts: MarshalOptions{EmitNilSliceAsNull: true},
+		in:    struct{ X any }{[]any(nil)},
+		want:  `{"X":null}`,
 	}, {
 		name: name("Interfaces/Any/Slices/Empty"),
 		in:   struct{ X any }{[]any{}},
@@ -5357,29 +5499,45 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: name("Structs/Format/Maps"),
 		inBuf: `[
-	{"EmitNull": null, "PointerEmitNull": null},
-	{"EmitNull": {}, "PointerEmitNull": {}},
-	{"EmitNull": {"k": "v"}, "PointerEmitNull": {"k": "v"}}
+	{"EmitNull": null, "PointerEmitNull": null, "EmitEmpty": null, "PointerEmitEmpty": null, "EmitDefault": null, "PointerEmitDefault": null},
+	{"EmitNull": {}, "PointerEmitNull": {}, "EmitEmpty": {}, "PointerEmitEmpty": {}, "EmitDefault": {}, "PointerEmitDefault": {}},
+	{"EmitNull": {"k": "v"}, "PointerEmitNull": {"k": "v"}, "EmitEmpty": {"k": "v"}, "PointerEmitEmpty": {"k": "v"}, "EmitDefault": {"k": "v"}, "PointerEmitDefault": {"k": "v"}}
 ]`,
 		inVal: new([]structFormatMaps),
-		want: addr([]structFormatMaps{
-			{EmitNull: nil, PointerEmitNull: nil},
-			{EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{})},
-			{EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"})},
-		}),
+		want: addr([]structFormatMaps{{
+			EmitNull: map[string]string(nil), PointerEmitNull: (*map[string]string)(nil),
+			EmitEmpty: map[string]string(nil), PointerEmitEmpty: (*map[string]string)(nil),
+			EmitDefault: map[string]string(nil), PointerEmitDefault: (*map[string]string)(nil),
+		}, {
+			EmitNull: map[string]string{}, PointerEmitNull: addr(map[string]string{}),
+			EmitEmpty: map[string]string{}, PointerEmitEmpty: addr(map[string]string{}),
+			EmitDefault: map[string]string{}, PointerEmitDefault: addr(map[string]string{}),
+		}, {
+			EmitNull: map[string]string{"k": "v"}, PointerEmitNull: addr(map[string]string{"k": "v"}),
+			EmitEmpty: map[string]string{"k": "v"}, PointerEmitEmpty: addr(map[string]string{"k": "v"}),
+			EmitDefault: map[string]string{"k": "v"}, PointerEmitDefault: addr(map[string]string{"k": "v"}),
+		}}),
 	}, {
 		name: name("Structs/Format/Slices"),
 		inBuf: `[
-	{"EmitNull": null, "PointerEmitNull": null},
-	{"EmitNull": [], "PointerEmitNull": []},
-	{"EmitNull": ["v"], "PointerEmitNull": ["v"]}
+	{"EmitNull": null, "PointerEmitNull": null, "EmitEmpty": null, "PointerEmitEmpty": null, "EmitDefault": null, "PointerEmitDefault": null},
+	{"EmitNull": [], "PointerEmitNull": [], "EmitEmpty": [], "PointerEmitEmpty": [], "EmitDefault": [], "PointerEmitDefault": []},
+	{"EmitNull": ["v"], "PointerEmitNull": ["v"], "EmitEmpty": ["v"], "PointerEmitEmpty": ["v"], "EmitDefault": ["v"], "PointerEmitDefault": ["v"]}
 ]`,
 		inVal: new([]structFormatSlices),
-		want: addr([]structFormatSlices{
-			{EmitNull: nil, PointerEmitNull: nil},
-			{EmitNull: []string{}, PointerEmitNull: addr([]string{})},
-			{EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"})},
-		}),
+		want: addr([]structFormatSlices{{
+			EmitNull: []string(nil), PointerEmitNull: (*[]string)(nil),
+			EmitEmpty: []string(nil), PointerEmitEmpty: (*[]string)(nil),
+			EmitDefault: []string(nil), PointerEmitDefault: (*[]string)(nil),
+		}, {
+			EmitNull: []string{}, PointerEmitNull: addr([]string{}),
+			EmitEmpty: []string{}, PointerEmitEmpty: addr([]string{}),
+			EmitDefault: []string{}, PointerEmitDefault: addr([]string{}),
+		}, {
+			EmitNull: []string{"v"}, PointerEmitNull: addr([]string{"v"}),
+			EmitEmpty: []string{"v"}, PointerEmitEmpty: addr([]string{"v"}),
+			EmitDefault: []string{"v"}, PointerEmitDefault: addr([]string{"v"}),
+		}}),
 	}, {
 		name:    name("Structs/Format/Invalid/Bool"),
 		inBuf:   `{"Bool":true}`,

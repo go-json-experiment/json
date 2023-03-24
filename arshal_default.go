@@ -241,6 +241,10 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
+		if mo.EmitNilSliceAsNull && va.Kind() == reflect.Slice && va.IsNil() {
+			// TODO: Provide a "emitempty" format override?
+			return enc.WriteToken(Null)
+		}
 		val := enc.UnusedBuffer()
 		b := va.Bytes()
 		n := len(`"`) + encodedLen(len(b)) + len(`"`)
@@ -589,27 +593,36 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			defer enc.seenPointers.leave(va.Value)
 		}
 
+		emitNull := mo.EmitNilMapAsNull
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
-			if mo.format == "emitnull" {
-				if va.IsNil() {
-					return enc.WriteToken(Null)
-				}
+			switch mo.format {
+			case "emitnull":
+				emitNull = true
 				mo.format = ""
-			} else {
+			case "emitempty":
+				emitNull = false
+				mo.format = ""
+			default:
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
 
-		// Optimize for marshaling an empty map without any preceding whitespace.
+		// Handle empty maps.
 		n := va.Len()
-		if optimizeCommon && n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
-			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
-			enc.buf = append(enc.buf, "{}"...)
-			enc.tokens.last.increment()
-			if enc.needFlush() {
-				return enc.flush()
+		if n == 0 {
+			if emitNull && va.IsNil() {
+				return enc.WriteToken(Null)
 			}
-			return nil
+			// Optimize for marshaling an empty map without any preceding whitespace.
+			if optimizeCommon && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+				enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
+				enc.buf = append(enc.buf, "{}"...)
+				enc.tokens.last.increment()
+				if enc.needFlush() {
+					return enc.flush()
+				}
+				return nil
+			}
 		}
 
 		once.Do(init)
@@ -722,9 +735,10 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 	}
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
-			if uo.format == "emitnull" {
+			switch uo.format {
+			case "emitnull", "emitempty":
 				uo.format = "" // only relevant for marshaling
-			} else {
+			default:
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}
@@ -1140,27 +1154,36 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			defer enc.seenPointers.leave(va.Value)
 		}
 
+		emitNull := mo.EmitNilSliceAsNull
 		if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
-			if mo.format == "emitnull" {
-				if va.IsNil() {
-					return enc.WriteToken(Null)
-				}
+			switch mo.format {
+			case "emitnull":
+				emitNull = true
 				mo.format = ""
-			} else {
+			case "emitempty":
+				emitNull = false
+				mo.format = ""
+			default:
 				return newInvalidFormatError("marshal", t, mo.format)
 			}
 		}
 
-		// Optimize for marshaling an empty slice without any preceding whitespace.
+		// Handle empty slices.
 		n := va.Len()
-		if optimizeCommon && n == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
-			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
-			enc.buf = append(enc.buf, "[]"...)
-			enc.tokens.last.increment()
-			if enc.needFlush() {
-				return enc.flush()
+		if n == 0 {
+			if emitNull && va.IsNil() {
+				return enc.WriteToken(Null)
 			}
-			return nil
+			// Optimize for marshaling an empty slice without any preceding whitespace.
+			if optimizeCommon && !enc.options.multiline && !enc.tokens.last.needObjectName() {
+				enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
+				enc.buf = append(enc.buf, "[]"...)
+				enc.tokens.last.increment()
+				if enc.needFlush() {
+					return enc.flush()
+				}
+				return nil
+			}
 		}
 
 		once.Do(init)
@@ -1185,9 +1208,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 	emptySlice := reflect.MakeSlice(t, 0, 0)
 	fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
 		if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
-			if uo.format == "emitnull" {
+			switch uo.format {
+			case "emitnull", "emitempty":
 				uo.format = "" // only relevant for marshaling
-			} else {
+			default:
 				return newInvalidFormatError("unmarshal", t, uo.format)
 			}
 		}

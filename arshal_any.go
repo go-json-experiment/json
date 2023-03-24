@@ -80,15 +80,21 @@ func marshalObjectAny(mo MarshalOptions, enc *Encoder, obj map[string]any) error
 		defer enc.seenPointers.leave(v)
 	}
 
-	// Optimize for marshaling an empty map without any preceding whitespace.
-	if len(obj) == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
-		enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
-		enc.buf = append(enc.buf, "{}"...)
-		enc.tokens.last.increment()
-		if enc.needFlush() {
-			return enc.flush()
+	// Handle empty maps.
+	if len(obj) == 0 {
+		if mo.EmitNilMapAsNull && obj == nil {
+			return enc.WriteToken(Null)
 		}
-		return nil
+		// Optimize for marshaling an empty map without any preceding whitespace.
+		if !enc.options.multiline && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '{')
+			enc.buf = append(enc.buf, "{}"...)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
 	}
 
 	if err := enc.WriteToken(ObjectStart); err != nil {
@@ -186,15 +192,21 @@ func marshalArrayAny(mo MarshalOptions, enc *Encoder, arr []any) error {
 		defer enc.seenPointers.leave(v)
 	}
 
-	// Optimize for marshaling an empty slice without any preceding whitespace.
-	if len(arr) == 0 && !enc.options.multiline && !enc.tokens.last.needObjectName() {
-		enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
-		enc.buf = append(enc.buf, "[]"...)
-		enc.tokens.last.increment()
-		if enc.needFlush() {
-			return enc.flush()
+	// Handle empty slices.
+	if len(arr) == 0 {
+		if mo.EmitNilSliceAsNull && arr == nil {
+			return enc.WriteToken(Null)
 		}
-		return nil
+		// Optimize for marshaling an empty slice without any preceding whitespace.
+		if !enc.options.multiline && !enc.tokens.last.needObjectName() {
+			enc.buf = enc.tokens.mayAppendDelim(enc.buf, '[')
+			enc.buf = append(enc.buf, "[]"...)
+			enc.tokens.last.increment()
+			if enc.needFlush() {
+				return enc.flush()
+			}
+			return nil
+		}
 	}
 
 	if err := enc.WriteToken(ArrayStart); err != nil {
