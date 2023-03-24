@@ -43,12 +43,13 @@ type seenPointers map[typedPointer]struct{}
 type typedPointer struct {
 	typ reflect.Type
 	ptr any // always stores unsafe.Pointer, but avoids depending on unsafe
+	len int // remember slice length to avoid false positives
 }
 
 // visit visits pointer p of type t, reporting an error if seen before.
 // If successfully visited, then the caller must eventually call leave.
 func (m *seenPointers) visit(v reflect.Value) error {
-	p := typedPointer{v.Type(), v.UnsafePointer()}
+	p := typedPointer{v.Type(), v.UnsafePointer(), sliceLen(v)}
 	if _, ok := (*m)[p]; ok {
 		return &SemanticError{action: "marshal", GoType: p.typ, Err: errors.New("encountered a cycle")}
 	}
@@ -59,8 +60,15 @@ func (m *seenPointers) visit(v reflect.Value) error {
 	return nil
 }
 func (m *seenPointers) leave(v reflect.Value) {
-	p := typedPointer{v.Type(), v.UnsafePointer()}
+	p := typedPointer{v.Type(), v.UnsafePointer(), sliceLen(v)}
 	delete(*m, p)
+}
+
+func sliceLen(v reflect.Value) int {
+	if v.Kind() == reflect.Slice {
+		return v.Len()
+	}
+	return 0
 }
 
 func len64[Bytes ~[]byte | ~string](in Bytes) int64 {

@@ -2338,6 +2338,17 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveSlice{}), Err: errors.New("encountered a cycle")},
 	}, {
+		name: name("Slices/NonCyclicSlice"),
+		in: func() []any {
+			v := []any{nil, nil}
+			v[1] = v[:1]
+			for i := 1000; i > 0; i-- {
+				v = []any{v}
+			}
+			return v
+		}(),
+		want: strings.Repeat(`[`, startDetectingCyclesAfter) + `[null,[null]]` + strings.Repeat(`]`, startDetectingCyclesAfter),
+	}, {
 		name:  name("Slices/IgnoreInvalidFormat"),
 		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
 		in:    []string{"hello", "goodbye"},
