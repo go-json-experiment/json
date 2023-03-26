@@ -200,10 +200,26 @@ func TestMakeStructFields(t *testing.T) {
 			inlinedFallback: &structField{id: 0, index: []int{2}, typ: T[map[string]jsontext.Value](), fieldOptions: fieldOptions{name: "X", quotedName: `"X"`, unknown: true}},
 		},
 	}, {
+		name: jsontest.Name("InlinedFallback/InvalidImplicit"),
+		in: struct {
+			MapStringAny
+		}{},
+		want: structFields{
+			flattened: []structField{
+				{id: 0, index: []int{0}, typ: reflect.TypeOf(MapStringAny(nil)), fieldOptions: fieldOptions{name: "MapStringAny", quotedName: `"MapStringAny"`}},
+			},
+		},
+		wantErr: errors.New("embedded Go struct field MapStringAny of non-struct type must be explicitly given a JSON name"),
+	}, {
 		name: jsontest.Name("InvalidUTF8"),
 		in: struct {
 			Name string `json:"'\\xde\\xad\\xbe\\xef'"`
 		}{},
+		want: structFields{
+			flattened: []structField{
+				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{hasName: true, name: "\u07ad\ufffd\ufffd", quotedName: "\"\u07ad\ufffd\ufffd\""}},
+			},
+		},
 		wantErr: errors.New(`Go struct field Name has JSON object name "ޭ\xbe\xef" with invalid UTF-8`),
 	}, {
 		name: jsontest.Name("DuplicateName"),
@@ -211,6 +227,7 @@ func TestMakeStructFields(t *testing.T) {
 			A string `json:"same"`
 			B string `json:"same"`
 		}{},
+		want:    structFields{flattened: []structField{}},
 		wantErr: errors.New(`Go struct fields A and B conflict over JSON object name "same"`),
 	}, {
 		name: jsontest.Name("BothInlineAndUnknown"),
@@ -235,43 +252,43 @@ func TestMakeStructFields(t *testing.T) {
 		in: struct {
 			A struct{ encoding.TextMarshaler } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("InlineTextAppender"),
 		in: struct {
 			A struct{ encodingTextAppender } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.encodingTextAppender } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.encodingTextAppender } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownJSONMarshalerV1"),
 		in: struct {
 			A struct{ MarshalerV1 } `json:",unknown"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV1 } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV1 } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("InlineJSONMarshalerV2"),
 		in: struct {
 			A struct{ MarshalerV2 } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV2 } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV2 } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownTextUnmarshaler"),
 		in: struct {
 			A *struct{ encoding.TextUnmarshaler } `json:",unknown"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextUnmarshaler } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextUnmarshaler } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("InlineJSONUnmarshalerV1"),
 		in: struct {
 			A *struct{ UnmarshalerV1 } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV1 } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV1 } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownJSONUnmarshalerV2"),
 		in: struct {
 			A struct{ UnmarshalerV2 } `json:",unknown"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV2 } must not implement JSON marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV2 } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownStruct"),
 		in: struct {
@@ -308,10 +325,10 @@ func TestMakeStructFields(t *testing.T) {
 	}, {
 		name: jsontest.Name("DuplicateEmbedInline"),
 		in: struct {
-			MapStringAny
+			A MapStringAny   `json:",inline"`
 			B jsontext.Value `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct fields MapStringAny and B cannot both be a Go map or jsontext.Value`),
+		wantErr: errors.New(`inlined Go struct fields A and B cannot both be a Go map or jsontext.Value`),
 	}}
 
 	for _, tt := range tests {
@@ -347,17 +364,15 @@ func TestMakeStructFields(t *testing.T) {
 			}
 
 			// Reproduce maps in want.
-			if tt.wantErr == nil {
-				tt.want.byActualName = make(map[string]*structField)
-				for i := range tt.want.flattened {
-					f := &tt.want.flattened[i]
-					tt.want.byActualName[f.name] = f
-				}
-				tt.want.byFoldedName = make(map[string][]*structField)
-				for i, f := range tt.want.flattened {
-					foldedName := string(foldName([]byte(f.name)))
-					tt.want.byFoldedName[foldedName] = append(tt.want.byFoldedName[foldedName], &tt.want.flattened[i])
-				}
+			tt.want.byActualName = make(map[string]*structField)
+			for i := range tt.want.flattened {
+				f := &tt.want.flattened[i]
+				tt.want.byActualName[f.name] = f
+			}
+			tt.want.byFoldedName = make(map[string][]*structField)
+			for i, f := range tt.want.flattened {
+				foldedName := string(foldName([]byte(f.name)))
+				tt.want.byFoldedName[foldedName] = append(tt.want.byFoldedName[foldedName], &tt.want.flattened[i])
 			}
 
 			// Only compare underlying error to simplify test logic.
@@ -699,7 +714,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:"'hello,string"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "'hello", quotedName: `"'hello"`, string: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, string: true},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: single-quoted string not terminated: 'hello,str..."),
 	}, {
 		name: jsontest.Name("MalformedQuotedString/MissingComma"),
@@ -713,7 +728,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:"'hello\\u####',inline,string"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "'hello\\u####'", quotedName: `"'hello\\u####'"`, inline: true, string: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true, string: true},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: invalid single-quoted string: 'hello\\u####'"),
 	}, {
 		name: jsontest.Name("MisnamedTag"),
