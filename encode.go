@@ -223,11 +223,11 @@ func (e *Encoder) flush() error {
 		// This would be semantically correct, but hurts performance.
 		// As such, ensure 25% of the current length is always available
 		// to reduce the probability that other appends must allocate.
-		if avail := bb.Cap() - bb.Len(); avail < bb.Len()/4 {
+		if avail := bb.Available(); avail < bb.Len()/4 {
 			bb.Grow(avail + 1)
 		}
 
-		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
+		e.buf = bb.AvailableBuffer()
 		return nil
 	}
 
