@@ -3,6 +3,6 @@
 // This package will regularly experience breaking changes.
 module github.com/go-json-experiment/json
 
-go 1.20
+go 1.21
 
 require golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0

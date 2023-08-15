@@ -213,9 +213,7 @@ func getMemberNames() *memberNames {
 }
 func putMemberNames(ns *memberNames) {
 	if cap(*ns) < 1<<10 {
-		for i := range *ns {
-			(*ns)[i] = memberName{} // avoid pinning name
-		}
+		clear(*ns) // avoid pinning name
 		memberNamePool.Put(ns)
 	}
 }
