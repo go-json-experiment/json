@@ -7,7 +7,7 @@ package json
 import (
 	"bytes"
 	"compress/gzip"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,7 +30,7 @@ var (
 
 func jsonTestdata() []jsonTestdataEntry {
 	jsonTestdataOnce.Do(func() {
-		fis, err := ioutil.ReadDir("testdata")
+		fis, err := os.ReadDir("testdata")
 		if err != nil {
 			panic(err)
 		}
@@ -56,7 +56,7 @@ func jsonTestdata() []jsonTestdataEntry {
 			name := strings.Join(words, "")
 
 			// Read and decompress the test data.
-			b, err := ioutil.ReadFile(filepath.Join("testdata", fi.Name()))
+			b, err := os.ReadFile(filepath.Join("testdata", fi.Name()))
 			if err != nil {
 				panic(err)
 			}
@@ -64,7 +64,7 @@ func jsonTestdata() []jsonTestdataEntry {
 			if err != nil {
 				panic(err)
 			}
-			data, err := ioutil.ReadAll(zr)
+			data, err := io.ReadAll(zr)
 			if err != nil {
 				panic(err)
 			}
