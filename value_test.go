@@ -5,8 +5,11 @@
 package json
 
 import (
+	"bytes"
+	"cmp"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -195,54 +198,45 @@ func TestRawValueMethods(t *testing.T) {
 	}
 }
 
-var lessUTF16Testdata = []string{"", "\r", "1", "\u0080", "\u00f6", "\u20ac", "\U0001f600", "\ufb33"}
+var compareUTF16Testdata = []string{"", "\r", "1", "\u0080", "\u00f6", "\u20ac", "\U0001f600", "\ufb33"}
 
-func TestLessUTF16(t *testing.T) {
-	for i, si := range lessUTF16Testdata {
-		for j, sj := range lessUTF16Testdata {
-			got := lessUTF16([]byte(si), []byte(sj))
-			want := i < j
+func TestCompareUTF16(t *testing.T) {
+	for i, si := range compareUTF16Testdata {
+		for j, sj := range compareUTF16Testdata {
+			got := compareUTF16([]byte(si), []byte(sj))
+			want := cmp.Compare(i, j)
 			if got != want {
-				t.Errorf("lessUTF16(%q, %q) = %v, want %v", si, sj, got, want)
+				t.Errorf("compareUTF16(%q, %q) = %v, want %v", si, sj, got, want)
 			}
 		}
 	}
 }
 
-func FuzzLessUTF16(f *testing.F) {
-	for _, td1 := range lessUTF16Testdata {
-		for _, td2 := range lessUTF16Testdata {
+func FuzzCompareUTF16(f *testing.F) {
+	for _, td1 := range compareUTF16Testdata {
+		for _, td2 := range compareUTF16Testdata {
 			f.Add([]byte(td1), []byte(td2))
 		}
 	}
 
-	// lessUTF16Simple is identical to lessUTF16,
+	// compareUTF16Simple is identical to compareUTF16,
 	// but relies on naively converting a string to a []uint16 codepoints.
 	// It is easy to verify as correct, but is slow.
-	lessUTF16Simple := func(x, y []byte) bool {
+	compareUTF16Simple := func(x, y []byte) int {
 		ux := utf16.Encode([]rune(string(x)))
 		uy := utf16.Encode([]rune(string(y)))
-		// TODO(https://go.dev/issue/57433): Use slices.Compare.
-		for {
-			if len(ux) == 0 || len(uy) == 0 {
-				if len(ux) == len(uy) {
-					return string(x) < string(y)
-				}
-				return len(ux) < len(uy)
-			}
-			if ux[0] != uy[0] {
-				return ux[0] < uy[0]
-			}
-			ux, uy = ux[1:], uy[1:]
+		if n := slices.Compare(ux, uy); n != 0 {
+			return n
 		}
+		return bytes.Compare(x, y) // only occurs for strings with invalid UTF-8
 	}
 
 	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
 		// Compare the optimized and simplified implementations.
-		got := lessUTF16(s1, s2)
-		want := lessUTF16Simple(s1, s2)
+		got := compareUTF16(s1, s2)
+		want := compareUTF16Simple(s1, s2)
 		if got != want {
-			t.Errorf("lessUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
+			t.Errorf("compareUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
 		}
 	})
 }

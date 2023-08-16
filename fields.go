@@ -5,17 +5,16 @@
 package json
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/exp/slices"
 )
 
 var errIgnoredField = errors.New("ignored field")
@@ -228,14 +227,18 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	// or the one that is uniquely tagged with a JSON name.
 	// Otherwise, no dominant field exists for the set.
 	flattened := allFields[:0]
-	sort.Slice(allFields, func(i, j int) bool {
-		switch fi, fj := allFields[i], allFields[j]; {
-		case fi.name != fj.name:
-			return fi.name < fj.name
-		case len(fi.index) != len(fj.index):
-			return len(fi.index) < len(fj.index)
+	slices.SortFunc(allFields, func(x, y structField) int {
+		switch {
+		case x.name != y.name:
+			return strings.Compare(x.name, y.name)
+		case len(x.index) != len(y.index):
+			return cmp.Compare(len(x.index), len(y.index))
+		case x.hasName && !y.hasName:
+			return -1
+		case !x.hasName && y.hasName:
+			return +1
 		default:
-			return fi.hasName && !fj.hasName
+			return 0 // TODO(https://go.dev/issue/61643): Compare bools better.
 		}
 	})
 	for len(allFields) > 0 {
@@ -252,8 +255,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	// Sort the fields according to a breadth-first ordering
 	// so that we can re-number IDs with the smallest possible values.
 	// This optimizes use of uintSet such that it fits in the 64-entry bit set.
-	sort.Slice(flattened, func(i, j int) bool {
-		return flattened[i].id < flattened[j].id
+	slices.SortFunc(flattened, func(x, y structField) int {
+		return cmp.Compare(x.id, y.id)
 	})
 	for i := range flattened {
 		flattened[i].id = i
@@ -261,8 +264,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 
 	// Sort the fields according to a depth-first ordering
 	// as the typical order that fields are marshaled.
-	sort.Slice(flattened, func(i, j int) bool {
-		return slices.Compare(flattened[i].index, flattened[j].index) < 0
+	slices.SortFunc(flattened, func(x, y structField) int {
+		return slices.Compare(x.index, y.index)
 	})
 
 	// Compute the mapping of fields in the byActualName map.
@@ -281,8 +284,8 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		if len(fields) > 1 {
 			// The precedence order for conflicting nocase names
 			// is by breadth-first order, rather than depth-first order.
-			sort.Slice(fields, func(i, j int) bool {
-				return fields[i].id < fields[j].id
+			slices.SortFunc(fields, func(x, y *structField) int {
+				return cmp.Compare(x.id, y.id)
 			})
 			fs.byFoldedName[foldedName] = fields
 		}

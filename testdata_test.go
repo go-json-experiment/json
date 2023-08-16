@@ -8,9 +8,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +35,7 @@ func jsonTestdata() []jsonTestdataEntry {
 		if err != nil {
 			panic(err)
 		}
-		sort.Slice(fis, func(i, j int) bool { return fis[i].Name() < fis[j].Name() })
+		slices.SortFunc(fis, func(x, y fs.DirEntry) int { return strings.Compare(x.Name(), y.Name()) })
 		for _, fi := range fis {
 			if !strings.HasSuffix(fi.Name(), ".json.gz") {
 				break

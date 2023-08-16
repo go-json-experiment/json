@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"io"
 	"math/bits"
-	"sort"
+	"slices"
 	"sync"
 )
 
@@ -173,10 +173,5 @@ func putStrings(s *stringSlice) {
 
 // Sort sorts the string slice according to RFC 8785, section 3.2.3.
 func (ss *stringSlice) Sort() {
-	// TODO(https://go.dev/issue/47619): Use slices.SortFunc instead.
-	sort.Sort(ss)
+	slices.SortFunc(*ss, func(x, y string) int { return compareUTF16(x, y) })
 }
-
-func (ss *stringSlice) Len() int           { return len(*ss) }
-func (ss *stringSlice) Less(i, j int) bool { return lessUTF16((*ss)[i], (*ss)[j]) }
-func (ss *stringSlice) Swap(i, j int)      { (*ss)[i], (*ss)[j] = (*ss)[j], (*ss)[i] }

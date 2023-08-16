@@ -6,9 +6,11 @@ package json
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"io"
-	"sort"
+	"slices"
+	"strings"
 	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -204,25 +206,19 @@ type memberName struct {
 	before, after int64
 }
 
-var memberNamePool = sync.Pool{New: func() any { return new(memberNames) }}
+var memberNamePool = sync.Pool{New: func() any { return new([]memberName) }}
 
-func getMemberNames() *memberNames {
-	ns := memberNamePool.Get().(*memberNames)
+func getMemberNames() *[]memberName {
+	ns := memberNamePool.Get().(*[]memberName)
 	*ns = (*ns)[:0]
 	return ns
 }
-func putMemberNames(ns *memberNames) {
+func putMemberNames(ns *[]memberName) {
 	if cap(*ns) < 1<<10 {
 		clear(*ns) // avoid pinning name
 		memberNamePool.Put(ns)
 	}
 }
-
-type memberNames []memberName
-
-func (m *memberNames) Len() int           { return len(*m) }
-func (m *memberNames) Less(i, j int) bool { return lessUTF16((*m)[i].name, (*m)[j].name) }
-func (m *memberNames) Swap(i, j int)      { (*m)[i], (*m)[j] = (*m)[j], (*m)[i] }
 
 // reorderObjects recursively reorders all object members in place
 // according to the ordering specified in RFC 8785, section 3.2.3.
@@ -258,7 +254,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 			afterValue := d.InputOffset()
 
 			if isSorted && len(*members) > 0 {
-				isSorted = lessUTF16(prevName, []byte(name))
+				isSorted = compareUTF16(prevName, []byte(name)) < 0
 			}
 			*members = append(*members, memberName{name, beforeName, afterValue})
 			prevName = name
@@ -270,8 +266,9 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		if isSorted {
 			return
 		}
-		// TODO(https://go.dev/issue/47619): Use slices.Sort.
-		sort.Sort(members)
+		slices.SortFunc(*members, func(x, y memberName) int {
+			return compareUTF16(x.name, y.name)
+		})
 
 		// Append the reordered members to a new buffer,
 		// then copy the reordered members back over the original members.
@@ -308,11 +305,11 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 	}
 }
 
-// lessUTF16 reports whether x is lexicographically less than y according
+// compareUTF16 lexicographically compares x to y according
 // to the UTF-16 codepoints of the UTF-8 encoded input strings.
 // This implements the ordering specified in RFC 8785, section 3.2.3.
 // The inputs must be valid UTF-8, otherwise this may panic.
-func lessUTF16[Bytes ~[]byte | ~string](x, y Bytes) bool {
+func compareUTF16[Bytes ~[]byte | ~string](x, y Bytes) int {
 	// NOTE: This is an optimized, allocation-free implementation
 	// of lessUTF16Simple in fuzz_test.go. FuzzLessUTF16 verifies that the
 	// two implementations agree on the result of comparing any two strings.
@@ -326,15 +323,15 @@ func lessUTF16[Bytes ~[]byte | ~string](x, y Bytes) bool {
 	for {
 		if len(x) == 0 || len(y) == 0 {
 			if len(x) == len(y) && invalidUTF8 {
-				return string(x0) < string(y0)
+				return strings.Compare(string(x0), string(y0))
 			}
-			return len(x) < len(y)
+			return cmp.Compare(len(x), len(y))
 		}
 
 		// ASCII fast-path.
 		if x[0] < utf8.RuneSelf || y[0] < utf8.RuneSelf {
 			if x[0] != y[0] {
-				return x[0] < y[0]
+				return cmp.Compare(x[0], y[0])
 			}
 			x, y = x[1:], y[1:]
 			continue
@@ -357,7 +354,7 @@ func lessUTF16[Bytes ~[]byte | ~string](x, y Bytes) bool {
 			rx, _ = utf16.EncodeRune(rx)
 		}
 		if rx != ry {
-			return rx < ry
+			return cmp.Compare(rx, ry)
 		}
 		invalidUTF8 = invalidUTF8 || (rx == utf8.RuneError && nx == 1) || (ry == utf8.RuneError && ny == 1)
 		x, y = x[nx:], y[ny:]

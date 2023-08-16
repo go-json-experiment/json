@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"math/bits"
+	"slices"
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -1002,10 +1003,7 @@ func (e *Encoder) StackPointer() string {
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
 func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
-	// TODO(https://go.dev/issue/57433): Use slices.Grow.
-	if dst == nil {
-		dst = make([]byte, 0, len(`"`)+len(src)+len(`"`))
-	}
+	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
 
 	var i, n int
 	var hasInvalidUTF8 bool

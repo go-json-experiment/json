@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -1301,10 +1302,7 @@ func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, valid
 // but the error will be specified as having encountered such an error.
 // The input must be an entire JSON string with no surrounding whitespace.
 func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, err error) {
-	// TODO(https://go.dev/issue/57433): Use slices.Grow.
-	if dst == nil {
-		dst = make([]byte, 0, len(src))
-	}
+	dst = slices.Grow(dst, len(src))
 
 	// Consume the leading double quote.
 	var i, n int

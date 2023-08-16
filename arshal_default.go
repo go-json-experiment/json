@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"sync"
 )
@@ -714,9 +714,8 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				// TODO: If AllowDuplicateNames is enabled, then sort according
 				// to reflect.Value as well if the names are equal.
 				// See internal/fmtsort.
-				// TODO(https://go.dev/issue/47619): Use slices.SortFunc instead.
-				sort.Slice(members, func(i, j int) bool {
-					return lessUTF16(members[i].name, members[j].name)
+				slices.SortFunc(members, func(x, y member) int {
+					return compareUTF16(x.name, y.name)
 				})
 				for _, member := range members {
 					if err := enc.WriteToken(String(member.name)); err != nil {
