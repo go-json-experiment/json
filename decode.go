@@ -1657,7 +1657,10 @@ func parseDecUint(b []byte) (v uint64, ok bool) {
 	if n == 0 || len(b) != n {
 		return 0, false
 	}
-	if overflow {
+	switch {
+	case len(b) > 0 && b[0] == '0' && string(b) != "0":
+		return v, false
+	case overflow:
 		return math.MaxUint64, false
 	}
 	return v, true

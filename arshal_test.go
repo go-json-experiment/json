@@ -4371,6 +4371,13 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
+		name:    name("Ints/Stringified/LeadingZero"),
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		inBuf:   `"00"`,
+		inVal:   addr(int(-1)),
+		want:    addr(int(-1)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "00" as signed integer: %w`, strconv.ErrSyntax)},
+	}, {
 		name:  name("Ints/Escaped"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
 		inBuf: `"\u002d\u0036\u0034\u0036\u0034"`,
@@ -4547,6 +4554,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"6464"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
+	}, {
+		name:    name("Uints/Stringified/LeadingZero"),
+		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		inBuf:   `"00"`,
+		inVal:   addr(uint(1)),
+		want:    addr(uint(1)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "00" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:  name("Uints/Escaped"),
 		uopts: UnmarshalOptions{StringifyNumbers: true},
