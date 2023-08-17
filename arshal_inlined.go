@@ -41,7 +41,8 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 	}
 
 	if v.Type() == rawValueType {
-		b := v.Interface().(RawValue)
+		// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
+		b := *v.Addr().Interface().(*RawValue)
 		if len(b) == 0 { // TODO: Should this be nil? What if it were all whitespace?
 			return nil
 		}

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	jsonv1 "encoding/json"
 )
@@ -163,6 +164,17 @@ var arshalTestdata = []struct {
 	val:    new(jsonArshalerV2),
 	new:    func() any { return new(jsonArshalerV2) },
 	skipV1: true,
+}, {
+	name:   "Duration",
+	raw:    []byte(`"1h1m1s"`),
+	val:    addr(time.Hour + time.Minute + time.Second),
+	new:    func() any { return new(time.Duration) },
+	skipV1: true,
+}, {
+	name: "Time",
+	raw:  []byte(`"2006-01-02T22:04:05Z"`),
+	val:  addr(time.Unix(1136239445, 0).UTC()),
+	new:  func() any { return new(time.Time) },
 }}
 
 type textArshaler struct{}

@@ -39,8 +39,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					return newInvalidFormatError("marshal", t, mo.format)
 				}
 			}
-
-			td := va.Interface().(time.Duration)
+			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
+			td := *va.Addr().Interface().(*time.Duration)
 			b := enc.UnusedBuffer()
 			b = append(b, '"')
 			b = append(b, td.String()...) // never contains special characters
@@ -95,7 +95,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
-			tt := va.Interface().(time.Time)
+			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
+			tt := *va.Addr().Interface().(*time.Time)
 			b := enc.UnusedBuffer()
 			b = append(b, '"')
 			b = tt.AppendFormat(b, format)
