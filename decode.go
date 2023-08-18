@@ -1632,35 +1632,20 @@ func parseHexUint16[Bytes ~[]byte | ~string](b Bytes) (v uint16, ok bool) {
 	return v, true
 }
 
-// parseDecUint is similar to strconv.ParseUint,
-// but operates directly on []byte and is optimized for base-10.
-// If the number is syntactically valid but overflows uint64,
-// then it returns (math.MaxUint64, false).
-// See https://go.dev/issue/42429.
+// parseDecUint parses b as a decimal unsigned integer according to
+// a strict subset of the JSON number grammar, returning the value if valid.
+// It returns (0, false) if there is a syntax error and
+// returns (math.MaxUint64, false) if there is an overflow.
 func parseDecUint(b []byte) (v uint64, ok bool) {
-	// Overflow logic is based on strconv/atoi.go:138-149 from Go1.15, where:
-	//   - cutoff is equal to math.MaxUint64/10+1, and
-	//   - the n1 > maxVal check is unnecessary
-	//     since maxVal is equivalent to math.MaxUint64.
+	const unsafeWidth = 20 // len(fmt.Sprint(uint64(math.MaxUint64)))
 	var n int
-	var overflow bool
-	for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
-		overflow = overflow || v >= math.MaxUint64/10+1
-		v *= 10
-
-		v1 := v + uint64(b[n]-'0')
-		overflow = overflow || v1 < v
-		v = v1
-
-		n++
-	}
-	if n == 0 || len(b) != n {
-		return 0, false
+	for ; len(b) > n && ('0' <= b[n] && b[n] <= '9'); n++ {
+		v = 10*v + uint64(b[n]-'0')
 	}
 	switch {
-	case len(b) > 0 && b[0] == '0' && string(b) != "0":
-		return v, false
-	case overflow:
+	case n == 0 || len(b) != n || (b[0] == '0' && string(b) != "0"):
+		return 0, false
+	case n >= unsafeWidth && (b[0] != '1' || v < 1e19 || n > unsafeWidth):
 		return math.MaxUint64, false
 	}
 	return v, true
