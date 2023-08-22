@@ -11,6 +11,8 @@ var errInvalidUTF8 = &SyntacticError{str: "invalid UTF-8 within string"}
 // It uses the minimal string representation per RFC 8785, section 3.2.2.2.
 // Invalid UTF-8 bytes are replaced with the Unicode replacement character
 // and an error is returned at the end indicating the presence of invalid UTF-8.
+//
+// Deprecated: Use jsontext.AppendQuote instead.
 func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes) ([]byte, error) {
 	return appendString(dst, src, true, nil)
 }
@@ -21,6 +23,8 @@ func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes) ([]byte, error)
 // Invalid UTF-8 bytes are replaced with the Unicode replacement character
 // and an error is returned at the end indicating the presence of invalid UTF-8.
 // Any trailing bytes after the JSON string literal results in an error.
+//
+// Deprecated: Use jsontext.AppendUnquote instead.
 func AppendUnquote[Bytes ~[]byte | ~string](dst []byte, src Bytes) ([]byte, error) {
 	return unescapeString(dst, src)
 }

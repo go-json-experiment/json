@@ -48,6 +48,8 @@ import (
 // DecodeOptions configures how JSON decoding operates.
 // The zero value is equivalent to the default settings,
 // which is compliant with both RFC 7493 and RFC 8259.
+//
+// Deprecated: Use jsontext.DecodeOptions instead.
 type DecodeOptions struct {
 	requireKeyedLiterals
 	nonComparable
@@ -95,6 +97,8 @@ type DecodeOptions struct {
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call ReadToken to obtain a
 // string token for object names.
+//
+// Deprecated: Use jsontext.Decoder instead.
 type Decoder struct {
 	state
 	decodeBuffer
@@ -133,6 +137,8 @@ type decodeBuffer struct {
 // If r is a bytes.Buffer, then the decoder parses directly from the buffer
 // without first copying the contents to an intermediate buffer.
 // Additional writes to the buffer must not occur while the decoder is in use.
+//
+// Deprecated: Use jsontext.NewDecoder instead.
 func NewDecoder(r io.Reader) *Decoder {
 	return DecodeOptions{}.NewDecoder(r)
 }

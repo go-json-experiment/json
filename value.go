@@ -27,6 +27,8 @@ import (
 //
 // RawValue can represent entire array or object values, while Token cannot.
 // RawValue may contain leading and/or trailing whitespace.
+//
+// Deprecated: Use jsontext.Value instead.
 type RawValue []byte
 
 // Clone returns a copy of v.

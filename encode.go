@@ -18,6 +18,8 @@ import (
 // EncodeOptions configures how JSON encoding operates.
 // The zero value is equivalent to the default settings,
 // which is compliant with both RFC 7493 and RFC 8259.
+//
+// Deprecated: Use jsontext.EncodeOptions instead.
 type EncodeOptions struct {
 	requireKeyedLiterals
 	nonComparable
@@ -100,6 +102,8 @@ type EncodeOptions struct {
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call WriteToken with a string
 // for object names.
+//
+// Deprecated: Use jsontext.Encoder instead.
 type Encoder struct {
 	state
 	encodeBuffer
@@ -131,6 +135,8 @@ type encodeBuffer struct {
 }
 
 // NewEncoder constructs a new streaming encoder writing to w.
+//
+// Deprecated: Use jsontext.NewEncoder instead.
 func NewEncoder(w io.Writer) *Encoder {
 	return EncodeOptions{}.NewEncoder(w)
 }

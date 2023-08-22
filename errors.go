@@ -151,6 +151,8 @@ func (e *SemanticError) Unwrap() error {
 // encoding or decoding JSON according to the grammar.
 //
 // The contents of this error as produced by this package may change over time.
+//
+// Deprecated: Use jsontext.SyntacticError instead.
 type SyntacticError struct {
 	requireKeyedLiterals
 	nonComparable

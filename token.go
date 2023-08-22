@@ -30,6 +30,8 @@ const (
 // A Token cannot represent entire array or object values, while a RawValue can.
 // There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
+//
+// Deprecated: Use jsontext.Token instead.
 type Token struct {
 	nonComparable
 
@@ -83,14 +85,21 @@ type Token struct {
 // TODO: Does representing 1-byte delimiters as *decodeBuffer cause performance issues?
 
 var (
-	Null  Token = rawToken("null")
+	// Deprecated: Use jsontext.Null instead.
+	Null Token = rawToken("null")
+	// Deprecated: Use jsontext.False instead.
 	False Token = rawToken("false")
-	True  Token = rawToken("true")
+	// Deprecated: Use jsontext.True instead.
+	True Token = rawToken("true")
 
+	// Deprecated: Use jsontext.ObjectStart instead.
 	ObjectStart Token = rawToken("{")
-	ObjectEnd   Token = rawToken("}")
-	ArrayStart  Token = rawToken("[")
-	ArrayEnd    Token = rawToken("]")
+	// Deprecated: Use jsontext.ObjectEnd instead.
+	ObjectEnd Token = rawToken("}")
+	// Deprecated: Use jsontext.ArrayStart instead.
+	ArrayStart Token = rawToken("[")
+	// Deprecated: Use jsontext.ArrayEnd instead.
+	ArrayEnd Token = rawToken("]")
 
 	zeroString Token = rawToken(`""`)
 	zeroNumber Token = rawToken(`0`)
@@ -105,6 +114,8 @@ func rawToken(s string) Token {
 }
 
 // Bool constructs a Token representing a JSON boolean.
+//
+// Deprecated: Use jsontext.Bool instead.
 func Bool(b bool) Token {
 	if b {
 		return True
@@ -115,6 +126,8 @@ func Bool(b bool) Token {
 // String constructs a Token representing a JSON string.
 // The provided string should contain valid UTF-8, otherwise invalid characters
 // may be mangled as the Unicode replacement character.
+//
+// Deprecated: Use jsontext.String instead.
 func String(s string) Token {
 	if len(s) == 0 {
 		return zeroString
@@ -125,6 +138,8 @@ func String(s string) Token {
 // Float constructs a Token representing a JSON number.
 // The values NaN, +Inf, and -Inf will be represented
 // as a JSON string with the values "NaN", "Infinity", and "-Infinity".
+//
+// Deprecated: Use jsontext.Float instead.
 func Float(n float64) Token {
 	switch {
 	case math.Float64bits(n) == 0:
@@ -140,6 +155,8 @@ func Float(n float64) Token {
 }
 
 // Int constructs a Token representing a JSON number from an int64.
+//
+// Deprecated: Use jsontext.Int instead.
 func Int(n int64) Token {
 	if n == 0 {
 		return zeroNumber
@@ -148,6 +165,8 @@ func Int(n int64) Token {
 }
 
 // Uint constructs a Token representing a JSON number from a uint64.
+//
+// Deprecated: Use jsontext.Uint instead.
 func Uint(n uint64) Token {
 	if n == 0 {
 		return zeroNumber
@@ -483,6 +502,8 @@ func (t Token) Kind() Kind {
 //
 // An invalid kind is usually represented using 0,
 // but may be non-zero due to invalid JSON data.
+//
+// Deprecated: Use jsontext.Kind instead.
 type Kind byte
 
 const invalidKind Kind = 0
