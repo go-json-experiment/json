@@ -11,6 +11,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 func FuzzCoder(f *testing.F) {
@@ -24,8 +26,8 @@ func FuzzCoder(f *testing.F) {
 	for _, td := range encoderErrorTestdata {
 		f.Add(int64(0), []byte(td.wantOut))
 	}
-	for _, td := range jsonTestdata() {
-		f.Add(int64(0), td.data)
+	for _, td := range jsontest.Data {
+		f.Add(int64(0), td.Data())
 	}
 
 	f.Fuzz(func(t *testing.T, seed int64, b []byte) {

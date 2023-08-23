@@ -17,6 +17,8 @@ import (
 	"time"
 
 	jsonv1 "encoding/json"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 var benchV1 = os.Getenv("BENCHMARK_V1") != ""
@@ -309,32 +311,32 @@ func TestBenchmarkTestdata(t *testing.T) { runAllTestdata(t) }
 func BenchmarkTestdata(b *testing.B)     { runAllTestdata(b) }
 
 func runAllTestdata(tb testing.TB) {
-	for _, td := range jsonTestdata() {
+	for _, td := range jsontest.Data {
 		for _, arshalName := range []string{"Marshal", "Unmarshal"} {
 			for _, typeName := range []string{"Concrete", "Interface"} {
 				newValue := func() any { return new(any) }
 				if typeName == "Concrete" {
-					if td.new == nil {
+					if td.New == nil {
 						continue
 					}
-					newValue = td.new
+					newValue = td.New
 				}
-				value := mustUnmarshalValue(tb, td.data, newValue)
-				name := path.Join(td.name, arshalName, typeName)
-				runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
-					runArshal(tb, arshalName, newValue, td.data, value)
+				value := mustUnmarshalValue(tb, td.Data(), newValue)
+				name := path.Join(td.Name, arshalName, typeName)
+				runTestOrBench(tb, name, int64(td.Size), func(tb testing.TB) {
+					runArshal(tb, arshalName, newValue, td.Data(), value)
 				})
 			}
 		}
 
-		tokens := mustDecodeTokens(tb, td.data)
-		buffer := make([]byte, 0, 2*len(td.data))
+		tokens := mustDecodeTokens(tb, td.Data())
+		buffer := make([]byte, 0, 2*len(td.Data()))
 		for _, codeName := range []string{"Encode", "Decode"} {
 			for _, typeName := range []string{"Token", "Value"} {
 				for _, modeName := range []string{"Streaming", "Buffered"} {
-					name := path.Join(td.name, codeName, typeName, modeName)
-					runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
-						runCode(tb, codeName, typeName, modeName, buffer, td.data, tokens)
+					name := path.Join(td.Name, codeName, typeName, modeName)
+					runTestOrBench(tb, name, int64(td.Size), func(tb testing.TB) {
+						runCode(tb, codeName, typeName, modeName, buffer, td.Data(), tokens)
 					})
 				}
 			}
@@ -571,9 +573,9 @@ func runRawValue(tb testing.TB) {
 		tb.Skip() // CitmCatalog is not loaded in short mode
 	}
 	var data []byte
-	for _, ts := range jsonTestdata() {
-		if ts.name == "CitmCatalog" {
-			data = ts.data
+	for _, ts := range jsontest.Data {
+		if ts.Name == "CitmCatalog" {
+			data = ts.Data()
 		}
 	}
 

@@ -14,6 +14,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 var (
@@ -25,7 +27,7 @@ var (
 type tokOrVal interface{ Kind() Kind }
 
 type coderTestdataEntry struct {
-	name             testName
+	name             jsontest.CaseName
 	in               string
 	outCompacted     string
 	outEscaped       string // outCompacted if empty; escapes all runes in a string
@@ -36,85 +38,85 @@ type coderTestdataEntry struct {
 }
 
 var coderTestdata = []coderTestdataEntry{{
-	name:         name("Null"),
+	name:         jsontest.Name("Null"),
 	in:           ` null `,
 	outCompacted: `null`,
 	tokens:       []Token{Null},
 	pointers:     []string{""},
 }, {
-	name:         name("False"),
+	name:         jsontest.Name("False"),
 	in:           ` false `,
 	outCompacted: `false`,
 	tokens:       []Token{False},
 }, {
-	name:         name("True"),
+	name:         jsontest.Name("True"),
 	in:           ` true `,
 	outCompacted: `true`,
 	tokens:       []Token{True},
 }, {
-	name:         name("EmptyString"),
+	name:         jsontest.Name("EmptyString"),
 	in:           ` "" `,
 	outCompacted: `""`,
 	tokens:       []Token{String("")},
 }, {
-	name:         name("SimpleString"),
+	name:         jsontest.Name("SimpleString"),
 	in:           ` "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" `,
 	outCompacted: `"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"`,
 	outEscaped:   `"\u0061\u0062\u0063\u0064\u0065\u0066\u0067\u0068\u0069\u006a\u006b\u006c\u006d\u006e\u006f\u0070\u0071\u0072\u0073\u0074\u0075\u0076\u0077\u0078\u0079\u007a\u0041\u0042\u0043\u0044\u0045\u0046\u0047\u0048\u0049\u004a\u004b\u004c\u004d\u004e\u004f\u0050\u0051\u0052\u0053\u0054\u0055\u0056\u0057\u0058\u0059\u005a"`,
 	tokens:       []Token{String("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")},
 }, {
-	name:             name("ComplicatedString"),
+	name:             jsontest.Name("ComplicatedString"),
 	in:               " \"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + ` \ud800\udead \"\\\/\b\f\n\r\t \u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009" `,
 	outCompacted:     "\"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + " 𐊭 \\\"\\\\/\\b\\f\\n\\r\\t \\\"\\\\/\\b\\f\\n\\r\\t\"",
 	outEscaped:       `"\u0048\u0065\u006c\u006c\u006f\u002c\u0020\u4e16\u754c\u0020\ud83c\udf1f\u2605\u2606\u2729\ud83c\udf20\u0020\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02\u0020\ud800\udead\u0020\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009\u0020\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`,
 	outCanonicalized: `"Hello, 世界 🌟★☆✩🌠 ö€힙דּ�😂 𐊭 \"\\/\b\f\n\r\t \"\\/\b\f\n\r\t"`,
 	tokens:           []Token{rawToken("\"Hello, 世界 🌟★☆✩🌠 " + "\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602" + " 𐊭 \\\"\\\\/\\b\\f\\n\\r\\t \\\"\\\\/\\b\\f\\n\\r\\t\"")},
 }, {
-	name:         name("ZeroNumber"),
+	name:         jsontest.Name("ZeroNumber"),
 	in:           ` 0 `,
 	outCompacted: `0`,
 	tokens:       []Token{Uint(0)},
 }, {
-	name:         name("SimpleNumber"),
+	name:         jsontest.Name("SimpleNumber"),
 	in:           ` 123456789 `,
 	outCompacted: `123456789`,
 	tokens:       []Token{Uint(123456789)},
 }, {
-	name:         name("NegativeNumber"),
+	name:         jsontest.Name("NegativeNumber"),
 	in:           ` -123456789 `,
 	outCompacted: `-123456789`,
 	tokens:       []Token{Int(-123456789)},
 }, {
-	name:         name("FractionalNumber"),
+	name:         jsontest.Name("FractionalNumber"),
 	in:           " 0.123456789 ",
 	outCompacted: `0.123456789`,
 	tokens:       []Token{Float(0.123456789)},
 }, {
-	name:             name("ExponentNumber"),
+	name:             jsontest.Name("ExponentNumber"),
 	in:               " 0e12456789 ",
 	outCompacted:     `0e12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e12456789`)},
 }, {
-	name:             name("ExponentNumberP"),
+	name:             jsontest.Name("ExponentNumberP"),
 	in:               " 0e+12456789 ",
 	outCompacted:     `0e+12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e+12456789`)},
 }, {
-	name:             name("ExponentNumberN"),
+	name:             jsontest.Name("ExponentNumberN"),
 	in:               " 0e-12456789 ",
 	outCompacted:     `0e-12456789`,
 	outCanonicalized: `0`,
 	tokens:           []Token{rawToken(`0e-12456789`)},
 }, {
-	name:             name("ComplicatedNumber"),
+	name:             jsontest.Name("ComplicatedNumber"),
 	in:               ` -123456789.987654321E+0123456789 `,
 	outCompacted:     `-123456789.987654321E+0123456789`,
 	outCanonicalized: `-1.7976931348623157e+308`,
 	tokens:           []Token{rawToken(`-123456789.987654321E+0123456789`)},
 }, {
-	name: name("Numbers"),
+	name: jsontest.Name("Numbers"),
 	in: ` [
 		0, -0, 0.0, -0.0, 1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001, 1e1000,
 		-5e-324, 1e+100, 1.7976931348623157e+308,
@@ -155,13 +157,13 @@ var coderTestdata = []coderTestdataEntry{{
 		"", "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10", "/11", "/12", "/13", "/14", "/15", "/16", "/17", "",
 	},
 }, {
-	name:         name("ObjectN0"),
+	name:         jsontest.Name("ObjectN0"),
 	in:           ` { } `,
 	outCompacted: `{}`,
 	tokens:       []Token{ObjectStart, ObjectEnd},
 	pointers:     []string{"", ""},
 }, {
-	name:         name("ObjectN1"),
+	name:         jsontest.Name("ObjectN1"),
 	in:           ` { "0" : 0 } `,
 	outCompacted: `{"0":0}`,
 	outEscaped:   `{"\u0030":0}`,
@@ -171,7 +173,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
 	pointers: []string{"", "/0", "/0", ""},
 }, {
-	name:         name("ObjectN2"),
+	name:         jsontest.Name("ObjectN2"),
 	in:           ` { "0" : 0 , "1" : 1 } `,
 	outCompacted: `{"0":0,"1":1}`,
 	outEscaped:   `{"\u0030":0,"\u0031":1}`,
@@ -182,7 +184,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
 	pointers: []string{"", "/0", "/0", "/1", "/1", ""},
 }, {
-	name:         name("ObjectNested"),
+	name:         jsontest.Name("ObjectNested"),
 	in:           ` { "0" : { "1" : { "2" : { "3" : { "4" : {  } } } } } } `,
 	outCompacted: `{"0":{"1":{"2":{"3":{"4":{}}}}}}`,
 	outEscaped:   `{"\u0030":{"\u0031":{"\u0032":{"\u0033":{"\u0034":{}}}}}}`,
@@ -213,7 +215,7 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name: name("ObjectSuperNested"),
+	name: jsontest.Name("ObjectSuperNested"),
 	in: `{"": {
 		"44444": {
 			"6666666":  "ccccccc",
@@ -279,13 +281,13 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name:         name("ArrayN0"),
+	name:         jsontest.Name("ArrayN0"),
 	in:           ` [ ] `,
 	outCompacted: `[]`,
 	tokens:       []Token{ArrayStart, ArrayEnd},
 	pointers:     []string{"", ""},
 }, {
-	name:         name("ArrayN1"),
+	name:         jsontest.Name("ArrayN1"),
 	in:           ` [ 0 ] `,
 	outCompacted: `[0]`,
 	outIndented: `[
@@ -294,7 +296,7 @@ var coderTestdata = []coderTestdataEntry{{
 	tokens:   []Token{ArrayStart, Uint(0), ArrayEnd},
 	pointers: []string{"", "/0", ""},
 }, {
-	name:         name("ArrayN2"),
+	name:         jsontest.Name("ArrayN2"),
 	in:           ` [ 0 , 1 ] `,
 	outCompacted: `[0,1]`,
 	outIndented: `[
@@ -303,7 +305,7 @@ var coderTestdata = []coderTestdataEntry{{
 	]`,
 	tokens: []Token{ArrayStart, Uint(0), Uint(1), ArrayEnd},
 }, {
-	name:         name("ArrayNested"),
+	name:         jsontest.Name("ArrayNested"),
 	in:           ` [ [ [ [ [ ] ] ] ] ] `,
 	outCompacted: `[[[[[]]]]]`,
 	outIndented: `[
@@ -329,7 +331,7 @@ var coderTestdata = []coderTestdataEntry{{
 		"",
 	},
 }, {
-	name: name("Everything"),
+	name: jsontest.Name("Everything"),
 	in: ` {
 		"literals" : [ null , false , true ],
 		"string" : "Hello, 世界" ,
@@ -419,13 +421,13 @@ func TestCoderInterleaved(t *testing.T) {
 		// In TokenFirst and ValueFirst, alternate between tokens and values.
 		// In TokenDelims, only use tokens for object and array delimiters.
 		for _, modeName := range []string{"TokenFirst", "ValueFirst", "TokenDelims"} {
-			t.Run(path.Join(td.name.name, modeName), func(t *testing.T) {
-				testCoderInterleaved(t, td.name.where, modeName, td)
+			t.Run(path.Join(td.name.Name, modeName), func(t *testing.T) {
+				testCoderInterleaved(t, td.name.Where, modeName, td)
 			})
 		}
 	}
 }
-func testCoderInterleaved(t *testing.T, where pc, modeName string, td coderTestdataEntry) {
+func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string, td coderTestdataEntry) {
 	src := strings.NewReader(td.in)
 	dst := new(bytes.Buffer)
 	dec := NewDecoder(src)

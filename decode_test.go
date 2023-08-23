@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 // equalTokens reports whether to sequences of tokens formats the same way.
@@ -35,13 +37,13 @@ func equalTokens(xs, ys []Token) bool {
 func TestDecoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value", "TokenDelims"} {
-			t.Run(path.Join(td.name.name, typeName), func(t *testing.T) {
-				testDecoder(t, td.name.where, typeName, td)
+			t.Run(path.Join(td.name.Name, typeName), func(t *testing.T) {
+				testDecoder(t, td.name.Where, typeName, td)
 			})
 		}
 	}
 }
-func testDecoder(t *testing.T, where pc, typeName string, td coderTestdataEntry) {
+func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coderTestdataEntry) {
 	dec := NewDecoder(bytes.NewBufferString(td.in))
 	switch typeName {
 	case "Token":
@@ -112,13 +114,13 @@ func testDecoder(t *testing.T, where pc, typeName string, td coderTestdataEntry)
 func TestFaultyDecoder(t *testing.T) {
 	for _, td := range coderTestdata {
 		for _, typeName := range []string{"Token", "Value"} {
-			t.Run(path.Join(td.name.name, typeName), func(t *testing.T) {
-				testFaultyDecoder(t, td.name.where, typeName, td)
+			t.Run(path.Join(td.name.Name, typeName), func(t *testing.T) {
+				testFaultyDecoder(t, td.name.Where, typeName, td)
 			})
 		}
 	}
 }
-func testFaultyDecoder(t *testing.T, where pc, typeName string, td coderTestdataEntry) {
+func testFaultyDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coderTestdataEntry) {
 	b := &FaultyBuffer{
 		B:        []byte(td.in),
 		MaxBytes: 1,
@@ -178,27 +180,27 @@ type decoderMethodCall struct {
 }
 
 var decoderErrorTestdata = []struct {
-	name       testName
+	name       jsontest.CaseName
 	opts       DecodeOptions
 	in         string
 	calls      []decoderMethodCall
 	wantOffset int
 }{{
-	name: name("InvalidStart"),
+	name: jsontest.Name("InvalidStart"),
 	in:   ` #`,
 	calls: []decoderMethodCall{
 		{'#', zeroToken, newInvalidCharacterError("#", "at start of token").withOffset(len64(" ")), ""},
 		{'#', zeroValue, newInvalidCharacterError("#", "at start of value").withOffset(len64(" ")), ""},
 	},
 }, {
-	name: name("StreamN0"),
+	name: jsontest.Name("StreamN0"),
 	in:   ` `,
 	calls: []decoderMethodCall{
 		{0, zeroToken, io.EOF, ""},
 		{0, zeroValue, io.EOF, ""},
 	},
 }, {
-	name: name("StreamN1"),
+	name: jsontest.Name("StreamN1"),
 	in:   ` null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -207,7 +209,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` null`),
 }, {
-	name: name("StreamN2"),
+	name: jsontest.Name("StreamN2"),
 	in:   ` nullnull `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -217,7 +219,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` nullnull`),
 }, {
-	name: name("StreamN2/ExtraComma"), // stream is whitespace delimited, not comma delimited
+	name: jsontest.Name("StreamN2/ExtraComma"), // stream is whitespace delimited, not comma delimited
 	in:   ` null , null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
@@ -226,63 +228,63 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` null`),
 }, {
-	name: name("TruncatedNull"),
+	name: jsontest.Name("TruncatedNull"),
 	in:   `nul`,
 	calls: []decoderMethodCall{
 		{'n', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'n', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: name("InvalidNull"),
+	name: jsontest.Name("InvalidNull"),
 	in:   `nulL`,
 	calls: []decoderMethodCall{
 		{'n', zeroToken, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withOffset(len64(`nul`)), ""},
 		{'n', zeroValue, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withOffset(len64(`nul`)), ""},
 	},
 }, {
-	name: name("TruncatedFalse"),
+	name: jsontest.Name("TruncatedFalse"),
 	in:   `fals`,
 	calls: []decoderMethodCall{
 		{'f', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'f', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: name("InvalidFalse"),
+	name: jsontest.Name("InvalidFalse"),
 	in:   `falsE`,
 	calls: []decoderMethodCall{
 		{'f', zeroToken, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withOffset(len64(`fals`)), ""},
 		{'f', zeroValue, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withOffset(len64(`fals`)), ""},
 	},
 }, {
-	name: name("TruncatedTrue"),
+	name: jsontest.Name("TruncatedTrue"),
 	in:   `tru`,
 	calls: []decoderMethodCall{
 		{'t', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'t', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: name("InvalidTrue"),
+	name: jsontest.Name("InvalidTrue"),
 	in:   `truE`,
 	calls: []decoderMethodCall{
 		{'t', zeroToken, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withOffset(len64(`tru`)), ""},
 		{'t', zeroValue, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withOffset(len64(`tru`)), ""},
 	},
 }, {
-	name: name("TruncatedString"),
+	name: jsontest.Name("TruncatedString"),
 	in:   `"start`,
 	calls: []decoderMethodCall{
 		{'"', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'"', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: name("InvalidString"),
+	name: jsontest.Name("InvalidString"),
 	in:   `"ok` + "\x00",
 	calls: []decoderMethodCall{
 		{'"', zeroToken, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withOffset(len64(`"ok`)), ""},
 		{'"', zeroValue, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withOffset(len64(`"ok`)), ""},
 	},
 }, {
-	name: name("ValidString/AllowInvalidUTF8/Token"),
+	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
 	opts: DecodeOptions{AllowInvalidUTF8: true},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -290,7 +292,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
-	name: name("ValidString/AllowInvalidUTF8/Value"),
+	name: jsontest.Name("ValidString/AllowInvalidUTF8/Value"),
 	opts: DecodeOptions{AllowInvalidUTF8: true},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -298,7 +300,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
-	name: name("InvalidString/RejectInvalidUTF8"),
+	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
 	opts: DecodeOptions{AllowInvalidUTF8: false},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
@@ -306,21 +308,21 @@ var decoderErrorTestdata = []struct {
 		{'"', zeroValue, errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
 	},
 }, {
-	name: name("TruncatedNumber"),
+	name: jsontest.Name("TruncatedNumber"),
 	in:   `0.`,
 	calls: []decoderMethodCall{
 		{'0', zeroToken, io.ErrUnexpectedEOF, ""},
 		{'0', zeroValue, io.ErrUnexpectedEOF, ""},
 	},
 }, {
-	name: name("InvalidNumber"),
+	name: jsontest.Name("InvalidNumber"),
 	in:   `0.e`,
 	calls: []decoderMethodCall{
 		{'0', zeroToken, newInvalidCharacterError("e", "within number (expecting digit)").withOffset(len64(`0.`)), ""},
 		{'0', zeroValue, newInvalidCharacterError("e", "within number (expecting digit)").withOffset(len64(`0.`)), ""},
 	},
 }, {
-	name: name("TruncatedObject/AfterStart"),
+	name: jsontest.Name("TruncatedObject/AfterStart"),
 	in:   `{`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -330,7 +332,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{`),
 }, {
-	name: name("TruncatedObject/AfterName"),
+	name: jsontest.Name("TruncatedObject/AfterName"),
 	in:   `{"0"`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -341,7 +343,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0"`),
 }, {
-	name: name("TruncatedObject/AfterColon"),
+	name: jsontest.Name("TruncatedObject/AfterColon"),
 	in:   `{"0":`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -352,7 +354,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0"`),
 }, {
-	name: name("TruncatedObject/AfterValue"),
+	name: jsontest.Name("TruncatedObject/AfterValue"),
 	in:   `{"0":0`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -364,7 +366,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0`),
 }, {
-	name: name("TruncatedObject/AfterComma"),
+	name: jsontest.Name("TruncatedObject/AfterComma"),
 	in:   `{"0":0,`,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -376,7 +378,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0`),
 }, {
-	name: name("InvalidObject/MissingColon"),
+	name: jsontest.Name("InvalidObject/MissingColon"),
 	in:   ` { "fizz" "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("\"", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
@@ -387,7 +389,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: name("InvalidObject/MissingColon/GotComma"),
+	name: jsontest.Name("InvalidObject/MissingColon/GotComma"),
 	in:   ` { "fizz" , "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError(",", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
@@ -398,7 +400,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: name("InvalidObject/MissingColon/GotHash"),
+	name: jsontest.Name("InvalidObject/MissingColon/GotHash"),
 	in:   ` { "fizz" # "buzz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("#", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
@@ -409,7 +411,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
-	name: name("InvalidObject/MissingComma"),
+	name: jsontest.Name("InvalidObject/MissingComma"),
 	in:   ` { "fizz" : "buzz" "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("\"", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
@@ -421,7 +423,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: name("InvalidObject/MissingComma/GotColon"),
+	name: jsontest.Name("InvalidObject/MissingComma/GotColon"),
 	in:   ` { "fizz" : "buzz" : "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError(":", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
@@ -433,7 +435,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: name("InvalidObject/MissingComma/GotHash"),
+	name: jsontest.Name("InvalidObject/MissingComma/GotHash"),
 	in:   ` { "fizz" : "buzz" # "gazz" } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("#", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
@@ -445,7 +447,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: name("InvalidObject/ExtraComma/AfterStart"),
+	name: jsontest.Name("InvalidObject/ExtraComma/AfterStart"),
 	in:   ` { , } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError(",", `at start of string (expecting '"')`).withOffset(len64(` { `)), ""},
@@ -455,7 +457,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/ExtraComma/AfterValue"),
+	name: jsontest.Name("InvalidObject/ExtraComma/AfterValue"),
 	in:   ` { "fizz" : "buzz" , } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("}", `at start of string (expecting '"')`).withOffset(len64(` { "fizz" : "buzz" , `)), ""},
@@ -467,7 +469,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
-	name: name("InvalidObject/InvalidName/GotNull"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotNull"),
 	in:   ` { null : null } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("n", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -477,7 +479,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/InvalidName/GotFalse"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotFalse"),
 	in:   ` { false : false } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("f", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -487,7 +489,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/InvalidName/GotTrue"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotTrue"),
 	in:   ` { true : true } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("t", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -497,7 +499,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/InvalidName/GotNumber"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotNumber"),
 	in:   ` { 0 : 0 } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("0", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -507,7 +509,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/InvalidName/GotObject"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotObject"),
 	in:   ` { {} : {} } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("{", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -517,7 +519,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/InvalidName/GotArray"),
+	name: jsontest.Name("InvalidObject/InvalidName/GotArray"),
 	in:   ` { [] : [] } `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("[", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -527,7 +529,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("InvalidObject/MismatchingDelim"),
+	name: jsontest.Name("InvalidObject/MismatchingDelim"),
 	in:   ` { ] `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError("]", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
@@ -537,7 +539,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("ValidObject/InvalidValue"),
+	name: jsontest.Name("ValidObject/InvalidValue"),
 	in:   ` { } `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -545,7 +547,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` {`),
 }, {
-	name: name("ValidObject/UniqueNames"),
+	name: jsontest.Name("ValidObject/UniqueNames"),
 	in:   `{"0":0,"1":1} `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -557,7 +559,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0,"1":1}`),
 }, {
-	name: name("ValidObject/DuplicateNames"),
+	name: jsontest.Name("ValidObject/DuplicateNames"),
 	opts: DecodeOptions{AllowDuplicateNames: true},
 	in:   `{"0":0,"0":0} `,
 	calls: []decoderMethodCall{
@@ -570,7 +572,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":0,"0":0}`),
 }, {
-	name: name("InvalidObject/DuplicateNames"),
+	name: jsontest.Name("InvalidObject/DuplicateNames"),
 	in:   `{"0":{},"1":{},"0":{}} `,
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), ""},
@@ -586,7 +588,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"0":{},"1":{}`),
 }, {
-	name: name("TruncatedArray/AfterStart"),
+	name: jsontest.Name("TruncatedArray/AfterStart"),
 	in:   `[`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -596,7 +598,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[`),
 }, {
-	name: name("TruncatedArray/AfterValue"),
+	name: jsontest.Name("TruncatedArray/AfterValue"),
 	in:   `[0`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -607,7 +609,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[0`),
 }, {
-	name: name("TruncatedArray/AfterComma"),
+	name: jsontest.Name("TruncatedArray/AfterComma"),
 	in:   `[0,`,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
@@ -618,7 +620,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[0`),
 }, {
-	name: name("InvalidArray/MissingComma"),
+	name: jsontest.Name("InvalidArray/MissingComma"),
 	in:   ` [ "fizz" "buzz" ] `,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withOffset(len64(` [ "fizz" `)), ""},
@@ -629,7 +631,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` [ "fizz"`),
 }, {
-	name: name("InvalidArray/MismatchingDelim"),
+	name: jsontest.Name("InvalidArray/MismatchingDelim"),
 	in:   ` [ } `,
 	calls: []decoderMethodCall{
 		{'[', zeroValue, newInvalidCharacterError("}", "at start of value").withOffset(len64(` [ `)), ""},
@@ -639,7 +641,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` [`),
 }, {
-	name: name("ValidArray/InvalidValue"),
+	name: jsontest.Name("ValidArray/InvalidValue"),
 	in:   ` [ ] `,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
@@ -647,7 +649,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(` [`),
 }, {
-	name: name("InvalidDelim/AfterTopLevel"),
+	name: jsontest.Name("InvalidDelim/AfterTopLevel"),
 	in:   `"",`,
 	calls: []decoderMethodCall{
 		{'"', String(""), nil, ""},
@@ -656,7 +658,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`""`),
 }, {
-	name: name("InvalidDelim/AfterObjectStart"),
+	name: jsontest.Name("InvalidDelim/AfterObjectStart"),
 	in:   `{:`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -665,7 +667,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{`),
 }, {
-	name: name("InvalidDelim/AfterObjectName"),
+	name: jsontest.Name("InvalidDelim/AfterObjectName"),
 	in:   `{"",`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -675,7 +677,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{""`),
 }, {
-	name: name("ValidDelim/AfterObjectName"),
+	name: jsontest.Name("ValidDelim/AfterObjectName"),
 	in:   `{"":`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -685,7 +687,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{""`),
 }, {
-	name: name("InvalidDelim/AfterObjectValue"),
+	name: jsontest.Name("InvalidDelim/AfterObjectValue"),
 	in:   `{"":"":`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -696,7 +698,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"":""`),
 }, {
-	name: name("ValidDelim/AfterObjectValue"),
+	name: jsontest.Name("ValidDelim/AfterObjectValue"),
 	in:   `{"":"",`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -707,7 +709,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`{"":""`),
 }, {
-	name: name("InvalidDelim/AfterArrayStart"),
+	name: jsontest.Name("InvalidDelim/AfterArrayStart"),
 	in:   `[,`,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
@@ -716,7 +718,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[`),
 }, {
-	name: name("InvalidDelim/AfterArrayValue"),
+	name: jsontest.Name("InvalidDelim/AfterArrayValue"),
 	in:   `["":`,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
@@ -726,7 +728,7 @@ var decoderErrorTestdata = []struct {
 	},
 	wantOffset: len(`[""`),
 }, {
-	name: name("ValidDelim/AfterArrayValue"),
+	name: jsontest.Name("ValidDelim/AfterArrayValue"),
 	in:   `["",`,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
@@ -741,12 +743,12 @@ var decoderErrorTestdata = []struct {
 // leaves the Decoder in a consistent state.
 func TestDecoderErrors(t *testing.T) {
 	for _, td := range decoderErrorTestdata {
-		t.Run(path.Join(td.name.name), func(t *testing.T) {
-			testDecoderErrors(t, td.name.where, td.opts, td.in, td.calls, td.wantOffset)
+		t.Run(path.Join(td.name.Name), func(t *testing.T) {
+			testDecoderErrors(t, td.name.Where, td.opts, td.in, td.calls, td.wantOffset)
 		})
 	}
 }
-func testDecoderErrors(t *testing.T, where pc, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
+func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
 	src := bytes.NewBufferString(in)
 	dec := opts.NewDecoder(src)
 	for i, call := range calls {

@@ -13,10 +13,12 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 type rawValueTestdataEntry struct {
-	name                testName
+	name                jsontest.CaseName
 	in                  string
 	wantValid           bool
 	wantCompacted       string
@@ -32,7 +34,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	for _, td := range coderTestdata {
 		// NOTE: The Compact method preserves the raw formatting of strings,
 		// while the Encoder (by default) does not.
-		if td.name.name == "ComplicatedString" {
+		if td.name.Name == "ComplicatedString" {
 			td.outCompacted = strings.TrimSpace(td.in)
 		}
 		out = append(out, rawValueTestdataEntry{
@@ -46,7 +48,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}
 	return out
 }(), []rawValueTestdataEntry{{
-	name: name("RFC8785/Primitives"),
+	name: jsontest.Name("RFC8785/Primitives"),
 	in: `{
 		"numbers": [333333333.33333329, 1E30, 4.50,
 					2e-3, 0.000000000000000000000000001],
@@ -72,7 +74,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalized: `{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}`,
 }, {
-	name: name("RFC8785/ObjectOrdering"),
+	name: jsontest.Name("RFC8785/ObjectOrdering"),
 	in: `{
 		"\u20ac": "Euro Sign",
 		"\r": "Carriage Return",
@@ -95,7 +97,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalized: `{"\r":"Carriage Return","1":"One","":"Control","ö":"Latin Small Letter O With Diaeresis","€":"Euro Sign","😀":"Emoji: Grinning Face","דּ":"Hebrew Letter Dalet With Dagesh"}`,
 }, {
-	name:          name("LargeIntegers"),
+	name:          jsontest.Name("LargeIntegers"),
 	in:            ` [ -9223372036854775808 , 9223372036854775807 ] `,
 	wantValid:     true,
 	wantCompacted: `[-9223372036854775808,9223372036854775807]`,
@@ -105,25 +107,25 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	]`,
 	wantCanonicalized: `[-9223372036854776000,9223372036854776000]`, // NOTE: Loss of precision due to numbers being treated as floats.
 }, {
-	name:                name("InvalidUTF8"),
+	name:                jsontest.Name("InvalidUTF8"),
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
 	wantCanonicalizeErr: errInvalidUTF8.withOffset(len64(`  "living` + "\xde\xad")),
 }, {
-	name:                name("InvalidUTF8/SurrogateHalf"),
+	name:                jsontest.Name("InvalidUTF8/SurrogateHalf"),
 	in:                  `"\ud800"`,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"\ud800"`,
 	wantCanonicalizeErr: newInvalidEscapeSequenceError(`\ud800"`).withOffset(len64(`"`)),
 }, {
-	name:              name("UppercaseEscaped"),
+	name:              jsontest.Name("UppercaseEscaped"),
 	in:                `"\u000B"`,
 	wantValid:         true,
 	wantCompacted:     `"\u000B"`,
 	wantCanonicalized: `"\u000b"`,
 }, {
-	name:          name("DuplicateNames"),
+	name:          jsontest.Name("DuplicateNames"),
 	in:            ` { "0" : 0 , "1" : 1 , "0" : 0 }`,
 	wantValid:     false, // uses RFC 7493 as the definition; which does check for object uniqueness
 	wantCompacted: `{"0":0,"1":1,"0":0}`,
@@ -134,7 +136,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	}`,
 	wantCanonicalizeErr: newDuplicateNameError(`"0"`).withOffset(len64(` { "0" : 0 , "1" : 1 , `)),
 }, {
-	name:                name("Whitespace"),
+	name:                jsontest.Name("Whitespace"),
 	in:                  " \n\r\t",
 	wantValid:           false,
 	wantCompacted:       " \n\r\t",
@@ -145,7 +147,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 
 func TestRawValueMethods(t *testing.T) {
 	for _, td := range rawValueTestdata {
-		t.Run(td.name.name, func(t *testing.T) {
+		t.Run(td.name.Name, func(t *testing.T) {
 			if td.wantIndented == "" {
 				td.wantIndented = td.wantCompacted
 			}
@@ -165,34 +167,34 @@ func TestRawValueMethods(t *testing.T) {
 			v := RawValue(td.in)
 			gotValid := v.IsValid()
 			if gotValid != td.wantValid {
-				t.Errorf("%s: RawValue.IsValid = %v, want %v", td.name.where, gotValid, td.wantValid)
+				t.Errorf("%s: RawValue.IsValid = %v, want %v", td.name.Where, gotValid, td.wantValid)
 			}
 
 			gotCompacted := RawValue(td.in)
 			gotCompactErr := gotCompacted.Compact()
 			if string(gotCompacted) != td.wantCompacted {
-				t.Errorf("%s: RawValue.Compact = %s, want %s", td.name.where, gotCompacted, td.wantCompacted)
+				t.Errorf("%s: RawValue.Compact = %s, want %s", td.name.Where, gotCompacted, td.wantCompacted)
 			}
 			if !reflect.DeepEqual(gotCompactErr, td.wantCompactErr) {
-				t.Errorf("%s: RawValue.Compact error mismatch:\ngot  %v\nwant %v", td.name.where, gotCompactErr, td.wantCompactErr)
+				t.Errorf("%s: RawValue.Compact error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCompactErr, td.wantCompactErr)
 			}
 
 			gotIndented := RawValue(td.in)
 			gotIndentErr := gotIndented.Indent("\t", "    ")
 			if string(gotIndented) != td.wantIndented {
-				t.Errorf("%s: RawValue.Indent = %s, want %s", td.name.where, gotIndented, td.wantIndented)
+				t.Errorf("%s: RawValue.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
 			}
 			if !reflect.DeepEqual(gotIndentErr, td.wantIndentErr) {
-				t.Errorf("%s: RawValue.Indent error mismatch:\ngot  %v\nwant %v", td.name.where, gotIndentErr, td.wantIndentErr)
+				t.Errorf("%s: RawValue.Indent error mismatch:\ngot  %v\nwant %v", td.name.Where, gotIndentErr, td.wantIndentErr)
 			}
 
 			gotCanonicalized := RawValue(td.in)
 			gotCanonicalizeErr := gotCanonicalized.Canonicalize()
 			if string(gotCanonicalized) != td.wantCanonicalized {
-				t.Errorf("%s: RawValue.Canonicalize = %s, want %s", td.name.where, gotCanonicalized, td.wantCanonicalized)
+				t.Errorf("%s: RawValue.Canonicalize = %s, want %s", td.name.Where, gotCanonicalized, td.wantCanonicalized)
 			}
 			if !reflect.DeepEqual(gotCanonicalizeErr, td.wantCanonicalizeErr) {
-				t.Errorf("%s: RawValue.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.where, gotCanonicalizeErr, td.wantCanonicalizeErr)
+				t.Errorf("%s: RawValue.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCanonicalizeErr, td.wantCanonicalizeErr)
 			}
 		})
 	}

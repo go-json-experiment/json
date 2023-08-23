@@ -2,98 +2,102 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+// Package jsontest contains functionality to assist in testing JSON.
+package jsontest
 
 import (
 	"bytes"
 	"compress/gzip"
+	"embed"
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
-	"os"
-	"path/filepath"
+	"path"
 	"slices"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 )
 
-type jsonTestdataEntry struct {
-	name string
-	data []byte
-	new  func() any // nil if there is no concrete type for this
+// Embed the testdata directory as a fs.FS because this package is imported
+// by other packages such that the location of testdata may change relative
+// to the working directory of the test itself.
+//
+//go:embed testdata/*.json.gz
+var testdataFS embed.FS
+
+type Entry struct {
+	Name string
+	Size int
+	Data func() []byte
+	New  func() any // nil if there is no concrete type for this
 }
 
-var (
-	jsonTestdataOnce sync.Once
-	jsonTestdataLazy []jsonTestdataEntry
-)
-
-func jsonTestdata() []jsonTestdataEntry {
-	jsonTestdataOnce.Do(func() {
-		fis, err := os.ReadDir("testdata")
-		if err != nil {
-			panic(err)
-		}
-		slices.SortFunc(fis, func(x, y fs.DirEntry) int { return strings.Compare(x.Name(), y.Name()) })
-		for _, fi := range fis {
-			if !strings.HasSuffix(fi.Name(), ".json.gz") {
-				break
-			}
-
-			// Skip large files for a short test run.
-			if testing.Short() {
-				fi, err := os.Stat(filepath.Join("testdata", fi.Name()))
-				if err == nil && fi.Size() > 1e3 {
-					continue
-				}
-			}
-
-			// Convert snake_case file name to CamelCase.
-			words := strings.Split(strings.TrimSuffix(fi.Name(), ".json.gz"), "_")
-			for i := range words {
-				words[i] = strings.Title(words[i])
-			}
-			name := strings.Join(words, "")
-
-			// Read and decompress the test data.
-			b, err := os.ReadFile(filepath.Join("testdata", fi.Name()))
-			if err != nil {
-				panic(err)
-			}
-			zr, err := gzip.NewReader(bytes.NewReader(b))
-			if err != nil {
-				panic(err)
-			}
-			data, err := io.ReadAll(zr)
-			if err != nil {
-				panic(err)
-			}
-
-			// Check whether there is a concrete type for this data.
-			var newFn func() any
-			switch name {
-			case "CanadaGeometry":
-				newFn = func() any { return new(canadaRoot) }
-			case "CitmCatalog":
-				newFn = func() any { return new(citmRoot) }
-			case "GolangSource":
-				newFn = func() any { return new(golangRoot) }
-			case "StringEscaped":
-				newFn = func() any { return new(stringRoot) }
-			case "StringUnicode":
-				newFn = func() any { return new(stringRoot) }
-			case "SyntheaFhir":
-				newFn = func() any { return new(syntheaRoot) }
-			case "TwitterStatus":
-				newFn = func() any { return new(twitterRoot) }
-			}
-
-			jsonTestdataLazy = append(jsonTestdataLazy, jsonTestdataEntry{name, data, newFn})
-		}
-	})
-	return jsonTestdataLazy
+func mustGet[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }
+
+// Data is a list of JSON testdata.
+var Data = func() (entries []Entry) {
+	fis := mustGet(fs.ReadDir(testdataFS, "testdata"))
+	slices.SortFunc(fis, func(x, y fs.DirEntry) int { return strings.Compare(x.Name(), y.Name()) })
+	for _, fi := range fis {
+		var entry Entry
+
+		// Convert snake_case file name to CamelCase.
+		words := strings.Split(strings.TrimSuffix(fi.Name(), ".json.gz"), "_")
+		for i := range words {
+			words[i] = strings.Title(words[i])
+		}
+		entry.Name = strings.Join(words, "")
+
+		// Obtain the uncompressed size found in the trailing uint32
+		// of the GZIP-compressed file (per RFC 1952, section 2.3.1.).
+		filePath := path.Join("testdata", fi.Name())
+		f := mustGet(testdataFS.Open(filePath))
+		defer f.Close()
+		mustGet(f.(io.Seeker).Seek(-4, io.SeekEnd))
+		b := mustGet(io.ReadAll(f))
+		entry.Size = int(binary.LittleEndian.Uint32(b[:]))
+
+		// Lazily read and decompress the test data.
+		entry.Data = sync.OnceValue(func() []byte {
+			b := mustGet(fs.ReadFile(testdataFS, filePath))
+			zr := mustGet(gzip.NewReader(bytes.NewReader(b)))
+			data := mustGet(io.ReadAll(zr))
+			if len(data) != entry.Size {
+				panic(fmt.Sprintf("size mismatch: got %d, want %d", len(data), entry.Size))
+			}
+			return data
+		})
+
+		// Check whether there is a concrete type for this data.
+		switch entry.Name {
+		case "CanadaGeometry":
+			entry.New = func() any { return new(canadaRoot) }
+		case "CitmCatalog":
+			entry.New = func() any { return new(citmRoot) }
+		case "GolangSource":
+			entry.New = func() any { return new(golangRoot) }
+		case "StringEscaped":
+			entry.New = func() any { return new(stringRoot) }
+		case "StringUnicode":
+			entry.New = func() any { return new(stringRoot) }
+		case "SyntheaFhir":
+			entry.New = func() any { return new(syntheaRoot) }
+		case "TwitterStatus":
+			entry.New = func() any { return new(twitterRoot) }
+		}
+
+		entries = append(entries, entry)
+	}
+	return entries
+}()
 
 type (
 	canadaRoot struct {
@@ -357,7 +361,7 @@ type (
 				MaritalStatus             syntheaCode        `json:"maritalStatus"`
 				MedicationCodeableConcept syntheaCode        `json:"medicationCodeableConcept"`
 				MultipleBirthBoolean      bool               `json:"multipleBirthBoolean"`
-				Name                      RawValue           `json:"name"`
+				Name                      rawValue           `json:"name"`
 				NumberOfInstances         int64              `json:"numberOfInstances"`
 				NumberOfSeries            int64              `json:"numberOfSeries"`
 				OccurrenceDateTime        time.Time          `json:"occurrenceDateTime"`
@@ -414,8 +418,8 @@ type (
 				} `json:"supportingInfo"`
 				Telecom              []map[string]string `json:"telecom"`
 				Text                 map[string]string   `json:"text"`
-				Total                RawValue            `json:"total"`
-				Type                 RawValue            `json:"type"`
+				Total                rawValue            `json:"total"`
+				Type                 rawValue            `json:"type"`
 				Use                  string              `json:"use"`
 				VaccineCode          syntheaCode         `json:"vaccineCode"`
 				ValueCodeableConcept syntheaCode         `json:"valueCodeableConcept"`
@@ -596,3 +600,21 @@ type (
 		Indices     []int        `json:"indices"`
 	}
 )
+
+// rawValue is the raw encoded JSON value.
+type rawValue []byte
+
+func (v rawValue) MarshalJSON() ([]byte, error) {
+	if v == nil {
+		return []byte("null"), nil
+	}
+	return v, nil
+}
+
+func (v *rawValue) UnmarshalJSON(b []byte) error {
+	if v == nil {
+		return errors.New("jsontest.rawValue: UnmarshalJSON on nil pointer")
+	}
+	*v = append((*v)[:0], b...)
+	return nil
+}

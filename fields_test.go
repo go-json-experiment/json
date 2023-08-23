@@ -9,6 +9,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 type unexported struct{}
@@ -24,12 +26,12 @@ func TestMakeStructFields(t *testing.T) {
 	}
 	type MapStringAny map[string]any
 	tests := []struct {
-		name    testName
+		name    jsontest.CaseName
 		in      any
 		want    structFields
 		wantErr error
 	}{{
-		name: name("Names"),
+		name: jsontest.Name("Names"),
 		in: struct {
 			F1 string
 			F2 string `json:"-"`
@@ -45,7 +47,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("BreadthFirstSearch"),
+		name: jsontest.Name("BreadthFirstSearch"),
 		in: struct {
 			L1A string
 			L1B struct {
@@ -79,7 +81,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("NameResolution"),
+		name: jsontest.Name("NameResolution"),
 		in: struct {
 			X1 struct {
 				X struct {
@@ -106,7 +108,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("NameResolution/ExplicitNameUniquePrecedence"),
+		name: jsontest.Name("NameResolution/ExplicitNameUniquePrecedence"),
 		in: struct {
 			X1 struct {
 				A string // loses in precedence to X2.A
@@ -124,7 +126,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("NameResolution/ExplicitNameCancelsOut"),
+		name: jsontest.Name("NameResolution/ExplicitNameCancelsOut"),
 		in: struct {
 			X1 struct {
 				A string // loses in precedence to X2.A or X3.A
@@ -138,7 +140,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{flattened: []structField{}},
 	}, {
-		name: name("Embed/Implicit"),
+		name: jsontest.Name("Embed/Implicit"),
 		in: struct {
 			Embed
 		}{},
@@ -148,7 +150,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("Embed/Explicit"),
+		name: jsontest.Name("Embed/Explicit"),
 		in: struct {
 			Embed `json:",inline"`
 		}{},
@@ -158,7 +160,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("Recursive"),
+		name: jsontest.Name("Recursive"),
 		in: struct {
 			A         string
 			Recursive `json:",inline"`
@@ -172,7 +174,7 @@ func TestMakeStructFields(t *testing.T) {
 			},
 		},
 	}, {
-		name: name("InlinedFallback/Cancelation"),
+		name: jsontest.Name("InlinedFallback/Cancelation"),
 		in: struct {
 			X1 struct {
 				X RawValue `json:",inline"`
@@ -183,7 +185,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{},
 	}, {
-		name: name("InlinedFallback/Precedence"),
+		name: jsontest.Name("InlinedFallback/Precedence"),
 		in: struct {
 			X1 struct {
 				X RawValue `json:",inline"`
@@ -197,74 +199,74 @@ func TestMakeStructFields(t *testing.T) {
 			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeOf(map[string]RawValue(nil)), fieldOptions: fieldOptions{name: "X", quotedName: `"X"`, unknown: true}},
 		},
 	}, {
-		name: name("InvalidUTF8"),
+		name: jsontest.Name("InvalidUTF8"),
 		in: struct {
 			Name string `json:"'\\xde\\xad\\xbe\\xef'"`
 		}{},
 		wantErr: errors.New(`Go struct field Name has JSON object name "ޭ\xbe\xef" with invalid UTF-8`),
 	}, {
-		name: name("DuplicateName"),
+		name: jsontest.Name("DuplicateName"),
 		in: struct {
 			A string `json:"same"`
 			B string `json:"same"`
 		}{},
 		wantErr: errors.New(`Go struct fields A and B conflict over JSON object name "same"`),
 	}, {
-		name: name("BothInlineAndUnknown"),
+		name: jsontest.Name("BothInlineAndUnknown"),
 		in: struct {
 			A struct{} `json:",inline,unknown"`
 		}{},
 		wantErr: errors.New("Go struct field A cannot have both `inline` and `unknown` specified"),
 	}, {
-		name: name("InlineWithOptions"),
+		name: jsontest.Name("InlineWithOptions"),
 		in: struct {
 			A struct{} `json:",inline,omitempty"`
 		}{},
 		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
 	}, {
-		name: name("UnknownWithOptions"),
+		name: jsontest.Name("UnknownWithOptions"),
 		in: struct {
 			A map[string]any `json:",inline,omitempty"`
 		}{},
 		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
 	}, {
-		name: name("InlineTextMarshaler"),
+		name: jsontest.Name("InlineTextMarshaler"),
 		in: struct {
 			A struct{ encoding.TextMarshaler } `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("UnknownJSONMarshalerV1"),
+		name: jsontest.Name("UnknownJSONMarshalerV1"),
 		in: struct {
 			A struct{ MarshalerV1 } `json:",unknown"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV1 } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("InlineJSONMarshalerV2"),
+		name: jsontest.Name("InlineJSONMarshalerV2"),
 		in: struct {
 			A struct{ MarshalerV2 } `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV2 } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("UnknownTextUnmarshaler"),
+		name: jsontest.Name("UnknownTextUnmarshaler"),
 		in: struct {
 			A *struct{ encoding.TextUnmarshaler } `json:",unknown"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextUnmarshaler } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("InlineJSONUnmarshalerV1"),
+		name: jsontest.Name("InlineJSONUnmarshalerV1"),
 		in: struct {
 			A *struct{ UnmarshalerV1 } `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV1 } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("UnknownJSONUnmarshalerV2"),
+		name: jsontest.Name("UnknownJSONUnmarshalerV2"),
 		in: struct {
 			A struct{ UnmarshalerV2 } `json:",unknown"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV2 } must not implement JSON marshal or unmarshal methods`),
 	}, {
-		name: name("UnknownStruct"),
+		name: jsontest.Name("UnknownStruct"),
 		in: struct {
 			A struct {
 				X, Y, Z string
@@ -272,32 +274,32 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New("inlined Go struct field A of type struct { X string; Y string; Z string } with `unknown` tag must be a Go map of string key or a json.RawValue"),
 	}, {
-		name: name("InlineUnsupported/MapIntKey"),
+		name: jsontest.Name("InlineUnsupported/MapIntKey"),
 		in: struct {
 			A map[int]any `json:",unknown"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type map[int]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
 	}, {
-		name: name("InlineUnsupported/MapNamedStringKey"),
+		name: jsontest.Name("InlineUnsupported/MapNamedStringKey"),
 		in: struct {
 			A map[namedString]any `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type map[json.namedString]interface {} must be a Go struct, Go map of string key, or json.RawValue`),
 	}, {
-		name: name("InlineUnsupported/DoublePointer"),
+		name: jsontest.Name("InlineUnsupported/DoublePointer"),
 		in: struct {
 			A **struct{} `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type *struct {} must be a Go struct, Go map of string key, or json.RawValue`),
 	}, {
-		name: name("DuplicateInline"),
+		name: jsontest.Name("DuplicateInline"),
 		in: struct {
 			A map[string]any `json:",inline"`
 			B RawValue       `json:",inline"`
 		}{},
 		wantErr: errors.New(`inlined Go struct fields A and B cannot both be a Go map or json.RawValue`),
 	}, {
-		name: name("DuplicateEmbedInline"),
+		name: jsontest.Name("DuplicateEmbedInline"),
 		in: struct {
 			MapStringAny
 			B RawValue `json:",inline"`
@@ -306,7 +308,7 @@ func TestMakeStructFields(t *testing.T) {
 	}}
 
 	for _, tt := range tests {
-		t.Run(tt.name.name, func(t *testing.T) {
+		t.Run(tt.name.Name, func(t *testing.T) {
 			got, err := makeStructFields(reflect.TypeOf(tt.in))
 
 			// Sanity check that pointers are consistent.
@@ -316,13 +318,13 @@ func TestMakeStructFields(t *testing.T) {
 			}
 			for _, f := range got.byActualName {
 				if !pointers[f] {
-					t.Errorf("%s: byActualName pointer not in flattened", tt.name.where)
+					t.Errorf("%s: byActualName pointer not in flattened", tt.name.Where)
 				}
 			}
 			for _, fs := range got.byFoldedName {
 				for _, f := range fs {
 					if !pointers[f] {
-						t.Errorf("%s: byFoldedName pointer not in flattened", tt.name.where)
+						t.Errorf("%s: byFoldedName pointer not in flattened", tt.name.Where)
 					}
 				}
 			}
@@ -358,7 +360,7 @@ func TestMakeStructFields(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.want) || !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("%s: makeStructFields(%T):\n\tgot  (%v, %v)\n\twant (%v, %v)", tt.name.where, tt.in, got, gotErr, tt.want, tt.wantErr)
+				t.Errorf("%s: makeStructFields(%T):\n\tgot  (%v, %v)\n\twant (%v, %v)", tt.name.Where, tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
 		})
 	}
@@ -366,262 +368,262 @@ func TestMakeStructFields(t *testing.T) {
 
 func TestParseTagOptions(t *testing.T) {
 	tests := []struct {
-		name        testName
+		name        jsontest.CaseName
 		in          any // must be a struct with a single field
 		wantOpts    fieldOptions
 		wantIgnored bool
 		wantErr     error
 	}{{
-		name: name("GoName"),
+		name: jsontest.Name("GoName"),
 		in: struct {
 			FieldName int
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 	}, {
-		name: name("GoNameWithOptions"),
+		name: jsontest.Name("GoNameWithOptions"),
 		in: struct {
 			FieldName int `json:",inline"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true},
 	}, {
-		name: name("Empty"),
+		name: jsontest.Name("Empty"),
 		in: struct {
 			V int `json:""`
 		}{},
 		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
 	}, {
-		name: name("Unexported"),
+		name: jsontest.Name("Unexported"),
 		in: struct {
 			v int `json:"Hello"`
 		}{},
 		wantIgnored: true,
 		wantErr:     errors.New("unexported Go struct field v cannot have non-ignored `json:\"Hello\"` tag"),
 	}, {
-		name: name("UnexportedEmpty"),
+		name: jsontest.Name("UnexportedEmpty"),
 		in: struct {
 			v int `json:""`
 		}{},
 		wantIgnored: true,
 		wantErr:     errors.New("unexported Go struct field v cannot have non-ignored `json:\"\"` tag"),
 	}, {
-		name: name("EmbedUnexported"),
+		name: jsontest.Name("EmbedUnexported"),
 		in: struct {
 			unexported
 		}{},
 		wantIgnored: true,
 		wantErr:     errors.New("embedded Go struct field unexported of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
 	}, {
-		name: name("Ignored"),
+		name: jsontest.Name("Ignored"),
 		in: struct {
 			V int `json:"-"`
 		}{},
 		wantIgnored: true,
 	}, {
-		name: name("IgnoredEmbedUnexported"),
+		name: jsontest.Name("IgnoredEmbedUnexported"),
 		in: struct {
 			unexported `json:"-"`
 		}{},
 		wantIgnored: true,
 	}, {
-		name: name("DashComma"),
+		name: jsontest.Name("DashComma"),
 		in: struct {
 			V int `json:"-,"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "-", quotedName: `"-"`},
 		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid trailing ',' character"),
 	}, {
-		name: name("QuotedDashName"),
+		name: jsontest.Name("QuotedDashName"),
 		in: struct {
 			V int `json:"'-'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "-", quotedName: `"-"`},
 	}, {
-		name: name("LatinPunctuationName"),
+		name: jsontest.Name("LatinPunctuationName"),
 		in: struct {
 			V int `json:"$%-/"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "$%-/", quotedName: `"$%-/"`},
 	}, {
-		name: name("QuotedLatinPunctuationName"),
+		name: jsontest.Name("QuotedLatinPunctuationName"),
 		in: struct {
 			V int `json:"'$%-/'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "$%-/", quotedName: `"$%-/"`},
 	}, {
-		name: name("LatinDigitsName"),
+		name: jsontest.Name("LatinDigitsName"),
 		in: struct {
 			V int `json:"0123456789"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "0123456789", quotedName: `"0123456789"`},
 	}, {
-		name: name("QuotedLatinDigitsName"),
+		name: jsontest.Name("QuotedLatinDigitsName"),
 		in: struct {
 			V int `json:"'0123456789'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "0123456789", quotedName: `"0123456789"`},
 	}, {
-		name: name("LatinUppercaseName"),
+		name: jsontest.Name("LatinUppercaseName"),
 		in: struct {
 			V int `json:"ABCDEFGHIJKLMOPQRSTUVWXYZ"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "ABCDEFGHIJKLMOPQRSTUVWXYZ", quotedName: `"ABCDEFGHIJKLMOPQRSTUVWXYZ"`},
 	}, {
-		name: name("LatinLowercaseName"),
+		name: jsontest.Name("LatinLowercaseName"),
 		in: struct {
 			V int `json:"abcdefghijklmnopqrstuvwxyz_"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "abcdefghijklmnopqrstuvwxyz_", quotedName: `"abcdefghijklmnopqrstuvwxyz_"`},
 	}, {
-		name: name("GreekName"),
+		name: jsontest.Name("GreekName"),
 		in: struct {
 			V string `json:"Ελλάδα"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα", quotedName: `"Ελλάδα"`},
 	}, {
-		name: name("QuotedGreekName"),
+		name: jsontest.Name("QuotedGreekName"),
 		in: struct {
 			V string `json:"'Ελλάδα'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "Ελλάδα", quotedName: `"Ελλάδα"`},
 	}, {
-		name: name("ChineseName"),
+		name: jsontest.Name("ChineseName"),
 		in: struct {
 			V string `json:"世界"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "世界", quotedName: `"世界"`},
 	}, {
-		name: name("QuotedChineseName"),
+		name: jsontest.Name("QuotedChineseName"),
 		in: struct {
 			V string `json:"'世界'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "世界", quotedName: `"世界"`},
 	}, {
-		name: name("PercentSlashName"),
+		name: jsontest.Name("PercentSlashName"),
 		in: struct {
 			V int `json:"text/html%"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "text/html%", quotedName: `"text/html%"`},
 	}, {
-		name: name("QuotedPercentSlashName"),
+		name: jsontest.Name("QuotedPercentSlashName"),
 		in: struct {
 			V int `json:"'text/html%'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "text/html%", quotedName: `"text/html%"`},
 	}, {
-		name: name("PunctuationName"),
+		name: jsontest.Name("PunctuationName"),
 		in: struct {
 			V string `json:"!#$%&()*+-./:;<=>?@[]^_{|}~ "`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
 	}, {
-		name: name("QuotedPunctuationName"),
+		name: jsontest.Name("QuotedPunctuationName"),
 		in: struct {
 			V string `json:"'!#$%&()*+-./:;<=>?@[]^_{|}~ '"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
 	}, {
-		name: name("EmptyName"),
+		name: jsontest.Name("EmptyName"),
 		in: struct {
 			V int `json:"''"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "", quotedName: `""`},
 	}, {
-		name: name("SpaceName"),
+		name: jsontest.Name("SpaceName"),
 		in: struct {
 			V int `json:"' '"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: " ", quotedName: `" "`},
 	}, {
-		name: name("CommaQuotes"),
+		name: jsontest.Name("CommaQuotes"),
 		in: struct {
 			V int `json:"',\\'\"\\\"'"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: `,'""`, quotedName: `",'\"\""`},
 	}, {
-		name: name("SingleComma"),
+		name: jsontest.Name("SingleComma"),
 		in: struct {
 			V int `json:","`
 		}{},
 		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
 		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid trailing ',' character"),
 	}, {
-		name: name("SuperfluousCommas"),
+		name: jsontest.Name("SuperfluousCommas"),
 		in: struct {
 			V int `json:",,,,\"\",,inline,unknown,,,,"`
 		}{},
 		wantOpts: fieldOptions{name: "V", quotedName: `"V"`, inline: true, unknown: true},
 		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid character ',' at start of option (expecting Unicode letter or single quote)"),
 	}, {
-		name: name("NoCaseOption"),
+		name: jsontest.Name("NoCaseOption"),
 		in: struct {
 			FieldName int `json:",nocase"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, nocase: true},
 	}, {
-		name: name("InlineOption"),
+		name: jsontest.Name("InlineOption"),
 		in: struct {
 			FieldName int `json:",inline"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true},
 	}, {
-		name: name("UnknownOption"),
+		name: jsontest.Name("UnknownOption"),
 		in: struct {
 			FieldName int `json:",unknown"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, unknown: true},
 	}, {
-		name: name("OmitZeroOption"),
+		name: jsontest.Name("OmitZeroOption"),
 		in: struct {
 			FieldName int `json:",omitzero"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, omitzero: true},
 	}, {
-		name: name("OmitEmptyOption"),
+		name: jsontest.Name("OmitEmptyOption"),
 		in: struct {
 			FieldName int `json:",omitempty"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, omitempty: true},
 	}, {
-		name: name("StringOption"),
+		name: jsontest.Name("StringOption"),
 		in: struct {
 			FieldName int `json:",string"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, string: true},
 	}, {
-		name: name("FormatOptionEqual"),
+		name: jsontest.Name("FormatOptionEqual"),
 		in: struct {
 			FieldName int `json:",format=fizzbuzz"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 		wantErr:  errors.New("Go struct field FieldName is missing value for `format` tag option"),
 	}, {
-		name: name("FormatOptionColon"),
+		name: jsontest.Name("FormatOptionColon"),
 		in: struct {
 			FieldName int `json:",format:fizzbuzz"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, format: "fizzbuzz"},
 	}, {
-		name: name("FormatOptionQuoted"),
+		name: jsontest.Name("FormatOptionQuoted"),
 		in: struct {
 			FieldName int `json:",format:'2006-01-02'"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, format: "2006-01-02"},
 	}, {
-		name: name("FormatOptionInvalid"),
+		name: jsontest.Name("FormatOptionInvalid"),
 		in: struct {
 			FieldName int `json:",format:'2006-01-02"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 		wantErr:  errors.New("Go struct field FieldName has malformed value for `format` tag option: single-quoted string not terminated: '2006-01-0..."),
 	}, {
-		name: name("FormatOptionNotLast"),
+		name: jsontest.Name("FormatOptionNotLast"),
 		in: struct {
 			FieldName int `json:",format:alpha,ordered"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, format: "alpha"},
 		wantErr:  errors.New("Go struct field FieldName has `format` tag option that was not specified last"),
 	}, {
-		name: name("AllOptions"),
+		name: jsontest.Name("AllOptions"),
 		in: struct {
 			FieldName int `json:",nocase,inline,unknown,omitzero,omitempty,string,format:format"`
 		}{},
@@ -637,7 +639,7 @@ func TestParseTagOptions(t *testing.T) {
 			format:     "format",
 		},
 	}, {
-		name: name("AllOptionsQuoted"),
+		name: jsontest.Name("AllOptionsQuoted"),
 		in: struct {
 			FieldName int `json:",'nocase','inline','unknown','omitzero','omitempty','string','format':'format'"`
 		}{},
@@ -654,48 +656,48 @@ func TestParseTagOptions(t *testing.T) {
 		},
 		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `'nocase'` tag option; specify `nocase` instead"),
 	}, {
-		name: name("AllOptionsCaseSensitive"),
+		name: jsontest.Name("AllOptionsCaseSensitive"),
 		in: struct {
 			FieldName int `json:",NOCASE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT:FORMAT"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 		wantErr:  errors.New("Go struct field FieldName has invalid appearance of `NOCASE` tag option; specify `nocase` instead"),
 	}, {
-		name: name("AllOptionsSpaceSensitive"),
+		name: jsontest.Name("AllOptionsSpaceSensitive"),
 		in: struct {
 			FieldName int `json:", nocase , inline , unknown , omitzero , omitempty , string , format:format "`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: invalid character ' ' at start of option (expecting Unicode letter or single quote)"),
 	}, {
-		name: name("UnknownTagOption"),
+		name: jsontest.Name("UnknownTagOption"),
 		in: struct {
 			FieldName int `json:",inline,whoknows,string"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, inline: true, string: true},
 	}, {
-		name: name("MalformedQuotedString/MissingQuote"),
+		name: jsontest.Name("MalformedQuotedString/MissingQuote"),
 		in: struct {
 			FieldName int `json:"'hello,string"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "'hello", quotedName: `"'hello"`, string: true},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: single-quoted string not terminated: 'hello,str..."),
 	}, {
-		name: name("MalformedQuotedString/MissingComma"),
+		name: jsontest.Name("MalformedQuotedString/MissingComma"),
 		in: struct {
 			FieldName int `json:"'hello'inline,string"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "hello", quotedName: `"hello"`, inline: true, string: true},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: invalid character 'i' before next option (expecting ',')"),
 	}, {
-		name: name("MalformedQuotedString/InvalidEscape"),
+		name: jsontest.Name("MalformedQuotedString/InvalidEscape"),
 		in: struct {
 			FieldName int `json:"'hello\\u####',inline,string"`
 		}{},
 		wantOpts: fieldOptions{hasName: true, name: "'hello\\u####'", quotedName: `"'hello\\u####'"`, inline: true, string: true},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: invalid single-quoted string: 'hello\\u####'"),
 	}, {
-		name: name("MisnamedTag"),
+		name: jsontest.Name("MisnamedTag"),
 		in: struct {
 			V int `jsom:"Misnamed"`
 		}{},
@@ -703,11 +705,11 @@ func TestParseTagOptions(t *testing.T) {
 	}}
 
 	for _, tt := range tests {
-		t.Run(tt.name.name, func(t *testing.T) {
+		t.Run(tt.name.Name, func(t *testing.T) {
 			fs := reflect.TypeOf(tt.in).Field(0)
 			gotOpts, gotIgnored, gotErr := parseFieldOptions(fs)
 			if !reflect.DeepEqual(gotOpts, tt.wantOpts) || gotIgnored != tt.wantIgnored || !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("%s: parseFieldOptions(%T) = (%v, %v, %v), want (%v, %v, %v)", tt.name.where, tt.in, gotOpts, gotIgnored, gotErr, tt.wantOpts, tt.wantIgnored, tt.wantErr)
+				t.Errorf("%s: parseFieldOptions(%T) = (%v, %v, %v), want (%v, %v, %v)", tt.name.Where, tt.in, gotOpts, gotIgnored, gotErr, tt.wantOpts, tt.wantIgnored, tt.wantErr)
 			}
 		})
 	}

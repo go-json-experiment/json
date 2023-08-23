@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
 func TestIntern(t *testing.T) {
@@ -33,9 +35,9 @@ var sink string
 func BenchmarkIntern(b *testing.B) {
 	datasetStrings := func(name string) (out [][]byte) {
 		var data []byte
-		for _, ts := range jsonTestdata() {
-			if ts.name == name {
-				data = ts.data
+		for _, ts := range jsontest.Data {
+			if ts.Name == name {
+				data = ts.Data()
 			}
 		}
 		dec := NewDecoder(bytes.NewReader(data))
