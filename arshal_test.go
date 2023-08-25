@@ -5275,6 +5275,12 @@ func TestUnmarshal(t *testing.T) {
 			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
+		name:    jsontest.Name("Structs/Stringified/InvalidEmpty"),
+		inBuf:   `{"Int":""}`,
+		inVal:   new(structStringifiedAll),
+		want:    new(structStringifiedAll),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: int64Type, Err: fmt.Errorf(`cannot parse "" as signed integer: %w`, strconv.ErrSyntax)},
+	}, {
 		name: jsontest.Name("Structs/Format/Bytes"),
 		inBuf: `{
 	"Base16": "0123456789abcdef",

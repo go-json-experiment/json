@@ -380,7 +380,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			fallthrough
 		case '0':
 			var negOffset int
-			neg := val[0] == '-'
+			neg := len(val) > 0 && val[0] == '-'
 			if neg {
 				negOffset = 1
 			}
