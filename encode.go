@@ -13,65 +13,10 @@ import (
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
-
-// EncodeOptions configures how JSON encoding operates.
-// The zero value is equivalent to the default settings,
-// which is compliant with both RFC 7493 and RFC 8259.
-//
-// Deprecated: Use jsontext.EncodeOptions instead.
-type EncodeOptions struct {
-	requireKeyedLiterals
-	nonComparable
-
-	// multiline specifies whether the encoder should emit multiline output.
-	multiline bool
-
-	// omitTopLevelNewline specifies whether to omit the newline
-	// that is appended after every top-level JSON value when streaming.
-	omitTopLevelNewline bool
-
-	// AllowDuplicateNames specifies that JSON objects may contain
-	// duplicate member names. Disabling the duplicate name check may provide
-	// performance benefits, but breaks compliance with RFC 7493, section 2.3.
-	// The output will still be compliant with RFC 8259,
-	// which leaves the handling of duplicate names as unspecified behavior.
-	AllowDuplicateNames bool
-
-	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
-	// which will be mangled as the Unicode replacement character, U+FFFD.
-	// This causes the encoder to break compliance with
-	// RFC 7493, section 2.1, and RFC 8259, section 8.1.
-	AllowInvalidUTF8 bool
-
-	// preserveRawStrings specifies that WriteToken and WriteValue should not
-	// reformat any JSON string, but keep the formatting verbatim.
-	preserveRawStrings bool
-
-	// canonicalizeNumbers specifies that WriteToken and WriteValue should
-	// reformat any JSON numbers according to RFC 8785, section 3.2.2.3.
-	canonicalizeNumbers bool
-
-	// EscapeRune reports whether the provided character should be escaped
-	// as a hexadecimal Unicode codepoint (e.g., \ufffd).
-	// If nil, the shortest and simplest encoding will be used,
-	// which is also the formatting specified by RFC 8785, section 3.2.2.2.
-	EscapeRune func(rune) bool
-
-	// Indent (if non-empty) specifies that the encoder should emit multiline
-	// output where each element in a JSON object or array begins on a new,
-	// indented line beginning with the indent prefix followed by one or more
-	// copies of indent according to the indentation nesting.
-	// It may only be composed of space or tab characters.
-	Indent string
-
-	// IndentPrefix is prepended to each line within a JSON object or array.
-	// The purpose of the indent prefix is to encode data that can more easily
-	// be embedded inside other formatted JSON data.
-	// It may only be composed of space or tab characters.
-	// It is ignored if Indent is empty.
-	IndentPrefix string
-}
 
 // Encoder is a streaming encoder from raw JSON tokens and values.
 // It is used to write a stream of top-level JSON values,
@@ -103,12 +48,13 @@ type EncodeOptions struct {
 // For example, it is probably more common to call WriteToken with a string
 // for object names.
 //
-// Deprecated: Use jsontext.Encoder instead.
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Encoder] instead.
 type Encoder struct {
 	state
 	encodeBuffer
-	options EncodeOptions
+	options jsonopts.Struct
 
+	escapeRunes  *escapeRunes
 	seenPointers seenPointers // only used when marshaling
 }
 
@@ -134,13 +80,6 @@ type encodeBuffer struct {
 	bufStats bufferStatistics
 }
 
-// NewEncoder constructs a new streaming encoder writing to w.
-//
-// Deprecated: Use jsontext.NewEncoder instead.
-func NewEncoder(w io.Writer) *Encoder {
-	return EncodeOptions{}.NewEncoder(w)
-}
-
 // NewEncoder constructs a new streaming encoder writing to w
 // configured with the provided options.
 // It flushes the internal buffer when the buffer is sufficiently full or
@@ -148,46 +87,45 @@ func NewEncoder(w io.Writer) *Encoder {
 //
 // If w is a bytes.Buffer, then the encoder appends directly into the buffer
 // without copying the contents from an intermediate buffer.
-func (o EncodeOptions) NewEncoder(w io.Writer) *Encoder {
+//
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.NewEncoder] instead.
+func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 	e := new(Encoder)
-	o.ResetEncoder(e, w)
+	e.Reset(w, opts...)
 	return e
 }
 
-// ResetEncoder resets an encoder such that it is writing afresh to w and
-// configured with the provided options.
-func (o EncodeOptions) ResetEncoder(e *Encoder, w io.Writer) {
-	if e == nil {
-		panic("json: invalid nil Encoder")
+// Reset resets an encoder such that it is writing afresh to w and
+// configured with the provided options. Reset must not be called on
+// a Encoder passed to [MarshalerV2.MarshalJSONV2] or [MarshalFuncV2].
+func (e *Encoder) Reset(w io.Writer, opts ...Options) {
+	switch {
+	case e == nil:
+		panic("jsontext: invalid nil Encoder")
+	case w == nil:
+		panic("jsontext: invalid nil io.Writer")
+	case e.options.Flags.Get(jsonflags.WithinArshalCall):
+		panic("jsontext: cannot reset Encoder passed to json.MarshalerV2")
 	}
-	if w == nil {
-		panic("json: invalid nil io.Writer")
-	}
-	e.reset(nil, w, o)
+	e.reset(nil, w, opts...)
 }
 
-func (e *Encoder) reset(b []byte, w io.Writer, o EncodeOptions) {
-	if len(o.Indent) > 0 {
-		o.multiline = true
-		if s := trimLeftSpaceTab(o.IndentPrefix); len(s) > 0 {
-			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
-		}
-		if s := trimLeftSpaceTab(o.Indent); len(s) > 0 {
-			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
-		}
-	}
+func (e *Encoder) reset(b []byte, w io.Writer, opts ...Options) {
 	e.state.reset()
 	e.encodeBuffer = encodeBuffer{buf: b, wr: w, bufStats: e.bufStats}
-	e.options = o
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
 		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 	}
-}
-
-// Reset resets an encoder such that it is writing afresh to w but
-// keeps any pre-existing encoder options.
-func (e *Encoder) Reset(w io.Writer) {
-	e.options.ResetEncoder(e, w)
+	e.options = jsonopts.Struct{}
+	e.options.Join(opts...)
+	e.escapeRunes = makeEscapeRunes(
+		e.options.Flags.Get(jsonflags.EscapeForHTML),
+		e.options.Flags.Get(jsonflags.EscapeForJS),
+		e.options.EscapeFunc,
+	)
+	if e.options.Flags.Get(jsonflags.Expand) && !e.options.Flags.Has(jsonflags.Indent) {
+		e.options.Indent = "\t"
+	}
 }
 
 // needFlush determines whether to flush at this point.
@@ -209,7 +147,7 @@ func (e *Encoder) flush() error {
 	}
 
 	// In streaming mode, always emit a newline after the top-level value.
-	if e.tokens.depth() == 1 && !e.options.omitTopLevelNewline {
+	if e.tokens.depth() == 1 && !e.options.Flags.Get(jsonflags.OmitTopLevelNewline) {
 		e.buf = append(e.buf, '\n')
 	}
 
@@ -351,7 +289,7 @@ func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 	// Undo state changes.
 	e.tokens.last.decrement() // for object member value
 	e.tokens.last.decrement() // for object member name
-	if !e.options.AllowDuplicateNames {
+	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 		if e.tokens.last.isActiveNamespace() {
 			e.namespaces.last().removeLast()
 		}
@@ -379,7 +317,7 @@ func (e *Encoder) unwriteOnlyObjectMemberName() string {
 
 	// Undo state changes.
 	e.tokens.last.decrement()
-	if !e.options.AllowDuplicateNames {
+	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 		if e.tokens.last.isActiveNamespace() {
 			e.namespaces.last().removeLast()
 		}
@@ -439,7 +377,7 @@ func (e *Encoder) WriteToken(t Token) error {
 
 	// Append any delimiters or optional whitespace.
 	b = e.tokens.mayAppendDelim(b, k)
-	if e.options.multiline {
+	if e.options.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -458,10 +396,10 @@ func (e *Encoder) WriteToken(t Token) error {
 		err = e.tokens.appendLiteral()
 	case '"':
 		n0 := len(b) // offset before calling t.appendString
-		if b, err = t.appendString(b, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune); err != nil {
+		if b, err = t.appendString(b, !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes); err != nil {
 			break
 		}
-		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
 			if !e.tokens.last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
@@ -474,7 +412,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		}
 		err = e.tokens.appendString()
 	case '0':
-		if b, err = t.appendNumber(b, e.options.canonicalizeNumbers); err != nil {
+		if b, err = t.appendNumber(b, e.options.Flags.Get(jsonflags.CanonicalizeNumbers)); err != nil {
 			break
 		}
 		err = e.tokens.appendNumber()
@@ -483,7 +421,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		if err = e.tokens.pushObject(); err != nil {
 			break
 		}
-		if !e.options.AllowDuplicateNames {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			e.names.push()
 			e.namespaces.push()
 		}
@@ -492,7 +430,7 @@ func (e *Encoder) WriteToken(t Token) error {
 		if err = e.tokens.popObject(); err != nil {
 			break
 		}
-		if !e.options.AllowDuplicateNames {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			e.names.pop()
 			e.namespaces.pop()
 		}
@@ -531,7 +469,7 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 
 	// Append any delimiters or optional whitespace.
 	b = e.tokens.mayAppendDelim(b, '0')
-	if e.options.multiline {
+	if e.options.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, '0')
 	}
 	pos := len(b) // offset before the token
@@ -551,14 +489,14 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 		b = append(b, '"')
 
 		// Escape the string if necessary.
-		if e.options.EscapeRune != nil {
+		if e.escapeRunes.escapeFunc != nil {
 			b2 := append(e.unusedCache, b[n0+len(`"`):len(b)-len(`"`)]...)
-			b, _ = appendString(b[:n0], string(b2), false, e.options.EscapeRune)
+			b, _ = appendString(b[:n0], string(b2), false, e.escapeRunes)
 			e.unusedCache = b2[:0]
 		}
 
 		// Update the state machine.
-		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
 			if !e.tokens.last.isValidNamespace() {
 				return errInvalidNamespace
 			}
@@ -611,7 +549,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 
 	// Append any delimiters or optional whitespace.
 	b = e.tokens.mayAppendDelim(b, k)
-	if e.options.multiline {
+	if e.options.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the value
@@ -635,7 +573,7 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	case 'n', 'f', 't':
 		err = e.tokens.appendLiteral()
 	case '"':
-		if !e.options.AllowDuplicateNames && e.tokens.last.needObjectName() {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
 			if !e.tokens.last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
@@ -727,17 +665,17 @@ func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, in
 		}
 		return append(dst, "true"...), len("true"), nil
 	case '"':
-		if n := consumeSimpleString(src); n > 0 && e.options.EscapeRune == nil {
+		if n := consumeSimpleString(src); n > 0 && e.escapeRunes.escapeFunc == nil {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
 			return dst, n, nil
 		}
-		return reformatString(dst, src, !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
+		return reformatString(dst, src, !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes)
 	case '0':
-		if n := consumeSimpleNumber(src); n > 0 && !e.options.canonicalizeNumbers {
+		if n := consumeSimpleNumber(src); n > 0 && !e.options.Flags.Get(jsonflags.CanonicalizeNumbers) {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple numbers verbatim
 			return dst, n, nil
 		}
-		return reformatNumber(dst, src, e.options.canonicalizeNumbers)
+		return reformatNumber(dst, src, e.options.Flags.Get(jsonflags.CanonicalizeNumbers))
 	case '{':
 		return e.reformatObject(dst, src, depth)
 	case '[':
@@ -773,7 +711,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 
 	var err error
 	var names *objectNamespace
-	if !e.options.AllowDuplicateNames {
+	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 		e.namespaces.push()
 		defer e.namespaces.pop()
 		names = e.namespaces.last()
@@ -781,7 +719,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.options.multiline {
+		if e.options.Flags.Get(jsonflags.Expand) {
 			dst = e.appendIndent(dst, depth)
 		}
 
@@ -791,16 +729,16 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 			return dst, n, io.ErrUnexpectedEOF
 		}
 		m := consumeSimpleString(src[n:])
-		if m > 0 && e.options.EscapeRune == nil {
+		if m > 0 && e.escapeRunes.escapeFunc == nil {
 			dst = append(dst, src[n:n+m]...)
 		} else {
-			dst, m, err = reformatString(dst, src[n:], !e.options.AllowInvalidUTF8, e.options.preserveRawStrings, e.options.EscapeRune)
+			dst, m, err = reformatString(dst, src[n:], !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes)
 			if err != nil {
 				return dst, n + m, err
 			}
 		}
 		// TODO: Specify whether the name is verbatim or not.
-		if !e.options.AllowDuplicateNames && !names.insertQuoted(src[n:n+m], false) {
+		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(src[n:n+m], false) {
 			return dst, n, newDuplicateNameError(src[n : n+m])
 		}
 		n += m
@@ -815,7 +753,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 		}
 		dst = append(dst, ':')
 		n += len(":")
-		if e.options.multiline {
+		if e.options.Flags.Get(jsonflags.Expand) {
 			dst = append(dst, ' ')
 		}
 
@@ -841,7 +779,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 			n += len(",")
 			continue
 		case '}':
-			if e.options.multiline {
+			if e.options.Flags.Get(jsonflags.Expand) {
 				dst = e.appendIndent(dst, depth-1)
 			}
 			dst = append(dst, '}')
@@ -881,7 +819,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.options.multiline {
+		if e.options.Flags.Get(jsonflags.Expand) {
 			dst = e.appendIndent(dst, depth)
 		}
 
@@ -908,7 +846,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 			n += len(",")
 			continue
 		case ']':
-			if e.options.multiline {
+			if e.options.Flags.Get(jsonflags.Expand) {
 				dst = e.appendIndent(dst, depth-1)
 			}
 			dst = append(dst, ']')
@@ -1008,19 +946,18 @@ func (e *Encoder) StackPointer() string {
 // Note that this API allows full control over the formatting of strings
 // except for whether a forward solidus '/' may be formatted as '\/' and
 // the casing of hexadecimal Unicode escape sequences.
-func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 bool, escapeRune func(rune) bool) ([]byte, error) {
-	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
-
+func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 bool, escape *escapeRunes) ([]byte, error) {
 	var i, n int
 	var hasInvalidUTF8 bool
+	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
 	dst = append(dst, '"')
-	if escapeRune == nil {
-		// Optimize for when escapeRune is nil.
+	if escape == nil || escape.canonical {
+		// Optimize for canonical formatting.
 		for uint(len(src)) > uint(n) {
 			// Handle single-byte ASCII.
 			if c := src[n]; c < utf8.RuneSelf {
 				n++
-				if c < ' ' || c == '"' || c == '\\' {
+				if escapeCanonical.escapeASCII(c) {
 					dst = append(dst, src[i:n-1]...)
 					dst = appendEscapedASCII(dst, c)
 					i = n
@@ -1039,27 +976,38 @@ func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 b
 			}
 		}
 	} else {
-		// Slower implementation for when escapeRune is non-nil.
+		// Handle arbitrary escaping.
 		for uint(len(src)) > uint(n) {
+			// Handle single-byte ASCII.
+			if c := src[n]; c < utf8.RuneSelf {
+				n++
+				if escape.escapeASCII(c) {
+					dst = append(dst, src[i:n-1]...)
+					if escape.escapeASCIIAsUTF16(c) {
+						dst = appendEscapedUTF16(dst, uint16(c))
+					} else {
+						dst = appendEscapedASCII(dst, c)
+					}
+					i = n
+				}
+				continue
+			}
+
+			// Handle multi-byte Unicode.
 			switch r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:]))); {
 			case r == utf8.RuneError && rn == 1:
 				hasInvalidUTF8 = true
 				dst = append(dst, src[i:n]...)
-				if escapeRune('\ufffd') {
+				if escape.escapeRune(r) {
 					dst = append(dst, `\ufffd`...)
 				} else {
 					dst = append(dst, "\ufffd"...)
 				}
 				n += rn
 				i = n
-			case escapeRune(r):
+			case escape.escapeRune(r):
 				dst = append(dst, src[i:n]...)
 				dst = appendEscapedUnicode(dst, r)
-				n += rn
-				i = n
-			case r < ' ' || r == '"' || r == '\\':
-				dst = append(dst, src[i:n]...)
-				dst = appendEscapedASCII(dst, byte(r))
 				n += rn
 				i = n
 			default:
@@ -1113,14 +1061,14 @@ func appendEscapedUTF16(dst []byte, x uint16) []byte {
 // reformatString consumes a JSON string from src and appends it to dst,
 // reformatting it if necessary for the given escapeRune parameter.
 // It returns the appended output and the number of consumed input bytes.
-func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune func(rune) bool) ([]byte, int, error) {
+func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escape *escapeRunes) ([]byte, int, error) {
 	// TODO: Should this update valueFlags as input?
 	var flags valueFlags
 	n, err := consumeString(&flags, src, validateUTF8)
 	if err != nil {
 		return dst, n, err
 	}
-	if preserveRaw || (escapeRune == nil && flags.isCanonical()) {
+	if preserveRaw || (escape.canonical && flags.isCanonical()) {
 		dst = append(dst, src[:n]...) // copy the string verbatim
 		return dst, n, nil
 	}
@@ -1130,7 +1078,7 @@ func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escapeRune 
 	// it would be faster to simply append src to dst without going through
 	// an intermediary representation in a separate buffer.
 	b, _ := unescapeString(nil, src[:n])
-	dst, _ = appendString(dst, string(b), validateUTF8, escapeRune)
+	dst, _ = appendString(dst, string(b), validateUTF8, escape)
 	return dst, n, nil
 }
 

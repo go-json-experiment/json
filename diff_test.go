@@ -28,7 +28,9 @@ var jsonPackages = []struct {
 	Unmarshal func([]byte, any) error
 }{
 	{"v1", jsonv1.Marshal, jsonv1.Unmarshal},
-	{"v2", jsonv2.Marshal, jsonv2.Unmarshal},
+	{"v2",
+		func(in any) ([]byte, error) { return jsonv2.Marshal(in) },
+		func(in []byte, out any) error { return jsonv2.Unmarshal(in, out) }},
 }
 
 // In v1, unmarshal matches struct fields using a case-insensitive match.
@@ -729,8 +731,8 @@ func TestMapDeterminism(t *testing.T) {
 // In v1, JSON string encoding escapes special characters related to HTML.
 // In v2, JSON string encoding uses a normalized representation (per RFC 8785).
 //
-// Users of v2 can opt into the v1 behavior by setting
-// json.EncodeOptions.EscapeRune. See the EscapeHTML example.
+// Users of v2 can opt into the v1 behavior by setting WithEscapeFunc.
+// See the EscapeHTML example.
 //
 // Escaping HTML-specific characters in a JSON library is a layering violation.
 // It presumes that JSON is always used with HTML and ignores other
@@ -761,11 +763,7 @@ func TestEscapeHTML(t *testing.T) {
 // replacing such bytes with the Unicode replacement character.
 // In v2, JSON serialization reports an error if invalid UTF-8 is encountered.
 //
-// Users of v2 can opt into the v1 behavior by setting
-// AllowInvalidUTF8 to true in json.EncodeOptions or json.DecodeOptions:
-//
-//	json.MarshalOptions{...}.Marshal(json.EncodeOptions{AllowInvalidUTF8: true}, ...)
-//	json.UnmarshalOptions{...}.Unmarshal(json.DecodeOptions{AllowInvalidUTF8: true}, ...)
+// Users of v2 can opt into the v1 behavior by setting [AllowInvalidUTF8].
 //
 // Silently allowing invalid UTF-8 causes data corruption that can be difficult
 // to detect until it is too late. Once it has been discovered, strict UTF-8
@@ -814,11 +812,7 @@ func TestInvalidUTF8(t *testing.T) {
 // In v2, duplicate JSON object names are rejected by default where
 // they follow the merge semantics of v2 based on RFC 7396.
 //
-// Users of v2 can opt into the v1 behavior by setting
-// AllowDuplicateNames to true in json.EncodeOptions or json.DecodeOptions:
-//
-//	json.MarshalOptions{...}.Marshal(json.EncodeOptions{AllowDuplicateNames: true}, ...)
-//	json.UnmarshalOptions{...}.Unmarshal(json.DecodeOptions{AllowDuplicateNames: true}, ...)
+// Users of v2 can opt into the v1 behavior by setting [AllowDuplicateNames].
 //
 // Per RFC 8259, the handling of duplicate names is left as undefined behavior.
 // Rejecting such inputs is within the realm of valid behavior.

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"testing/iotest"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
@@ -181,7 +182,7 @@ type decoderMethodCall struct {
 
 var decoderErrorTestdata = []struct {
 	name       jsontest.CaseName
-	opts       DecodeOptions
+	opts       []Options
 	in         string
 	calls      []decoderMethodCall
 	wantOffset int
@@ -285,7 +286,7 @@ var decoderErrorTestdata = []struct {
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
-	opts: DecodeOptions{AllowInvalidUTF8: true},
+	opts: []Options{AllowInvalidUTF8(true)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', rawToken("\"living\xde\xad\xbe\xef\""), nil, ""},
@@ -293,7 +294,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Value"),
-	opts: DecodeOptions{AllowInvalidUTF8: true},
+	opts: []Options{AllowInvalidUTF8(true)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', RawValue("\"living\xde\xad\xbe\xef\""), nil, ""},
@@ -301,7 +302,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
 	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
-	opts: DecodeOptions{AllowInvalidUTF8: false},
+	opts: []Options{AllowInvalidUTF8(false)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', zeroToken, errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
@@ -560,7 +561,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len(`{"0":0,"1":1}`),
 }, {
 	name: jsontest.Name("ValidObject/DuplicateNames"),
-	opts: DecodeOptions{AllowDuplicateNames: true},
+	opts: []Options{AllowDuplicateNames(true)},
 	in:   `{"0":0,"0":0} `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
@@ -748,9 +749,9 @@ func TestDecoderErrors(t *testing.T) {
 		})
 	}
 }
-func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts DecodeOptions, in string, calls []decoderMethodCall, wantOffset int) {
+func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, in string, calls []decoderMethodCall, wantOffset int) {
 	src := bytes.NewBufferString(in)
-	dec := opts.NewDecoder(src)
+	dec := NewDecoder(src, opts...)
 	for i, call := range calls {
 		gotKind := dec.PeekKind()
 		if gotKind != call.wantKind {
@@ -870,8 +871,7 @@ func TestBlockingDecoder(t *testing.T) {
 	defer r.Close()
 	defer w.Close()
 
-	enc := NewEncoder(w)
-	enc.options.omitTopLevelNewline = true
+	enc := NewEncoder(w, jsonflags.OmitTopLevelNewline|1)
 	dec := NewDecoder(r)
 
 	errCh := make(chan error)
@@ -1130,7 +1130,10 @@ func TestConsumeString(t *testing.T) {
 		{"\"\x1f\"", false, 1, 1, stringNonVerbatim | stringNonCanonical, "", newInvalidCharacterError("\x1f", "within string (expecting non-control character)"), errPrev, errPrev},
 		{`"\u001f"`, false, 8, 8, stringNonVerbatim, "\x1f", nil, nil, nil},
 		{`"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, true, 54, 54, 0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, nil, nil},
-		{"\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", true, 44, 44, 0, " !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, nil, nil},
+		{"\" !#$%'()*+,-./0123456789:;=?@[]^_`{|}~\x7f\"", true, 41, 41, 0, " !#$%'()*+,-./0123456789:;=?@[]^_`{|}~\x7f", nil, nil, nil},
+		{`"&"`, false, 3, 3, 0, "&", nil, nil, nil},
+		{`"<"`, false, 3, 3, 0, "<", nil, nil, nil},
+		{`">"`, false, 3, 3, 0, ">", nil, nil, nil},
 		{"\"x\x80\"", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8, errPrev},
 		{"\"x\xff\"", false, 4, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", nil, errInvalidUTF8, errPrev},
 		{"\"x\xc0", false, 3, 2, stringNonVerbatim | stringNonCanonical, "x\ufffd", io.ErrUnexpectedEOF, errInvalidUTF8, io.ErrUnexpectedEOF},

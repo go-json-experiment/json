@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
 var (
@@ -30,13 +32,13 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case timeDurationType:
 		fncs.nonDefault = true
 		marshalNanos := fncs.marshal
-		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
-			if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
-				if mo.format == "nanos" {
-					mo.format = ""
-					return marshalNanos(mo, enc, va)
+		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
+			if mo.Format != "" && mo.FormatDepth == enc.tokens.depth() {
+				if mo.Format == "nanos" {
+					mo.Format = ""
+					return marshalNanos(enc, va, mo)
 				} else {
-					return newInvalidFormatError("marshal", t, mo.format)
+					return newInvalidFormatError("marshal", t, mo.Format)
 				}
 			}
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
@@ -48,15 +50,15 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return enc.WriteValue(b)
 		}
 		unmarshalNanos := fncs.unmarshal
-		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
+		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			// TODO: Should there be a flag that specifies that we can unmarshal
 			// from either form since there would be no ambiguity?
-			if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
-				if uo.format == "nanos" {
-					uo.format = ""
-					return unmarshalNanos(uo, dec, va)
+			if uo.Format != "" && uo.FormatDepth == dec.tokens.depth() {
+				if uo.Format == "nanos" {
+					uo.Format = ""
+					return unmarshalNanos(dec, va, uo)
 				} else {
-					return newInvalidFormatError("unmarshal", t, uo.format)
+					return newInvalidFormatError("unmarshal", t, uo.Format)
 				}
 			}
 
@@ -84,12 +86,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	case timeTimeType:
 		fncs.nonDefault = true
-		fncs.marshal = func(mo MarshalOptions, enc *Encoder, va addressableValue) error {
+		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			format := time.RFC3339Nano
 			isRFC3339 := true
-			if mo.format != "" && mo.formatDepth == enc.tokens.depth() {
+			if mo.Format != "" && mo.FormatDepth == enc.tokens.depth() {
 				var err error
-				format, isRFC3339, err = checkTimeFormat(mo.format)
+				format, isRFC3339, err = checkTimeFormat(mo.Format)
 				if err != nil {
 					return &SemanticError{action: "marshal", GoType: t, Err: err}
 				}
@@ -128,12 +130,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			return enc.WriteValue(b)
 		}
-		fncs.unmarshal = func(uo UnmarshalOptions, dec *Decoder, va addressableValue) error {
+		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			format := time.RFC3339
 			isRFC3339 := true
-			if uo.format != "" && uo.formatDepth == dec.tokens.depth() {
+			if uo.Format != "" && uo.FormatDepth == dec.tokens.depth() {
 				var err error
-				format, isRFC3339, err = checkTimeFormat(uo.format)
+				format, isRFC3339, err = checkTimeFormat(uo.Format)
 				if err != nil {
 					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}

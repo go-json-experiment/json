@@ -13,6 +13,9 @@ import (
 	"strconv"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
 // NOTE: The logic for decoding is complicated by the fact that reading from
@@ -45,29 +48,6 @@ import (
 //     TODO: Revisit this pattern if the Go compiler provides finer control
 //     over exactly which calls are inlined or not.
 
-// DecodeOptions configures how JSON decoding operates.
-// The zero value is equivalent to the default settings,
-// which is compliant with both RFC 7493 and RFC 8259.
-//
-// Deprecated: Use jsontext.DecodeOptions instead.
-type DecodeOptions struct {
-	requireKeyedLiterals
-	nonComparable
-
-	// AllowDuplicateNames specifies that JSON objects may contain
-	// duplicate member names. Disabling the duplicate name check may provide
-	// computational and performance benefits, but breaks compliance with
-	// RFC 7493, section 2.3. The input will still be compliant with RFC 8259,
-	// which leaves the handling of duplicate names as unspecified behavior.
-	AllowDuplicateNames bool
-
-	// AllowInvalidUTF8 specifies that JSON strings may contain invalid UTF-8,
-	// which will be mangled as the Unicode replacement character, U+FFFD.
-	// This causes the decoder to break compliance with
-	// RFC 7493, section 2.1, and RFC 8259, section 8.1.
-	AllowInvalidUTF8 bool
-}
-
 // Decoder is a streaming decoder for raw JSON tokens and values.
 // It is used to read a stream of top-level JSON values,
 // each separated by optional whitespace characters.
@@ -98,11 +78,11 @@ type DecodeOptions struct {
 // For example, it is probably more common to call ReadToken to obtain a
 // string token for object names.
 //
-// Deprecated: Use jsontext.Decoder instead.
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Decoder] instead.
 type Decoder struct {
 	state
 	decodeBuffer
-	options DecodeOptions
+	options jsonopts.Struct
 
 	stringCache *stringCache // only used when unmarshaling
 }
@@ -138,41 +118,33 @@ type decodeBuffer struct {
 // without first copying the contents to an intermediate buffer.
 // Additional writes to the buffer must not occur while the decoder is in use.
 //
-// Deprecated: Use jsontext.NewDecoder instead.
-func NewDecoder(r io.Reader) *Decoder {
-	return DecodeOptions{}.NewDecoder(r)
-}
-
-// NewDecoder constructs a new streaming decoder reading from r
-// configured with the provided options.
-func (o DecodeOptions) NewDecoder(r io.Reader) *Decoder {
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.NewDecoder] instead.
+func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 	d := new(Decoder)
-	o.ResetDecoder(d, r)
+	d.Reset(r, opts...)
 	return d
 }
 
-// ResetDecoder resets a decoder such that it is reading afresh from r and
-// configured with the provided options.
-func (o DecodeOptions) ResetDecoder(d *Decoder, r io.Reader) {
-	if d == nil {
-		panic("json: invalid nil Decoder")
+// Reset resets a decoder such that it is reading afresh from r and
+// configured with the provided options. Reset must not be called on an
+// a Decoder passed to [UnmarshalerV2.UnmarshalJSONV2] or [UnmarshalFuncV2].
+func (d *Decoder) Reset(r io.Reader, opts ...Options) {
+	switch {
+	case d == nil:
+		panic("jsontext: invalid nil Decoder")
+	case r == nil:
+		panic("jsontext: invalid nil io.Writer")
+	case d.options.Flags.Get(jsonflags.WithinArshalCall):
+		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerV2")
 	}
-	if r == nil {
-		panic("json: invalid nil io.Reader")
-	}
-	d.reset(nil, r, o)
+	d.reset(nil, r, opts...)
 }
 
-func (d *Decoder) reset(b []byte, r io.Reader, o DecodeOptions) {
+func (d *Decoder) reset(b []byte, r io.Reader, opts ...Options) {
 	d.state.reset()
 	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
-	d.options = o
-}
-
-// Reset resets a decoder such that it is reading afresh from r but
-// keep any pre-existing decoder options.
-func (d *Decoder) Reset(r io.Reader) {
-	d.options.ResetDecoder(d, r)
+	d.options = jsonopts.Struct{}
+	d.options.Join(opts...)
 }
 
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")
@@ -510,7 +482,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && d.tokens.last.needObjectName() {
+		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && d.tokens.last.needObjectName() {
 			if !d.tokens.last.isValidNamespace() {
 				return Token{}, errInvalidNamespace
 			}
@@ -550,7 +522,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if err = d.tokens.pushObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
-		if !d.options.AllowDuplicateNames {
+		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			d.names.push()
 			d.namespaces.push()
 		}
@@ -562,7 +534,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if err = d.tokens.popObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
-		if !d.options.AllowDuplicateNames {
+		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			d.names.pop()
 			d.namespaces.pop()
 		}
@@ -676,7 +648,7 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 	case 'n', 't', 'f':
 		err = d.tokens.appendLiteral()
 	case '"':
-		if !d.options.AllowDuplicateNames && d.tokens.last.needObjectName() {
+		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && d.tokens.last.needObjectName() {
 			if !d.tokens.last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
@@ -831,7 +803,7 @@ func (d *Decoder) consumeLiteral(pos int, lit string) (newPos int, err error) {
 func (d *Decoder) consumeString(flags *valueFlags, pos int) (newPos int, err error) {
 	var n int
 	for {
-		n, err = consumeStringResumable(flags, d.buf[pos:], n, !d.options.AllowInvalidUTF8)
+		n, err = consumeStringResumable(flags, d.buf[pos:], n, !d.options.Flags.Get(jsonflags.AllowInvalidUTF8))
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -876,7 +848,7 @@ func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
 func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, err error) {
 	var n int
 	var names *objectNamespace
-	if !d.options.AllowDuplicateNames {
+	if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 		d.namespaces.push()
 		defer d.namespaces.pop()
 		names = d.namespaces.last()
@@ -924,7 +896,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 		} else {
 			pos += n
 		}
-		if !d.options.AllowDuplicateNames && !names.insertQuoted(d.buf[pos-n:pos], flags2.isVerbatim()) {
+		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(d.buf[pos-n:pos], flags2.isVerbatim()) {
 			return pos - n, newDuplicateNameError(d.buf[pos-n : pos])
 		}
 
@@ -1147,11 +1119,16 @@ func consumeLiteral(b []byte, lit string) (n int, err error) {
 // but is limited to the grammar for an ASCII string without escape sequences.
 // It returns 0 if it is invalid or more complicated than a simple string,
 // in which case consumeString should be called.
+//
+// It rejects '<', '>', and '&' for compatibility reasons since these were
+// always escaped in the v1 implementation. Thus, if this function reports ok
+// then we know that the string would be encoded the same way under both
+// v1 or v2 escape semantics.
 func consumeSimpleString(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 && b[0] == '"' {
 		n++
-		for len(b) > n && (' ' <= b[n] && b[n] != '\\' && b[n] != '"' && b[n] < utf8.RuneSelf) {
+		for len(b) > n && b[n] < utf8.RuneSelf && !escapeHTML.escapeASCII(b[n]) {
 			n++
 		}
 		if uint(len(b)) > uint(n) && b[n] == '"' {

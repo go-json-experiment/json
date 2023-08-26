@@ -68,7 +68,7 @@
 // into the corresponding Go struct fields.
 // Object members that do not match any struct fields,
 // also known as “unknown members”, are ignored by default or rejected
-// if UnmarshalOptions.RejectUnknownMembers is specified.
+// if [RejectUnknownMembers] is specified.
 //
 // The representation of each struct field can be customized in the
 // "json" struct field tag, where the tag is a comma separated list of options.
@@ -98,8 +98,7 @@
 //     encoded as a JSON null, empty string, empty object, or empty array.
 //     This option has no effect when unmarshaling.
 //
-//   - string: The "string" option specifies that
-//     MarshalOptions.StringifyNumbers and UnmarshalOptions.StringifyNumbers
+//   - string: The "string" option specifies that [StringifyNumbers]
 //     be set when marshaling or unmarshaling a struct field value.
 //     This causes numeric types to be encoded as a JSON number
 //     within a JSON string, and to be decoded from either a JSON number or
@@ -120,10 +119,10 @@
 //     It is the JSON equivalent of Go struct embedding.
 //     A Go embedded field is implicitly inlined unless an explicit JSON name
 //     is specified. The inlined field must be a Go struct
-//     (that does not implement any JSON methods), RawValue, map[string]T,
-//     or an unnamed pointer to such types. When marshaling,
+//     (that does not implement any JSON methods), [jsontext.Value],
+//     map[string]T, or an unnamed pointer to such types. When marshaling,
 //     inlined fields from a pointer type are omitted if it is nil.
-//     Inlined fields of type RawValue and map[string]T are called
+//     Inlined fields of type [jsontext.Value] and map[string]T are called
 //     “inlined fallbacks” as they can represent all possible
 //     JSON object members not directly handled by the parent struct.
 //     Only one inlined fallback field may be specified in a struct,
@@ -132,11 +131,11 @@
 //
 //   - unknown: The "unknown" option is a specialized variant
 //     of the inlined fallback to indicate that this Go struct field
-//     contains any number of unknown JSON object members. The field type
-//     must be a RawValue, map[string]T, or an unnamed pointer to such types.
-//     If MarshalOptions.DiscardUnknownMembers is specified when marshaling,
+//     contains any number of unknown JSON object members. The field type must
+//     be a [jsontext.Value], map[string]T, or an unnamed pointer to such types.
+//     If [DiscardUnknownMembers] is specified when marshaling,
 //     the contents of this field are ignored.
-//     If UnmarshalOptions.RejectUnknownMembers is specified when unmarshaling,
+//     If [RejectUnknownMembers] is specified when unmarshaling,
 //     any unknown object members are rejected regardless of whether
 //     an inlined fallback with the "unknown" option exists. This option
 //     must not be specified with any other option (including the JSON name).
@@ -156,7 +155,7 @@
 // For example, only a nil slice or map is omitted under "omitzero", while
 // an empty slice or map is omitted under "omitempty" regardless of nilness.
 // The "omitzero" option is useful for types with a well-defined zero value
-// (e.g., netip.Addr) or have an IsZero method (e.g., time.Time).
+// (e.g., [net/netip.Addr]) or have an IsZero method (e.g., [time.Time.IsZero]).
 //
 // Every Go struct corresponds to a list of JSON representable fields
 // which is constructed by performing a breadth-first search over
@@ -173,7 +172,7 @@
 // with embedded struct types.
 //
 // Marshaling or unmarshaling a non-empty struct
-// without any JSON representable fields results in a SemanticError.
+// without any JSON representable fields results in a [SemanticError].
 // Unexported fields must not have any `json` tags except for `json:"-"`.
 package json
 

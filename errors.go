@@ -152,7 +152,7 @@ func (e *SemanticError) Unwrap() error {
 //
 // The contents of this error as produced by this package may change over time.
 //
-// Deprecated: Use jsontext.SyntacticError instead.
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.SyntacticError] instead.
 type SyntacticError struct {
 	requireKeyedLiterals
 	nonComparable

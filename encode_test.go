@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
@@ -41,24 +42,25 @@ func TestEncoder(t *testing.T) {
 }
 func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName string, td coderTestdataEntry) {
 	var want string
+	var opts []Options
 	dst := new(bytes.Buffer)
-	enc := NewEncoder(dst)
-	enc.options.omitTopLevelNewline = true
+	opts = append(opts, jsonflags.OmitTopLevelNewline|1)
 	want = td.outCompacted
 	switch formatName {
 	case "Escaped":
-		enc.options.EscapeRune = func(rune) bool { return true }
+		opts = append(opts, WithEscapeFunc(func(rune) bool { return true }))
 		if td.outEscaped != "" {
 			want = td.outEscaped
 		}
 	case "Indented":
-		enc.options.multiline = true
-		enc.options.IndentPrefix = "\t"
-		enc.options.Indent = "    "
+		opts = append(opts, Expand(true))
+		opts = append(opts, WithIndentPrefix("\t"))
+		opts = append(opts, WithIndent("    "))
 		if td.outIndented != "" {
 			want = td.outIndented
 		}
 	}
+	enc := NewEncoder(dst, opts...)
 
 	switch typeName {
 	case "Token":
@@ -155,7 +157,7 @@ type encoderMethodCall struct {
 
 var encoderErrorTestdata = []struct {
 	name    jsontest.CaseName
-	opts    EncodeOptions
+	opts    []Options
 	calls   []encoderMethodCall
 	wantOut string
 }{{
@@ -220,21 +222,21 @@ var encoderErrorTestdata = []struct {
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
-	opts: EncodeOptions{AllowInvalidUTF8: true},
+	opts: []Options{AllowInvalidUTF8(true)},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Value"),
-	opts: EncodeOptions{AllowInvalidUTF8: true},
+	opts: []Options{AllowInvalidUTF8(true)},
 	calls: []encoderMethodCall{
 		{RawValue("\"living\xde\xad\xbe\xef\""), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
-	opts: EncodeOptions{AllowInvalidUTF8: false},
+	opts: []Options{AllowInvalidUTF8(false)},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), errInvalidUTF8, ""},
 		{RawValue("\"living\xde\xad\xbe\xef\""), errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
@@ -347,7 +349,7 @@ var encoderErrorTestdata = []struct {
 	wantOut: `{"0":0,"1":1}` + "\n" + `{"0":0,"1":1}` + "\n",
 }, {
 	name: jsontest.Name("ValidObject/DuplicateNames"),
-	opts: EncodeOptions{AllowDuplicateNames: true},
+	opts: []Options{AllowDuplicateNames(true)},
 	calls: []encoderMethodCall{
 		{ObjectStart, nil, ""},
 		{String("0"), nil, ""},
@@ -419,9 +421,9 @@ func TestEncoderErrors(t *testing.T) {
 		})
 	}
 }
-func testEncoderErrors(t *testing.T, where jsontest.CasePos, opts EncodeOptions, calls []encoderMethodCall, wantOut string) {
+func testEncoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, calls []encoderMethodCall, wantOut string) {
 	dst := new(bytes.Buffer)
-	enc := opts.NewEncoder(dst)
+	enc := NewEncoder(dst, opts...)
 	for i, call := range calls {
 		var gotErr error
 		switch tokVal := call.in.(type) {
@@ -453,15 +455,15 @@ func testEncoderErrors(t *testing.T, where jsontest.CasePos, opts EncodeOptions,
 
 func TestAppendString(t *testing.T) {
 	var (
-		escapeNothing    = func(r rune) bool { return false }
-		escapeHTML       = func(r rune) bool { return r == '<' || r == '>' || r == '&' || r == '\u2028' || r == '\u2029' }
-		escapeNonASCII   = func(r rune) bool { return r > unicode.MaxASCII }
-		escapeEverything = func(r rune) bool { return true }
+		escapeNothing    = makeEscapeRunes(false, false, nil)
+		escapeHTML       = makeEscapeRunes(true, true, nil)
+		escapeNonASCII   = makeEscapeRunes(false, false, func(r rune) bool { return r > unicode.MaxASCII })
+		escapeEverything = makeEscapeRunes(false, false, func(r rune) bool { return true })
 	)
 
 	tests := []struct {
 		in          string
-		escapeRune  func(rune) bool
+		escapeRune  *escapeRunes
 		want        string
 		wantErr     error
 		wantErrUTF8 error

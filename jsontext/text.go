@@ -13,14 +13,14 @@ import (
 	"io"
 
 	"github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
 type (
-	EncodeOptions = json.EncodeOptions
-	Encoder       = json.Encoder
+	Options = jsonopts.Options
 
-	DecodeOptions = json.DecodeOptions
-	Decoder       = json.Decoder
+	Encoder = json.Encoder
+	Decoder = json.Decoder
 
 	Kind  = json.Kind
 	Token = json.Token
@@ -37,8 +37,17 @@ func AppendUnquote[Bytes ~[]byte | ~string](dst []byte, src Bytes) ([]byte, erro
 	return json.AppendUnquote(dst, src)
 }
 
-func NewEncoder(w io.Writer) *Encoder { return json.NewEncoder(w) }
-func NewDecoder(r io.Reader) *Decoder { return json.NewDecoder(r) }
+func NewEncoder(w io.Writer, opts ...Options) *Encoder { return json.NewEncoder(w, opts...) }
+func NewDecoder(r io.Reader, opts ...Options) *Decoder { return json.NewDecoder(r, opts...) }
+
+func AllowDuplicateNames(v bool) Options        { return json.AllowDuplicateNames(v) }
+func AllowInvalidUTF8(v bool) Options           { return json.AllowInvalidUTF8(v) }
+func EscapeForHTML(v bool) Options              { return json.EscapeForHTML(v) }
+func EscapeForJS(v bool) Options                { return json.EscapeForJS(v) }
+func WithEscapeFunc(fn func(rune) bool) Options { return json.WithEscapeFunc(fn) }
+func Expand(v bool) Options                     { return json.Expand(v) }
+func WithIndent(indent string) Options          { return json.WithIndent(indent) }
+func WithIndentPrefix(prefix string) Options    { return json.WithIndentPrefix(prefix) }
 
 var (
 	Null  Token = json.Null

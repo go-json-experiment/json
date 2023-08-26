@@ -40,7 +40,7 @@ type bufferStatistics struct {
 	prevLen int // length of previous buffer
 }
 
-func getBufferedEncoder(o EncodeOptions) *Encoder {
+func getBufferedEncoder(opts ...Options) *Encoder {
 	e := bufferedEncoderPool.Get().(*Encoder)
 	if e.buf == nil {
 		// Round up to nearest 2ⁿ to make best use of malloc size classes.
@@ -49,7 +49,7 @@ func getBufferedEncoder(o EncodeOptions) *Encoder {
 		n := 1 << bits.Len(uint(e.bufStats.prevLen|63))
 		e.buf = make([]byte, 0, n)
 	}
-	e.reset(e.buf[:0], nil, o)
+	e.reset(e.buf[:0], nil, opts...)
 	return e
 }
 func putBufferedEncoder(e *Encoder) {
@@ -82,14 +82,14 @@ func putBufferedEncoder(e *Encoder) {
 	bufferedEncoderPool.Put(e)
 }
 
-func getStreamingEncoder(w io.Writer, o EncodeOptions) *Encoder {
+func getStreamingEncoder(w io.Writer, opts ...Options) *Encoder {
 	if _, ok := w.(*bytes.Buffer); ok {
 		e := bytesBufferEncoderPool.Get().(*Encoder)
-		e.reset(nil, w, o) // buffer taken from bytes.Buffer
+		e.reset(nil, w, opts...) // buffer taken from bytes.Buffer
 		return e
 	} else {
 		e := streamingEncoderPool.Get().(*Encoder)
-		e.reset(e.buf[:0], w, o) // preserve existing buffer
+		e.reset(e.buf[:0], w, opts...) // preserve existing buffer
 		return e
 	}
 }
@@ -119,23 +119,23 @@ var (
 	bytesBufferDecoderPool = bufferedDecoderPool
 )
 
-func getBufferedDecoder(b []byte, o DecodeOptions) *Decoder {
+func getBufferedDecoder(b []byte, opts ...Options) *Decoder {
 	d := bufferedDecoderPool.Get().(*Decoder)
-	d.reset(b, nil, o)
+	d.reset(b, nil, opts...)
 	return d
 }
 func putBufferedDecoder(d *Decoder) {
 	bufferedDecoderPool.Put(d)
 }
 
-func getStreamingDecoder(r io.Reader, o DecodeOptions) *Decoder {
+func getStreamingDecoder(r io.Reader, opts ...Options) *Decoder {
 	if _, ok := r.(*bytes.Buffer); ok {
 		d := bytesBufferDecoderPool.Get().(*Decoder)
-		d.reset(nil, r, o) // buffer taken from bytes.Buffer
+		d.reset(nil, r, opts...) // buffer taken from bytes.Buffer
 		return d
 	} else {
 		d := streamingDecoderPool.Get().(*Decoder)
-		d.reset(d.buf[:0], r, o) // preserve existing buffer
+		d.reset(d.buf[:0], r, opts...) // preserve existing buffer
 		return d
 	}
 }

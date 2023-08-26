@@ -27,17 +27,17 @@ type ObjectMember[V any] struct {
 	Value V
 }
 
-// MarshalNextJSON encodes obj as a JSON object into enc.
-func (obj *OrderedObject[V]) MarshalNextJSON(opts json.MarshalOptions, enc *json.Encoder) error {
+// MarshalJSONV2 encodes obj as a JSON object into enc.
+func (obj *OrderedObject[V]) MarshalJSONV2(enc *json.Encoder, opts json.Options) error {
 	if err := enc.WriteToken(json.ObjectStart); err != nil {
 		return err
 	}
 	for i := range *obj {
 		member := &(*obj)[i]
-		if err := opts.MarshalNext(enc, &member.Name); err != nil {
+		if err := json.MarshalEncode(enc, &member.Name, opts); err != nil {
 			return err
 		}
-		if err := opts.MarshalNext(enc, &member.Value); err != nil {
+		if err := json.MarshalEncode(enc, &member.Value, opts); err != nil {
 			return err
 		}
 	}
@@ -47,8 +47,8 @@ func (obj *OrderedObject[V]) MarshalNextJSON(opts json.MarshalOptions, enc *json
 	return nil
 }
 
-// UnmarshalNextJSON decodes a JSON object from dec into obj.
-func (obj *OrderedObject[V]) UnmarshalNextJSON(opts json.UnmarshalOptions, dec *json.Decoder) error {
+// UnmarshalJSONV2 decodes a JSON object from dec into obj.
+func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *json.Decoder, opts json.Options) error {
 	if k := dec.PeekKind(); k != '{' {
 		return fmt.Errorf("expected object start, but encountered %v", k)
 	}
@@ -58,10 +58,10 @@ func (obj *OrderedObject[V]) UnmarshalNextJSON(opts json.UnmarshalOptions, dec *
 	for dec.PeekKind() != '}' {
 		*obj = append(*obj, ObjectMember[V]{})
 		member := &(*obj)[len(*obj)-1]
-		if err := opts.UnmarshalNext(dec, &member.Name); err != nil {
+		if err := json.UnmarshalDecode(dec, &member.Name, opts); err != nil {
 			return err
 		}
-		if err := opts.UnmarshalNext(dec, &member.Value); err != nil {
+		if err := json.UnmarshalDecode(dec, &member.Value, opts); err != nil {
 			return err
 		}
 	}
@@ -76,21 +76,18 @@ func (obj *OrderedObject[V]) UnmarshalNextJSON(opts json.UnmarshalOptions, dec *
 func Example_orderedObject() {
 	// Round-trip marshal and unmarshal an ordered object.
 	// We expect the order and duplicity of JSON object members to be preserved.
+	// Specify AllowDuplicateNames since this object contains "fizz" twice.
 	want := OrderedObject[string]{
 		{"fizz", "buzz"},
 		{"hello", "world"},
 		{"fizz", "wuzz"},
 	}
-	b, err := json.MarshalOptions{}.Marshal(json.EncodeOptions{
-		AllowDuplicateNames: true, // since the object contains "fizz" twice
-	}, &want)
+	b, err := json.Marshal(&want, json.AllowDuplicateNames(true))
 	if err != nil {
 		log.Fatal(err)
 	}
 	var got OrderedObject[string]
-	err = json.UnmarshalOptions{}.Unmarshal(json.DecodeOptions{
-		AllowDuplicateNames: true, // since the object contains "fizz" twice
-	}, b, &got)
+	err = json.Unmarshal(b, &got, json.AllowDuplicateNames(true))
 	if err != nil {
 		log.Fatal(err)
 	}

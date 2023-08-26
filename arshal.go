@@ -10,117 +10,48 @@ import (
 	"io"
 	"reflect"
 	"sync"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
-// MarshalOptions configures how Go data is serialized as JSON data.
-// The zero value is equivalent to the default marshal settings.
-type MarshalOptions struct {
-	requireKeyedLiterals
-	nonComparable
+var structOptionsPool = &sync.Pool{New: func() any { return new(jsonopts.Struct) }}
 
-	// Marshalers is a list of type-specific marshalers to use.
-	Marshalers *Marshalers
-
-	// EmitNilSliceAsNull specifies that nil Go slices should marshal as a
-	// JSON null instead of the default representation as an empty JSON array
-	// (or a empty JSON string in the case of ~[]byte).
-	// Slice fields explicitly marked with `format:emitempty` still marshal
-	// as an empty JSON array.
-	EmitNilSliceAsNull bool
-
-	// EmitNilMapAsNull specifies that nil Go maps should marshal as a
-	// JSON null instead of the default representation as an empty JSON object.
-	// Map fields explicitly marked with `format:emitempty` still marshal
-	// as an empty JSON object.
-	EmitNilMapAsNull bool
-
-	// StringifyNumbers specifies that numeric Go types should be serialized
-	// as a JSON string containing the equivalent JSON number value.
-	//
-	// According to RFC 8259, section 6, a JSON implementation may choose to
-	// limit the representation of a JSON number to an IEEE 754 binary64 value.
-	// This may cause decoders to lose precision for int64 and uint64 types.
-	// Escaping JSON numbers as a JSON string preserves the exact precision.
-	StringifyNumbers bool
-
-	// DiscardUnknownMembers specifies that marshaling should ignore any
-	// JSON object members stored in Go struct fields dedicated to storing
-	// unknown JSON object members.
-	DiscardUnknownMembers bool
-
-	// Deterministic specifies that the same input value will be serialized
-	// as the exact same output bytes. Different processes of
-	// the same program will serialize equal values to the same bytes,
-	// but different versions of the same program are not guaranteed
-	// to produce the exact same sequence of bytes.
-	Deterministic bool
-
-	// formatDepth is the depth at which we respect the format flag.
-	formatDepth int
-	// format is custom formatting for the value at the specified depth.
-	format string
+func getStructOptions() *jsonopts.Struct {
+	return structOptionsPool.Get().(*jsonopts.Struct)
 }
-
-// Marshal serializes a Go value as a []byte with default options.
-// It is a thin wrapper over MarshalOptions.Marshal.
-func Marshal(in any) (out []byte, err error) {
-	return MarshalOptions{}.Marshal(EncodeOptions{}, in)
-}
-
-// MarshalFull serializes a Go value into an io.Writer with default options.
-// It is a thin wrapper over MarshalOptions.MarshalFull.
-func MarshalFull(out io.Writer, in any) error {
-	return MarshalOptions{}.MarshalFull(EncodeOptions{}, out, in)
+func putStructOptions(o *jsonopts.Struct) {
+	*o = jsonopts.Struct{}
+	structOptionsPool.Put(o)
 }
 
 // Marshal serializes a Go value as a []byte according to the provided
-// marshal and encode options. It does not terminate the output with a newline.
-// See MarshalNext for details about the conversion of a Go value into JSON.
-func (mo MarshalOptions) Marshal(eo EncodeOptions, in any) (out []byte, err error) {
-	enc := getBufferedEncoder(eo)
-	defer putBufferedEncoder(enc)
-	enc.options.omitTopLevelNewline = true
-	err = mo.MarshalNext(enc, in)
-	return bytes.Clone(enc.buf), err
-}
-
-// MarshalFull serializes a Go value into an io.Writer according to the provided
-// marshal and encode options. It does not terminate the output with a newline.
-// See MarshalNext for details about the conversion of a Go value into JSON.
-func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) error {
-	enc := getStreamingEncoder(out, eo)
-	defer putStreamingEncoder(enc)
-	enc.options.omitTopLevelNewline = true
-	err := mo.MarshalNext(enc, in)
-	return err
-}
-
-// MarshalNext encodes a Go value as the next JSON value according to
-// the provided marshal options.
+// marshal and encode options (while ignoring unmarshal or decode options).
+// It does not terminate the output with a newline.
 //
 // Type-specific marshal functions and methods take precedence
 // over the default representation of a value.
 // Functions or methods that operate on *T are only called when encoding
 // a value of type T (by taking its address) or a non-nil value of *T.
-// MarshalNext ensures that a value is always addressable
+// Marshal ensures that a value is always addressable
 // (by boxing it on the heap if necessary) so that
 // these functions and methods can be consistently called. For performance,
-// it is recommended that MarshalNext be passed a non-nil pointer to the value.
+// it is recommended that Marshal be passed a non-nil pointer to the value.
 //
 // The input value is encoded as JSON according the following rules:
 //
-//   - If any type-specific functions in MarshalOptions.Marshalers match
+//   - If any type-specific functions in a [WithMarshalers] option match
 //     the value type, then those functions are called to encode the value.
-//     If all applicable functions return SkipFunc,
+//     If all applicable functions return [SkipFunc],
 //     then the value is encoded according to subsequent rules.
 //
-//   - If the value type implements MarshalerV2,
-//     then the MarshalNextJSON method is called to encode the value.
+//   - If the value type implements [MarshalerV2],
+//     then the MarshalJSONV2 method is called to encode the value.
 //
-//   - If the value type implements MarshalerV1,
+//   - If the value type implements [MarshalerV1],
 //     then the MarshalJSON method is called to encode the value.
 //
-//   - If the value type implements encoding.TextMarshaler,
+//   - If the value type implements [encoding.TextMarshaler],
 //     then the MarshalText method is called to encode the value and
 //     subsequently encode its result as a JSON string.
 //
@@ -152,27 +83,26 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 //     where each byte is recursively JSON-encoded as each JSON array element.
 //
 //   - A Go integer is encoded as a JSON number without fractions or exponents.
-//     If MarshalOptions.StringifyNumbers is specified, then the JSON number is
-//     encoded within a JSON string. It does not support any custom format
-//     flags.
+//     If [StringifyNumbers] is specified, then the JSON number is
+//     encoded within a JSON string. It does not support any custom format flags.
 //
 //   - A Go float is encoded as a JSON number.
-//     If MarshalOptions.StringifyNumbers is specified,
+//     If [StringifyNumbers] is specified,
 //     then the JSON number is encoded within a JSON string.
 //     If the format is "nonfinite", then NaN, +Inf, and -Inf are encoded as
 //     the JSON strings "NaN", "Infinity", and "-Infinity", respectively.
-//     Otherwise, the presence of non-finite numbers results in a SemanticError.
+//     Otherwise, the presence of non-finite numbers results in a [SemanticError].
 //
 //   - A Go map is encoded as a JSON object, where each Go map key and value
 //     is recursively encoded as a name and value pair in the JSON object.
 //     The Go map key must encode as a JSON string, otherwise this results
-//     in a SemanticError. When encoding keys, MarshalOptions.StringifyNumbers
+//     in a [SemanticError]. When encoding keys, [StringifyNumbers]
 //     is automatically applied so that numeric keys encode as JSON strings.
 //     The Go map is traversed in a non-deterministic order.
-//     For deterministic encoding, consider using RawValue.Canonicalize.
+//     For deterministic encoding, consider using [jsontext.Value.Canonicalize].
 //     If the format is "emitnull", then a nil map is encoded as a JSON null.
 //     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
-//     regardless of whether MarshalOptions.EmitNilMapAsNull is specified.
+//     regardless of whether [FormatNilMapAsNull] is specified.
 //     Otherwise by default, a nil map is encoded as an empty JSON object.
 //
 //   - A Go struct is encoded as a JSON object.
@@ -183,7 +113,7 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 //     is recursively JSON-encoded as the elements of the JSON array.
 //     If the format is "emitnull", then a nil slice is encoded as a JSON null.
 //     If the format is "emitempty", then a nil slice is encoded as an empty JSON array,
-//     regardless of whether MarshalOptions.EmitNilSliceAsNull is specified.
+//     regardless of whether [FormatNilSliceAsNull] is specified.
 //     Otherwise by default, a nil slice is encoded as an empty JSON array.
 //
 //   - A Go array is encoded as a JSON array, where each Go array element
@@ -199,24 +129,55 @@ func (mo MarshalOptions) MarshalFull(eo EncodeOptions, out io.Writer, in any) er
 //     the recursively JSON-encoded representation of the underlying value.
 //     It does not support any custom format flags.
 //
-//   - A Go time.Time is encoded as a JSON string containing the timestamp
-//     formatted in RFC 3339 with nanosecond resolution.
+//   - A Go [time.Time] is encoded as a JSON string containing the timestamp
+//     formatted in RFC 3339 with nanosecond precision.
 //     If the format matches one of the format constants declared
 //     in the time package (e.g., RFC1123), then that format is used.
-//     Otherwise, the format is used as-is with time.Time.Format if non-empty.
+//     Otherwise, the format is used as-is with [time.Time.Format] if non-empty.
 //
-//   - A Go time.Duration is encoded as a JSON string containing the duration
-//     formatted according to time.Duration.String.
+//   - A Go [time.Duration] is encoded as a JSON string containing the duration
+//     formatted according to [time.Duration.String].
 //     If the format is "nanos", it is encoded as a JSON number
 //     containing the number of nanoseconds in the duration.
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
-//     have no default representation and result in a SemanticError.
+//     have no default representation and result in a [SemanticError].
 //
-// JSON cannot represent cyclic data structures and
-// MarshalNext does not handle them.
+// JSON cannot represent cyclic data structures and Marshal does not handle them.
 // Passing cyclic structures will result in an error.
-func (mo MarshalOptions) MarshalNext(out *Encoder, in any) error {
+func Marshal(in any, opts ...Options) (out []byte, err error) {
+	enc := getBufferedEncoder(opts...)
+	defer putBufferedEncoder(enc)
+	enc.options.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
+	err = marshalEncode(enc, in, &enc.options)
+	return bytes.Clone(enc.buf), err
+}
+
+// MarshalWrite serializes a Go value into an [io.Writer] according to the provided
+// marshal and encode options (while ignoring unmarshal or decode options).
+// It does not terminate the output with a newline.
+// See [Marshal] for details about the conversion of a Go value into JSON.
+func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
+	enc := getStreamingEncoder(out, opts...)
+	defer putStreamingEncoder(enc)
+	enc.options.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
+	return marshalEncode(enc, in, &enc.options)
+}
+
+// MarshalEncode serializes a Go value into an [Encoder] according to the provided
+// marshal options (while ignoring unmarshal, encode, or decode options).
+// Unlike [Marshal] and [MarshalWrite], encode options are ignored because
+// they must have already been specified on the provided [Encoder].
+// See [Marshal] for details about the conversion of a Go value into JSON.
+func MarshalEncode(out *Encoder, in any, opts ...Options) (err error) {
+	mo := getStructOptions()
+	defer putStructOptions(mo)
+	mo.Join(opts...)
+	mo.CopyCoderOptions(&out.options)
+	return marshalEncode(out, in, mo)
+}
+
+func marshalEncode(out *Encoder, in any, mo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(in)
 	if !v.IsValid() || (v.Kind() == reflect.Pointer && v.IsNil()) {
 		return out.WriteToken(Null)
@@ -234,10 +195,10 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in any) error {
 	// Lookup and call the marshal function for this type.
 	marshal := lookupArshaler(t).marshal
 	if mo.Marshalers != nil {
-		marshal, _ = mo.Marshalers.lookup(marshal, t)
+		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t)
 	}
-	if err := marshal(mo, out, va); err != nil {
-		if !out.options.AllowDuplicateNames {
+	if err := marshal(out, va, mo); err != nil {
+		if !out.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			out.tokens.invalidateDisabledNamespaces()
 		}
 		return err
@@ -245,102 +206,36 @@ func (mo MarshalOptions) MarshalNext(out *Encoder, in any) error {
 	return nil
 }
 
-// UnmarshalOptions configures how JSON data is deserialized as Go data.
-// The zero value is equivalent to the default unmarshal settings.
-type UnmarshalOptions struct {
-	requireKeyedLiterals
-	nonComparable
-
-	// Unmarshalers is a list of type-specific unmarshalers to use.
-	Unmarshalers *Unmarshalers
-
-	// StringifyNumbers specifies that numeric Go types can be deserialized
-	// from either a JSON number or a JSON string containing a JSON number
-	// without any surrounding whitespace.
-	StringifyNumbers bool
-
-	// RejectUnknownMembers specifies that unknown members should be rejected
-	// when unmarshaling a JSON object, regardless of whether there is a field
-	// to store unknown members.
-	RejectUnknownMembers bool
-
-	// formatDepth is the depth at which we respect the format flag.
-	formatDepth int
-	// format is custom formatting for the value at the specified depth.
-	format string
-}
-
-// Unmarshal deserializes a Go value from a []byte with default options.
-// It is a thin wrapper over UnmarshalOptions.Unmarshal.
-func Unmarshal(in []byte, out any) error {
-	return UnmarshalOptions{}.Unmarshal(DecodeOptions{}, in, out)
-}
-
-// UnmarshalFull deserializes a Go value from an io.Reader with default options.
-// It is a thin wrapper over UnmarshalOptions.UnmarshalFull.
-func UnmarshalFull(in io.Reader, out any) error {
-	return UnmarshalOptions{}.UnmarshalFull(DecodeOptions{}, in, out)
-}
-
-// Unmarshal deserializes a Go value from a []byte according to the
-// provided unmarshal and decode options. The output must be a non-nil pointer.
+// Unmarshal decodes a []byte input into a Go value according to the provided
+// unmarshal and decode options (while ignoring marshal or encode options).
 // The input must be a single JSON value with optional whitespace interspersed.
-// See UnmarshalNext for details about the conversion of JSON into a Go value.
-func (uo UnmarshalOptions) Unmarshal(do DecodeOptions, in []byte, out any) error {
-	dec := getBufferedDecoder(in, do)
-	defer putBufferedDecoder(dec)
-	return uo.unmarshalFull(dec, out)
-}
-
-// UnmarshalFull deserializes a Go value from an io.Reader according to the
-// provided unmarshal and decode options. The output must be a non-nil pointer.
-// The input must be a single JSON value with optional whitespace interspersed.
-// It consumes the entirety of io.Reader until io.EOF is encountered.
-// See UnmarshalNext for details about the conversion of JSON into a Go value.
-func (uo UnmarshalOptions) UnmarshalFull(do DecodeOptions, in io.Reader, out any) error {
-	dec := getStreamingDecoder(in, do)
-	defer putStreamingDecoder(dec)
-	return uo.unmarshalFull(dec, out)
-}
-func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
-	switch err := uo.UnmarshalNext(in, out); err {
-	case nil:
-		return in.checkEOF()
-	case io.EOF:
-		return io.ErrUnexpectedEOF
-	default:
-		return err
-	}
-}
-
-// UnmarshalNext decodes the next JSON value into a Go value according to
-// the provided unmarshal options. The output must be a non-nil pointer.
+// The output must be a non-nil pointer.
 //
 // Type-specific unmarshal functions and methods take precedence
 // over the default representation of a value.
 // Functions or methods that operate on *T are only called when decoding
 // a value of type T (by taking its address) or a non-nil value of *T.
-// UnmarshalNext ensures that a value is always addressable
+// Unmarshal ensures that a value is always addressable
 // (by boxing it on the heap if necessary) so that
 // these functions and methods can be consistently called.
 //
 // The input is decoded into the output according the following rules:
 //
-//   - If any type-specific functions in UnmarshalOptions.Unmarshalers match
+//   - If any type-specific functions in a [WithUnmarshalers] option match
 //     the value type, then those functions are called to decode the JSON
-//     value. If all applicable functions return SkipFunc,
+//     value. If all applicable functions return [SkipFunc],
 //     then the input is decoded according to subsequent rules.
 //
-//   - If the value type implements UnmarshalerV2,
-//     then the UnmarshalNextJSON method is called to decode the JSON value.
+//   - If the value type implements [UnmarshalerV2],
+//     then the UnmarshalJSONV2 method is called to decode the JSON value.
 //
-//   - If the value type implements UnmarshalerV1,
+//   - If the value type implements [UnmarshalerV1],
 //     then the UnmarshalJSON method is called to decode the JSON value.
 //
-//   - If the value type implements encoding.TextUnmarshaler,
+//   - If the value type implements [encoding.TextUnmarshaler],
 //     then the input is decoded as a JSON string and
 //     the UnmarshalText method is called with the decoded string value.
-//     This fails with a SemanticError if the input is not a JSON string.
+//     This fails with a [SemanticError] if the input is not a JSON string.
 //
 //   - Otherwise, the JSON value is decoded according to the value's type
 //     as described in detail below.
@@ -353,7 +248,7 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 // A JSON null may be decoded into every supported Go value where
 // it is equivalent to storing the zero value of the Go value.
 // If the input JSON kind is not handled by the current Go value type,
-// then this fails with a SemanticError. Unless otherwise specified,
+// then this fails with a [SemanticError]. Unless otherwise specified,
 // the decoded value replaces any pre-existing value.
 //
 // The representation of each type is as follows:
@@ -376,28 +271,28 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 //     When decoding into a non-nil []byte, the slice length is reset to zero
 //     and the decoded input is appended to it.
 //     When decoding into a [N]byte, the input must decode to exactly N bytes,
-//     otherwise it fails with a SemanticError.
+//     otherwise it fails with a [SemanticError].
 //
 //   - A Go integer is decoded from a JSON number.
 //     It may also be decoded from a JSON string containing a JSON number
-//     if UnmarshalOptions.StringifyNumbers is specified.
-//     It fails with a SemanticError if the JSON number
+//     if [StringifyNumbers] is specified.
+//     It fails with a [SemanticError] if the JSON number
 //     has a fractional or exponent component.
 //     It also fails if it overflows the representation of the Go integer type.
 //     It does not support any custom format flags.
 //
 //   - A Go float is decoded from a JSON number.
 //     It may also be decoded from a JSON string containing a JSON number
-//     if UnmarshalOptions.StringifyNumbers is specified.
+//     if [StringifyNumbers] is specified.
 //     The JSON number is parsed as the closest representable Go float value.
 //     If the format is "nonfinite", then the JSON strings
 //     "NaN", "Infinity", and "-Infinity" are decoded as NaN, +Inf, and -Inf.
-//     Otherwise, the presence of such strings results in a SemanticError.
+//     Otherwise, the presence of such strings results in a [SemanticError].
 //
 //   - A Go map is decoded from a JSON object,
 //     where each JSON object name and value pair is recursively decoded
 //     as the Go map key and value. When decoding keys,
-//     UnmarshalOptions.StringifyNumbers is automatically applied so that
+//     [StringifyNumbers] is automatically applied so that
 //     numeric keys can decode from JSON strings. Maps are not cleared.
 //     If the Go map is nil, then a new map is allocated to decode into.
 //     If the decoded key matches an existing Go map entry, the entry value
@@ -417,7 +312,7 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 //   - A Go array is decoded from a JSON array, where each JSON array element
 //     is recursively decoded as each corresponding Go array element.
 //     Each Go array element is zeroed before decoding into it.
-//     It fails with a SemanticError if the JSON array does not contain
+//     It fails with a [SemanticError] if the JSON array does not contain
 //     the exact same number of elements as the Go array.
 //     It does not support any custom format flags.
 //
@@ -432,33 +327,78 @@ func (uo UnmarshalOptions) unmarshalFull(in *Decoder, out any) error {
 //     Otherwise, a nil interface value of an empty interface type is initialized
 //     with a zero Go bool, string, float64, map[string]any, or []any if the
 //     input is a JSON boolean, string, number, object, or array, respectively.
-//     If the interface value is still nil, then this fails with a SemanticError
+//     If the interface value is still nil, then this fails with a [SemanticError]
 //     since decoding could not determine an appropriate Go type to decode into.
 //     For example, unmarshaling into a nil io.Reader fails since
 //     there is no concrete type to populate the interface value with.
 //     Otherwise an underlying value exists and it recursively decodes
 //     the JSON input into it. It does not support any custom format flags.
 //
-//   - A Go time.Time is decoded from a JSON string containing the time
-//     formatted in RFC 3339 with nanosecond resolution.
+//   - A Go [time.Time] is decoded from a JSON string containing the time
+//     formatted in RFC 3339 with nanosecond precision.
 //     If the format matches one of the format constants declared in
 //     the time package (e.g., RFC1123), then that format is used for parsing.
-//     Otherwise, the format is used as-is with time.Time.Parse if non-empty.
+//     Otherwise, the format is used as-is with [time.Time.Parse] if non-empty.
 //
-//   - A Go time.Duration is decoded from a JSON string by
-//     passing the decoded string to time.ParseDuration.
+//   - A Go [time.Duration] is decoded from a JSON string by
+//     passing the decoded string to [time.ParseDuration].
 //     If the format is "nanos", it is instead decoded from a JSON number
 //     containing the number of nanoseconds in the duration.
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
-//     have no default representation and result in a SemanticError.
+//     have no default representation and result in a [SemanticError].
 //
 // In general, unmarshaling follows merge semantics (similar to RFC 7396)
 // where the decoded Go value replaces the destination value
 // for any JSON kind other than an object.
 // For JSON objects, the input object is merged into the destination value
 // where matching object members recursively apply merge semantics.
-func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out any) error {
+func Unmarshal(in []byte, out any, opts ...Options) (err error) {
+	dec := getBufferedDecoder(in, opts...)
+	defer putBufferedDecoder(dec)
+	return unmarshalFull(dec, out, &dec.options)
+}
+
+// UnmarshalRead deserializes a Go value from an [io.Reader] according to the
+// provided unmarshal and decode options (while ignoring marshal or encode options).
+// The input must be a single JSON value with optional whitespace interspersed.
+// It consumes the entirety of [io.Reader] until [io.EOF] is encountered,
+// without reporting an error for EOF. The output must be a non-nil pointer.
+// See [Unmarshal] for details about the conversion of JSON into a Go value.
+func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
+	dec := getStreamingDecoder(in, opts...)
+	defer putStreamingDecoder(dec)
+	return unmarshalFull(dec, out, &dec.options)
+}
+
+func unmarshalFull(in *Decoder, out any, uo *jsonopts.Struct) error {
+	switch err := unmarshalDecode(in, out, uo); err {
+	case nil:
+		return in.checkEOF()
+	case io.EOF:
+		return io.ErrUnexpectedEOF
+	default:
+		return err
+	}
+}
+
+// UnmarshalDecode deserializes a Go value from a [Decoder] according to the
+// provided unmarshal options (while ignoring marshal, encode, or decode options).
+// Unlike [Unmarshal] and [UnmarshalRead], decode options are ignored because
+// they must have already been specified on the provided [Decoder].
+// The input may be a stream of one or more JSON values,
+// where this only unmarshals the next JSON value in the stream.
+// The output must be a non-nil pointer.
+// See [Unmarshal] for details about the conversion of JSON into a Go value.
+func UnmarshalDecode(in *Decoder, out any, opts ...Options) (err error) {
+	uo := getStructOptions()
+	defer putStructOptions(uo)
+	uo.Join(opts...)
+	uo.CopyCoderOptions(&in.options)
+	return unmarshalDecode(in, out, uo)
+}
+
+func unmarshalDecode(in *Decoder, out any, uo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(out)
 	if !v.IsValid() || v.Kind() != reflect.Pointer || v.IsNil() {
 		var t reflect.Type
@@ -477,10 +417,10 @@ func (uo UnmarshalOptions) UnmarshalNext(in *Decoder, out any) error {
 	// Lookup and call the unmarshal function for this type.
 	unmarshal := lookupArshaler(t).unmarshal
 	if uo.Unmarshalers != nil {
-		unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, t)
+		unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t)
 	}
-	if err := unmarshal(uo, in, va); err != nil {
-		if !in.options.AllowDuplicateNames {
+	if err := unmarshal(in, va, uo); err != nil {
+		if !in.options.Flags.Get(jsonflags.AllowDuplicateNames) {
 			in.tokens.invalidateDisabledNamespaces()
 		}
 		return err
@@ -502,9 +442,13 @@ func newAddressableValue(t reflect.Type) addressableValue {
 }
 
 // All marshal and unmarshal behavior is implemented using these signatures.
+// The *jsonopts.Struct argument is guaranteed to identical to or at least
+// a strict super-set of the options in Encoder.options or Decoder.options.
+// It is identical for Marshal, Unmarshal, MarshalWrite, and UnmarshalRead.
+// It is a super-set for MarshalEncode and UnmarshalDecode.
 type (
-	marshaler   = func(MarshalOptions, *Encoder, addressableValue) error
-	unmarshaler = func(UnmarshalOptions, *Decoder, addressableValue) error
+	marshaler   = func(*Encoder, addressableValue, *jsonopts.Struct) error
+	unmarshaler = func(*Decoder, addressableValue, *jsonopts.Struct) error
 )
 
 type arshaler struct {

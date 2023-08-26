@@ -14,6 +14,8 @@ import (
 	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
 )
 
 // NOTE: RawValue is analogous to v1 json.RawMessage.
@@ -28,7 +30,7 @@ import (
 // RawValue can represent entire array or object values, while Token cannot.
 // RawValue may contain leading and/or trailing whitespace.
 //
-// Deprecated: Use jsontext.Value instead.
+// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Value] instead.
 type RawValue []byte
 
 // Clone returns a copy of v.
@@ -53,7 +55,7 @@ func (v RawValue) String() string {
 // It does not verify whether numbers are representable within the limits
 // of any common numeric type (e.g., float64, int64, or uint64).
 func (v RawValue) IsValid() bool {
-	d := getBufferedDecoder(v, DecodeOptions{})
+	d := getBufferedDecoder(v)
 	defer putBufferedDecoder(d)
 	_, errVal := d.ReadValue()
 	_, errEOF := d.ReadToken()
@@ -78,6 +80,8 @@ func (v *RawValue) Compact() error {
 // It does not reformat JSON strings to use any other representation.
 // It is guaranteed to succeed if the input is valid.
 // If the value is already indented properly, then the buffer is not mutated.
+//
+// The prefix and indent strings must be composed of only spaces and/or tabs.
 func (v *RawValue) Indent(prefix, indent string) error {
 	return v.reformat(false, true, prefix, indent)
 }
@@ -139,32 +143,40 @@ func (v RawValue) Kind() Kind {
 }
 
 func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) error {
-	var eo EncodeOptions
+	// Write the entire value to reformat all tokens and whitespace.
+	e := getBufferedEncoder()
+	defer putBufferedEncoder(e)
+	eo := &e.options
 	if canonical {
-		eo.AllowInvalidUTF8 = false    // per RFC 8785, section 3.2.4
-		eo.AllowDuplicateNames = false // per RFC 8785, section 3.1
-		eo.canonicalizeNumbers = true  // per RFC 8785, section 3.2.2.3
-		eo.EscapeRune = nil            // per RFC 8785, section 3.2.2.2
-		eo.multiline = false           // per RFC 8785, section 3.2.1
+		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 0)    // per RFC 8785, section 3.2.4
+		eo.Flags.Set(jsonflags.AllowDuplicateNames | 0) // per RFC 8785, section 3.1
+		eo.Flags.Set(jsonflags.CanonicalizeNumbers | 1) // per RFC 8785, section 3.2.2.3
+		eo.Flags.Set(jsonflags.PreserveRawStrings | 0)  // per RFC 8785, section 3.2.2.2
+		eo.Flags.Set(jsonflags.EscapeForHTML | 0)       // per RFC 8785, section 3.2.2.2
+		eo.Flags.Set(jsonflags.EscapeForJS | 0)         // per RFC 8785, section 3.2.2.2
+		eo.Flags.Set(jsonflags.EscapeFunc | 0)          // per RFC 8785, section 3.2.2.2
+		eo.Flags.Set(jsonflags.Expand | 0)              // per RFC 8785, section 3.2.1
 	} else {
-		if s := trimLeftSpaceTab(prefix); len(s) > 0 {
+		if s := strings.TrimLeft(prefix, " \t"); len(s) > 0 {
 			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
 		}
-		if s := trimLeftSpaceTab(indent); len(s) > 0 {
+		if s := strings.TrimLeft(indent, " \t"); len(s) > 0 {
 			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
 		}
-		eo.AllowInvalidUTF8 = true
-		eo.AllowDuplicateNames = true
-		eo.preserveRawStrings = true
-		eo.multiline = multiline // in case indent is empty
-		eo.IndentPrefix = prefix
-		eo.Indent = indent
+		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 1)
+		eo.Flags.Set(jsonflags.AllowDuplicateNames | 1)
+		eo.Flags.Set(jsonflags.PreserveRawStrings | 1)
+		if multiline {
+			eo.Flags.Set(jsonflags.Expand | 1)
+			eo.Flags.Set(jsonflags.Indent | 1)
+			eo.Flags.Set(jsonflags.IndentPrefix | 1)
+			eo.IndentPrefix = prefix
+			eo.Indent = indent
+		} else {
+			eo.Flags.Set(jsonflags.Expand | 0)
+		}
 	}
-	eo.omitTopLevelNewline = true
-
-	// Write the entire value to reformat all tokens and whitespace.
-	e := getBufferedEncoder(eo)
-	defer putBufferedEncoder(e)
+	eo.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
 	if err := e.WriteValue(*v); err != nil {
 		return err
 	}
@@ -173,12 +185,13 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 	if canonical {
 		// Obtain a buffered encoder just to use its internal buffer as
 		// a scratch buffer in reorderObjects for reordering object members.
-		e2 := getBufferedEncoder(EncodeOptions{})
+		e2 := getBufferedEncoder()
 		defer putBufferedEncoder(e2)
 
 		// Disable redundant checks performed earlier during encoding.
-		d := getBufferedDecoder(e.buf, DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true})
+		d := getBufferedDecoder(e.buf)
 		defer putBufferedDecoder(d)
+		d.options.Flags.Set(jsonflags.AllowDuplicateNames | jsonflags.AllowInvalidUTF8 | 1)
 		reorderObjects(d, &e2.buf) // per RFC 8785, section 3.2.3
 	}
 
@@ -187,17 +200,6 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 		*v = append((*v)[:0], e.buf...)
 	}
 	return nil
-}
-
-func trimLeftSpaceTab(s string) string {
-	for i, r := range s {
-		switch r {
-		case ' ', '\t':
-		default:
-			return s[i:]
-		}
-	}
-	return ""
 }
 
 type memberName struct {

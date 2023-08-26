@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
@@ -368,8 +369,8 @@ type (
 	}
 	allMethodsExceptJSONv2 struct {
 		allMethods
-		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
-		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
+		MarshalJSONV2   struct{} // cancel out MarshalJSONV2 method with collision
+		UnmarshalJSONV2 struct{} // cancel out UnmarshalJSONV2 method with collision
 	}
 	allMethodsExceptJSONv1 struct {
 		allMethods
@@ -390,27 +391,27 @@ type (
 	}
 	onlyMethodJSONv1 struct {
 		allMethods
-		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
-		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
-		MarshalText       struct{} // cancel out MarshalText method with collision
-		UnmarshalText     struct{} // cancel out UnmarshalText method with collision
+		MarshalJSONV2   struct{} // cancel out MarshalJSONV2 method with collision
+		UnmarshalJSONV2 struct{} // cancel out UnmarshalJSONV2 method with collision
+		MarshalText     struct{} // cancel out MarshalText method with collision
+		UnmarshalText   struct{} // cancel out UnmarshalText method with collision
 	}
 	onlyMethodText struct {
 		allMethods
-		MarshalNextJSON   struct{} // cancel out MarshalNextJSON method with collision
-		UnmarshalNextJSON struct{} // cancel out UnmarshalNextJSON method with collision
-		MarshalJSON       struct{} // cancel out MarshalJSON method with collision
-		UnmarshalJSON     struct{} // cancel out UnmarshalJSON method with collision
+		MarshalJSONV2   struct{} // cancel out MarshalJSONV2 method with collision
+		UnmarshalJSONV2 struct{} // cancel out UnmarshalJSONV2 method with collision
+		MarshalJSON     struct{} // cancel out MarshalJSON method with collision
+		UnmarshalJSON   struct{} // cancel out UnmarshalJSON method with collision
 	}
 
 	structMethodJSONv2 struct{ value string }
 	structMethodJSONv1 struct{ value string }
 	structMethodText   struct{ value string }
 
-	marshalJSONv2Func   func(MarshalOptions, *Encoder) error
+	marshalJSONv2Func   func(*Encoder, Options) error
 	marshalJSONv1Func   func() ([]byte, error)
 	marshalTextFunc     func() ([]byte, error)
-	unmarshalJSONv2Func func(UnmarshalOptions, *Decoder) error
+	unmarshalJSONv2Func func(*Decoder, Options) error
 	unmarshalJSONv1Func func([]byte) error
 	unmarshalTextFunc   func([]byte) error
 
@@ -443,8 +444,8 @@ type (
 	}
 )
 
-func (p *allMethods) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
-	if got, want := "MarshalNextJSON", p.method; got != want {
+func (p *allMethods) MarshalJSONV2(enc *Encoder, opts Options) error {
+	if got, want := "MarshalJSONV2", p.method; got != want {
 		return fmt.Errorf("called wrong method: got %v, want %v", got, want)
 	}
 	return enc.WriteValue(p.value)
@@ -462,8 +463,8 @@ func (p *allMethods) MarshalText() ([]byte, error) {
 	return p.value, nil
 }
 
-func (p *allMethods) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
-	p.method = "UnmarshalNextJSON"
+func (p *allMethods) UnmarshalJSONV2(dec *Decoder, opts Options) error {
+	p.method = "UnmarshalJSONV2"
 	val, err := dec.ReadValue()
 	p.value = val
 	return err
@@ -479,10 +480,10 @@ func (p *allMethods) UnmarshalText(val []byte) error {
 	return nil
 }
 
-func (s structMethodJSONv2) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
+func (s structMethodJSONv2) MarshalJSONV2(enc *Encoder, opts Options) error {
 	return enc.WriteToken(String(s.value))
 }
-func (s *structMethodJSONv2) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
+func (s *structMethodJSONv2) UnmarshalJSONV2(dec *Decoder, opts Options) error {
 	tok, err := dec.ReadToken()
 	if err != nil {
 		return err
@@ -514,8 +515,8 @@ func (s *structMethodText) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (f marshalJSONv2Func) MarshalNextJSON(mo MarshalOptions, enc *Encoder) error {
-	return f(mo, enc)
+func (f marshalJSONv2Func) MarshalJSONV2(enc *Encoder, opts Options) error {
+	return f(enc, opts)
 }
 func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 	return f()
@@ -523,8 +524,8 @@ func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 func (f marshalTextFunc) MarshalText() ([]byte, error) {
 	return f()
 }
-func (f unmarshalJSONv2Func) UnmarshalNextJSON(uo UnmarshalOptions, dec *Decoder) error {
-	return f(uo, dec)
+func (f unmarshalJSONv2Func) UnmarshalJSONV2(dec *Decoder, opts Options) error {
+	return f(dec, opts)
 }
 func (f unmarshalJSONv1Func) UnmarshalJSON(b []byte) error {
 	return f(b)
@@ -619,17 +620,20 @@ func mustParseTime(layout, value string) time.Time {
 	return t
 }
 
+var invalidFormatOption = &jsonopts.Struct{
+	ArshalValues: jsonopts.ArshalValues{FormatDepth: 1000, Format: "invalid"},
+}
+
 func TestMarshal(t *testing.T) {
 	tests := []struct {
 		name    jsontest.CaseName
-		mopts   MarshalOptions
-		eopts   EncodeOptions
+		opts    []Options
 		in      any
 		want    string
 		wantErr error
 
 		canonicalize bool // canonicalize the output before comparing?
-		useWriter    bool // call MarshalFull instead of Marshal
+		useWriter    bool // call MarshalWrite instead of Marshal
 	}{{
 		name: jsontest.Name("Nil"),
 		in:   nil,
@@ -643,15 +647,15 @@ func TestMarshal(t *testing.T) {
 		in:   []namedBool{false, true},
 		want: `[false,true]`,
 	}, {
-		name:  jsontest.Name("Bools/NotStringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
-		in:    []bool{false, true},
-		want:  `[false,true]`,
+		name: jsontest.Name("Bools/NotStringified"),
+		opts: []Options{StringifyNumbers(true)},
+		in:   []bool{false, true},
+		want: `[false,true]`,
 	}, {
-		name:  jsontest.Name("Bools/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    true,
-		want:  `true`,
+		name: jsontest.Name("Bools/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   true,
+		want: `true`,
 	}, {
 		name: jsontest.Name("Strings"),
 		in:   []string{"", "hello", "世界"},
@@ -661,19 +665,19 @@ func TestMarshal(t *testing.T) {
 		in:   []namedString{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
 	}, {
-		name:  jsontest.Name("Strings/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    "string",
-		want:  `"string"`,
+		name: jsontest.Name("Strings/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   "string",
+		want: `"string"`,
 	}, {
 		name: jsontest.Name("Bytes"),
 		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
-		name:  jsontest.Name("Bytes/EmitNilSliceAsNull"),
-		mopts: MarshalOptions{EmitNilSliceAsNull: true},
-		in:    [][]byte{nil, {}},
-		want:  `[null,""]`,
+		name: jsontest.Name("Bytes/FormatNilSliceAsNull"),
+		opts: []Options{FormatNilSliceAsNull(true)},
+		in:   [][]byte{nil, {}},
+		want: `[null,""]`,
 	}, {
 		name: jsontest.Name("Bytes/Large"),
 		in:   []byte("the quick brown fox jumped over the lazy dog and ate the homework that I spent so much time on."),
@@ -683,10 +687,10 @@ func TestMarshal(t *testing.T) {
 		in:   []namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}},
 		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
-		name:  jsontest.Name("Bytes/NotStringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
-		in:    [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
-		want:  `["","","AQ==","AQI=","AQID"]`,
+		name: jsontest.Name("Bytes/NotStringified"),
+		opts: []Options{StringifyNumbers(true)},
+		in:   [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}},
+		want: `["","","AQ==","AQI=","AQID"]`,
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a slice of uints.
@@ -706,10 +710,10 @@ func TestMarshal(t *testing.T) {
 		in:   [5]namedByte{'h', 'e', 'l', 'l', 'o'},
 		want: `[104,101,108,108,111]`,
 	}, {
-		name:  jsontest.Name("Bytes/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    []byte("hello"),
-		want:  `"aGVsbG8="`,
+		name: jsontest.Name("Bytes/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   []byte("hello"),
+		want: `"aGVsbG8="`,
 	}, {
 		name: jsontest.Name("Ints"),
 		in: []any{
@@ -717,17 +721,17 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[0,-128,-32768,-2147483648,-9223372036854775808,-6464]`,
 	}, {
-		name:  jsontest.Name("Ints/Stringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
+		name: jsontest.Name("Ints/Stringified"),
+		opts: []Options{StringifyNumbers(true)},
 		in: []any{
 			int(0), int8(math.MinInt8), int16(math.MinInt16), int32(math.MinInt32), int64(math.MinInt64), namedInt64(-6464),
 		},
 		want: `["0","-128","-32768","-2147483648","-9223372036854775808","-6464"]`,
 	}, {
-		name:  jsontest.Name("Ints/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    int(0),
-		want:  `0`,
+		name: jsontest.Name("Ints/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   int(0),
+		want: `0`,
 	}, {
 		name: jsontest.Name("Uints"),
 		in: []any{
@@ -735,17 +739,17 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[0,255,65535,4294967295,18446744073709551615,6464,1234]`,
 	}, {
-		name:  jsontest.Name("Uints/Stringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
+		name: jsontest.Name("Uints/Stringified"),
+		opts: []Options{StringifyNumbers(true)},
 		in: []any{
 			uint(0), uint8(math.MaxUint8), uint16(math.MaxUint16), uint32(math.MaxUint32), uint64(math.MaxUint64), namedUint64(6464),
 		},
 		want: `["0","255","65535","4294967295","18446744073709551615","6464"]`,
 	}, {
-		name:  jsontest.Name("Uints/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    uint(0),
-		want:  `0`,
+		name: jsontest.Name("Uints/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   uint(0),
+		want: `0`,
 	}, {
 		name: jsontest.Name("Floats"),
 		in: []any{
@@ -753,15 +757,15 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `[3.4028235e+38,1.7976931348623157e+308,64.64]`,
 	}, {
-		name:  jsontest.Name("Floats/Stringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
+		name: jsontest.Name("Floats/Stringified"),
+		opts: []Options{StringifyNumbers(true)},
 		in: []any{
 			float32(math.MaxFloat32), float64(math.MaxFloat64), namedFloat64(64.64),
 		},
 		want: `["3.4028235e+38","1.7976931348623157e+308","64.64"]`,
 	}, {
 		name:    jsontest.Name("Floats/Invalid/NaN"),
-		mopts:   MarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		in:      math.NaN(),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.NaN())},
 	}, {
@@ -773,10 +777,10 @@ func TestMarshal(t *testing.T) {
 		in:      math.Inf(-1),
 		wantErr: &SemanticError{action: "marshal", GoType: float64Type, Err: fmt.Errorf("invalid value: %v", math.Inf(-1))},
 	}, {
-		name:  jsontest.Name("Floats/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    float64(0),
-		want:  `0`,
+		name: jsontest.Name("Floats/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   float64(0),
+		want: `0`,
 	}, {
 		name:    jsontest.Name("Maps/InvalidKey/Bool"),
 		in:      map[bool]string{false: "value"},
@@ -848,21 +852,21 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 		want:         `{"-64":-32,"64":32,"64.64":32.32,"key":"key"}`,
 	}, {
-		name:  jsontest.Name("Maps/DuplicateName/String/AllowInvalidUTF8+AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
-		in:    map[string]string{"\x80": "", "\x81": ""},
-		want:  `{"�":"","�":""}`,
+		name: jsontest.Name("Maps/DuplicateName/String/AllowInvalidUTF8+AllowDuplicateNames"),
+		opts: []Options{AllowInvalidUTF8(true), AllowDuplicateNames(true)},
+		in:   map[string]string{"\x80": "", "\x81": ""},
+		want: `{"�":"","�":""}`,
 	}, {
 		name:    jsontest.Name("Maps/DuplicateName/String/AllowInvalidUTF8"),
-		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		opts:    []Options{AllowInvalidUTF8(true)},
 		in:      map[string]string{"\x80": "", "\x81": ""},
 		want:    `{"�":""`,
 		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"�":"",`)),
 	}, {
-		name:  jsontest.Name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowDuplicateNames: true},
-		in:    map[nocaseString]string{"hello": "", "HELLO": ""},
-		want:  `{"hello":"","hello":""}`,
+		name: jsontest.Name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
+		opts: []Options{AllowDuplicateNames(true)},
+		in:   map[nocaseString]string{"hello": "", "HELLO": ""},
+		want: `{"hello":"","hello":""}`,
 	}, {
 		name:    jsontest.Name("Maps/DuplicateName/NoCaseString"),
 		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
@@ -870,13 +874,15 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: newDuplicateNameError(`"hello"`).withOffset(len64(`{"hello":"",`))},
 	}, {
 		name: jsontest.Name("Maps/DuplicateName/NaNs/Deterministic+AllowDuplicateNames"),
-		mopts: MarshalOptions{
-			Deterministic: true,
-			Marshalers:    MarshalFuncV1(func(v float64) ([]byte, error) { return []byte(`"NaN"`), nil }),
+		opts: []Options{
+			WithMarshalers(
+				MarshalFuncV1(func(v float64) ([]byte, error) { return []byte(`"NaN"`), nil }),
+			),
+			Deterministic(true),
+			AllowDuplicateNames(true),
 		},
-		eopts: EncodeOptions{AllowDuplicateNames: true},
-		in:    map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
-		want:  `{"NaN":"NaN","NaN":"NaN"}`,
+		in:   map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
+		want: `{"NaN":"NaN","NaN":"NaN"}`,
 	}, {
 		name: jsontest.Name("Maps/InvalidValue/Channel"),
 		in: map[string]chan string{
@@ -885,28 +891,34 @@ func TestMarshal(t *testing.T) {
 		want:    `{"key"`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name:  jsontest.Name("Maps/String/Deterministic"),
-		mopts: MarshalOptions{Deterministic: true},
-		in:    map[string]int{"a": 0, "b": 1, "c": 2},
-		want:  `{"a":0,"b":1,"c":2}`,
+		name: jsontest.Name("Maps/String/Deterministic"),
+		opts: []Options{Deterministic(true)},
+		in:   map[string]int{"a": 0, "b": 1, "c": 2},
+		want: `{"a":0,"b":1,"c":2}`,
 	}, {
-		name:    jsontest.Name("Maps/String/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
-		mopts:   MarshalOptions{Deterministic: true},
-		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		name: jsontest.Name("Maps/String/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
+		opts: []Options{
+			Deterministic(true),
+			AllowInvalidUTF8(true),
+			AllowDuplicateNames(false),
+		},
 		in:      map[string]int{"\xff": 0, "\xfe": 1},
 		want:    `{"�":1`,
 		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"�":1,`)),
 	}, {
-		name:  jsontest.Name("Maps/String/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
-		mopts: MarshalOptions{Deterministic: true},
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
-		in:    map[string]int{"\xff": 0, "\xfe": 1},
-		want:  `{"�":1,"�":0}`,
+		name: jsontest.Name("Maps/String/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		opts: []Options{
+			Deterministic(true),
+			AllowInvalidUTF8(true),
+			AllowDuplicateNames(true),
+		},
+		in:   map[string]int{"\xff": 0, "\xfe": 1},
+		want: `{"�":1,"�":0}`,
 	}, {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs"),
-		mopts: MarshalOptions{
-			Deterministic: true,
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+		opts: []Options{
+			Deterministic(true),
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v string, opts Options) error {
 				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
 				}
@@ -918,15 +930,15 @@ func TestMarshal(t *testing.T) {
 				default:
 					return fmt.Errorf("invalid value: %q", v)
 				}
-			}),
+			})),
 		},
 		in:   map[namedString]map[string]int{"X": {"a": -1, "b": 1}},
 		want: `{"X":{"a":1,"b":-1}}`,
 	}, {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs+RejectDuplicateNames"),
-		mopts: MarshalOptions{
-			Deterministic: true,
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+		opts: []Options{
+			Deterministic(true),
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v string, opts Options) error {
 				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
 				}
@@ -936,17 +948,17 @@ func TestMarshal(t *testing.T) {
 				default:
 					return fmt.Errorf("invalid value: %q", v)
 				}
-			}),
+			})),
+			AllowDuplicateNames(false),
 		},
-		eopts:   EncodeOptions{AllowDuplicateNames: false},
 		in:      map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
 		want:    `{"X":{"x":1`,
 		wantErr: newDuplicateNameError(`"x"`).withOffset(len64(`{"X":{"x":1,`)),
 	}, {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs+AllowDuplicateNames"),
-		mopts: MarshalOptions{
-			Deterministic: true,
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+		opts: []Options{
+			Deterministic(true),
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v string, opts Options) error {
 				if p := enc.StackPointer(); p != "/0" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /0", p)
 				}
@@ -956,10 +968,10 @@ func TestMarshal(t *testing.T) {
 				default:
 					return fmt.Errorf("invalid value: %q", v)
 				}
-			}),
+			})),
+			AllowDuplicateNames(true),
 		},
-		eopts: EncodeOptions{AllowDuplicateNames: true},
-		in:    map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
+		in: map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
 		// NOTE: Since the names are identical, the exact values may be
 		// non-deterministic since sort cannot distinguish between members.
 		want: `{"X":{"x":1,"x":1}}`,
@@ -984,10 +996,10 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveMap{}), Err: errors.New("encountered a cycle")},
 	}, {
-		name:  jsontest.Name("Maps/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    map[string]string{},
-		want:  `{}`,
+		name: jsontest.Name("Maps/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   map[string]string{},
+		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/Empty"),
 		in:   structEmpty{},
@@ -1005,17 +1017,17 @@ func TestMarshal(t *testing.T) {
 		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
 		want: `{"":"empty",",":"comma","\"":"quote"}`,
 	}, {
-		name:  jsontest.Name("Structs/EscapedNames"),
-		eopts: EncodeOptions{EscapeRune: func(rune) bool { return true }},
-		in:    structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
-		want:  `{"":"\u0065\u006d\u0070\u0074\u0079","\u002c":"\u0063\u006f\u006d\u006d\u0061","\u0022":"\u0071\u0075\u006f\u0074\u0065"}`,
+		name: jsontest.Name("Structs/EscapedNames"),
+		opts: []Options{WithEscapeFunc(func(rune) bool { return true })},
+		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
+		want: `{"":"\u0065\u006d\u0070\u0074\u0079","\u002c":"\u0063\u006f\u006d\u006d\u0061","\u0022":"\u0071\u0075\u006f\u0074\u0065"}`,
 	}, {
 		name: jsontest.Name("Structs/NoCase"),
 		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
 		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 	}, {
-		name:  jsontest.Name("Structs/Normal"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Normal"),
+		opts: []Options{Expand(true)},
 		in: structAll{
 			Bool:   true,
 			String: "hello",
@@ -1160,8 +1172,8 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name:  jsontest.Name("Structs/Stringified"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Stringified"),
+		opts: []Options{Expand(true)},
 		in: structStringifiedAll{
 			Bool:   true,
 			String: "hello",
@@ -1306,8 +1318,11 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
-		name:  jsontest.Name("Structs/Stringified/Escaped"),
-		eopts: EncodeOptions{Indent: "\t", EscapeRune: func(rune) bool { return true }},
+		name: jsontest.Name("Structs/Stringified/Escaped"),
+		opts: []Options{
+			Expand(true),
+			WithEscapeFunc(func(rune) bool { return true }),
+		},
 		in: structStringifiedAll{
 			Bool:   true,
 			String: "hello",
@@ -1360,8 +1375,8 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
-		name:  jsontest.Name("Structs/OmitZero/NonZero"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitZero/NonZero"),
+		opts: []Options{Expand(true)},
 		in: structOmitZeroAll{
 			Bool:          true,                                   // not omitted since true is non-zero
 			String:        " ",                                    // not omitted since non-empty string is non-zero
@@ -1422,8 +1437,8 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitZeroMethodAll{},
 		want: `{"ValueNeverZero":"","PointerNeverZero":""}`,
 	}, {
-		name:  jsontest.Name("Structs/OmitZeroMethod/NonZero"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitZeroMethod/NonZero"),
+		opts: []Options{Expand(true)},
 		in: structOmitZeroMethodAll{
 			ValueAlwaysZero:                 valueAlwaysZero("nonzero"),
 			ValueNeverZero:                  valueNeverZero("nonzero"),
@@ -1449,13 +1464,13 @@ func TestMarshal(t *testing.T) {
 	"PointerPointerPointerNeverZero": "nonzero"
 }`,
 	}, {
-		name:  jsontest.Name("Structs/OmitZeroMethod/Interface/Zero"),
-		eopts: EncodeOptions{Indent: "\t"},
-		in:    structOmitZeroMethodInterfaceAll{},
-		want:  `{}`,
+		name: jsontest.Name("Structs/OmitZeroMethod/Interface/Zero"),
+		opts: []Options{Expand(true)},
+		in:   structOmitZeroMethodInterfaceAll{},
+		want: `{}`,
 	}, {
-		name:  jsontest.Name("Structs/OmitZeroMethod/Interface/PartialZero"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitZeroMethod/Interface/PartialZero"),
+		opts: []Options{Expand(true)},
 		in: structOmitZeroMethodInterfaceAll{
 			ValueAlwaysZero:          valueAlwaysZero(""),
 			ValueNeverZero:           valueNeverZero(""),
@@ -1468,8 +1483,8 @@ func TestMarshal(t *testing.T) {
 	"ValueNeverZero": ""
 }`,
 	}, {
-		name:  jsontest.Name("Structs/OmitZeroMethod/Interface/NonZero"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitZeroMethod/Interface/NonZero"),
+		opts: []Options{Expand(true)},
 		in: structOmitZeroMethodInterfaceAll{
 			ValueAlwaysZero:          valueAlwaysZero("nonzero"),
 			ValueNeverZero:           valueNeverZero("nonzero"),
@@ -1484,9 +1499,9 @@ func TestMarshal(t *testing.T) {
 	"PointerPointerNeverZero": "nonzero"
 }`,
 	}, {
-		name:  jsontest.Name("Structs/OmitEmpty/Zero"),
-		eopts: EncodeOptions{Indent: "\t"},
-		in:    structOmitEmptyAll{},
+		name: jsontest.Name("Structs/OmitEmpty/Zero"),
+		opts: []Options{Expand(true)},
+		in:   structOmitEmptyAll{},
 		want: `{
 	"Bool": false,
 	"StringNonEmpty": "value",
@@ -1502,8 +1517,8 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
-		name:  jsontest.Name("Structs/OmitEmpty/EmptyNonZero"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitEmpty/EmptyNonZero"),
+		opts: []Options{Expand(true)},
 		in: structOmitEmptyAll{
 			String:                string(""),
 			StringEmpty:           stringMarshalEmpty(""),
@@ -1557,8 +1572,8 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
-		name:  jsontest.Name("Structs/OmitEmpty/NonEmpty"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/OmitEmpty/NonEmpty"),
+		opts: []Options{Expand(true)},
 		in: structOmitEmptyAll{
 			Bool:                  true,
 			PointerBool:           addr(true),
@@ -1719,8 +1734,8 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Pointer":{"Bool":true},"Interface":[""]}`,
 	}, {
-		name:  jsontest.Name("Structs/Format/Bytes"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Format/Bytes"),
+		opts: []Options{Expand(true)},
 		in: structFormatBytes{
 			Base16:    []byte("\x01\x23\x45\x67\x89\xab\xcd\xef"),
 			Base32:    []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
@@ -1743,13 +1758,15 @@ func TestMarshal(t *testing.T) {
 	]
 }`}, {
 		name: jsontest.Name("Structs/Format/Bytes/Array"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(in byte) ([]byte, error) {
-			if in > 3 {
-				return []byte("true"), nil
-			} else {
-				return []byte("false"), nil
-			}
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(in byte) ([]byte, error) {
+				if in > 3 {
+					return []byte("true"), nil
+				} else {
+					return []byte("false"), nil
+				}
+			})),
+		},
 		in: struct {
 			Array []byte `json:",format:array"`
 		}{
@@ -1757,8 +1774,8 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"Array":[false,true,false,true,false,true]}`,
 	}, {
-		name:  jsontest.Name("Structs/Format/Floats"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Format/Floats"),
+		opts: []Options{Expand(true)},
 		in: []structFormatFloats{
 			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi)},
 			{NonFinite: math.NaN(), PointerNonFinite: addr(math.NaN())},
@@ -1784,8 +1801,8 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:  jsontest.Name("Structs/Format/Maps"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Format/Maps"),
+		opts: []Options{Expand(true)},
 		in: []structFormatMaps{{
 			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
 			EmitEmpty: map[string]string(nil), PointerEmitEmpty: addr(map[string]string(nil)),
@@ -1838,9 +1855,11 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:  jsontest.Name("Structs/Format/Maps/EmitNilMapAsNull"),
-		mopts: MarshalOptions{EmitNilMapAsNull: true},
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Format/Maps/FormatNilMapAsNull"),
+		opts: []Options{
+			FormatNilMapAsNull(true),
+			Expand(true),
+		},
 		in: []structFormatMaps{{
 			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
 			EmitEmpty: map[string]string(nil), PointerEmitEmpty: addr(map[string]string(nil)),
@@ -1893,8 +1912,8 @@ func TestMarshal(t *testing.T) {
 	}
 ]`,
 	}, {
-		name:  jsontest.Name("Structs/Format/Slices"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Structs/Format/Slices"),
+		opts: []Options{Expand(true)},
 		in: []structFormatSlices{{
 			EmitNull: []string(nil), PointerEmitNull: addr([]string(nil)),
 			EmitEmpty: []string(nil), PointerEmitEmpty: addr([]string(nil)),
@@ -2059,26 +2078,26 @@ func TestMarshal(t *testing.T) {
 		want: `{"A":1,"B":2,"fizz":"buzz","foo":"bar"}`,
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/RawValue/RejectDuplicateNames"),
-		eopts:   EncodeOptions{AllowDuplicateNames: false},
+		opts:    []Options{AllowDuplicateNames(false)},
 		in:      structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
 		want:    `{"fizz":"buzz"`,
 		wantErr: newDuplicateNameError(`"fizz"`),
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/RawValue/AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowDuplicateNames: true},
-		in:    structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
-		want:  `{"fizz":"buzz","fizz":"buzz"}`,
+		name: jsontest.Name("Structs/InlinedFallback/RawValue/AllowDuplicateNames"),
+		opts: []Options{AllowDuplicateNames(true)},
+		in:   structInlineRawValue{X: RawValue(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
+		want: `{"fizz":"buzz","fizz":"buzz"}`,
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/RawValue/RejectInvalidUTF8"),
-		eopts:   EncodeOptions{AllowInvalidUTF8: false},
+		opts:    []Options{AllowInvalidUTF8(false)},
 		in:      structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
 		want:    `{`,
 		wantErr: errInvalidUTF8.withOffset(len64(`{"` + "\xde\xad")),
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/RawValue/AllowInvalidUTF8"),
-		eopts: EncodeOptions{AllowInvalidUTF8: true},
-		in:    structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
-		want:  `{"ޭ��":"value"}`,
+		name: jsontest.Name("Structs/InlinedFallback/RawValue/AllowInvalidUTF8"),
+		opts: []Options{AllowInvalidUTF8(true)},
+		in:   structInlineRawValue{X: RawValue(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
+		want: `{"ޭ��":"value"}`,
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/RawValue/InvalidWhitespace"),
 		in:      structInlineRawValue{X: RawValue("\n\r\t ")},
@@ -2148,18 +2167,18 @@ func TestMarshal(t *testing.T) {
 		want: `{"A":1,"B":2,"fizz":null}`,
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapStringAny/RejectInvalidUTF8"),
-		eopts:   EncodeOptions{AllowInvalidUTF8: false},
+		opts:    []Options{AllowInvalidUTF8(false)},
 		in:      structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
 		want:    `{`,
 		wantErr: errInvalidUTF8,
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8"),
-		eopts: EncodeOptions{AllowInvalidUTF8: true},
-		in:    structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
-		want:  `{"ޭ��":null}`,
+		name: jsontest.Name("Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8"),
+		opts: []Options{AllowInvalidUTF8(true)},
+		in:   structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
+		want: `{"ޭ��":null}`,
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapStringAny/InvalidValue"),
-		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		opts:    []Options{AllowInvalidUTF8(true)},
 		in:      structInlineMapStringAny{X: jsonObject{"name": make(chan string)}},
 		want:    `{"name"`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
@@ -2169,10 +2188,10 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringAny/MarshalFuncV1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v float64) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v float64) ([]byte, error) {
 				return []byte(fmt.Sprintf(`"%v"`, v)), nil
-			}),
+			})),
 		},
 		in:   structInlineMapStringAny{X: jsonObject{"fizz": 3.14159}},
 		want: `{"fizz":"3.14159"}`,
@@ -2196,32 +2215,30 @@ func TestMarshal(t *testing.T) {
 		want:         `{"one":1,"two":2,"zero":0}`,
 		canonicalize: true,
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic"),
-		mopts: MarshalOptions{Deterministic: true},
+		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic"),
+		opts: []Options{Deterministic(true)},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		},
 		want: `{"one":1,"two":2,"zero":0}`,
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
-		mopts: MarshalOptions{Deterministic: true},
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
+		opts: []Options{Deterministic(true), AllowInvalidUTF8(true), AllowDuplicateNames(false)},
 		in: structInlineMapStringInt{
 			X: map[string]int{"\xff": 0, "\xfe": 1},
 		},
 		want:    `{"�":1`,
 		wantErr: newDuplicateNameError(`"�"`),
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
-		mopts: MarshalOptions{Deterministic: true},
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
+		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		opts: []Options{Deterministic(true), AllowInvalidUTF8(true), AllowDuplicateNames(true)},
 		in: structInlineMapStringInt{
 			X: map[string]int{"\xff": 0, "\xfe": 1},
 		},
 		want: `{"�":1,"�":0}`,
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
-		mopts: MarshalOptions{StringifyNumbers: true},
+		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
+		opts: []Options{StringifyNumbers(true)},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
 		},
@@ -2229,8 +2246,8 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/MarshalFuncV1"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				// Marshalers do not affect the string key of inlined maps.
 				MarshalFuncV1(func(v string) ([]byte, error) {
 					return []byte(fmt.Sprintf(`"%q"`, strings.ToUpper(v))), nil
@@ -2238,7 +2255,7 @@ func TestMarshal(t *testing.T) {
 				MarshalFuncV1(func(v int) ([]byte, error) {
 					return []byte(fmt.Sprintf(`"%v"`, v)), nil
 				}),
-			),
+			)),
 		},
 		in: structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},
@@ -2246,8 +2263,8 @@ func TestMarshal(t *testing.T) {
 		want:         `{"one":"1","two":"2","zero":"0"}`,
 		canonicalize: true,
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/DiscardUnknownMembers"),
-		mopts: MarshalOptions{DiscardUnknownMembers: true},
+		name: jsontest.Name("Structs/InlinedFallback/DiscardUnknownMembers"),
+		opts: []Options{DiscardUnknownMembers(true)},
 		in: structInlineRawValue{
 			A: 1,
 			X: RawValue(` { "fizz" : "buzz" } `),
@@ -2256,8 +2273,8 @@ func TestMarshal(t *testing.T) {
 		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
 		want: `{"A":1,"B":2,"fizz":"buzz"}`,
 	}, {
-		name:  jsontest.Name("Structs/UnknownFallback/DiscardUnknownMembers"),
-		mopts: MarshalOptions{DiscardUnknownMembers: true},
+		name: jsontest.Name("Structs/UnknownFallback/DiscardUnknownMembers"),
+		opts: []Options{DiscardUnknownMembers(true)},
 		in: structUnknownRawValue{
 			A: 1,
 			X: RawValue(` { "fizz" : "buzz" } `),
@@ -2280,8 +2297,8 @@ func TestMarshal(t *testing.T) {
 		want:    `{"dupe":""`,
 		wantErr: newDuplicateNameError(`"dupe"`),
 	}, {
-		name:  jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/Other/AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowDuplicateNames: true},
+		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/Other/AllowDuplicateNames"),
+		opts: []Options{AllowDuplicateNames(true)},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"dupe": "", "dupe": ""}`),
 		},
@@ -2300,8 +2317,8 @@ func TestMarshal(t *testing.T) {
 		want:    `{"Aaa":""`,
 		wantErr: newDuplicateNameError(`"Aaa"`),
 	}, {
-		name:  jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict/AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowDuplicateNames: true},
+		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/ExactConflict/AllowDuplicateNames"),
+		opts: []Options{AllowDuplicateNames(true)},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "Aaa": ""}`),
 		},
@@ -2314,8 +2331,8 @@ func TestMarshal(t *testing.T) {
 		want:    `{"Aaa":"","AaA":""`,
 		wantErr: newDuplicateNameError(`"aaa"`),
 	}, {
-		name:  jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict/AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowDuplicateNames: true},
+		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineRawValue/NoCaseConflict/AllowDuplicateNames"),
+		opts: []Options{AllowDuplicateNames(true)},
 		in: structNoCaseInlineRawValue{
 			X: RawValue(`{"Aaa": "", "AaA": "", "aaa": ""}`),
 		},
@@ -2405,10 +2422,10 @@ func TestMarshal(t *testing.T) {
 		want:    ``,
 		wantErr: &SemanticError{action: "marshal", GoType: structUnexportedEmbeddedType, Err: errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")},
 	}, {
-		name:  jsontest.Name("Structs/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    struct{}{},
-		want:  `{}`,
+		name: jsontest.Name("Structs/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   struct{}{},
+		want: `{}`,
 	}, {
 		name: jsontest.Name("Slices/Interface"),
 		in: []any{
@@ -2454,10 +2471,10 @@ func TestMarshal(t *testing.T) {
 		}(),
 		want: strings.Repeat(`[`, startDetectingCyclesAfter) + `[null,[null]]` + strings.Repeat(`]`, startDetectingCyclesAfter),
 	}, {
-		name:  jsontest.Name("Slices/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    []string{"hello", "goodbye"},
-		want:  `["hello","goodbye"]`,
+		name: jsontest.Name("Slices/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   []string{"hello", "goodbye"},
+		want: `["hello","goodbye"]`,
 	}, {
 		name: jsontest.Name("Arrays/Empty"),
 		in:   [0]struct{}{},
@@ -2492,10 +2509,10 @@ func TestMarshal(t *testing.T) {
 		want:    `[`,
 		wantErr: &SemanticError{action: "marshal", GoType: chanStringType},
 	}, {
-		name:  jsontest.Name("Arrays/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    [2]string{"hello", "goodbye"},
-		want:  `["hello","goodbye"]`,
+		name: jsontest.Name("Arrays/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   [2]string{"hello", "goodbye"},
+		want: `["hello","goodbye"]`,
 	}, {
 		name: jsontest.Name("Pointers/NilL0"),
 		in:   (*int)(nil),
@@ -2538,10 +2555,10 @@ func TestMarshal(t *testing.T) {
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
 		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePointer)(nil)), Err: errors.New("encountered a cycle")},
 	}, {
-		name:  jsontest.Name("Pointers/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    addr(addr(bool(true))),
-		want:  `true`,
+		name: jsontest.Name("Pointers/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   addr(addr(bool(true))),
+		want: `true`,
 	}, {
 		name: jsontest.Name("Interfaces/Nil/Empty"),
 		in:   [1]any{nil},
@@ -2551,10 +2568,10 @@ func TestMarshal(t *testing.T) {
 		in:   [1]io.Reader{nil},
 		want: `[null]`,
 	}, {
-		name:  jsontest.Name("Interfaces/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    [1]io.Reader{nil},
-		want:  `[null]`,
+		name: jsontest.Name("Interfaces/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   [1]io.Reader{nil},
+		want: `[null]`,
 	}, {
 		name: jsontest.Name("Interfaces/Any"),
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}, [8]byte{}}},
@@ -2564,57 +2581,71 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X namedAny }{[]namedAny{nil, false, "", 0.0, map[string]namedAny{}, []namedAny{}, [8]byte{}}},
 		want: `{"X":[null,false,"",0,{},[],"AAAAAAAAAAA="]}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Stringified"),
-		mopts: MarshalOptions{StringifyNumbers: true},
-		in:    struct{ X any }{0.0},
-		want:  `{"X":"0"}`,
+		name: jsontest.Name("Interfaces/Any/Stringified"),
+		opts: []Options{StringifyNumbers(true)},
+		in:   struct{ X any }{0.0},
+		want: `{"X":"0"}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/Any"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v any) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v any) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/Bool"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v bool) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,"called","",0,{},[]]}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/String"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v string) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"called",0,{},[]]}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/Float64"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v float64) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v float64) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"","called",{},[]]}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/MapStringAny"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v map[string]any) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v map[string]any) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":[null,false,"",0,"called",[]]}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/SliceAny"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v []any) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v []any) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[]any{nil, false, "", 0.0, map[string]any{}, []any{}}},
 		want: `{"X":"called"}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/MarshalFunc/Bytes"),
-		mopts: MarshalOptions{Marshalers: MarshalFuncV1(func(v [8]byte) ([]byte, error) {
-			return []byte(`"called"`), nil
-		})},
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v [8]byte) ([]byte, error) {
+				return []byte(`"called"`), nil
+			})),
+		},
 		in:   struct{ X any }{[8]byte{}},
 		want: `{"X":"called"}`,
 	}, {
@@ -2622,41 +2653,39 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X any }{map[string]any(nil)},
 		want: `{"X":{}}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Maps/Nil/EmitNilMapAsNull"),
-		mopts: MarshalOptions{EmitNilMapAsNull: true},
-		in:    struct{ X any }{map[string]any(nil)},
-		want:  `{"X":null}`,
+		name: jsontest.Name("Interfaces/Any/Maps/Nil/FormatNilMapAsNull"),
+		opts: []Options{FormatNilMapAsNull(true)},
+		in:   struct{ X any }{map[string]any(nil)},
+		want: `{"X":null}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/Empty"),
 		in:   struct{ X any }{map[string]any{}},
 		want: `{"X":{}}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Maps/Empty/Multiline"),
-		eopts: EncodeOptions{multiline: true},
-		in:    struct{ X any }{map[string]any{}},
-		want:  "{\n\"X\": {}\n}",
+		name: jsontest.Name("Interfaces/Any/Maps/Empty/Multiline"),
+		opts: []Options{Expand(true), WithIndent("")},
+		in:   struct{ X any }{map[string]any{}},
+		want: "{\n\"X\": {}\n}",
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/NonEmpty"),
 		in:   struct{ X any }{map[string]any{"fizz": "buzz"}},
 		want: `{"X":{"fizz":"buzz"}}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Maps/Deterministic"),
-		mopts: MarshalOptions{Deterministic: true},
-		in:    struct{ X any }{map[string]any{"alpha": "", "bravo": ""}},
-		want:  `{"X":{"alpha":"","bravo":""}}`,
+		name: jsontest.Name("Interfaces/Any/Maps/Deterministic"),
+		opts: []Options{Deterministic(true)},
+		in:   struct{ X any }{map[string]any{"alpha": "", "bravo": ""}},
+		want: `{"X":{"alpha":"","bravo":""}}`,
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+RejectDuplicateNames"),
-		mopts:   MarshalOptions{Deterministic: true},
-		eopts:   EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: false},
+		opts:    []Options{Deterministic(true), AllowInvalidUTF8(true), AllowDuplicateNames(false)},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
 		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"X":{"�":"",`)),
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
-		mopts: MarshalOptions{Deterministic: true},
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
-		in:    struct{ X any }{map[string]any{"\xff": "alpha", "\xfe": "bravo"}},
-		want:  `{"X":{"�":"bravo","�":"alpha"}}`,
+		name: jsontest.Name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
+		opts: []Options{Deterministic(true), AllowInvalidUTF8(true), AllowDuplicateNames(true)},
+		in:   struct{ X any }{map[string]any{"\xff": "alpha", "\xfe": "bravo"}},
+		want: `{"X":{"�":"bravo","�":"alpha"}}`,
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/RejectInvalidUTF8"),
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
@@ -2664,15 +2693,15 @@ func TestMarshal(t *testing.T) {
 		wantErr: errInvalidUTF8.withOffset(len64(`{"X":{`)),
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames"),
-		eopts:   EncodeOptions{AllowInvalidUTF8: true},
+		opts:    []Options{AllowInvalidUTF8(true)},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
 		wantErr: newDuplicateNameError(`"�"`).withOffset(len64(`{"X":{"�":"",`)),
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames"),
-		eopts: EncodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true},
-		in:    struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
-		want:  `{"X":{"�":"","�":""}}`,
+		name: jsontest.Name("Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames"),
+		opts: []Options{AllowInvalidUTF8(true), AllowDuplicateNames(true)},
+		in:   struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
+		want: `{"X":{"�":"","�":""}}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/Cyclic"),
 		in: func() any {
@@ -2687,19 +2716,19 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X any }{[]any(nil)},
 		want: `{"X":[]}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Slices/Nil/EmitNilSliceAsNull"),
-		mopts: MarshalOptions{EmitNilSliceAsNull: true},
-		in:    struct{ X any }{[]any(nil)},
-		want:  `{"X":null}`,
+		name: jsontest.Name("Interfaces/Any/Slices/Nil/FormatNilSliceAsNull"),
+		opts: []Options{FormatNilSliceAsNull(true)},
+		in:   struct{ X any }{[]any(nil)},
+		want: `{"X":null}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/Slices/Empty"),
 		in:   struct{ X any }{[]any{}},
 		want: `{"X":[]}`,
 	}, {
-		name:  jsontest.Name("Interfaces/Any/Slices/Empty/Multiline"),
-		eopts: EncodeOptions{multiline: true},
-		in:    struct{ X any }{[]any{}},
-		want:  "{\n\"X\": []\n}",
+		name: jsontest.Name("Interfaces/Any/Slices/Empty/Multiline"),
+		opts: []Options{Expand(true), WithIndent("")},
+		in:   struct{ X any }{[]any{}},
+		want: "{\n\"X\": []\n}",
 	}, {
 		name: jsontest.Name("Interfaces/Any/Slices/NonEmpty"),
 		in:   struct{ X any }{[]any{"fizz", "buzz"}},
@@ -2724,7 +2753,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"X":null}`,
 	}, {
 		name: jsontest.Name("Methods/AllMethods"),
-		in:   struct{ X *allMethods }{X: &allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}},
+		in:   struct{ X *allMethods }{X: &allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)}},
 		want: `{"X":"hello"}`,
 	}, {
 		name: jsontest.Name("Methods/AllMethodsExceptJSONv2"),
@@ -2732,15 +2761,15 @@ func TestMarshal(t *testing.T) {
 		want: `{"X":"hello"}`,
 	}, {
 		name: jsontest.Name("Methods/AllMethodsExceptJSONv1"),
-		in:   struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		in:   struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
 		name: jsontest.Name("Methods/AllMethodsExceptText"),
-		in:   struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		in:   struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
 		name: jsontest.Name("Methods/OnlyMethodJSONv2"),
-		in:   struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		in:   struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
 		name: jsontest.Name("Methods/OnlyMethodJSONv1"),
@@ -2757,7 +2786,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		// NOTE: Fixes https://go.dev/issue/46516.
 		name: jsontest.Name("Methods/Anonymous"),
-		in:   struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)}}},
+		in:   struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)}}},
 		want: `{"X":"hello"}`,
 	}, {
 		// NOTE: Fixes https://go.dev/issue/22967.
@@ -2767,9 +2796,9 @@ func TestMarshal(t *testing.T) {
 			M map[string]allMethods
 			I any
 		}{
-			V: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)},
-			M: map[string]allMethods{"K": {method: "MarshalNextJSON", value: []byte(`"hello"`)}},
-			I: allMethods{method: "MarshalNextJSON", value: []byte(`"hello"`)},
+			V: allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)},
+			M: map[string]allMethods{"K": {method: "MarshalJSONV2", value: []byte(`"hello"`)}},
+			I: allMethods{method: "MarshalJSONV2", value: []byte(`"hello"`)},
 		},
 		want: `{"V":"hello","M":{"K":"hello"},"I":"hello"}`,
 	}, {
@@ -2791,19 +2820,19 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/Error"),
-		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
+		in: marshalJSONv2Func(func(*Encoder, Options) error {
 			return errors.New("some error")
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooFew"),
-		in: marshalJSONv2Func(func(MarshalOptions, *Encoder) error {
+		in: marshalJSONv2Func(func(*Encoder, Options) error {
 			return nil // do nothing
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooMany"),
-		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
+		in: marshalJSONv2Func(func(enc *Encoder, opts Options) error {
 			enc.WriteToken(Null)
 			enc.WriteToken(Null)
 			return nil
@@ -2812,7 +2841,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("must write exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/SkipFunc"),
-		in: marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
+		in: marshalJSONv2Func(func(enc *Encoder, opts Options) error {
 			return SkipFunc
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: errors.New("marshal method cannot be skipped")},
@@ -2855,7 +2884,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Methods/Invalid/MapKey/JSONv2/Syntax"),
 		in: map[any]string{
-			addr(marshalJSONv2Func(func(mo MarshalOptions, enc *Encoder) error {
+			addr(marshalJSONv2Func(func(enc *Encoder, opts Options) error {
 				return enc.WriteToken(Null)
 			})): "invalid",
 		},
@@ -2872,368 +2901,373 @@ func TestMarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: jsontest.Name("Functions/Bool/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(bool) ([]byte, error) {
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
+		name: jsontest.Name("Functions/Bool/Empty"),
+		opts: []Options{WithMarshalers(nil)},
+		in:   true,
+		want: `true`,
+	}, {
 		name: jsontest.Name("Functions/NamedBool/V1/NoMatch"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(namedBool) ([]byte, error) {
 				return nil, errors.New("must not be called")
-			}),
+			})),
 		},
 		in:   true,
 		want: `true`,
 	}, {
 		name: jsontest.Name("Functions/NamedBool/V1/Match"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(namedBool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(namedBool) ([]byte, error) {
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   namedBool(true),
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/PointerBool/V1/Match"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v *bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v *bool) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Bool/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				return enc.WriteToken(String("called"))
-			}),
+			})),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/NamedBool/V2/NoMatch"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v namedBool, opts Options) error {
 				return errors.New("must not be called")
-			}),
+			})),
 		},
 		in:   true,
 		want: `true`,
 	}, {
 		name: jsontest.Name("Functions/NamedBool/V2/Match"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedBool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v namedBool, opts Options) error {
 				return enc.WriteToken(String("called"))
-			}),
+			})),
 		},
 		in:   namedBool(true),
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/PointerBool/V2/Match"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *bool, opts Options) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteToken(String("called"))
-			}),
+			})),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Bool/Empty1/NoMatch"),
-		mopts: MarshalOptions{
-			Marshalers: new(Marshalers),
+		opts: []Options{
+			WithMarshalers(new(Marshalers)),
 		},
 		in:   true,
 		want: `true`,
 	}, {
 		name: jsontest.Name("Functions/Bool/Empty2/NoMatch"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(),
+		opts: []Options{
+			WithMarshalers(NewMarshalers()),
 		},
 		in:   true,
 		want: `true`,
 	}, {
 		name: jsontest.Name("Functions/Bool/V1/DirectError"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(bool) ([]byte, error) {
 				return nil, errors.New("some error")
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V1/SkipError"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(bool) ([]byte, error) {
 				return nil, SkipFunc
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("marshal function of type func(T) ([]byte, error) cannot be skipped")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V1/InvalidValue"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(bool) ([]byte, error) {
 				return []byte("invalid"), nil
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: newInvalidCharacterError("i", "at start of value")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/DirectError"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				return errors.New("some error")
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/TooFew"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				return nil
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/TooMany"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				enc.WriteValue([]byte(`"hello"`))
 				enc.WriteValue([]byte(`"world"`))
 				return nil
-			}),
+			})),
 		},
 		in:      true,
 		want:    `"hello""world"`,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must write exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/Skipped"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				return SkipFunc
-			}),
+			})),
 		},
 		in:   true,
 		want: `true`,
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/ProcessBeforeSkip"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				enc.WriteValue([]byte(`"hello"`))
 				return SkipFunc
-			}),
+			})),
 		},
 		in:      true,
 		want:    `"hello"`,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: errors.New("must not write any JSON tokens when skipping")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/WrappedSkipError"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
-			}),
+			})),
 		},
 		in:      true,
 		wantErr: &SemanticError{action: "marshal", GoType: boolType, Err: fmt.Errorf("wrap: %w", SkipFunc)},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/PointerNoCaseString/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V1/InvalidValue"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`null`), nil
-			}),
+			})),
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidKind"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`null`), nil
-			}),
+			})),
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/String/V1/DuplicateName"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v string) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v string) ([]byte, error) {
 				return []byte(`"name"`), nil
-			}),
+			})),
 		},
 		in:      map[string]string{"name1": "value", "name2": "value"},
 		want:    `{"name":"name"`,
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: newDuplicateNameError(`"name"`).withOffset(len64(`{"name":"name",`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v nocaseString, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/PointerNoCaseString/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *nocaseString, opts Options) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v encoding.TextMarshaler, opts Options) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[nocaseString]string{"hello": "world"},
 		want: `{"called":"world"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidToken"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v nocaseString, opts Options) error {
 				return enc.WriteToken(Null)
-			}),
+			})),
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidValue"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v nocaseString, opts Options) error {
 				return enc.WriteValue([]byte(`null`))
-			}),
+			})),
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
 		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: errMissingName.withOffset(len64(`{`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v nocaseString) ([]byte, error) {
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Value/PointerNoCaseString/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v *nocaseString) ([]byte, error) {
 				_ = *v // must be a non-nil pointer
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V1"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v encoding.TextMarshaler) ([]byte, error) {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return []byte(`"called"`), nil
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v nocaseString, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Value/PointerNoCaseString/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *nocaseString) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *nocaseString, opts Options) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V2"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v encoding.TextMarshaler, opts Options) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   map[string]nocaseString{"hello": "world"},
 		want: `{"hello":"called"}`,
 	}, {
 		name: jsontest.Name("Funtions/Struct/Fields"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
 					return []byte(`"called1"`), nil
 				}),
 				MarshalFuncV1(func(v *string) ([]byte, error) {
 					return []byte(`"called2"`), nil
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v []byte) error {
+				MarshalFuncV2(func(enc *Encoder, v []byte, opts Options) error {
 					return enc.WriteValue([]byte(`"called3"`))
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *int64) error {
+				MarshalFuncV2(func(enc *Encoder, v *int64, opts Options) error {
 					return enc.WriteValue([]byte(`"called4"`))
 				}),
-			),
+			)),
 		},
 		in:   structScalars{},
 		want: `{"Bool":"called1","String":"called2","Bytes":"called3","Int":"called4","Uint":0,"Float":0}`,
 	}, {
 		name: jsontest.Name("Functions/Struct/OmitEmpty"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
 					return []byte(`null`), nil
 				}),
@@ -3243,10 +3277,10 @@ func TestMarshal(t *testing.T) {
 				MarshalFuncV1(func(v *stringMarshalNonEmpty) ([]byte, error) {
 					return []byte(`""`), nil
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bytesMarshalNonEmpty) error {
+				MarshalFuncV2(func(enc *Encoder, v bytesMarshalNonEmpty, opts Options) error {
 					return enc.WriteValue([]byte(`{}`))
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *float64) error {
+				MarshalFuncV2(func(enc *Encoder, v *float64, opts Options) error {
 					return enc.WriteValue([]byte(`[]`))
 				}),
 				MarshalFuncV1(func(v mapMarshalNonEmpty) ([]byte, error) {
@@ -3255,116 +3289,116 @@ func TestMarshal(t *testing.T) {
 				MarshalFuncV1(func(v []string) ([]byte, error) {
 					return []byte(`"called3"`), nil
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *sliceMarshalNonEmpty) error {
+				MarshalFuncV2(func(enc *Encoder, v *sliceMarshalNonEmpty, opts Options) error {
 					return enc.WriteValue([]byte(`"called4"`))
 				}),
-			),
+			)),
 		},
 		in:   structOmitEmptyAll{},
 		want: `{"String":"called1","MapNonEmpty":"called2","Slice":"called3","SliceNonEmpty":"called4"}`,
 	}, {
 		name: jsontest.Name("Functions/Struct/OmitZero"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(v bool) ([]byte, error) {
 					panic("should not be called")
 				}),
 				MarshalFuncV1(func(v *string) ([]byte, error) {
 					panic("should not be called")
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v []byte) error {
+				MarshalFuncV2(func(enc *Encoder, v []byte, opts Options) error {
 					panic("should not be called")
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *int64) error {
+				MarshalFuncV2(func(enc *Encoder, v *int64, opts Options) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Functions/Struct/Inlined"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(v structInlinedL1) ([]byte, error) {
 					panic("should not be called")
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *StructEmbed2) error {
+				MarshalFuncV2(func(enc *Encoder, v *StructEmbed2, opts Options) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		in:   structInlined{},
 		want: `{"D":""}`,
 	}, {
 		name: jsontest.Name("Functions/Slice/Elem"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV1(func(v bool) ([]byte, error) {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV1(func(v bool) ([]byte, error) {
 				return []byte(`"` + strconv.FormatBool(v) + `"`), nil
-			}),
+			})),
 		},
 		in:   []bool{true, false},
 		want: `["true","false"]`,
 	}, {
 		name: jsontest.Name("Functions/Array/Elem"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *bool, opts Options) error {
 				return enc.WriteValue([]byte(`"` + strconv.FormatBool(*v) + `"`))
-			}),
+			})),
 		},
 		in:   [2]bool{true, false},
 		want: `["true","false"]`,
 	}, {
 		name: jsontest.Name("Functions/Pointer/Nil"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *bool, opts Options) error {
 				panic("should not be called")
-			}),
+			})),
 		},
 		in:   struct{ X *bool }{nil},
 		want: `{"X":null}`,
 	}, {
 		name: jsontest.Name("Functions/Pointer/NonNil"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *bool) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *bool, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   struct{ X *bool }{addr(false)},
 		want: `{"X":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Interface/Nil"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v fmt.Stringer, opts Options) error {
 				panic("should not be called")
-			}),
+			})),
 		},
 		in:   struct{ X fmt.Stringer }{nil},
 		want: `{"X":null}`,
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchInterface"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v fmt.Stringer) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v fmt.Stringer, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchConcrete"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v valueStringer) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v valueStringer, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchPointer"),
-		mopts: MarshalOptions{
-			Marshalers: MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *valueStringer) error {
+		opts: []Options{
+			WithMarshalers(MarshalFuncV2(func(enc *Encoder, v *valueStringer, opts Options) error {
 				return enc.WriteValue([]byte(`"called"`))
-			}),
+			})),
 		},
 		in:   struct{ X fmt.Stringer }{valueStringer{}},
 		want: `{"X":"called"}`,
@@ -3387,8 +3421,8 @@ func TestMarshal(t *testing.T) {
 			"LAST",
 		},
 		want: `[null,{},null,{},null,null,{},{},null,{},null,null,{},"LAST"]`,
-		mopts: MarshalOptions{
-			Marshalers: func() *Marshalers {
+		opts: []Options{
+			WithMarshalers(func() *Marshalers {
 				type P [2]int
 				type PV struct {
 					P P
@@ -3505,7 +3539,7 @@ func TestMarshal(t *testing.T) {
 					{P{1, 13}, addr("LAST")},
 				}
 				checkAny := makeValueChecker("any", wantAny)
-				anyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v any) error {
+				anyMarshaler := MarshalFuncV2(func(enc *Encoder, v any, opts Options) error {
 					return checkAny(enc, v)
 				})
 
@@ -3516,17 +3550,17 @@ func TestMarshal(t *testing.T) {
 					}
 				}
 				checkPointerAny := makeValueChecker("*any", wantPointerAny)
-				pointerAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *any) error {
+				pointerAnyMarshaler := MarshalFuncV2(func(enc *Encoder, v *any, opts Options) error {
 					return checkPointerAny(enc, v)
 				})
 
 				checkNamedAny := makeValueChecker("namedAny", wantAny)
-				namedAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v namedAny) error {
+				namedAnyMarshaler := MarshalFuncV2(func(enc *Encoder, v namedAny, opts Options) error {
 					return checkNamedAny(enc, v)
 				})
 
 				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
-				pointerNamedAnyMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *namedAny) error {
+				pointerNamedAnyMarshaler := MarshalFuncV2(func(enc *Encoder, v *namedAny, opts Options) error {
 					return checkPointerNamedAny(enc, v)
 				})
 
@@ -3538,38 +3572,38 @@ func TestMarshal(t *testing.T) {
 					}
 				}
 				checkStringer := makeValueChecker("stringer", wantStringer)
-				stringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v stringer) error {
+				stringerMarshaler := MarshalFuncV2(func(enc *Encoder, v stringer, opts Options) error {
 					return checkStringer(enc, v)
 				})
 
 				checkPointerStringer := makeValueChecker("*stringer", nil)
-				pointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *stringer) error {
+				pointerStringerMarshaler := MarshalFuncV2(func(enc *Encoder, v *stringer, opts Options) error {
 					return checkPointerStringer(enc, v)
 				})
 
 				wantValueStringer := []P{{1, 1}, {1, 3}, {1, 6}}
 				checkValueValueStringer := makePositionChecker("valueStringer", wantValueStringer)
-				valueValueStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v valueStringer) error {
+				valueValueStringerMarshaler := MarshalFuncV2(func(enc *Encoder, v valueStringer, opts Options) error {
 					return checkValueValueStringer(enc, v)
 				})
 
 				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
-				pointerValueStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *valueStringer) error {
+				pointerValueStringerMarshaler := MarshalFuncV2(func(enc *Encoder, v *valueStringer, opts Options) error {
 					return checkPointerValueStringer(enc, v)
 				})
 
 				wantPointerStringer := []P{{1, 7}, {1, 9}, {1, 12}}
 				checkValuePointerStringer := makePositionChecker("pointerStringer", wantPointerStringer)
-				valuePointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v pointerStringer) error {
+				valuePointerStringerMarshaler := MarshalFuncV2(func(enc *Encoder, v pointerStringer, opts Options) error {
 					return checkValuePointerStringer(enc, v)
 				})
 
 				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
-				pointerPointerStringerMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v *pointerStringer) error {
+				pointerPointerStringerMarshaler := MarshalFuncV2(func(enc *Encoder, v *pointerStringer, opts Options) error {
 					return checkPointerPointerStringer(enc, v)
 				})
 
-				lastMarshaler := MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v string) error {
+				lastMarshaler := MarshalFuncV2(func(enc *Encoder, v string, opts Options) error {
 					return checkLast()
 				})
 
@@ -3586,54 +3620,54 @@ func TestMarshal(t *testing.T) {
 					pointerPointerStringerMarshaler,
 					lastMarshaler,
 				)
-			}(),
+			}()),
 		},
 	}, {
 		name: jsontest.Name("Functions/Precedence/V1First"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+				MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2First"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
+				MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 					return enc.WriteToken(String("called"))
 				}),
 				MarshalFuncV1(func(bool) ([]byte, error) {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
-				MarshalFuncV2(func(mo MarshalOptions, enc *Encoder, v bool) error {
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
+				MarshalFuncV2(func(enc *Encoder, v bool, opts Options) error {
 					return SkipFunc
 				}),
 				MarshalFuncV1(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
-			),
+			)),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedFirst"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				NewMarshalers(
 					MarshalFuncV1(func(bool) ([]byte, error) {
 						return []byte(`"called"`), nil
@@ -3642,14 +3676,14 @@ func TestMarshal(t *testing.T) {
 				MarshalFuncV1(func(bool) ([]byte, error) {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		in:   true,
 		want: `"called"`,
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedLast"),
-		mopts: MarshalOptions{
-			Marshalers: NewMarshalers(
+		opts: []Options{
+			WithMarshalers(NewMarshalers(
 				MarshalFuncV1(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
@@ -3658,7 +3692,7 @@ func TestMarshal(t *testing.T) {
 						panic("should not be called")
 					}),
 				),
-			),
+			)),
 		},
 		in:   true,
 		want: `"called"`,
@@ -3709,10 +3743,10 @@ func TestMarshal(t *testing.T) {
 		want:    `{"D"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
-		name:  jsontest.Name("Duration/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    time.Duration(0),
-		want:  `"0s"`,
+		name: jsontest.Name("Duration/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   time.Duration(0),
+		want: `"0s"`,
 	}, {
 		name: jsontest.Name("Time/Zero"),
 		in: struct {
@@ -3732,8 +3766,8 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T5":"0001-01-01T00:00:00Z"}`,
 	}, {
-		name:  jsontest.Name("Time/Format"),
-		eopts: EncodeOptions{Indent: "\t"},
+		name: jsontest.Name("Time/Format"),
+		opts: []Options{Expand(true)},
 		in: structTimeFormat{
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
@@ -3829,10 +3863,10 @@ func TestMarshal(t *testing.T) {
 		want:    `{"T"`,
 		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`timezone hour outside of range [0,23]`)},
 	}, {
-		name:  jsontest.Name("Time/IgnoreInvalidFormat"),
-		mopts: MarshalOptions{formatDepth: 1000, format: "invalid"},
-		in:    time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
-		want:  `"2000-01-01T00:00:00Z"`,
+		name: jsontest.Name("Time/IgnoreInvalidFormat"),
+		opts: []Options{invalidFormatOption},
+		in:   time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+		want: `"2000-01-01T00:00:00Z"`,
 	}}
 
 	for _, tt := range tests {
@@ -3841,10 +3875,10 @@ func TestMarshal(t *testing.T) {
 			var gotErr error
 			if tt.useWriter {
 				bb := new(struct{ bytes.Buffer }) // avoid optimizations with bytes.Buffer
-				gotErr = tt.mopts.MarshalFull(tt.eopts, bb, tt.in)
+				gotErr = MarshalWrite(bb, tt.in, tt.opts...)
 				got = bb.Bytes()
 			} else {
-				got, gotErr = tt.mopts.Marshal(tt.eopts, tt.in)
+				got, gotErr = Marshal(tt.in, tt.opts...)
 			}
 			if tt.canonicalize {
 				(*RawValue)(&got).Canonicalize()
@@ -3862,8 +3896,7 @@ func TestMarshal(t *testing.T) {
 func TestUnmarshal(t *testing.T) {
 	tests := []struct {
 		name    jsontest.CaseName
-		dopts   DecodeOptions
-		uopts   UnmarshalOptions
+		opts    []Options
 		inBuf   string
 		inVal   any
 		want    any
@@ -3907,14 +3940,14 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr([]namedBool{false, false, true}),
 	}, {
 		name:    jsontest.Name("Bools/Invalid/StringifiedFalse"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"false"`,
 		inVal:   addr(true),
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
 		name:    jsontest.Name("Bools/Invalid/StringifiedTrue"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"true"`,
 		inVal:   addr(true),
 		want:    addr(true),
@@ -3945,7 +3978,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: boolType},
 	}, {
 		name:  jsontest.Name("Bools/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `false`,
 		inVal: addr(true),
 		want:  addr(false),
@@ -3995,7 +4028,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: stringType},
 	}, {
 		name:  jsontest.Name("Strings/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `"hello"`,
 		inVal: addr("goodbye"),
 		want:  addr("hello"),
@@ -4031,7 +4064,7 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr([]namedBytes{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
 	}, {
 		name:  jsontest.Name("Bytes/NotStringified"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `[null,"","AQ==","AQI=","AQID"]`,
 		inVal: new([][]byte),
 		want:  addr([][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}}),
@@ -4238,7 +4271,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: bytesType},
 	}, {
 		name:  jsontest.Name("Bytes/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `"aGVsbG8="`,
 		inVal: new([]byte),
 		want:  addr([]byte("hello")),
@@ -4347,20 +4380,20 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedInt64(-6464)),
 	}, {
 		name:  jsontest.Name("Ints/Stringified"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"-6464"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
 		name:    jsontest.Name("Ints/Stringified/LeadingZero"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"00"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "00" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:  jsontest.Name("Ints/Escaped"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"\u002d\u0036\u0034\u0036\u0034"`,
 		inVal: new(int),
 		want:  addr(int(-6464)),
@@ -4383,14 +4416,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Ints/Invalid/StringifiedFraction"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1.0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Ints/Invalid/StringifiedExponent"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1e0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
@@ -4403,14 +4436,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    jsontest.Name("Ints/Invalid/OverflowSyntax"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: intType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Ints/Invalid/Whitespace"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"0 "`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
@@ -4441,7 +4474,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: intType},
 	}, {
 		name:  jsontest.Name("Ints/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `1`,
 		inVal: addr(int(0)),
 		want:  addr(int(1)),
@@ -4531,20 +4564,20 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedUint64(6464)),
 	}, {
 		name:  jsontest.Name("Uints/Stringified"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"6464"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
 	}, {
 		name:    jsontest.Name("Uints/Stringified/LeadingZero"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"00"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "00" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:  jsontest.Name("Uints/Escaped"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"\u0036\u0034\u0036\u0034"`,
 		inVal: new(uint),
 		want:  addr(uint(6464)),
@@ -4574,14 +4607,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Uints/Invalid/StringifiedFraction"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1.0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Uints/Invalid/StringifiedExponent"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1e0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
@@ -4594,14 +4627,14 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)},
 	}, {
 		name:    jsontest.Name("Uints/Invalid/OverflowSyntax"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: uintType, Err: fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Whitespace"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"0 "`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
@@ -4632,7 +4665,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: uintType},
 	}, {
 		name:  jsontest.Name("Uints/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `1`,
 		inVal: addr(uint(0)),
 		want:  addr(uint(1)),
@@ -4678,40 +4711,40 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(namedFloat64(64.64)),
 	}, {
 		name:  jsontest.Name("Floats/Stringified"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"64.64"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
 		name:  jsontest.Name("Floats/Escaped"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `"\u0036\u0034\u002e\u0036\u0034"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/NaN"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"NaN"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Floats/Invalid/Infinity"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"Infinity"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Floats/Invalid/Whitespace"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1 "`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: float64Type, Err: fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)},
 	}, {
 		name:    jsontest.Name("Floats/Invalid/GoSyntax"),
-		uopts:   UnmarshalOptions{StringifyNumbers: true},
+		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1p-2"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
@@ -4742,7 +4775,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: float64Type},
 	}, {
 		name:  jsontest.Name("Floats/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `1`,
 		inVal: addr(float64(0)),
 		want:  addr(float64(1)),
@@ -4808,7 +4841,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: newDuplicateNameError(`"-0"`).withOffset(len64(`{"0":1,`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/Int/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"0":1,"-0":-1}`,
 		inVal: new(map[int]int),
 		want:  addr(map[int]int{0: -1}), // latter takes precedence
@@ -4825,7 +4858,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: newDuplicateNameError(`"1"`).withOffset(len64(`{"1.0":"1.0",`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/Float/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
 		inVal: new(map[float64]string),
 		want:  addr(map[float64]string{1: "1e0"}), // latter takes precedence
@@ -4842,13 +4875,13 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: newDuplicateNameError(`"HELLO"`).withOffset(len64(`{"hello":"hello",`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"hello":"hello","HELLO":"HELLO"}`,
 		inVal: new(map[nocaseString]string),
 		want:  addr(map[nocaseString]string{"hello": "HELLO"}), // latter takes precedence
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/NoCaseString/OverwriteExisting"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"HELLO":"HELLO"}`,
 		inVal: addr(map[nocaseString]string{"hello": "hello"}),
 		want:  addr(map[nocaseString]string{"hello": "HELLO"}),
@@ -4888,7 +4921,7 @@ func TestUnmarshal(t *testing.T) {
 		// where existing map entries were not merged into.
 		// See https://go.dev/issue/31924.
 		name:  jsontest.Name("Maps/Merge"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"k1":{"k2":"v2"},"k2":{"k1":"v1"},"k2":{"k2":"v2"}}`,
 		inVal: addr(map[string]map[string]string{
 			"k1": {"k1": "v1"},
@@ -4923,7 +4956,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '[', GoType: mapStringStringType},
 	}, {
 		name:  jsontest.Name("Maps/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `{"hello":"goodbye"}`,
 		inVal: addr(map[string]string{}),
 		want:  addr(map[string]string{"hello": "goodbye"}),
@@ -5301,14 +5334,16 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name: jsontest.Name("Structs/Format/Bytes/Array"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *byte) error {
-			if string(b) == "true" {
-				*v = 1
-			} else {
-				*v = 0
-			}
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *byte) error {
+				if string(b) == "true" {
+					*v = 1
+				} else {
+					*v = 0
+				}
+				return nil
+			})),
+		},
 		inBuf: `{"Array":[false,true,false,true,false,true]}`,
 		inVal: new(struct {
 			Array []byte `json:",format:array"`
@@ -5695,14 +5730,14 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","a":3}`), B: 2}),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/RawValue/RejectDuplicateNames"),
-		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		opts:    []Options{AllowDuplicateNames(false)},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineRawValue),
 		want:    addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz"}`), B: 2}),
 		wantErr: newDuplicateNameError(`"fizz"`).withOffset(len64(`{"A":1,"fizz":"buzz","B":2,`)),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/RawValue/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal: new(structInlineRawValue),
 		want:  addr(structInlineRawValue{A: 1, X: RawValue(`{"fizz":"buzz","fizz":"buzz"}`), B: 2}),
@@ -5811,14 +5846,14 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz", "a": 3.0}, B: 2}),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapStringAny/RejectDuplicateNames"),
-		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		opts:    []Options{AllowDuplicateNames(false)},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
 		wantErr: newDuplicateNameError(`"fizz"`).withOffset(len64(`{"A":1,"fizz":"buzz","B":2,`)),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringAny/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"A":1,"fizz":{"one":1,"two":-2},"B":2,"fizz":{"two":2,"three":3}}`,
 		inVal: new(structInlineMapStringAny),
 		want:  addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": jsonObject{"one": 1.0, "two": 2.0, "three": 3.0}}, B: 2}),
@@ -5854,12 +5889,12 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/UnmarshalFuncV1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *any) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *any) error {
 				var err error
 				*v, err = strconv.ParseFloat(string(bytes.Trim(b, `"`)), 64)
 				return err
-			}),
+			})),
 		},
 		inBuf: `{"D":"1.1","E":"2.2","F":"3.3"}`,
 		inVal: new(structInlineMapStringAny),
@@ -5912,7 +5947,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: intType},
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `{"zero": 0, "one": "1", "two": 2}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
@@ -5920,15 +5955,15 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/UnmarshalFuncV1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *int) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *int) error {
 				i, err := strconv.ParseInt(string(bytes.Trim(b, `"`)), 10, 64)
 				if err != nil {
 					return err
 				}
 				*v = int(i)
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"zero": "0", "one": "1", "two": "2"}`,
 		inVal: new(structInlineMapStringInt),
@@ -5937,7 +5972,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/RejectUnknownMembers"),
-		uopts: UnmarshalOptions{RejectUnknownMembers: true},
+		opts:  []Options{RejectUnknownMembers(true)},
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: new(structInlineRawValue),
 		// NOTE: DiscardUnknownMembers has no effect since this is "inline".
@@ -5948,7 +5983,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name:    jsontest.Name("Structs/UnknownFallback/RejectUnknownMembers"),
-		uopts:   UnmarshalOptions{RejectUnknownMembers: true},
+		opts:    []Options{RejectUnknownMembers(true)},
 		inBuf:   `{"A":1,"fizz":"buzz","B":2}`,
 		inVal:   new(structUnknownRawValue),
 		want:    addr(structUnknownRawValue{A: 1}),
@@ -5964,13 +5999,13 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name:  jsontest.Name("Structs/UnknownIgnored"),
-		uopts: UnmarshalOptions{RejectUnknownMembers: false},
+		opts:  []Options{RejectUnknownMembers(false)},
 		inBuf: `{"unknown":"fizzbuzz"}`,
 		inVal: new(structAll),
 		want:  new(structAll),
 	}, {
 		name:    jsontest.Name("Structs/RejectUnknownMembers"),
-		uopts:   UnmarshalOptions{RejectUnknownMembers: true},
+		opts:    []Options{RejectUnknownMembers(true)},
 		inBuf:   `{"unknown":"fizzbuzz"}`,
 		inVal:   new(structAll),
 		want:    new(structAll),
@@ -5997,13 +6032,13 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"}),
 	}, {
 		name:  jsontest.Name("Structs/NoCase/Merge/AllowDuplicateNames"),
-		dopts: DecodeOptions{AllowDuplicateNames: true},
+		opts:  []Options{AllowDuplicateNames(true)},
 		inBuf: `{"AaA":"AaA","aaa":"aaa","aAa":"aAa"}`,
 		inVal: new(structNoCase),
 		want:  addr(structNoCase{AaA: "aAa"}),
 	}, {
 		name:    jsontest.Name("Structs/NoCase/Merge/RejectDuplicateNames"),
-		dopts:   DecodeOptions{AllowDuplicateNames: false},
+		opts:    []Options{AllowDuplicateNames(false)},
 		inBuf:   `{"AaA":"AaA","aaa":"aaa"}`,
 		inVal:   new(structNoCase),
 		want:    addr(structNoCase{AaA: "AaA"}),
@@ -6121,7 +6156,7 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(struct{}{}),
 	}, {
 		name:  jsontest.Name("Structs/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `{"Field":"Value"}`,
 		inVal: addr(struct{ Field string }{}),
 		want:  addr(struct{ Field string }{"Value"}),
@@ -6210,7 +6245,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: sliceStringType},
 	}, {
 		name:  jsontest.Name("Slices/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `[false,true]`,
 		inVal: addr([]bool{true, false}),
 		want:  addr([]bool{false, true}),
@@ -6300,7 +6335,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '{', GoType: array1StringType},
 	}, {
 		name:  jsontest.Name("Arrays/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `[false,true]`,
 		inVal: addr([2]bool{true, false}),
 		want:  addr([2]bool{false, true}),
@@ -6351,7 +6386,7 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(addr("hello")),
 	}, {
 		name:  jsontest.Name("Points/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `true`,
 		inVal: addr(new(bool)),
 		want:  addr(addr(true)),
@@ -6472,7 +6507,7 @@ func TestUnmarshal(t *testing.T) {
 		}(),
 	}, {
 		name:  jsontest.Name("Interfaces/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `true`,
 		inVal: new(any),
 		want: func() any {
@@ -6491,61 +6526,73 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(struct{ X namedAny }{[]any{nil, false, true, "", 0.0, map[string]any{}, []any{}}}),
 	}, {
 		name:  jsontest.Name("Interfaces/Any/Stringified"),
-		uopts: UnmarshalOptions{StringifyNumbers: true},
+		opts:  []Options{StringifyNumbers(true)},
 		inBuf: `{"X":"0"}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{"0"}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/Any"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *any) error {
-			*v = "called"
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *any) error {
+				*v = "called"
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{"called"}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/Bool"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *bool) error {
-			*v = string(b) != "true"
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *bool) error {
+				*v = string(b) != "true"
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, true, false, "", 0.0, map[string]any{}, []any{}}}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/String"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
-			*v = "called"
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *string) error {
+				*v = "called"
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "called", 0.0, map[string]any{}, []any{}}}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/Float64"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *float64) error {
-			*v = 3.14159
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *float64) error {
+				*v = 3.14159
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "", 3.14159, map[string]any{}, []any{}}}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/MapStringAny"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *map[string]any) error {
-			*v = map[string]any{"called": nil}
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *map[string]any) error {
+				*v = map[string]any{"called": nil}
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{nil, false, true, "", 0.0, map[string]any{"called": nil}, []any{}}}),
 	}, {
 		name: jsontest.Name("Interfaces/Any/UnmarshalFunc/SliceAny"),
-		uopts: UnmarshalOptions{Unmarshalers: UnmarshalFuncV1(func(b []byte, v *[]any) error {
-			*v = []any{"called"}
-			return nil
-		})},
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *[]any) error {
+				*v = []any{"called"}
+				return nil
+			})),
+		},
 		inBuf: `{"X":[null,false,true,"",0,{},[]]}`,
 		inVal: new(struct{ X any }),
 		want:  addr(struct{ X any }{[]any{"called"}}),
@@ -6562,7 +6609,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: newDuplicateNameError(`"fizz"`).withOffset(len64(`{"X":{"fizz":"buzz",`)),
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/AllowDuplicateNames"),
-		dopts:   DecodeOptions{AllowDuplicateNames: true},
+		opts:    []Options{AllowDuplicateNames(true)},
 		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
 		inVal:   new(struct{ X any }),
 		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
@@ -6581,7 +6628,7 @@ func TestUnmarshal(t *testing.T) {
 		name:  jsontest.Name("Methods/NilPointer/Value"),
 		inBuf: `{"X":"value"}`,
 		inVal: addr(struct{ X *allMethods }{X: (*allMethods)(nil)}),
-		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
+		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalJSONV2", value: []byte(`"value"`)}}),
 	}, {
 		name:  jsontest.Name("Methods/NilInterface/Null"),
 		inBuf: `{"X":null}`,
@@ -6591,12 +6638,12 @@ func TestUnmarshal(t *testing.T) {
 		name:  jsontest.Name("Methods/NilInterface/Value"),
 		inBuf: `{"X":"value"}`,
 		inVal: addr(struct{ X MarshalerV2 }{X: (*allMethods)(nil)}),
-		want:  addr(struct{ X MarshalerV2 }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"value"`)}}),
+		want:  addr(struct{ X MarshalerV2 }{X: &allMethods{method: "UnmarshalJSONV2", value: []byte(`"value"`)}}),
 	}, {
 		name:  jsontest.Name("Methods/AllMethods"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethods }),
-		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}),
+		want:  addr(struct{ X *allMethods }{X: &allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)}}),
 	}, {
 		name:  jsontest.Name("Methods/AllMethodsExceptJSONv2"),
 		inBuf: `{"X":"hello"}`,
@@ -6606,17 +6653,17 @@ func TestUnmarshal(t *testing.T) {
 		name:  jsontest.Name("Methods/AllMethodsExceptJSONv1"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethodsExceptJSONv1 }),
-		want:  addr(struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+		want:  addr(struct{ X *allMethodsExceptJSONv1 }{X: &allMethodsExceptJSONv1{allMethods: allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)}}}),
 	}, {
 		name:  jsontest.Name("Methods/AllMethodsExceptText"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *allMethodsExceptText }),
-		want:  addr(struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+		want:  addr(struct{ X *allMethodsExceptText }{X: &allMethodsExceptText{allMethods: allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)}}}),
 	}, {
 		name:  jsontest.Name("Methods/OnlyMethodJSONv2"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X *onlyMethodJSONv2 }),
-		want:  addr(struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+		want:  addr(struct{ X *onlyMethodJSONv2 }{X: &onlyMethodJSONv2{allMethods: allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)}}}),
 	}, {
 		name:  jsontest.Name("Methods/OnlyMethodJSONv1"),
 		inBuf: `{"X":"hello"}`,
@@ -6637,7 +6684,7 @@ func TestUnmarshal(t *testing.T) {
 		name:  jsontest.Name("Methods/Anonymous"),
 		inBuf: `{"X":"hello"}`,
 		inVal: new(struct{ X struct{ allMethods } }),
-		want:  addr(struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)}}}),
+		want:  addr(struct{ X struct{ allMethods } }{X: struct{ allMethods }{allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)}}}),
 	}, {
 		// NOTE: Fixes https://go.dev/issue/22967.
 		name:  jsontest.Name("Methods/Addressable"),
@@ -6654,9 +6701,9 @@ func TestUnmarshal(t *testing.T) {
 			M map[string]allMethods
 			I any
 		}{
-			V: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
-			M: map[string]allMethods{"K": {method: "UnmarshalNextJSON", value: []byte(`"hello"`)}},
-			I: allMethods{method: "UnmarshalNextJSON", value: []byte(`"hello"`)},
+			V: allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)},
+			M: map[string]allMethods{"K": {method: "UnmarshalJSONV2", value: []byte(`"hello"`)}},
+			I: allMethods{method: "UnmarshalJSONV2", value: []byte(`"hello"`)},
 		}),
 	}, {
 		// NOTE: Fixes https://go.dev/issue/29732.
@@ -6678,20 +6725,20 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/Error"),
 		inBuf: `{}`,
-		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
+		inVal: addr(unmarshalJSONv2Func(func(*Decoder, Options) error {
 			return errors.New("some error")
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooFew"),
-		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
+		inVal: addr(unmarshalJSONv2Func(func(*Decoder, Options) error {
 			return nil // do nothing
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("must read exactly one JSON value")},
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/TooMany"),
 		inBuf: `{}{}`,
-		inVal: addr(unmarshalJSONv2Func(func(uo UnmarshalOptions, dec *Decoder) error {
+		inVal: addr(unmarshalJSONv2Func(func(dec *Decoder, opts Options) error {
 			dec.ReadValue()
 			dec.ReadValue()
 			return nil
@@ -6700,7 +6747,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/SkipFunc"),
 		inBuf: `{}`,
-		inVal: addr(unmarshalJSONv2Func(func(UnmarshalOptions, *Decoder) error {
+		inVal: addr(unmarshalJSONv2Func(func(*Decoder, Options) error {
 			return SkipFunc
 		})),
 		wantErr: &SemanticError{action: "unmarshal", GoType: unmarshalJSONv2FuncType, Err: errors.New("unmarshal method cannot be skipped")},
@@ -6741,46 +6788,52 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: unmarshalTextFuncType, Err: errors.New("unmarshal method cannot be skipped")},
 	}, {
 		name: jsontest.Name("Functions/String/V1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *string) error {
 				if string(b) != `""` {
 					return fmt.Errorf("got %s, want %s", b, `""`)
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
+		name:  jsontest.Name("Functions/String/Empty"),
+		opts:  []Options{WithUnmarshalers(nil)},
+		inBuf: `"hello"`,
+		inVal: addr(""),
+		want:  addr("hello"),
+	}, {
 		name: jsontest.Name("Functions/NamedString/V1/NoMatch"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *namedString) error {
 				panic("should not be called")
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
 		name: jsontest.Name("Functions/NamedString/V1/Match"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *namedString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *namedString) error {
 				if string(b) != `""` {
 					return fmt.Errorf("got %s, want %s", b, `""`)
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(namedString("")),
 		want:  addr(namedString("called")),
 	}, {
 		name: jsontest.Name("Functions/String/V2"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -6789,25 +6842,25 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
 		name: jsontest.Name("Functions/NamedString/V2/NoMatch"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *namedString, opts Options) error {
 				panic("should not be called")
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
 		name: jsontest.Name("Functions/NamedString/V2/Match"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *namedString, opts Options) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -6816,33 +6869,33 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(namedString("")),
 		want:  addr(namedString("called")),
 	}, {
 		name: jsontest.Name("Functions/String/Empty1/NoMatch"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: new(Unmarshalers),
+		opts: []Options{
+			WithUnmarshalers(new(Unmarshalers)),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
 		name: jsontest.Name("Functions/String/Empty2/NoMatch"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(),
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers()),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
 		name: jsontest.Name("Functions/String/V1/DirectError"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func([]byte, *string) error {
 				return errors.New("some error")
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6850,10 +6903,10 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Functions/String/V1/SkipError"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func([]byte, *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func([]byte, *string) error {
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6861,10 +6914,10 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: reflect.PointerTo(stringType), Err: errors.New("unmarshal function of type func([]byte, T) error cannot be skipped")},
 	}, {
 		name: jsontest.Name("Functions/String/V2/DirectError"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				return errors.New("some error")
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6872,10 +6925,10 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("some error")},
 	}, {
 		name: jsontest.Name("Functions/String/V2/TooFew"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				return nil
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6883,8 +6936,8 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Functions/String/V2/TooMany"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
@@ -6892,7 +6945,7 @@ func TestUnmarshal(t *testing.T) {
 					return err
 				}
 				return nil
-			}),
+			})),
 		},
 		inBuf:   `["",""]`,
 		inVal:   addr([]string{}),
@@ -6900,23 +6953,23 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must read exactly one JSON value")},
 	}, {
 		name: jsontest.Name("Functions/String/V2/Skipped"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
 		want:  addr(""),
 	}, {
 		name: jsontest.Name("Functions/String/V2/ProcessBeforeSkip"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6924,10 +6977,10 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: errors.New("must not read any JSON tokens when skipping")},
 	}, {
 		name: jsontest.Name("Functions/String/V2/WrappedSkipError"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
-			}),
+			})),
 		},
 		inBuf:   `""`,
 		inVal:   addr(""),
@@ -6935,36 +6988,36 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: fmt.Errorf("wrap: %w", SkipFunc)},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
 				if string(b) != `"hello"` {
 					return fmt.Errorf("got %s, want %s", b, `"hello"`)
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
 				if string(b) != `"hello"` {
 					return fmt.Errorf("got %s, want %s", b, `"hello"`)
 				}
 				*v.(*nocaseString) = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *nocaseString, opts Options) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -6973,15 +7026,15 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V2"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v encoding.TextMarshaler, opts Options) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -6990,21 +7043,21 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v.(*nocaseString) = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[nocaseString]string{}),
 		want:  addr(map[nocaseString]string{"called": "world"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Key/String/V1/DuplicateName"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
 				*v = fmt.Sprintf("%d-%d", len(dec.tokens.stack), dec.tokens.last.length())
 				return nil
-			}),
+			})),
 		},
 		inBuf:   `{"name":"value","name":"value"}`,
 		inVal:   addr(map[string]string{}),
@@ -7012,36 +7065,36 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: newDuplicateNameError(`"name"`).withOffset(len64(`{"name":"value",`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *nocaseString) error {
 				if string(b) != `"world"` {
 					return fmt.Errorf("got %s, want %s", b, `"world"`)
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V1"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v encoding.TextMarshaler) error {
 				if string(b) != `"world"` {
 					return fmt.Errorf("got %s, want %s", b, `"world"`)
 				}
 				*v.(*nocaseString) = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V2"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *nocaseString) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *nocaseString, opts Options) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -7050,15 +7103,15 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V2"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v encoding.TextMarshaler) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v encoding.TextMarshaler, opts Options) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -7067,15 +7120,15 @@ func TestUnmarshal(t *testing.T) {
 				}
 				*v.(*nocaseString) = "called"
 				return nil
-			}),
+			})),
 		},
 		inBuf: `{"hello":"world"}`,
 		inVal: addr(map[string]nocaseString{}),
 		want:  addr(map[string]nocaseString{"hello": "called"}),
 	}, {
 		name: jsontest.Name("Funtions/Struct/Fields"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *bool) error {
 					if string(b) != `"called1"` {
 						return fmt.Errorf("got %s, want %s", b, `"called1"`)
@@ -7090,7 +7143,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called2"
 					return nil
 				}),
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *[]byte) error {
+				UnmarshalFuncV2(func(dec *Decoder, v *[]byte, opts Options) error {
 					switch t, err := dec.ReadToken(); {
 					case err != nil:
 						return err
@@ -7100,7 +7153,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = []byte("called3")
 					return nil
 				}),
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *int64) error {
+				UnmarshalFuncV2(func(dec *Decoder, v *int64, opts Options) error {
 					switch b, err := dec.ReadValue(); {
 					case err != nil:
 						return err
@@ -7110,22 +7163,22 @@ func TestUnmarshal(t *testing.T) {
 					*v = 123
 					return nil
 				}),
-			),
+			)),
 		},
 		inBuf: `{"Bool":"called1","String":"called2","Bytes":"called3","Int":"called4","Uint":456,"Float":789}`,
 		inVal: addr(structScalars{}),
 		want:  addr(structScalars{Bool: true, String: "called2", Bytes: []byte("called3"), Int: 123, Uint: 456, Float: 789}),
 	}, {
 		name: jsontest.Name("Functions/Struct/Inlined"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
 				UnmarshalFuncV1(func([]byte, *structInlinedL1) error {
 					panic("should not be called")
 				}),
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *StructEmbed2) error {
+				UnmarshalFuncV2(func(dec *Decoder, v *StructEmbed2, opts Options) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		inBuf: `{"E":"E3","F":"F3","G":"G3","A":"A1","B":"B1","D":"D2"}`,
 		inVal: new(structInlined),
@@ -7138,56 +7191,56 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name: jsontest.Name("Functions/Slice/Elem"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *string) error {
 				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
 				return nil
-			}),
+			})),
 		},
 		inBuf: `["hello","World"]`,
 		inVal: addr([]string{}),
 		want:  addr([]string{"HELLO", "WORLD"}),
 	}, {
 		name: jsontest.Name("Functions/Array/Elem"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV1(func(b []byte, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV1(func(b []byte, v *string) error {
 				*v = strings.Trim(strings.ToUpper(string(b)), `"`)
 				return nil
-			}),
+			})),
 		},
 		inBuf: `["hello","World"]`,
 		inVal: addr([2]string{}),
 		want:  addr([2]string{"HELLO", "WORLD"}),
 	}, {
 		name: jsontest.Name("Functions/Pointer/Nil"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				t, err := dec.ReadToken()
 				*v = strings.ToUpper(t.String())
 				return err
-			}),
+			})),
 		},
 		inBuf: `{"X":"hello"}`,
 		inVal: addr(struct{ X *string }{nil}),
 		want:  addr(struct{ X *string }{addr("HELLO")}),
 	}, {
 		name: jsontest.Name("Functions/Pointer/NonNil"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 				t, err := dec.ReadToken()
 				*v = strings.ToUpper(t.String())
 				return err
-			}),
+			})),
 		},
 		inBuf: `{"X":"hello"}`,
 		inVal: addr(struct{ X *string }{addr("")}),
 		want:  addr(struct{ X *string }{addr("HELLO")}),
 	}, {
 		name: jsontest.Name("Functions/Interface/Nil"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v fmt.Stringer) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v fmt.Stringer, opts Options) error {
 				panic("should not be called")
-			}),
+			})),
 		},
 		inBuf:   `{"X":"hello"}`,
 		inVal:   addr(struct{ X fmt.Stringer }{nil}),
@@ -7195,42 +7248,42 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: fmtStringerType, Err: errors.New("cannot derive concrete type for non-empty interface")},
 	}, {
 		name: jsontest.Name("Functions/Interface/NetIP"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *fmt.Stringer, opts Options) error {
 				*v = net.IP{}
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf: `{"X":"1.1.1.1"}`,
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{net.IPv4(1, 1, 1, 1)}),
 	}, {
 		name: jsontest.Name("Functions/Interface/NewPointerNetIP"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *fmt.Stringer, opts Options) error {
 				*v = new(net.IP)
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf: `{"X":"1.1.1.1"}`,
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
 	}, {
 		name: jsontest.Name("Functions/Interface/NilPointerNetIP"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+		opts: []Options{
+			WithUnmarshalers(UnmarshalFuncV2(func(dec *Decoder, v *fmt.Stringer, opts Options) error {
 				*v = (*net.IP)(nil)
 				return SkipFunc
-			}),
+			})),
 		},
 		inBuf: `{"X":"1.1.1.1"}`,
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
 		want:  addr(struct{ X fmt.Stringer }{addr(net.IPv4(1, 1, 1, 1))}),
 	}, {
 		name: jsontest.Name("Functions/Interface/NilPointerNetIP/Override"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *fmt.Stringer) error {
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
+				UnmarshalFuncV2(func(dec *Decoder, v *fmt.Stringer, opts Options) error {
 					*v = (*net.IP)(nil)
 					return SkipFunc
 				}),
@@ -7238,7 +7291,7 @@ func TestUnmarshal(t *testing.T) {
 					b = bytes.ReplaceAll(b, []byte(`1`), []byte(`8`))
 					return v.UnmarshalText(bytes.Trim(b, `"`))
 				}),
-			),
+			)),
 		},
 		inBuf: `{"X":"1.1.1.1"}`,
 		inVal: addr(struct{ X fmt.Stringer }{nil}),
@@ -7262,8 +7315,8 @@ func TestUnmarshal(t *testing.T) {
 			addr(addr(pointerStringer{})), // **T
 			"LAST",
 		}),
-		uopts: UnmarshalOptions{
-			Unmarshalers: func() *Unmarshalers {
+		opts: []Options{
+			WithUnmarshalers(func() *Unmarshalers {
 				type P [2]int
 				type PV struct {
 					P P
@@ -7374,7 +7427,7 @@ func TestUnmarshal(t *testing.T) {
 					{P{1, 13}, addr("LAST")},
 				}
 				checkAny := makeValueChecker("any", wantAny)
-				anyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v any) error {
+				anyUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v any, opts Options) error {
 					return checkAny(dec, v)
 				})
 
@@ -7385,17 +7438,17 @@ func TestUnmarshal(t *testing.T) {
 					}
 				}
 				checkPointerAny := makeValueChecker("*any", wantPointerAny)
-				pointerAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *any) error {
+				pointerAnyUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *any, opts Options) error {
 					return checkPointerAny(dec, v)
 				})
 
 				checkNamedAny := makeValueChecker("namedAny", wantAny)
-				namedAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v namedAny) error {
+				namedAnyUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v namedAny, opts Options) error {
 					return checkNamedAny(dec, v)
 				})
 
 				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
-				pointerNamedAnyUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *namedAny) error {
+				pointerNamedAnyUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *namedAny, opts Options) error {
 					return checkPointerNamedAny(dec, v)
 				})
 
@@ -7407,40 +7460,40 @@ func TestUnmarshal(t *testing.T) {
 					}
 				}
 				checkStringer := makeValueChecker("stringer", wantStringer)
-				stringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v stringer) error {
+				stringerUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v stringer, opts Options) error {
 					return checkStringer(dec, v)
 				})
 
 				checkPointerStringer := makeValueChecker("*stringer", nil)
-				pointerStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *stringer) error {
+				pointerStringerUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *stringer, opts Options) error {
 					return checkPointerStringer(dec, v)
 				})
 
 				wantValueStringer := []P{{1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {1, 6}}
 				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
-				pointerValueStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *valueStringer) error {
+				pointerValueStringerUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *valueStringer, opts Options) error {
 					return checkPointerValueStringer(dec, v)
 				})
 
 				wantPointerStringer := []P{{1, 7}, {1, 8}, {1, 9}, {1, 10}, {1, 11}, {1, 12}}
 				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
-				pointerPointerStringerUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *pointerStringer) error {
+				pointerPointerStringerUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *pointerStringer, opts Options) error {
 					return checkPointerPointerStringer(dec, v)
 				})
 
-				lastUnmarshaler := UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				lastUnmarshaler := UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 					return checkLast()
 				})
 
 				return NewUnmarshalers(
 					// This is just like unmarshaling into a Go array,
 					// but avoids zeroing the element before calling unmarshal.
-					UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *[14]any) error {
+					UnmarshalFuncV2(func(dec *Decoder, v *[14]any, opts Options) error {
 						if _, err := dec.ReadToken(); err != nil {
 							return err
 						}
 						for i := 0; i < len(*v); i++ {
-							if err := uo.UnmarshalNext(dec, &(*v)[i]); err != nil {
+							if err := UnmarshalDecode(dec, &(*v)[i], opts); err != nil {
 								return err
 							}
 						}
@@ -7460,12 +7513,12 @@ func TestUnmarshal(t *testing.T) {
 					pointerPointerStringerUnmarshaler,
 					lastUnmarshaler,
 				)
-			}(),
+			}()),
 		},
 	}, {
 		name: jsontest.Name("Functions/Precedence/V1First"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *string) error {
 					if string(b) != `"called"` {
 						return fmt.Errorf("got %s, want %s", b, `"called"`)
@@ -7473,19 +7526,19 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called"
 					return nil
 				}),
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+				UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		inBuf: `"called"`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2First"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
+				UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 					switch t, err := dec.ReadToken(); {
 					case err != nil:
 						return err
@@ -7498,16 +7551,16 @@ func TestUnmarshal(t *testing.T) {
 				UnmarshalFuncV1(func([]byte, *string) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		inBuf: `"called"`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
-				UnmarshalFuncV2(func(uo UnmarshalOptions, dec *Decoder, v *string) error {
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
+				UnmarshalFuncV2(func(dec *Decoder, v *string, opts Options) error {
 					return SkipFunc
 				}),
 				UnmarshalFuncV1(func(b []byte, v *string) error {
@@ -7517,15 +7570,15 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called"
 					return nil
 				}),
-			),
+			)),
 		},
 		inBuf: `"called"`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedFirst"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
 				NewUnmarshalers(
 					UnmarshalFuncV1(func(b []byte, v *string) error {
 						if string(b) != `"called"` {
@@ -7538,15 +7591,15 @@ func TestUnmarshal(t *testing.T) {
 				UnmarshalFuncV1(func([]byte, *string) error {
 					panic("should not be called")
 				}),
-			),
+			)),
 		},
 		inBuf: `"called"`,
 		inVal: addr(""),
 		want:  addr("called"),
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedLast"),
-		uopts: UnmarshalOptions{
-			Unmarshalers: NewUnmarshalers(
+		opts: []Options{
+			WithUnmarshalers(NewUnmarshalers(
 				UnmarshalFuncV1(func(b []byte, v *string) error {
 					if string(b) != `"called"` {
 						return fmt.Errorf("got %s, want %s", b, `"called"`)
@@ -7559,7 +7612,7 @@ func TestUnmarshal(t *testing.T) {
 						panic("should not be called")
 					}),
 				),
-			),
+			)),
 		},
 		inBuf: `"called"`,
 		inVal: addr(""),
@@ -7698,7 +7751,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
 	}, {
 		name:  jsontest.Name("Duration/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `"1s"`,
 		inVal: addr(time.Duration(0)),
 		want:  addr(time.Second),
@@ -7854,7 +7907,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: newInvalidCharacterError("x", "at start of value").withOffset(len64(`{"D":`)),
 	}, {
 		name:  jsontest.Name("Time/IgnoreInvalidFormat"),
-		uopts: UnmarshalOptions{formatDepth: 1000, format: "invalid"},
+		opts:  []Options{invalidFormatOption},
 		inBuf: `"2000-01-01T00:00:00Z"`,
 		inVal: addr(time.Time{}),
 		want:  addr(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
@@ -7863,7 +7916,7 @@ func TestUnmarshal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name.Name, func(t *testing.T) {
 			got := tt.inVal
-			gotErr := tt.uopts.Unmarshal(tt.dopts, []byte(tt.inBuf), got)
+			gotErr := Unmarshal([]byte(tt.inBuf), got, tt.opts...)
 			if !reflect.DeepEqual(got, tt.want) && tt.want != nil {
 				t.Errorf("%s: Unmarshal output mismatch:\ngot  %v\nwant %v", tt.name.Where, got, tt.want)
 			}
@@ -7885,8 +7938,8 @@ func TestMarshalInvalidNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name.Name, func(t *testing.T) {
 			enc := NewEncoder(new(bytes.Buffer))
-			if err := (MarshalOptions{}).MarshalNext(enc, tt.val); err == nil {
-				t.Fatalf("%s: MarshalNext error is nil, want non-nil", tt.name.Where)
+			if err := MarshalEncode(enc, tt.val); err == nil {
+				t.Fatalf("%s: MarshalEncode error is nil, want non-nil", tt.name.Where)
 			}
 			for _, tok := range []Token{Null, String(""), Int(0), ObjectStart, ObjectEnd, ArrayStart, ArrayEnd} {
 				if err := enc.WriteToken(tok); err == nil {
@@ -7913,8 +7966,8 @@ func TestUnmarshalInvalidNamespace(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name.Name, func(t *testing.T) {
 			dec := NewDecoder(strings.NewReader(`{"X":""}`))
-			if err := (UnmarshalOptions{}).UnmarshalNext(dec, tt.val); err == nil {
-				t.Fatalf("%s: UnmarshalNext error is nil, want non-nil", tt.name.Where)
+			if err := UnmarshalDecode(dec, tt.val); err == nil {
+				t.Fatalf("%s: UnmarshalDecode error is nil, want non-nil", tt.name.Where)
 			}
 			if _, err := dec.ReadToken(); err == nil {
 				t.Fatalf("%s: ReadToken error is nil, want non-nil", tt.name.Where)

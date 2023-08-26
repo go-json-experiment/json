@@ -9,6 +9,9 @@ import (
 	"errors"
 	"io"
 	"reflect"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
 // This package supports "inlining" a Go struct field, where the contents
@@ -27,7 +30,7 @@ import (
 var rawValueType = reflect.TypeOf((*RawValue)(nil)).Elem()
 
 // marshalInlinedFallbackAll marshals all the members in an inlined fallback.
-func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableValue, f *structField, insertUnquotedName func([]byte) bool) error {
+func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.Struct, f *structField, insertUnquotedName func([]byte) bool) error {
 	v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 	if len(f.index) > 1 {
 		v = v.fieldByIndex(f.index[1:], false)
@@ -47,8 +50,9 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 			return nil
 		}
 
-		dec := getBufferedDecoder(b, DecodeOptions{AllowDuplicateNames: true, AllowInvalidUTF8: true})
+		dec := getBufferedDecoder(b)
 		defer putBufferedDecoder(dec)
+		dec.options.Flags.Set(jsonflags.AllowDuplicateNames | jsonflags.AllowInvalidUTF8 | 1)
 
 		tok, err := dec.ReadToken()
 		if err != nil {
@@ -103,7 +107,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 		mk := newAddressableValue(stringType)
 		mv := newAddressableValue(m.Type().Elem())
 		marshalKey := func(mk addressableValue) error {
-			b, err := appendString(enc.UnusedBuffer(), mk.String(), !enc.options.AllowInvalidUTF8, nil)
+			b, err := appendString(enc.UnusedBuffer(), mk.String(), !enc.options.Flags.Get(jsonflags.AllowInvalidUTF8), nil)
 			if err != nil {
 				return err
 			}
@@ -118,16 +122,16 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 		}
 		marshalVal := f.fncs.marshal
 		if mo.Marshalers != nil {
-			marshalVal, _ = mo.Marshalers.lookup(marshalVal, mv.Type())
+			marshalVal, _ = mo.Marshalers.(*Marshalers).lookup(marshalVal, mv.Type())
 		}
-		if !mo.Deterministic || n <= 1 {
+		if !mo.Flags.Get(jsonflags.Deterministic) || n <= 1 {
 			for iter := m.MapRange(); iter.Next(); {
 				mk.SetIterKey(iter)
 				if err := marshalKey(mk); err != nil {
 					return err
 				}
 				mv.Set(iter.Value())
-				if err := marshalVal(mo, enc, mv); err != nil {
+				if err := marshalVal(enc, mv, mo); err != nil {
 					return err
 				}
 			}
@@ -145,7 +149,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 				}
 				// TODO(https://go.dev/issue/57061): Use mv.SetMapIndexOf.
 				mv.Set(m.MapIndex(mk.Value))
-				if err := marshalVal(mo, enc, mv); err != nil {
+				if err := marshalVal(enc, mv, mo); err != nil {
 					return err
 				}
 			}
@@ -156,7 +160,7 @@ func marshalInlinedFallbackAll(mo MarshalOptions, enc *Encoder, va addressableVa
 }
 
 // unmarshalInlinedFallbackNext unmarshals only the next member in an inlined fallback.
-func unmarshalInlinedFallbackNext(uo UnmarshalOptions, dec *Decoder, va addressableValue, f *structField, quotedName, unquotedName []byte) error {
+func unmarshalInlinedFallbackNext(dec *Decoder, va addressableValue, uo *jsonopts.Struct, f *structField, quotedName, unquotedName []byte) error {
 	v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 	if len(f.index) > 1 {
 		v = v.fieldByIndex(f.index[1:], true)
@@ -206,9 +210,9 @@ func unmarshalInlinedFallbackNext(uo UnmarshalOptions, dec *Decoder, va addressa
 
 		unmarshal := f.fncs.unmarshal
 		if uo.Unmarshalers != nil {
-			unmarshal, _ = uo.Unmarshalers.lookup(unmarshal, mv.Type())
+			unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, mv.Type())
 		}
-		err := unmarshal(uo, dec, mv)
+		err := unmarshal(dec, mv, uo)
 		m.SetMapIndex(mk, mv.Value)
 		if err != nil {
 			return err

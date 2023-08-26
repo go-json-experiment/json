@@ -140,8 +140,8 @@ func FuzzRawValueReformat(f *testing.F) {
 	}
 
 	// isValid reports whether b is valid according to the specified options.
-	isValid := func(opts DecodeOptions, b []byte) bool {
-		d := opts.NewDecoder(bytes.NewReader(b))
+	isValid := func(b []byte, opts ...Options) bool {
+		d := NewDecoder(bytes.NewReader(b), opts...)
 		_, errVal := d.ReadValue()
 		_, errEOF := d.ReadToken()
 		return errVal == nil && errEOF == io.EOF
@@ -169,9 +169,9 @@ func FuzzRawValueReformat(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, b []byte) {
-		validRFC7159 := isValid(DecodeOptions{AllowInvalidUTF8: true, AllowDuplicateNames: true}, b)
-		validRFC8259 := isValid(DecodeOptions{AllowInvalidUTF8: false, AllowDuplicateNames: true}, b)
-		validRFC7493 := isValid(DecodeOptions{AllowInvalidUTF8: false, AllowDuplicateNames: false}, b)
+		validRFC7159 := isValid(b, AllowInvalidUTF8(true), AllowDuplicateNames(true))
+		validRFC8259 := isValid(b, AllowInvalidUTF8(false), AllowDuplicateNames(true))
+		validRFC7493 := isValid(b, AllowInvalidUTF8(false), AllowDuplicateNames(false))
 		switch {
 		case !validRFC7159 && validRFC8259:
 			t.Errorf("invalid input per RFC 7159 implies invalid per RFC 8259")

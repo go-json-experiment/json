@@ -96,7 +96,7 @@ Syntax deals with the structural representation of JSON (as specified in
 Semantics deals with the meaning of syntactic data as usable application data.
 
 The `Encoder` and `Decoder` types are streaming tokenizers concerned with the
-packing or parsing of JSON data. They operate on `Token` and `RawValue` types
+packing or parsing of JSON data. They operate on `Token` and `Value` types
 which represent the common data structures that are representable in JSON.
 `Encoder` and `Decoder` do not aim to provide any interpretation of the data.
 
@@ -255,7 +255,7 @@ https://github.com/go-json-experiment/jsonbench.
 
 ![Benchmark Marshal Rawvalue](benchmark-marshal-rawvalue.png)
 
-* This compares performance when marshaling from a `json.RawValue`.
+* This compares performance when marshaling from a `jsontext.Value`.
   This mostly exercises the underlying encoder and
   hides the cost of Go reflection.
 * Relative to `JSONv1`, `JSONv2` is about 3.5x to 7.8x faster.
@@ -303,7 +303,7 @@ https://github.com/go-json-experiment/jsonbench.
 
 ![Benchmark Unmarshal Rawvalue](benchmark-unmarshal-rawvalue.png)
 
-* This compares performance when unmarshaling into a `json.RawValue`.
+* This compares performance when unmarshaling into a `jsontext.Value`.
   This mostly exercises the underlying decoder and
   hides away most of the cost of Go reflection.
 * Relative to `JSONv1`, `JSONv2` is about 8.3x to 17.0x faster.

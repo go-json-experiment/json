@@ -111,7 +111,9 @@ func runUnmarshalUnknown(tb testing.TB) {
 	for _, n := range []int{1, 2, 5, 10, 20, 50, 100} {
 		unmarshal := Unmarshal
 		if benchV1 {
-			unmarshal = jsonv1.Unmarshal
+			unmarshal = func(in []byte, out any, opts ...Options) error {
+				return jsonv1.Unmarshal(in, out)
+			}
 		}
 
 		var fields []reflect.StructField
