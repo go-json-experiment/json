@@ -2,20 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"bytes"
 	"errors"
 	"io"
-	"math"
-	"slices"
-	"strconv"
-	"unicode/utf16"
-	"unicode/utf8"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 // NOTE: The logic for decoding is complicated by the fact that reading from
@@ -77,14 +73,18 @@ import (
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call ReadToken to obtain a
 // string token for object names.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Decoder] instead.
 type Decoder struct {
+	s decoderState
+}
+
+// decoderState is the low-level state of Decoder.
+// It has exported fields and method for use by the "json" package.
+type decoderState struct {
 	state
 	decodeBuffer
-	options jsonopts.Struct
+	jsonopts.Struct
 
-	stringCache *stringCache // only used when unmarshaling
+	StringCache *[256]string // only used when unmarshaling; identical to json.stringCache
 }
 
 // decodeBuffer is a buffer split into 4 segments:
@@ -117,8 +117,6 @@ type decodeBuffer struct {
 // If r is a bytes.Buffer, then the decoder parses directly from the buffer
 // without first copying the contents to an intermediate buffer.
 // Additional writes to the buffer must not occur while the decoder is in use.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.NewDecoder] instead.
 func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 	d := new(Decoder)
 	d.Reset(r, opts...)
@@ -134,30 +132,30 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 		panic("jsontext: invalid nil Decoder")
 	case r == nil:
 		panic("jsontext: invalid nil io.Writer")
-	case d.options.Flags.Get(jsonflags.WithinArshalCall):
+	case d.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerV2")
 	}
-	d.reset(nil, r, opts...)
+	d.s.reset(nil, r, opts...)
 }
 
-func (d *Decoder) reset(b []byte, r io.Reader, opts ...Options) {
+func (d *decoderState) reset(b []byte, r io.Reader, opts ...Options) {
 	d.state.reset()
 	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
-	d.options = jsonopts.Struct{}
-	d.options.Join(opts...)
+	d.Struct = jsonopts.Struct{}
+	d.Struct.Join(opts...)
 }
 
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")
 
 // fetch reads at least 1 byte from the underlying io.Reader.
 // It returns io.ErrUnexpectedEOF if zero bytes were read and io.EOF was seen.
-func (d *Decoder) fetch() error {
+func (d *decoderState) fetch() error {
 	if d.rd == nil {
 		return io.ErrUnexpectedEOF
 	}
 
 	// Inform objectNameStack that we are about to fetch new buffer content.
-	d.names.copyQuotedBuffer(d.buf)
+	d.Names.copyQuotedBuffer(d.buf)
 
 	// Specialize bytes.Buffer for better performance.
 	if bb, ok := d.rd.(*bytes.Buffer); ok {
@@ -268,12 +266,15 @@ func (d *decodeBuffer) injectSyntacticErrorWithPosition(err error, pos int) erro
 
 func (d *decodeBuffer) previousOffsetStart() int64 { return d.baseOffset + int64(d.prevStart) }
 func (d *decodeBuffer) previousOffsetEnd() int64   { return d.baseOffset + int64(d.prevEnd) }
-func (d *decodeBuffer) previousBuffer() []byte     { return d.buf[d.prevStart:d.prevEnd] }
+func (d *decodeBuffer) PreviousBuffer() []byte     { return d.buf[d.prevStart:d.prevEnd] }
 func (d *decodeBuffer) unreadBuffer() []byte       { return d.buf[d.prevEnd:len(d.buf)] }
 
 // PeekKind retrieves the next token kind, but does not advance the read offset.
 // It returns 0 if there are no more tokens.
 func (d *Decoder) PeekKind() Kind {
+	return d.s.PeekKind()
+}
+func (d *decoderState) PeekKind() Kind {
 	// Check whether we have a cached peek result.
 	if d.peekPos > 0 {
 		return Kind(d.buf[d.peekPos]).normalize()
@@ -284,10 +285,10 @@ func (d *Decoder) PeekKind() Kind {
 	pos := d.prevEnd
 
 	// Consume leading whitespace.
-	pos += consumeWhitespace(d.buf[pos:])
+	pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 	if d.needMore(pos) {
 		if pos, err = d.consumeWhitespace(pos); err != nil {
-			if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+			if err == io.ErrUnexpectedEOF && d.Tokens.Depth() == 1 {
 				err = io.EOF // EOF possibly if no Tokens present after top-level value
 			}
 			d.peekPos, d.peekErr = -1, err
@@ -300,7 +301,7 @@ func (d *Decoder) PeekKind() Kind {
 	if c := d.buf[pos]; c == ':' || c == ',' {
 		delim = c
 		pos += 1
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				d.peekPos, d.peekErr = -1, d.checkDelimBeforeIOError(delim, err)
@@ -309,7 +310,7 @@ func (d *Decoder) PeekKind() Kind {
 		}
 	}
 	next := Kind(d.buf[pos]).normalize()
-	if d.tokens.needDelim(next) != delim {
+	if d.Tokens.needDelim(next) != delim {
 		d.peekPos, d.peekErr = -1, d.checkDelim(delim, next)
 		return invalidKind
 	}
@@ -324,47 +325,51 @@ func (d *Decoder) PeekKind() Kind {
 
 // checkDelimBeforeIOError checks whether the delim is even valid
 // before returning an IO error, which occurs after the delim.
-func (d *Decoder) checkDelimBeforeIOError(delim byte, err error) error {
+func (d *decoderState) checkDelimBeforeIOError(delim byte, err error) error {
 	// Since an IO error occurred, we do not know what the next kind is.
 	// However, knowing the next kind is necessary to validate
 	// whether the current delim is at least potentially valid.
 	// Since a JSON string is always valid as the next token,
 	// conservatively assume that is the next kind for validation.
 	const next = Kind('"')
-	if d.tokens.needDelim(next) != delim {
+	if d.Tokens.needDelim(next) != delim {
 		err = d.checkDelim(delim, next)
 	}
 	return err
 }
 
 // checkDelim checks whether delim is valid for the given next kind.
-func (d *Decoder) checkDelim(delim byte, next Kind) error {
+func (d *decoderState) checkDelim(delim byte, next Kind) error {
 	pos := d.prevEnd // restore position to right after leading whitespace
-	pos += consumeWhitespace(d.buf[pos:])
-	err := d.tokens.checkDelim(delim, next)
+	pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
+	err := d.Tokens.checkDelim(delim, next)
 	return d.injectSyntacticErrorWithPosition(err, pos)
 }
 
 // SkipValue is semantically equivalent to calling ReadValue and discarding
 // the result except that memory is not wasted trying to hold the entire result.
 func (d *Decoder) SkipValue() error {
+	return d.s.SkipValue()
+}
+func (d *decoderState) SkipValue() error {
 	switch d.PeekKind() {
 	case '{', '[':
 		// For JSON objects and arrays, keep skipping all tokens
 		// until the depth matches the starting depth.
-		depth := d.tokens.depth()
+		depth := d.Tokens.Depth()
 		for {
 			if _, err := d.ReadToken(); err != nil {
 				return err
 			}
-			if depth >= d.tokens.depth() {
+			if depth >= d.Tokens.Depth() {
 				return nil
 			}
 		}
 	default:
 		// Trying to skip a value when the next token is a '}' or ']'
 		// will result in an error being returned here.
-		if _, err := d.ReadValue(); err != nil {
+		var flags jsonwire.ValueFlags
+		if _, err := d.ReadValue(&flags); err != nil {
 			return err
 		}
 		return nil
@@ -375,6 +380,9 @@ func (d *Decoder) SkipValue() error {
 // The returned token is only valid until the next Peek, Read, or Skip call.
 // It returns io.EOF if there are no more tokens.
 func (d *Decoder) ReadToken() (Token, error) {
+	return d.s.ReadToken()
+}
+func (d *decoderState) ReadToken() (Token, error) {
 	// Determine the next kind.
 	var err error
 	var next Kind
@@ -393,10 +401,10 @@ func (d *Decoder) ReadToken() (Token, error) {
 		pos = d.prevEnd
 
 		// Consume leading whitespace.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
-				if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+				if err == io.ErrUnexpectedEOF && d.Tokens.Depth() == 1 {
 					err = io.EOF // EOF possibly if no Tokens present after top-level value
 				}
 				return Token{}, err
@@ -408,7 +416,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		if c := d.buf[pos]; c == ':' || c == ',' {
 			delim = c
 			pos += 1
-			pos += consumeWhitespace(d.buf[pos:])
+			pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
 				if pos, err = d.consumeWhitespace(pos); err != nil {
 					return Token{}, d.checkDelimBeforeIOError(delim, err)
@@ -416,7 +424,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 			}
 		}
 		next = Kind(d.buf[pos]).normalize()
-		if d.tokens.needDelim(next) != delim {
+		if d.Tokens.needDelim(next) != delim {
 			return Token{}, d.checkDelim(delim, next)
 		}
 	}
@@ -425,7 +433,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 	var n int
 	switch next {
 	case 'n':
-		if consumeNull(d.buf[pos:]) == 0 {
+		if jsonwire.ConsumeNull(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "null")
 			if err != nil {
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
@@ -433,14 +441,14 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += len("null")
 		}
-		if err = d.tokens.appendLiteral(); err != nil {
+		if err = d.Tokens.appendLiteral(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("null")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return Null, nil
 
 	case 'f':
-		if consumeFalse(d.buf[pos:]) == 0 {
+		if jsonwire.ConsumeFalse(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "false")
 			if err != nil {
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
@@ -448,14 +456,14 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += len("false")
 		}
-		if err = d.tokens.appendLiteral(); err != nil {
+		if err = d.Tokens.appendLiteral(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("false")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return False, nil
 
 	case 't':
-		if consumeTrue(d.buf[pos:]) == 0 {
+		if jsonwire.ConsumeTrue(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "true")
 			if err != nil {
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
@@ -463,15 +471,15 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += len("true")
 		}
-		if err = d.tokens.appendLiteral(); err != nil {
+		if err = d.Tokens.appendLiteral(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-len("true")) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
 		return True, nil
 
 	case '"':
-		var flags valueFlags // TODO: Preserve this in Token?
-		if n = consumeSimpleString(d.buf[pos:]); n == 0 {
+		var flags jsonwire.ValueFlags // TODO: Preserve this in Token?
+		if n = jsonwire.ConsumeSimpleString(d.buf[pos:]); n == 0 {
 			oldAbsPos := d.baseOffset + int64(pos)
 			pos, err = d.consumeString(&flags, pos)
 			newAbsPos := d.baseOffset + int64(pos)
@@ -482,17 +490,17 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && d.tokens.last.needObjectName() {
-			if !d.tokens.last.isValidNamespace() {
+		if !d.Flags.Get(jsonflags.AllowDuplicateNames) && d.Tokens.Last.NeedObjectName() {
+			if !d.Tokens.Last.isValidNamespace() {
 				return Token{}, errInvalidNamespace
 			}
-			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
+			if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
 				err = newDuplicateNameError(d.buf[pos-n : pos])
 				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 			}
-			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
+			d.Names.ReplaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
-		if err = d.tokens.appendString(); err != nil {
+		if err = d.Tokens.appendString(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
@@ -501,7 +509,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 	case '0':
 		// NOTE: Since JSON numbers are not self-terminating,
 		// we need to make sure that the next byte is not part of a number.
-		if n = consumeSimpleNumber(d.buf[pos:]); n == 0 || d.needMore(pos+n) {
+		if n = jsonwire.ConsumeSimpleNumber(d.buf[pos:]); n == 0 || d.needMore(pos+n) {
 			oldAbsPos := d.baseOffset + int64(pos)
 			pos, err = d.consumeNumber(pos)
 			newAbsPos := d.baseOffset + int64(pos)
@@ -512,38 +520,38 @@ func (d *Decoder) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if err = d.tokens.appendNumber(); err != nil {
+		if err = d.Tokens.appendNumber(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of number
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
 		return Token{raw: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
 
 	case '{':
-		if err = d.tokens.pushObject(); err != nil {
+		if err = d.Tokens.pushObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
-		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			d.names.push()
-			d.namespaces.push()
+		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+			d.Names.push()
+			d.Namespaces.push()
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
 		return ObjectStart, nil
 
 	case '}':
-		if err = d.tokens.popObject(); err != nil {
+		if err = d.Tokens.popObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
-		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			d.names.pop()
-			d.namespaces.pop()
+		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+			d.Names.pop()
+			d.Namespaces.pop()
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
 		return ObjectEnd, nil
 
 	case '[':
-		if err = d.tokens.pushArray(); err != nil {
+		if err = d.Tokens.pushArray(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		pos += 1
@@ -551,7 +559,7 @@ func (d *Decoder) ReadToken() (Token, error) {
 		return ArrayStart, nil
 
 	case ']':
-		if err = d.tokens.popArray(); err != nil {
+		if err = d.Tokens.popArray(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
 		pos += 1
@@ -564,20 +572,6 @@ func (d *Decoder) ReadToken() (Token, error) {
 	}
 }
 
-type valueFlags uint
-
-const (
-	_ valueFlags = (1 << iota) / 2 // powers of two starting with zero
-
-	stringNonVerbatim  // string cannot be naively treated as valid UTF-8
-	stringNonCanonical // string not formatted according to RFC 8785, section 3.2.2.2.
-	// TODO: Track whether a number is a non-integer?
-)
-
-func (f *valueFlags) set(f2 valueFlags) { *f |= f2 }
-func (f valueFlags) isVerbatim() bool   { return f&stringNonVerbatim == 0 }
-func (f valueFlags) isCanonical() bool  { return f&stringNonCanonical == 0 }
-
 // ReadValue returns the next raw JSON value, advancing the read offset.
 // The value is stripped of any leading or trailing whitespace.
 // The returned value is only valid until the next Peek, Read, or Skip call and
@@ -586,10 +580,10 @@ func (f valueFlags) isCanonical() bool  { return f&stringNonCanonical == 0 }
 // then it reports a SyntacticError and the internal state remains unchanged.
 // It returns io.EOF if there are no more values.
 func (d *Decoder) ReadValue() (RawValue, error) {
-	var flags valueFlags
-	return d.readValue(&flags)
+	var flags jsonwire.ValueFlags
+	return d.s.ReadValue(&flags)
 }
-func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
+func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (RawValue, error) {
 	// Determine the next kind.
 	var err error
 	var next Kind
@@ -608,10 +602,10 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 		pos = d.prevEnd
 
 		// Consume leading whitespace.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
-				if err == io.ErrUnexpectedEOF && d.tokens.depth() == 1 {
+				if err == io.ErrUnexpectedEOF && d.Tokens.Depth() == 1 {
 					err = io.EOF // EOF possibly if no Tokens present after top-level value
 				}
 				return nil, err
@@ -623,7 +617,7 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 		if c := d.buf[pos]; c == ':' || c == ',' {
 			delim = c
 			pos += 1
-			pos += consumeWhitespace(d.buf[pos:])
+			pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
 				if pos, err = d.consumeWhitespace(pos); err != nil {
 					return nil, d.checkDelimBeforeIOError(delim, err)
@@ -631,14 +625,14 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 			}
 		}
 		next = Kind(d.buf[pos]).normalize()
-		if d.tokens.needDelim(next) != delim {
+		if d.Tokens.needDelim(next) != delim {
 			return nil, d.checkDelim(delim, next)
 		}
 	}
 
 	// Handle the next value.
 	oldAbsPos := d.baseOffset + int64(pos)
-	pos, err = d.consumeValue(flags, pos, d.tokens.depth())
+	pos, err = d.consumeValue(flags, pos, d.Tokens.Depth())
 	newAbsPos := d.baseOffset + int64(pos)
 	n := int(newAbsPos - oldAbsPos)
 	if err != nil {
@@ -646,34 +640,34 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 	}
 	switch next {
 	case 'n', 't', 'f':
-		err = d.tokens.appendLiteral()
+		err = d.Tokens.appendLiteral()
 	case '"':
-		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && d.tokens.last.needObjectName() {
-			if !d.tokens.last.isValidNamespace() {
+		if !d.Flags.Get(jsonflags.AllowDuplicateNames) && d.Tokens.Last.NeedObjectName() {
+			if !d.Tokens.Last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
 			}
-			if d.tokens.last.isActiveNamespace() && !d.namespaces.last().insertQuoted(d.buf[pos-n:pos], flags.isVerbatim()) {
+			if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
 				err = newDuplicateNameError(d.buf[pos-n : pos])
 				break
 			}
-			d.names.replaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
+			d.Names.ReplaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
-		err = d.tokens.appendString()
+		err = d.Tokens.appendString()
 	case '0':
-		err = d.tokens.appendNumber()
+		err = d.Tokens.appendNumber()
 	case '{':
-		if err = d.tokens.pushObject(); err != nil {
+		if err = d.Tokens.pushObject(); err != nil {
 			break
 		}
-		if err = d.tokens.popObject(); err != nil {
+		if err = d.Tokens.popObject(); err != nil {
 			panic("BUG: popObject should never fail immediately after pushObject: " + err.Error())
 		}
 	case '[':
-		if err = d.tokens.pushArray(); err != nil {
+		if err = d.Tokens.pushArray(); err != nil {
 			break
 		}
-		if err = d.tokens.popArray(); err != nil {
+		if err = d.Tokens.popArray(); err != nil {
 			panic("BUG: popArray should never fail immediately after pushArray: " + err.Error())
 		}
 	}
@@ -685,8 +679,8 @@ func (d *Decoder) readValue(flags *valueFlags) (RawValue, error) {
 	return d.buf[pos-n : pos : pos], nil
 }
 
-// checkEOF verifies that the input has no more data.
-func (d *Decoder) checkEOF() error {
+// CheckEOF verifies that the input has no more data.
+func (d *decoderState) CheckEOF() error {
 	switch pos, err := d.consumeWhitespace(d.prevEnd); err {
 	case nil:
 		err := newInvalidCharacterError(d.buf[pos:], "after top-level value")
@@ -704,7 +698,7 @@ func (d *Decoder) checkEOF() error {
 //
 // The following pattern is common in this implementation:
 //
-//	pos += consumeWhitespace(d.buf[pos:])
+//	pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 //	if d.needMore(pos) {
 //		if pos, err = d.consumeWhitespace(pos); err != nil {
 //			return ...
@@ -715,9 +709,9 @@ func (d *Decoder) checkEOF() error {
 // consumeWhitespace must be inlined. The body of the if statement is
 // executed only in rare situations where we need to fetch more data.
 // Since fetching may return an error, we also need to check the error.
-func (d *Decoder) consumeWhitespace(pos int) (newPos int, err error) {
+func (d *decoderState) consumeWhitespace(pos int) (newPos int, err error) {
 	for {
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -733,31 +727,31 @@ func (d *Decoder) consumeWhitespace(pos int) (newPos int, err error) {
 
 // consumeValue consumes a single JSON value starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the value.
-func (d *Decoder) consumeValue(flags *valueFlags, pos, depth int) (newPos int, err error) {
+func (d *decoderState) consumeValue(flags *jsonwire.ValueFlags, pos, depth int) (newPos int, err error) {
 	for {
 		var n int
 		var err error
 		switch next := Kind(d.buf[pos]).normalize(); next {
 		case 'n':
-			if n = consumeNull(d.buf[pos:]); n == 0 {
-				n, err = consumeLiteral(d.buf[pos:], "null")
+			if n = jsonwire.ConsumeNull(d.buf[pos:]); n == 0 {
+				n, err = jsonwire.ConsumeLiteral(d.buf[pos:], "null")
 			}
 		case 'f':
-			if n = consumeFalse(d.buf[pos:]); n == 0 {
-				n, err = consumeLiteral(d.buf[pos:], "false")
+			if n = jsonwire.ConsumeFalse(d.buf[pos:]); n == 0 {
+				n, err = jsonwire.ConsumeLiteral(d.buf[pos:], "false")
 			}
 		case 't':
-			if n = consumeTrue(d.buf[pos:]); n == 0 {
-				n, err = consumeLiteral(d.buf[pos:], "true")
+			if n = jsonwire.ConsumeTrue(d.buf[pos:]); n == 0 {
+				n, err = jsonwire.ConsumeLiteral(d.buf[pos:], "true")
 			}
 		case '"':
-			if n = consumeSimpleString(d.buf[pos:]); n == 0 {
+			if n = jsonwire.ConsumeSimpleString(d.buf[pos:]); n == 0 {
 				return d.consumeString(flags, pos)
 			}
 		case '0':
 			// NOTE: Since JSON numbers are not self-terminating,
 			// we need to make sure that the next byte is not part of a number.
-			if n = consumeSimpleNumber(d.buf[pos:]); n == 0 || d.needMore(pos+n) {
+			if n = jsonwire.ConsumeSimpleNumber(d.buf[pos:]); n == 0 || d.needMore(pos+n) {
 				return d.consumeNumber(pos)
 			}
 		case '{':
@@ -782,9 +776,9 @@ func (d *Decoder) consumeValue(flags *valueFlags, pos, depth int) (newPos int, e
 
 // consumeLiteral consumes a single JSON literal starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the literal.
-func (d *Decoder) consumeLiteral(pos int, lit string) (newPos int, err error) {
+func (d *decoderState) consumeLiteral(pos int, lit string) (newPos int, err error) {
 	for {
-		n, err := consumeLiteral(d.buf[pos:], lit)
+		n, err := jsonwire.ConsumeLiteral(d.buf[pos:], lit)
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -800,10 +794,10 @@ func (d *Decoder) consumeLiteral(pos int, lit string) (newPos int, err error) {
 
 // consumeString consumes a single JSON string starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the string.
-func (d *Decoder) consumeString(flags *valueFlags, pos int) (newPos int, err error) {
+func (d *decoderState) consumeString(flags *jsonwire.ValueFlags, pos int) (newPos int, err error) {
 	var n int
 	for {
-		n, err = consumeStringResumable(flags, d.buf[pos:], n, !d.options.Flags.Get(jsonflags.AllowInvalidUTF8))
+		n, err = jsonwire.ConsumeStringResumable(flags, d.buf[pos:], n, !d.Flags.Get(jsonflags.AllowInvalidUTF8))
 		if err == io.ErrUnexpectedEOF {
 			absPos := d.baseOffset + int64(pos)
 			err = d.fetch() // will mutate d.buf and invalidate pos
@@ -819,11 +813,11 @@ func (d *Decoder) consumeString(flags *valueFlags, pos int) (newPos int, err err
 
 // consumeNumber consumes a single JSON number starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the number.
-func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
+func (d *decoderState) consumeNumber(pos int) (newPos int, err error) {
 	var n int
-	var state consumeNumberState
+	var state jsonwire.ConsumeNumberState
 	for {
-		n, state, err = consumeNumberResumable(d.buf[pos:], n, state)
+		n, state, err = jsonwire.ConsumeNumberResumable(d.buf[pos:], n, state)
 		// NOTE: Since JSON numbers are not self-terminating,
 		// we need to make sure that the next byte is not part of a number.
 		if err == io.ErrUnexpectedEOF || d.needMore(pos+n) {
@@ -845,13 +839,13 @@ func (d *Decoder) consumeNumber(pos int) (newPos int, err error) {
 
 // consumeObject consumes a single JSON object starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the object.
-func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, err error) {
+func (d *decoderState) consumeObject(flags *jsonwire.ValueFlags, pos, depth int) (newPos int, err error) {
 	var n int
 	var names *objectNamespace
-	if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-		d.namespaces.push()
-		defer d.namespaces.pop()
-		names = d.namespaces.last()
+	if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+		d.Namespaces.push()
+		defer d.Namespaces.pop()
+		names = d.Namespaces.Last()
 	}
 
 	// Handle before start.
@@ -863,7 +857,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 	pos++
 
 	// Handle after start.
-	pos += consumeWhitespace(d.buf[pos:])
+	pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 	if d.needMore(pos) {
 		if pos, err = d.consumeWhitespace(pos); err != nil {
 			return pos, err
@@ -877,31 +871,31 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 	depth++
 	for {
 		// Handle before name.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
 			}
 		}
-		var flags2 valueFlags
-		if n = consumeSimpleString(d.buf[pos:]); n == 0 {
+		var flags2 jsonwire.ValueFlags
+		if n = jsonwire.ConsumeSimpleString(d.buf[pos:]); n == 0 {
 			oldAbsPos := d.baseOffset + int64(pos)
 			pos, err = d.consumeString(&flags2, pos)
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
-			flags.set(flags2)
+			flags.Join(flags2)
 			if err != nil {
 				return pos, err
 			}
 		} else {
 			pos += n
 		}
-		if !d.options.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(d.buf[pos-n:pos], flags2.isVerbatim()) {
+		if !d.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(d.buf[pos-n:pos], flags2.IsVerbatim()) {
 			return pos - n, newDuplicateNameError(d.buf[pos-n : pos])
 		}
 
 		// Handle after name.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
@@ -913,7 +907,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 		pos++
 
 		// Handle before value.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
@@ -925,7 +919,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 		}
 
 		// Handle after value.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
@@ -946,7 +940,7 @@ func (d *Decoder) consumeObject(flags *valueFlags, pos, depth int) (newPos int, 
 
 // consumeArray consumes a single JSON array starting at d.buf[pos:].
 // It returns the new position in d.buf immediately after the array.
-func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, err error) {
+func (d *decoderState) consumeArray(flags *jsonwire.ValueFlags, pos, depth int) (newPos int, err error) {
 	// Handle before start.
 	if uint(pos) >= uint(len(d.buf)) || d.buf[pos] != '[' {
 		panic("BUG: consumeArray must be called with a buffer that starts with '['")
@@ -956,7 +950,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, e
 	pos++
 
 	// Handle after start.
-	pos += consumeWhitespace(d.buf[pos:])
+	pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 	if d.needMore(pos) {
 		if pos, err = d.consumeWhitespace(pos); err != nil {
 			return pos, err
@@ -970,7 +964,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, e
 	depth++
 	for {
 		// Handle before value.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
@@ -982,7 +976,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, e
 		}
 
 		// Handle after value.
-		pos += consumeWhitespace(d.buf[pos:])
+		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
 			if pos, err = d.consumeWhitespace(pos); err != nil {
 				return pos, err
@@ -1006,7 +1000,7 @@ func (d *Decoder) consumeArray(flags *valueFlags, pos, depth int) (newPos int, e
 // The number of bytes actually read from the underlying io.Reader may be more
 // than this offset due to internal buffering effects.
 func (d *Decoder) InputOffset() int64 {
-	return d.previousOffsetEnd()
+	return d.s.previousOffsetEnd()
 }
 
 // UnreadBuffer returns the data remaining in the unread buffer,
@@ -1014,7 +1008,7 @@ func (d *Decoder) InputOffset() int64 {
 // The returned buffer must not be mutated while Decoder continues to be used.
 // The buffer contents are valid until the next Peek, Read, or Skip call.
 func (d *Decoder) UnreadBuffer() []byte {
-	return d.unreadBuffer()
+	return d.s.unreadBuffer()
 }
 
 // StackDepth returns the depth of the state machine for read JSON data.
@@ -1024,7 +1018,7 @@ func (d *Decoder) UnreadBuffer() []byte {
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (d *Decoder) StackDepth() int {
 	// NOTE: Keep in sync with Encoder.StackDepth.
-	return d.tokens.depth() - 1
+	return d.s.Tokens.Depth() - 1
 }
 
 // StackIndex returns information about the specified stack level.
@@ -1041,13 +1035,13 @@ func (d *Decoder) StackDepth() int {
 // A complete JSON object must have an even length.
 func (d *Decoder) StackIndex(i int) (Kind, int) {
 	// NOTE: Keep in sync with Encoder.StackIndex.
-	switch s := d.tokens.index(i); {
+	switch s := d.s.Tokens.index(i); {
 	case i > 0 && s.isObject():
-		return '{', s.length()
+		return '{', s.Length()
 	case i > 0 && s.isArray():
-		return '[', s.length()
+		return '[', s.Length()
 	default:
-		return 0, s.length()
+		return 0, s.Length()
 	}
 }
 
@@ -1055,639 +1049,6 @@ func (d *Decoder) StackIndex(i int) (Kind, int) {
 // Object names are only present if AllowDuplicateNames is false, otherwise
 // object members are represented using their index within the object.
 func (d *Decoder) StackPointer() string {
-	d.names.copyQuotedBuffer(d.buf)
-	return string(d.appendStackPointer(nil))
-}
-
-// consumeWhitespace consumes leading JSON whitespace per RFC 7159, section 2.
-func consumeWhitespace(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	for len(b) > n && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
-		n++
-	}
-	return n
-}
-
-// consumeNull consumes the next JSON null literal per RFC 7159, section 3.
-// It returns 0 if it is invalid, in which case consumeLiteral should be used.
-func consumeNull(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	const literal = "null"
-	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
-		return len(literal)
-	}
-	return 0
-}
-
-// consumeFalse consumes the next JSON false literal per RFC 7159, section 3.
-// It returns 0 if it is invalid, in which case consumeLiteral should be used.
-func consumeFalse(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	const literal = "false"
-	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
-		return len(literal)
-	}
-	return 0
-}
-
-// consumeTrue consumes the next JSON true literal per RFC 7159, section 3.
-// It returns 0 if it is invalid, in which case consumeLiteral should be used.
-func consumeTrue(b []byte) int {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	const literal = "true"
-	if len(b) >= len(literal) && string(b[:len(literal)]) == literal {
-		return len(literal)
-	}
-	return 0
-}
-
-// consumeLiteral consumes the next JSON literal per RFC 7159, section 3.
-// If the input appears truncated, it returns io.ErrUnexpectedEOF.
-func consumeLiteral(b []byte, lit string) (n int, err error) {
-	for i := 0; i < len(b) && i < len(lit); i++ {
-		if b[i] != lit[i] {
-			return i, newInvalidCharacterError(b[i:], "within literal "+lit+" (expecting "+strconv.QuoteRune(rune(lit[i]))+")")
-		}
-	}
-	if len(b) < len(lit) {
-		return len(b), io.ErrUnexpectedEOF
-	}
-	return len(lit), nil
-}
-
-// consumeSimpleString consumes the next JSON string per RFC 7159, section 7
-// but is limited to the grammar for an ASCII string without escape sequences.
-// It returns 0 if it is invalid or more complicated than a simple string,
-// in which case consumeString should be called.
-//
-// It rejects '<', '>', and '&' for compatibility reasons since these were
-// always escaped in the v1 implementation. Thus, if this function reports ok
-// then we know that the string would be encoded the same way under both
-// v1 or v2 escape semantics.
-func consumeSimpleString(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if len(b) > 0 && b[0] == '"' {
-		n++
-		for len(b) > n && b[n] < utf8.RuneSelf && !escapeHTML.escapeASCII(b[n]) {
-			n++
-		}
-		if uint(len(b)) > uint(n) && b[n] == '"' {
-			n++
-			return n
-		}
-	}
-	return 0
-}
-
-// consumeString consumes the next JSON string per RFC 7159, section 7.
-// If validateUTF8 is false, then this allows the presence of invalid UTF-8
-// characters within the string itself.
-// It reports the number of bytes consumed and whether an error was encountered.
-// If the input appears truncated, it returns io.ErrUnexpectedEOF.
-func consumeString(flags *valueFlags, b []byte, validateUTF8 bool) (n int, err error) {
-	return consumeStringResumable(flags, b, 0, validateUTF8)
-}
-
-// consumeStringResumable is identical to consumeString but supports resuming
-// from a previous call that returned io.ErrUnexpectedEOF.
-func consumeStringResumable(flags *valueFlags, b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
-	// Consume the leading double quote.
-	switch {
-	case resumeOffset > 0:
-		n = resumeOffset // already handled the leading quote
-	case uint(len(b)) == 0:
-		return n, io.ErrUnexpectedEOF
-	case b[0] == '"':
-		n++
-	default:
-		return n, newInvalidCharacterError(b[n:], `at start of string (expecting '"')`)
-	}
-
-	// Consume every character in the string.
-	for uint(len(b)) > uint(n) {
-		// Optimize for long sequences of unescaped characters.
-		noEscape := func(c byte) bool {
-			return c < utf8.RuneSelf && ' ' <= c && c != '\\' && c != '"'
-		}
-		for uint(len(b)) > uint(n) && noEscape(b[n]) {
-			n++
-		}
-		if uint(len(b)) <= uint(n) {
-			return n, io.ErrUnexpectedEOF
-		}
-
-		// Check for terminating double quote.
-		if b[n] == '"' {
-			n++
-			return n, nil
-		}
-
-		switch r, rn := utf8.DecodeRune(b[n:]); {
-		// Handle UTF-8 encoded byte sequence.
-		// Due to specialized handling of ASCII above, we know that
-		// all normal sequences at this point must be 2 bytes or larger.
-		case rn > 1:
-			n += rn
-		// Handle escape sequence.
-		case r == '\\':
-			flags.set(stringNonVerbatim)
-			resumeOffset = n
-			if uint(len(b)) < uint(n+2) {
-				return resumeOffset, io.ErrUnexpectedEOF
-			}
-			switch r := b[n+1]; r {
-			case '/':
-				// Forward slash is the only character with 3 representations.
-				// Per RFC 8785, section 3.2.2.2., this must not be escaped.
-				flags.set(stringNonCanonical)
-				n += 2
-			case '"', '\\', 'b', 'f', 'n', 'r', 't':
-				n += 2
-			case 'u':
-				if uint(len(b)) < uint(n+6) {
-					if hasEscapedUTF16Prefix(b[n:], false) {
-						return resumeOffset, io.ErrUnexpectedEOF
-					}
-					flags.set(stringNonCanonical)
-					return n, newInvalidEscapeSequenceError(b[n:])
-				}
-				v1, ok := parseHexUint16(b[n+2 : n+6])
-				if !ok {
-					flags.set(stringNonCanonical)
-					return n, newInvalidEscapeSequenceError(b[n : n+6])
-				}
-				// Only certain control characters can use the \uFFFF notation
-				// for canonical formatting (per RFC 8785, section 3.2.2.2.).
-				switch v1 {
-				// \uFFFF notation not permitted for these characters.
-				case '\b', '\f', '\n', '\r', '\t':
-					flags.set(stringNonCanonical)
-				default:
-					// \uFFFF notation only permitted for control characters.
-					if v1 >= ' ' {
-						flags.set(stringNonCanonical)
-					} else {
-						// \uFFFF notation must be lower case.
-						for _, c := range b[n+2 : n+6] {
-							if 'A' <= c && c <= 'F' {
-								flags.set(stringNonCanonical)
-							}
-						}
-					}
-				}
-				n += 6
-
-				r := rune(v1)
-				if validateUTF8 && utf16.IsSurrogate(r) {
-					if uint(len(b)) < uint(n+6) {
-						if hasEscapedUTF16Prefix(b[n:], true) {
-							return resumeOffset, io.ErrUnexpectedEOF
-						}
-						flags.set(stringNonCanonical)
-						return n - 6, newInvalidEscapeSequenceError(b[n-6:])
-					} else if v2, ok := parseHexUint16(b[n+2 : n+6]); b[n] != '\\' || b[n+1] != 'u' || !ok {
-						flags.set(stringNonCanonical)
-						return n - 6, newInvalidEscapeSequenceError(b[n-6 : n+6])
-					} else if r = utf16.DecodeRune(rune(v1), rune(v2)); r == utf8.RuneError {
-						flags.set(stringNonCanonical)
-						return n - 6, newInvalidEscapeSequenceError(b[n-6 : n+6])
-					} else {
-						n += 6
-					}
-				}
-			default:
-				flags.set(stringNonCanonical)
-				return n, newInvalidEscapeSequenceError(b[n : n+2])
-			}
-		// Handle invalid UTF-8.
-		case r == utf8.RuneError:
-			if !utf8.FullRune(b[n:]) {
-				return n, io.ErrUnexpectedEOF
-			}
-			flags.set(stringNonVerbatim | stringNonCanonical)
-			if validateUTF8 {
-				return n, errInvalidUTF8
-			}
-			n++
-		// Handle invalid control characters.
-		case r < ' ':
-			flags.set(stringNonVerbatim | stringNonCanonical)
-			return n, newInvalidCharacterError(b[n:], "within string (expecting non-control character)")
-		default:
-			panic("BUG: unhandled character " + quoteRune(b[n:]))
-		}
-	}
-	return n, io.ErrUnexpectedEOF
-}
-
-// unescapeString appends the unescaped form of a JSON string in src to dst.
-// Any invalid UTF-8 within the string will be replaced with utf8.RuneError,
-// but the error will be specified as having encountered such an error.
-// The input must be an entire JSON string with no surrounding whitespace.
-func unescapeString[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, err error) {
-	dst = slices.Grow(dst, len(src))
-
-	// Consume the leading double quote.
-	var i, n int
-	switch {
-	case uint(len(src)) == 0:
-		return dst, io.ErrUnexpectedEOF
-	case src[0] == '"':
-		i, n = 1, 1
-	default:
-		return dst, newInvalidCharacterError(src, `at start of string (expecting '"')`)
-	}
-
-	// Consume every character in the string.
-	for uint(len(src)) > uint(n) {
-		// Optimize for long sequences of unescaped characters.
-		noEscape := func(c byte) bool {
-			return c < utf8.RuneSelf && ' ' <= c && c != '\\' && c != '"'
-		}
-		for uint(len(src)) > uint(n) && noEscape(src[n]) {
-			n++
-		}
-		if uint(len(src)) <= uint(n) {
-			dst = append(dst, src[i:n]...)
-			return dst, io.ErrUnexpectedEOF
-		}
-
-		// Check for terminating double quote.
-		if src[n] == '"' {
-			dst = append(dst, src[i:n]...)
-			n++
-			if n < len(src) {
-				err = newInvalidCharacterError(src[n:], "after string value")
-			}
-			return dst, err
-		}
-
-		switch r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:]))); {
-		// Handle UTF-8 encoded byte sequence.
-		// Due to specialized handling of ASCII above, we know that
-		// all normal sequences at this point must be 2 bytes or larger.
-		case rn > 1:
-			n += rn
-		// Handle escape sequence.
-		case r == '\\':
-			dst = append(dst, src[i:n]...)
-
-			// Handle escape sequence.
-			if uint(len(src)) < uint(n+2) {
-				return dst, io.ErrUnexpectedEOF
-			}
-			switch r := src[n+1]; r {
-			case '"', '\\', '/':
-				dst = append(dst, r)
-				n += 2
-			case 'b':
-				dst = append(dst, '\b')
-				n += 2
-			case 'f':
-				dst = append(dst, '\f')
-				n += 2
-			case 'n':
-				dst = append(dst, '\n')
-				n += 2
-			case 'r':
-				dst = append(dst, '\r')
-				n += 2
-			case 't':
-				dst = append(dst, '\t')
-				n += 2
-			case 'u':
-				if uint(len(src)) < uint(n+6) {
-					if hasEscapedUTF16Prefix(src[n:], false) {
-						return dst, io.ErrUnexpectedEOF
-					}
-					return dst, newInvalidEscapeSequenceError(src[n:])
-				}
-				v1, ok := parseHexUint16(src[n+2 : n+6])
-				if !ok {
-					return dst, newInvalidEscapeSequenceError(src[n : n+6])
-				}
-				n += 6
-
-				// Check whether this is a surrogate half.
-				r := rune(v1)
-				if utf16.IsSurrogate(r) {
-					r = utf8.RuneError // assume failure unless the following succeeds
-					if uint(len(src)) < uint(n+6) {
-						if hasEscapedUTF16Prefix(src[n:], true) {
-							return utf8.AppendRune(dst, r), io.ErrUnexpectedEOF
-						}
-						err = newInvalidEscapeSequenceError(src[n-6:])
-					} else if v2, ok := parseHexUint16(src[n+2 : n+6]); src[n] != '\\' || src[n+1] != 'u' || !ok {
-						err = newInvalidEscapeSequenceError(src[n-6 : n+6])
-					} else if r = utf16.DecodeRune(rune(v1), rune(v2)); r == utf8.RuneError {
-						err = newInvalidEscapeSequenceError(src[n-6 : n+6])
-					} else {
-						n += 6
-					}
-				}
-
-				dst = utf8.AppendRune(dst, r)
-			default:
-				return dst, newInvalidEscapeSequenceError(src[n : n+2])
-			}
-			i = n
-		// Handle invalid UTF-8.
-		case r == utf8.RuneError:
-			dst = append(dst, src[i:n]...)
-			if !utf8.FullRuneInString(string(truncateMaxUTF8(src[n:]))) {
-				return dst, io.ErrUnexpectedEOF
-			}
-			// NOTE: An unescaped string may be longer than the escaped string
-			// because invalid UTF-8 bytes are being replaced.
-			dst = append(dst, "\uFFFD"...)
-			n += rn
-			i = n
-			err = errInvalidUTF8
-		// Handle invalid control characters.
-		case r < ' ':
-			dst = append(dst, src[i:n]...)
-			return dst, newInvalidCharacterError(src[n:], "within string (expecting non-control character)")
-		default:
-			panic("BUG: unhandled character " + quoteRune(src[n:]))
-		}
-	}
-	dst = append(dst, src[i:n]...)
-	return dst, io.ErrUnexpectedEOF
-}
-
-// hasEscapedUTF16Prefix reports whether b is possibly
-// the truncated prefix of a \uFFFF escape sequence.
-func hasEscapedUTF16Prefix[Bytes ~[]byte | ~string](b Bytes, lowerSurrogateHalf bool) bool {
-	for i := 0; i < len(b); i++ {
-		switch c := b[i]; {
-		case i == 0 && c != '\\':
-			return false
-		case i == 1 && c != 'u':
-			return false
-		case i == 2 && lowerSurrogateHalf && c != 'd' && c != 'D':
-			return false // not within ['\uDC00':'\uDFFF']
-		case i == 3 && lowerSurrogateHalf && !('c' <= c && c <= 'f') && !('C' <= c && c <= 'F'):
-			return false // not within ['\uDC00':'\uDFFF']
-		case i >= 2 && i < 6 && !('0' <= c && c <= '9') && !('a' <= c && c <= 'f') && !('A' <= c && c <= 'F'):
-			return false
-		}
-	}
-	return true
-}
-
-// unescapeStringMayCopy returns the unescaped form of b.
-// If there are no escaped characters, the output is simply a subslice of
-// the input with the surrounding quotes removed.
-// Otherwise, a new buffer is allocated for the output.
-func unescapeStringMayCopy(b []byte, isVerbatim bool) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if isVerbatim {
-		return b[len(`"`) : len(b)-len(`"`)]
-	}
-	b, _ = unescapeString(nil, b)
-	return b
-}
-
-// consumeSimpleNumber consumes the next JSON number per RFC 7159, section 6
-// but is limited to the grammar for a positive integer.
-// It returns 0 if it is invalid or more complicated than a simple integer,
-// in which case consumeNumber should be called.
-func consumeSimpleNumber(b []byte) (n int) {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if len(b) > 0 {
-		if b[0] == '0' {
-			n++
-		} else if '1' <= b[0] && b[0] <= '9' {
-			n++
-			for len(b) > n && ('0' <= b[n] && b[n] <= '9') {
-				n++
-			}
-		} else {
-			return 0
-		}
-		if uint(len(b)) <= uint(n) || (b[n] != '.' && b[n] != 'e' && b[n] != 'E') {
-			return n
-		}
-	}
-	return 0
-}
-
-type consumeNumberState uint
-
-const (
-	consumeNumberInit consumeNumberState = iota
-	beforeIntegerDigits
-	withinIntegerDigits
-	beforeFractionalDigits
-	withinFractionalDigits
-	beforeExponentDigits
-	withinExponentDigits
-)
-
-// consumeNumber consumes the next JSON number per RFC 7159, section 6.
-// It reports the number of bytes consumed and whether an error was encountered.
-// If the input appears truncated, it returns io.ErrUnexpectedEOF.
-//
-// Note that JSON numbers are not self-terminating.
-// If the entire input is consumed, then the caller needs to consider whether
-// there may be subsequent unread data that may still be part of this number.
-func consumeNumber(b []byte) (n int, err error) {
-	n, _, err = consumeNumberResumable(b, 0, consumeNumberInit)
-	return n, err
-}
-
-// consumeNumberResumable is identical to consumeNumber but supports resuming
-// from a previous call that returned io.ErrUnexpectedEOF.
-func consumeNumberResumable(b []byte, resumeOffset int, state consumeNumberState) (n int, _ consumeNumberState, err error) {
-	// Jump to the right state when resuming from a partial consumption.
-	n = resumeOffset
-	if state > consumeNumberInit {
-		switch state {
-		case withinIntegerDigits, withinFractionalDigits, withinExponentDigits:
-			// Consume leading digits.
-			for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
-				n++
-			}
-			if uint(len(b)) <= uint(n) {
-				return n, state, nil // still within the same state
-			}
-			state++ // switches "withinX" to "beforeY" where Y is the state after X
-		}
-		switch state {
-		case beforeIntegerDigits:
-			goto beforeInteger
-		case beforeFractionalDigits:
-			goto beforeFractional
-		case beforeExponentDigits:
-			goto beforeExponent
-		default:
-			return n, state, nil
-		}
-	}
-
-	// Consume required integer component (with optional minus sign).
-beforeInteger:
-	resumeOffset = n
-	if uint(len(b)) > 0 && b[0] == '-' {
-		n++
-	}
-	switch {
-	case uint(len(b)) <= uint(n):
-		return resumeOffset, beforeIntegerDigits, io.ErrUnexpectedEOF
-	case b[n] == '0':
-		n++
-		state = beforeFractionalDigits
-	case '1' <= b[n] && b[n] <= '9':
-		n++
-		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
-			n++
-		}
-		state = withinIntegerDigits
-	default:
-		return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
-	}
-
-	// Consume optional fractional component.
-beforeFractional:
-	if uint(len(b)) > uint(n) && b[n] == '.' {
-		resumeOffset = n
-		n++
-		switch {
-		case uint(len(b)) <= uint(n):
-			return resumeOffset, beforeFractionalDigits, io.ErrUnexpectedEOF
-		case '0' <= b[n] && b[n] <= '9':
-			n++
-		default:
-			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
-		}
-		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
-			n++
-		}
-		state = withinFractionalDigits
-	}
-
-	// Consume optional exponent component.
-beforeExponent:
-	if uint(len(b)) > uint(n) && (b[n] == 'e' || b[n] == 'E') {
-		resumeOffset = n
-		n++
-		if uint(len(b)) > uint(n) && (b[n] == '-' || b[n] == '+') {
-			n++
-		}
-		switch {
-		case uint(len(b)) <= uint(n):
-			return resumeOffset, beforeExponentDigits, io.ErrUnexpectedEOF
-		case '0' <= b[n] && b[n] <= '9':
-			n++
-		default:
-			return n, state, newInvalidCharacterError(b[n:], "within number (expecting digit)")
-		}
-		for uint(len(b)) > uint(n) && ('0' <= b[n] && b[n] <= '9') {
-			n++
-		}
-		state = withinExponentDigits
-	}
-
-	return n, state, nil
-}
-
-// parseHexUint16 is similar to strconv.ParseUint,
-// but operates directly on []byte and is optimized for base-16.
-// See https://go.dev/issue/42429.
-func parseHexUint16[Bytes ~[]byte | ~string](b Bytes) (v uint16, ok bool) {
-	if len(b) != 4 {
-		return 0, false
-	}
-	for i := 0; i < 4; i++ {
-		c := b[i]
-		switch {
-		case '0' <= c && c <= '9':
-			c = c - '0'
-		case 'a' <= c && c <= 'f':
-			c = 10 + c - 'a'
-		case 'A' <= c && c <= 'F':
-			c = 10 + c - 'A'
-		default:
-			return 0, false
-		}
-		v = v*16 + uint16(c)
-	}
-	return v, true
-}
-
-// parseDecUint parses b as a decimal unsigned integer according to
-// a strict subset of the JSON number grammar, returning the value if valid.
-// It returns (0, false) if there is a syntax error and
-// returns (math.MaxUint64, false) if there is an overflow.
-func parseDecUint(b []byte) (v uint64, ok bool) {
-	const unsafeWidth = 20 // len(fmt.Sprint(uint64(math.MaxUint64)))
-	var n int
-	for ; len(b) > n && ('0' <= b[n] && b[n] <= '9'); n++ {
-		v = 10*v + uint64(b[n]-'0')
-	}
-	switch {
-	case n == 0 || len(b) != n || (b[0] == '0' && string(b) != "0"):
-		return 0, false
-	case n >= unsafeWidth && (b[0] != '1' || v < 1e19 || n > unsafeWidth):
-		return math.MaxUint64, false
-	}
-	return v, true
-}
-
-// parseFloat parses a floating point number according to the Go float grammar.
-// Note that the JSON number grammar is a strict subset.
-//
-// If the number overflows the finite representation of a float,
-// then we return MaxFloat since any finite value will always be infinitely
-// more accurate at representing another finite value than an infinite value.
-func parseFloat(b []byte, bits int) (v float64, ok bool) {
-	// Fast path for exact integer numbers which fit in the
-	// 24-bit or 53-bit significand of a float32 or float64.
-	var negLen int // either 0 or 1
-	if len(b) > 0 && b[0] == '-' {
-		negLen = 1
-	}
-	u, ok := parseDecUint(b[negLen:])
-	if ok && ((bits == 32 && u <= 1<<24) || (bits == 64 && u <= 1<<53)) {
-		return math.Copysign(float64(u), float64(-1*negLen)), true
-	}
-
-	// Note that the []byte->string conversion unfortunately allocates.
-	// See https://go.dev/issue/42429 for more information.
-	fv, err := strconv.ParseFloat(string(b), bits)
-	if math.IsInf(fv, 0) {
-		switch {
-		case bits == 32 && math.IsInf(fv, +1):
-			return +math.MaxFloat32, true
-		case bits == 64 && math.IsInf(fv, +1):
-			return +math.MaxFloat64, true
-		case bits == 32 && math.IsInf(fv, -1):
-			return -math.MaxFloat32, true
-		case bits == 64 && math.IsInf(fv, -1):
-			return -math.MaxFloat64, true
-		}
-	}
-	return fv, err == nil
-}
-
-// truncateMaxUTF8 truncates b such it contains at least one rune.
-//
-// The utf8 package currently lacks generic variants, which complicates
-// generic functions that operates on either []byte or string.
-// As a hack, we always call the utf8 function operating on strings,
-// but always truncate the input such that the result is identical.
-//
-// Example usage:
-//
-//	utf8.DecodeRuneInString(string(truncateMaxUTF8(b)))
-//
-// Converting a []byte to a string is stack allocated since
-// truncateMaxUTF8 guarantees that the []byte is short.
-func truncateMaxUTF8[Bytes ~[]byte | ~string](b Bytes) Bytes {
-	// TODO(https://go.dev/issue/56948): Remove this function and
-	// instead directly call generic utf8 functions wherever used.
-	if len(b) > utf8.UTFMax {
-		return b[:utf8.UTFMax]
-	}
-	return b
+	d.s.Names.copyQuotedBuffer(d.s.buf)
+	return string(d.s.appendStackPointer(nil))
 }

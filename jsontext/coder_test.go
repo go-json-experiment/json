@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"bytes"
@@ -17,6 +17,10 @@ import (
 
 	"github.com/go-json-experiment/json/internal/jsontest"
 )
+
+func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
+	return int64(len(in))
+}
 
 var (
 	zeroToken Token
@@ -581,59 +585,6 @@ func TestCoderStackPointer(t *testing.T) {
 	}
 }
 
-func TestCoderBufferGrowth(t *testing.T) {
-	// The growth rate of the internal buffer should be exponential,
-	// but should not grow unbounded.
-	checkGrowth := func(ns []int) {
-		t.Helper()
-		var sumBytes, sumRates, numGrows float64
-		prev := ns[0]
-		for i := 1; i < len(ns)-1; i++ {
-			n := ns[i]
-			if n != prev {
-				sumRates += float64(n) / float64(prev)
-				numGrows++
-				prev = n
-			}
-			if n > 1<<20 {
-				t.Fatalf("single Read/Write too large: %d", n)
-			}
-			sumBytes += float64(n)
-		}
-		if mean := sumBytes / float64(len(ns)); mean < 1<<10 {
-			t.Fatalf("average Read/Write too small: %0.1f", mean)
-		}
-		switch mean := sumRates / numGrows; {
-		case mean < 1.25:
-			t.Fatalf("average growth rate too slow: %0.3f", mean)
-		case mean > 2.00:
-			t.Fatalf("average growth rate too fast: %0.3f", mean)
-		}
-	}
-
-	bb := &bytesBuffer{new(bytes.Buffer)}
-
-	var writeSizes []int
-	if err := MarshalWrite(WriterFunc(func(b []byte) (int, error) {
-		n, err := bb.Write(b)
-		writeSizes = append(writeSizes, n)
-		return n, err
-	}), make([]struct{}, 1e6)); err != nil {
-		t.Fatalf("MarshalWrite error: %v", err)
-	}
-	checkGrowth(writeSizes)
-
-	var readSizes []int
-	if err := UnmarshalRead(ReaderFunc(func(b []byte) (int, error) {
-		n, err := bb.Read(b)
-		readSizes = append(readSizes, n)
-		return n, err
-	}), new([]struct{})); err != nil {
-		t.Fatalf("UnmarshalRead error: %v", err)
-	}
-	checkGrowth(readSizes)
-}
-
 func TestCoderMaxDepth(t *testing.T) {
 	trimArray := func(b []byte) []byte { return b[len(`[`) : len(b)-len(`]`)] }
 	maxArrays := []byte(strings.Repeat(`[`, maxNestingDepth+1) + strings.Repeat(`]`, maxNestingDepth+1))
@@ -656,17 +607,17 @@ func TestCoderMaxDepth(t *testing.T) {
 		}
 
 		t.Run("ArraysValid/SingleValue", func(t *testing.T) {
-			dec.reset(trimArray(maxArrays), nil)
+			dec.s.reset(trimArray(maxArrays), nil)
 			checkReadValue(t, maxNestingDepth*len(`[]`), nil)
 		})
 		t.Run("ArraysValid/TokenThenValue", func(t *testing.T) {
-			dec.reset(trimArray(maxArrays), nil)
+			dec.s.reset(trimArray(maxArrays), nil)
 			checkReadToken(t, '[', nil)
 			checkReadValue(t, (maxNestingDepth-1)*len(`[]`), nil)
 			checkReadToken(t, ']', nil)
 		})
 		t.Run("ArraysValid/AllTokens", func(t *testing.T) {
-			dec.reset(trimArray(maxArrays), nil)
+			dec.s.reset(trimArray(maxArrays), nil)
 			for i := 0; i < maxNestingDepth; i++ {
 				checkReadToken(t, '[', nil)
 			}
@@ -676,16 +627,16 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 
 		t.Run("ArraysInvalid/SingleValue", func(t *testing.T) {
-			dec.reset(maxArrays, nil)
+			dec.s.reset(maxArrays, nil)
 			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
 		})
 		t.Run("ArraysInvalid/TokenThenValue", func(t *testing.T) {
-			dec.reset(maxArrays, nil)
+			dec.s.reset(maxArrays, nil)
 			checkReadToken(t, '[', nil)
 			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
 		})
 		t.Run("ArraysInvalid/AllTokens", func(t *testing.T) {
-			dec.reset(maxArrays, nil)
+			dec.s.reset(maxArrays, nil)
 			for i := 0; i < maxNestingDepth; i++ {
 				checkReadToken(t, '[', nil)
 			}
@@ -693,18 +644,18 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 
 		t.Run("ObjectsValid/SingleValue", func(t *testing.T) {
-			dec.reset(trimObject(maxObjects), nil)
+			dec.s.reset(trimObject(maxObjects), nil)
 			checkReadValue(t, maxNestingDepth*len(`{"":}`)+len(`""`), nil)
 		})
 		t.Run("ObjectsValid/TokenThenValue", func(t *testing.T) {
-			dec.reset(trimObject(maxObjects), nil)
+			dec.s.reset(trimObject(maxObjects), nil)
 			checkReadToken(t, '{', nil)
 			checkReadToken(t, '"', nil)
 			checkReadValue(t, (maxNestingDepth-1)*len(`{"":}`)+len(`""`), nil)
 			checkReadToken(t, '}', nil)
 		})
 		t.Run("ObjectsValid/AllTokens", func(t *testing.T) {
-			dec.reset(trimObject(maxObjects), nil)
+			dec.s.reset(trimObject(maxObjects), nil)
 			for i := 0; i < maxNestingDepth; i++ {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
@@ -716,17 +667,17 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 
 		t.Run("ObjectsInvalid/SingleValue", func(t *testing.T) {
-			dec.reset(maxObjects, nil)
+			dec.s.reset(maxObjects, nil)
 			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
 		})
 		t.Run("ObjectsInvalid/TokenThenValue", func(t *testing.T) {
-			dec.reset(maxObjects, nil)
+			dec.s.reset(maxObjects, nil)
 			checkReadToken(t, '{', nil)
 			checkReadToken(t, '"', nil)
 			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
 		})
 		t.Run("ObjectsInvalid/AllTokens", func(t *testing.T) {
-			dec.reset(maxObjects, nil)
+			dec.s.reset(maxObjects, nil)
 			for i := 0; i < maxNestingDepth; i++ {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
@@ -751,19 +702,19 @@ func TestCoderMaxDepth(t *testing.T) {
 		}
 
 		t.Run("Arrays/SingleValue", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteValue(t, maxArrays, errMaxDepth.withOffset(maxNestingDepth))
 			checkWriteValue(t, trimArray(maxArrays), nil)
 		})
 		t.Run("Arrays/TokenThenValue", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteToken(t, ArrayStart, nil)
 			checkWriteValue(t, trimArray(maxArrays), errMaxDepth.withOffset(maxNestingDepth))
 			checkWriteValue(t, trimArray(trimArray(maxArrays)), nil)
 			checkWriteToken(t, ArrayEnd, nil)
 		})
 		t.Run("Arrays/AllTokens", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			for i := 0; i < maxNestingDepth; i++ {
 				checkWriteToken(t, ArrayStart, nil)
 			}
@@ -774,12 +725,12 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 
 		t.Run("Objects/SingleValue", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteValue(t, maxObjects, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
 			checkWriteValue(t, trimObject(maxObjects), nil)
 		})
 		t.Run("Objects/TokenThenValue", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteToken(t, ObjectStart, nil)
 			checkWriteToken(t, String(""), nil)
 			checkWriteValue(t, trimObject(maxObjects), errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
@@ -787,7 +738,7 @@ func TestCoderMaxDepth(t *testing.T) {
 			checkWriteToken(t, ObjectEnd, nil)
 		})
 		t.Run("Objects/AllTokens", func(t *testing.T) {
-			enc.reset(enc.buf[:0], nil)
+			enc.s.reset(enc.s.Buf[:0], nil)
 			for i := 0; i < maxNestingDepth-1; i++ {
 				checkWriteToken(t, ObjectStart, nil)
 				checkWriteToken(t, String(""), nil)
@@ -802,14 +753,6 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 	})
 }
-
-type ReaderFunc func([]byte) (int, error)
-
-func (f ReaderFunc) Read(b []byte) (int, error) { return f(b) }
-
-type WriterFunc func([]byte) (int, error)
-
-func (f WriterFunc) Write(b []byte) (int, error) { return f(b) }
 
 // FaultyBuffer implements io.Reader and io.Writer.
 // It may process fewer bytes than the provided buffer

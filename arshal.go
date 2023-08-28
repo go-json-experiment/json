@@ -9,11 +9,18 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"slices"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
+	"github.com/go-json-experiment/json/jsontext"
 )
+
+// export exposes internal functionality of the "jsontext" package.
+var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 
 var structOptionsPool = &sync.Pool{New: func() any { return new(jsonopts.Struct) }}
 
@@ -146,11 +153,12 @@ func putStructOptions(o *jsonopts.Struct) {
 // JSON cannot represent cyclic data structures and Marshal does not handle them.
 // Passing cyclic structures will result in an error.
 func Marshal(in any, opts ...Options) (out []byte, err error) {
-	enc := getBufferedEncoder(opts...)
-	defer putBufferedEncoder(enc)
-	enc.options.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
-	err = marshalEncode(enc, in, &enc.options)
-	return bytes.Clone(enc.buf), err
+	enc := export.GetBufferedEncoder(opts...)
+	defer export.PutBufferedEncoder(enc)
+	xe := export.Encoder(enc)
+	xe.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
+	err = marshalEncode(enc, in, &xe.Struct)
+	return bytes.Clone(xe.Buf), err
 }
 
 // MarshalWrite serializes a Go value into an [io.Writer] according to the provided
@@ -158,10 +166,11 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 // It does not terminate the output with a newline.
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
-	enc := getStreamingEncoder(out, opts...)
-	defer putStreamingEncoder(enc)
-	enc.options.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
-	return marshalEncode(enc, in, &enc.options)
+	enc := export.GetStreamingEncoder(out, opts...)
+	defer export.PutStreamingEncoder(enc)
+	xe := export.Encoder(enc)
+	xe.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
+	return marshalEncode(enc, in, &xe.Struct)
 }
 
 // MarshalEncode serializes a Go value into an [Encoder] according to the provided
@@ -173,7 +182,8 @@ func MarshalEncode(out *Encoder, in any, opts ...Options) (err error) {
 	mo := getStructOptions()
 	defer putStructOptions(mo)
 	mo.Join(opts...)
-	mo.CopyCoderOptions(&out.options)
+	xe := export.Encoder(out)
+	mo.CopyCoderOptions(&xe.Struct)
 	return marshalEncode(out, in, mo)
 }
 
@@ -198,8 +208,9 @@ func marshalEncode(out *Encoder, in any, mo *jsonopts.Struct) (err error) {
 		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t)
 	}
 	if err := marshal(out, va, mo); err != nil {
-		if !out.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			out.tokens.invalidateDisabledNamespaces()
+		xe := export.Encoder(out)
+		if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {
+			xe.Tokens.InvalidateDisabledNamespaces()
 		}
 		return err
 	}
@@ -354,9 +365,10 @@ func marshalEncode(out *Encoder, in any, mo *jsonopts.Struct) (err error) {
 // For JSON objects, the input object is merged into the destination value
 // where matching object members recursively apply merge semantics.
 func Unmarshal(in []byte, out any, opts ...Options) (err error) {
-	dec := getBufferedDecoder(in, opts...)
-	defer putBufferedDecoder(dec)
-	return unmarshalFull(dec, out, &dec.options)
+	dec := export.GetBufferedDecoder(in, opts...)
+	defer export.PutBufferedDecoder(dec)
+	xd := export.Decoder(dec)
+	return unmarshalFull(dec, out, &xd.Struct)
 }
 
 // UnmarshalRead deserializes a Go value from an [io.Reader] according to the
@@ -366,15 +378,16 @@ func Unmarshal(in []byte, out any, opts ...Options) (err error) {
 // without reporting an error for EOF. The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
-	dec := getStreamingDecoder(in, opts...)
-	defer putStreamingDecoder(dec)
-	return unmarshalFull(dec, out, &dec.options)
+	dec := export.GetStreamingDecoder(in, opts...)
+	defer export.PutStreamingDecoder(dec)
+	xd := export.Decoder(dec)
+	return unmarshalFull(dec, out, &xd.Struct)
 }
 
 func unmarshalFull(in *Decoder, out any, uo *jsonopts.Struct) error {
 	switch err := unmarshalDecode(in, out, uo); err {
 	case nil:
-		return in.checkEOF()
+		return export.Decoder(in).CheckEOF()
 	case io.EOF:
 		return io.ErrUnexpectedEOF
 	default:
@@ -394,7 +407,8 @@ func UnmarshalDecode(in *Decoder, out any, opts ...Options) (err error) {
 	uo := getStructOptions()
 	defer putStructOptions(uo)
 	uo.Join(opts...)
-	uo.CopyCoderOptions(&in.options)
+	xd := export.Decoder(in)
+	uo.CopyCoderOptions(&xd.Struct)
 	return unmarshalDecode(in, out, uo)
 }
 
@@ -420,8 +434,9 @@ func unmarshalDecode(in *Decoder, out any, uo *jsonopts.Struct) (err error) {
 		unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t)
 	}
 	if err := unmarshal(in, va, uo); err != nil {
-		if !in.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			in.tokens.invalidateDisabledNamespaces()
+		xd := export.Decoder(in)
+		if !xd.Flags.Get(jsonflags.AllowDuplicateNames) {
+			xd.Tokens.InvalidateDisabledNamespaces()
 		}
 		return err
 	}
@@ -471,4 +486,30 @@ func lookupArshaler(t reflect.Type) *arshaler {
 	// Use the last stored so that duplicate arshalers can be garbage collected.
 	v, _ := lookupArshalerCache.LoadOrStore(t, fncs)
 	return v.(*arshaler)
+}
+
+var stringsPools = &sync.Pool{New: func() any { return new(stringSlice) }}
+
+type stringSlice []string
+
+// getStrings returns a non-nil pointer to a slice with length n.
+func getStrings(n int) *stringSlice {
+	s := stringsPools.Get().(*stringSlice)
+	if cap(*s) < n {
+		*s = make([]string, n)
+	}
+	*s = (*s)[:n]
+	return s
+}
+
+func putStrings(s *stringSlice) {
+	if cap(*s) > 1<<10 {
+		*s = nil // avoid pinning arbitrarily large amounts of memory
+	}
+	stringsPools.Put(s)
+}
+
+// Sort sorts the string slice according to RFC 8785, section 3.2.3.
+func (ss *stringSlice) Sort() {
+	slices.SortFunc(*ss, func(x, y string) int { return jsonwire.CompareUTF16(x, y) })
 }

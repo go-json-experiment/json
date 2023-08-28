@@ -2,36 +2,35 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"bytes"
-	"cmp"
 	"errors"
 	"io"
 	"slices"
 	"strings"
 	"sync"
-	"unicode/utf16"
-	"unicode/utf8"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
-// NOTE: RawValue is analogous to v1 json.RawMessage.
+// NOTE: Value is analogous to v1 json.RawMessage.
 
-// RawValue represents a single raw JSON value, which may be one of the following:
+// Value represents a single raw JSON value, which may be one of the following:
 //   - a JSON literal (i.e., null, true, or false)
 //   - a JSON string (e.g., "hello, world!")
 //   - a JSON number (e.g., 123.456)
 //   - an entire JSON object (e.g., {"fizz":"buzz"} )
 //   - an entire JSON array (e.g., [1,2,3] )
 //
-// RawValue can represent entire array or object values, while Token cannot.
-// RawValue may contain leading and/or trailing whitespace.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Value] instead.
-type RawValue []byte
+// Value can represent entire array or object values, while Token cannot.
+// Value may contain leading and/or trailing whitespace.
+type Value []byte
+
+// Deprecated: Use [Value] instead.
+type RawValue = Value
 
 // Clone returns a copy of v.
 func (v RawValue) Clone() RawValue {
@@ -136,7 +135,7 @@ func (v *RawValue) UnmarshalJSON(b []byte) error {
 // Kind returns the starting token kind.
 // For a valid value, this will never include '}' or ']'.
 func (v RawValue) Kind() Kind {
-	if v := v[consumeWhitespace(v):]; len(v) > 0 {
+	if v := v[jsonwire.ConsumeWhitespace(v):]; len(v) > 0 {
 		return Kind(v[0]).normalize()
 	}
 	return invalidKind
@@ -146,7 +145,7 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 	// Write the entire value to reformat all tokens and whitespace.
 	e := getBufferedEncoder()
 	defer putBufferedEncoder(e)
-	eo := &e.options
+	eo := &e.s.Struct
 	if canonical {
 		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 0)    // per RFC 8785, section 3.2.4
 		eo.Flags.Set(jsonflags.AllowDuplicateNames | 0) // per RFC 8785, section 3.1
@@ -158,10 +157,10 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 		eo.Flags.Set(jsonflags.Expand | 0)              // per RFC 8785, section 3.2.1
 	} else {
 		if s := strings.TrimLeft(prefix, " \t"); len(s) > 0 {
-			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
+			panic("json: invalid character " + jsonwire.QuoteRune(s) + " in indent prefix")
 		}
 		if s := strings.TrimLeft(indent, " \t"); len(s) > 0 {
-			panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
+			panic("json: invalid character " + jsonwire.QuoteRune(s) + " in indent")
 		}
 		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 1)
 		eo.Flags.Set(jsonflags.AllowDuplicateNames | 1)
@@ -177,7 +176,7 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 		}
 	}
 	eo.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
-	if err := e.WriteValue(*v); err != nil {
+	if err := e.s.WriteValue(*v); err != nil {
 		return err
 	}
 
@@ -189,15 +188,15 @@ func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) er
 		defer putBufferedEncoder(e2)
 
 		// Disable redundant checks performed earlier during encoding.
-		d := getBufferedDecoder(e.buf)
+		d := getBufferedDecoder(e.s.Buf)
 		defer putBufferedDecoder(d)
-		d.options.Flags.Set(jsonflags.AllowDuplicateNames | jsonflags.AllowInvalidUTF8 | 1)
-		reorderObjects(d, &e2.buf) // per RFC 8785, section 3.2.3
+		d.s.Flags.Set(jsonflags.AllowDuplicateNames | jsonflags.AllowInvalidUTF8 | 1)
+		reorderObjects(d, &e2.s.Buf) // per RFC 8785, section 3.2.3
 	}
 
 	// Store the result back into the value if different.
-	if !bytes.Equal(*v, e.buf) {
-		*v = append((*v)[:0], e.buf...)
+	if !bytes.Equal(*v, e.s.Buf) {
+		*v = append((*v)[:0], e.s.Buf...)
 	}
 	return nil
 }
@@ -251,14 +250,14 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		beforeBody := d.InputOffset() // offset after '{'
 		for d.PeekKind() != '}' {
 			beforeName := d.InputOffset()
-			var flags valueFlags
-			name, _ := d.readValue(&flags)
-			name = unescapeStringMayCopy(name, flags.isVerbatim())
+			var flags jsonwire.ValueFlags
+			name, _ := d.s.ReadValue(&flags)
+			name = jsonwire.UnquoteMayCopy(name, flags.IsVerbatim())
 			reorderObjects(d, scratch)
 			afterValue := d.InputOffset()
 
 			if isSorted && len(*members) > 0 {
-				isSorted = compareUTF16(prevName, []byte(name)) < 0
+				isSorted = jsonwire.CompareUTF16(prevName, []byte(name)) < 0
 			}
 			*members = append(*members, memberName{name, beforeName, afterValue})
 			prevName = name
@@ -271,7 +270,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 			return
 		}
 		slices.SortFunc(*members, func(x, y memberName) int {
-			return compareUTF16(x.name, y.name)
+			return jsonwire.CompareUTF16(x.name, y.name)
 		})
 
 		// Append the reordered members to a new buffer,
@@ -284,10 +283,10 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		//	sum([m.after-m.before for m in members]) == afterBody-beforeBody
 		sorted := (*scratch)[:0]
 		for i, member := range *members {
-			if d.buf[member.before] == ',' {
+			if d.s.buf[member.before] == ',' {
 				member.before++ // trim leading comma
 			}
-			sorted = append(sorted, d.buf[member.before:member.after]...)
+			sorted = append(sorted, d.s.buf[member.before:member.after]...)
 			if i < len(*members)-1 {
 				sorted = append(sorted, ',') // append trailing comma
 			}
@@ -295,7 +294,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		if int(afterBody-beforeBody) != len(sorted) {
 			panic("BUG: length invariant violated")
 		}
-		copy(d.buf[beforeBody:afterBody], sorted)
+		copy(d.s.buf[beforeBody:afterBody], sorted)
 
 		// Update scratch buffer to the largest amount ever used.
 		if len(sorted) > len(*scratch) {
@@ -306,61 +305,5 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 			reorderObjects(d, scratch)
 		}
 		d.ReadToken()
-	}
-}
-
-// compareUTF16 lexicographically compares x to y according
-// to the UTF-16 codepoints of the UTF-8 encoded input strings.
-// This implements the ordering specified in RFC 8785, section 3.2.3.
-// The inputs must be valid UTF-8, otherwise this may panic.
-func compareUTF16[Bytes ~[]byte | ~string](x, y Bytes) int {
-	// NOTE: This is an optimized, allocation-free implementation
-	// of lessUTF16Simple in fuzz_test.go. FuzzLessUTF16 verifies that the
-	// two implementations agree on the result of comparing any two strings.
-
-	isUTF16Self := func(r rune) bool {
-		return ('\u0000' <= r && r <= '\uD7FF') || ('\uE000' <= r && r <= '\uFFFF')
-	}
-
-	var invalidUTF8 bool
-	x0, y0 := x, y
-	for {
-		if len(x) == 0 || len(y) == 0 {
-			if len(x) == len(y) && invalidUTF8 {
-				return strings.Compare(string(x0), string(y0))
-			}
-			return cmp.Compare(len(x), len(y))
-		}
-
-		// ASCII fast-path.
-		if x[0] < utf8.RuneSelf || y[0] < utf8.RuneSelf {
-			if x[0] != y[0] {
-				return cmp.Compare(x[0], y[0])
-			}
-			x, y = x[1:], y[1:]
-			continue
-		}
-
-		// Decode next pair of runes as UTF-8.
-		rx, nx := utf8.DecodeRuneInString(string(truncateMaxUTF8(x)))
-		ry, ny := utf8.DecodeRuneInString(string(truncateMaxUTF8(y)))
-
-		selfx := isUTF16Self(rx)
-		selfy := isUTF16Self(ry)
-		switch {
-		// The x rune is a single UTF-16 codepoint, while
-		// the y rune is a surrogate pair of UTF-16 codepoints.
-		case selfx && !selfy:
-			ry, _ = utf16.EncodeRune(ry)
-		// The y rune is a single UTF-16 codepoint, while
-		// the x rune is a surrogate pair of UTF-16 codepoints.
-		case selfy && !selfx:
-			rx, _ = utf16.EncodeRune(rx)
-		}
-		if rx != ry {
-			return cmp.Compare(rx, ry)
-		}
-		invalidUTF8 = invalidUTF8 || (rx == utf8.RuneError && nx == 1) || (ry == utf8.RuneError && ny == 1)
-		x, y = x[nx:], y[ny:]
 	}
 }

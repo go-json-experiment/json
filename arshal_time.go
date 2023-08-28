@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 var (
@@ -33,7 +34,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.nonDefault = true
 		marshalNanos := fncs.marshal
 		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			if mo.Format != "" && mo.FormatDepth == enc.tokens.depth() {
+			xe := export.Encoder(enc)
+			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 				if mo.Format == "nanos" {
 					mo.Format = ""
 					return marshalNanos(enc, va, mo)
@@ -53,7 +55,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			// TODO: Should there be a flag that specifies that we can unmarshal
 			// from either form since there would be no ambiguity?
-			if uo.Format != "" && uo.FormatDepth == dec.tokens.depth() {
+			xd := export.Decoder(dec)
+			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 				if uo.Format == "nanos" {
 					uo.Format = ""
 					return unmarshalNanos(dec, va, uo)
@@ -62,9 +65,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
-			var flags valueFlags
+			var flags jsonwire.ValueFlags
 			td := va.Addr().Interface().(*time.Duration)
-			val, err := dec.readValue(&flags)
+			val, err := xd.ReadValue(&flags)
 			if err != nil {
 				return err
 			}
@@ -73,7 +76,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*td = time.Duration(0)
 				return nil
 			case '"':
-				val = unescapeStringMayCopy(val, flags.isVerbatim())
+				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 				td2, err := time.ParseDuration(string(val))
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
@@ -87,9 +90,10 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case timeTimeType:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
+			xe := export.Encoder(enc)
 			format := time.RFC3339Nano
 			isRFC3339 := true
-			if mo.Format != "" && mo.FormatDepth == enc.tokens.depth() {
+			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 				var err error
 				format, isRFC3339, err = checkTimeFormat(mo.Format)
 				if err != nil {
@@ -125,15 +129,16 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			// The format may contain special characters that need escaping.
 			// Verify that the result is a valid JSON string (common case),
 			// otherwise escape the string correctly (slower case).
-			if consumeSimpleString(b) != len(b) {
-				b, _ = appendString(nil, string(b[len(`"`):len(b)-len(`"`)]), true, nil)
+			if jsonwire.ConsumeSimpleString(b) != len(b) {
+				b, _ = jsonwire.AppendQuote(nil, b[len(`"`):len(b)-len(`"`)], true, nil)
 			}
 			return enc.WriteValue(b)
 		}
 		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
+			xd := export.Decoder(dec)
 			format := time.RFC3339
 			isRFC3339 := true
-			if uo.Format != "" && uo.FormatDepth == dec.tokens.depth() {
+			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 				var err error
 				format, isRFC3339, err = checkTimeFormat(uo.Format)
 				if err != nil {
@@ -141,9 +146,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
-			var flags valueFlags
+			var flags jsonwire.ValueFlags
 			tt := va.Addr().Interface().(*time.Time)
-			val, err := dec.readValue(&flags)
+			val, err := xd.ReadValue(&flags)
 			if err != nil {
 				return err
 			}
@@ -153,7 +158,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*tt = time.Time{}
 				return nil
 			case '"':
-				val = unescapeStringMayCopy(val, flags.isVerbatim())
+				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 				tt2, err := time.Parse(format, string(val))
 				if isRFC3339 && err == nil {
 					// TODO(https://go.dev/issue/54580): RFC 3339 specifies

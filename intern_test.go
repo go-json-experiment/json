@@ -18,13 +18,13 @@ func TestIntern(t *testing.T) {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz"
 	for i := 0; i <= len(alphabet); i++ {
 		want := alphabet[i:]
-		if got := sc.make([]byte(want)); got != want {
+		if got := makeString(&sc, []byte(want)); got != want {
 			t.Fatalf("make = %v, want %v", got, want)
 		}
 	}
 	for i := 0; i < 1000; i++ {
 		want := fmt.Sprintf("test%b", i)
-		if got := sc.make([]byte(want)); got != want {
+		if got := makeString(&sc, []byte(want)); got != want {
 			t.Fatalf("make = %v, want %v", got, want)
 		}
 	}
@@ -118,7 +118,7 @@ func BenchmarkIntern(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					var sc stringCache
 					for _, b := range tt.data {
-						sink = sc.make(b)
+						sink = makeString(&sc, b)
 					}
 				}
 			})

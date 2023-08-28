@@ -20,7 +20,7 @@ import (
 // on the provided [Encoder] or [Decoder]. For example, it is permissible to call
 // [Decoder.PeekKind], but not permissible to call [Decoder.ReadToken] or
 // [Encoder.WriteToken] since such methods mutate the state.
-const SkipFunc = jsonError("skip function")
+var SkipFunc = errors.New("json: skip function")
 
 // Marshalers is a list of functions that may override the marshal behavior
 // of specific types. Populate [WithMarshalers] to use it with
@@ -203,11 +203,12 @@ func MarshalFuncV2[T any](fn func(*Encoder, T, Options) error) *Marshalers {
 	typFnc := typedMarshaler{
 		typ: t,
 		fnc: func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			prevDepth, prevLength := enc.tokens.depthLength()
-			enc.options.Flags.Set(jsonflags.WithinArshalCall | 1)
+			xe := export.Encoder(enc)
+			prevDepth, prevLength := xe.Tokens.DepthLength()
+			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := fn(enc, va.castTo(t).Interface().(T), mo)
-			enc.options.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := enc.tokens.depthLength()
+			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
+			currDepth, currLength := xe.Tokens.DepthLength()
 			if err == nil && (prevDepth != currDepth || prevLength+1 != currLength) {
 				err = errors.New("must write exactly one JSON value")
 			}
@@ -276,11 +277,12 @@ func UnmarshalFuncV2[T any](fn func(*Decoder, T, Options) error) *Unmarshalers {
 	typFnc := typedUnmarshaler{
 		typ: t,
 		fnc: func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
-			prevDepth, prevLength := dec.tokens.depthLength()
-			dec.options.Flags.Set(jsonflags.WithinArshalCall | 1)
+			xd := export.Decoder(dec)
+			prevDepth, prevLength := xd.Tokens.DepthLength()
+			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := fn(dec, va.castTo(t).Interface().(T), uo)
-			dec.options.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := dec.tokens.depthLength()
+			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
+			currDepth, currLength := xd.Tokens.DepthLength()
 			if err == nil && (prevDepth != currDepth || prevLength+1 != currLength) {
 				err = errors.New("must read exactly one JSON value")
 			}

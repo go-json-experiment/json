@@ -15,6 +15,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 var errIgnoredField = errors.New("ignored field")
@@ -361,7 +363,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		out.name = opt
 		tag = tag[n:]
 	}
-	b, _ := appendString(nil, out.name, false, nil)
+	b, _ := jsonwire.AppendQuote(nil, out.name, false, nil)
 	out.quotedName = string(b)
 
 	// Handle any additional tag options (if any).

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsonwire
 
 import (
 	"reflect"
@@ -11,8 +11,8 @@ import (
 
 func TestEscapeRunesTables(t *testing.T) {
 	tests := []struct {
-		got  *escapeRunes
-		want *escapeRunes
+		got  *EscapeRunes
+		want *EscapeRunes
 	}{
 		{&escapeCanonical, makeEscapeRunesSlow(false, false, nil)},
 		{&escapeHTMLJS, makeEscapeRunesSlow(true, true, nil)},

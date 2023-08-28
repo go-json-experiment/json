@@ -2,20 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"bytes"
 	"io"
 	"math"
 	"math/bits"
-	"slices"
 	"strconv"
-	"unicode/utf16"
-	"unicode/utf8"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 // Encoder is a streaming encoder from raw JSON tokens and values.
@@ -47,15 +45,19 @@ import (
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call WriteToken with a string
 // for object names.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Encoder] instead.
 type Encoder struct {
+	s encoderState
+}
+
+// encoderState is the low-level state of Encoder.
+// It has exported fields and method for use by the "json" package.
+type encoderState struct {
 	state
 	encodeBuffer
-	options jsonopts.Struct
+	jsonopts.Struct
 
-	escapeRunes  *escapeRunes
-	seenPointers seenPointers // only used when marshaling
+	EscapeRunes  *jsonwire.EscapeRunes
+	SeenPointers map[any]struct{} // only used when marshaling; identical to json.seenPointers
 }
 
 // encodeBuffer is a buffer split into 2 segments:
@@ -63,7 +65,7 @@ type Encoder struct {
 //   - buf[0:len(buf)]        // written (but unflushed) portion of the buffer
 //   - buf[len(buf):cap(buf)] // unused portion of the buffer
 type encodeBuffer struct {
-	buf []byte // may alias wr if it is a bytes.Buffer
+	Buf []byte // may alias wr if it is a bytes.Buffer
 
 	// baseOffset is added to len(buf) to obtain the absolute offset
 	// relative to the start of io.Writer stream.
@@ -87,8 +89,6 @@ type encodeBuffer struct {
 //
 // If w is a bytes.Buffer, then the encoder appends directly into the buffer
 // without copying the contents from an intermediate buffer.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.NewEncoder] instead.
 func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 	e := new(Encoder)
 	e.Reset(w, opts...)
@@ -104,55 +104,55 @@ func (e *Encoder) Reset(w io.Writer, opts ...Options) {
 		panic("jsontext: invalid nil Encoder")
 	case w == nil:
 		panic("jsontext: invalid nil io.Writer")
-	case e.options.Flags.Get(jsonflags.WithinArshalCall):
+	case e.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Encoder passed to json.MarshalerV2")
 	}
-	e.reset(nil, w, opts...)
+	e.s.reset(nil, w, opts...)
 }
 
-func (e *Encoder) reset(b []byte, w io.Writer, opts ...Options) {
+func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	e.state.reset()
-	e.encodeBuffer = encodeBuffer{buf: b, wr: w, bufStats: e.bufStats}
+	e.encodeBuffer = encodeBuffer{Buf: b, wr: w, bufStats: e.bufStats}
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
-		e.buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
+		e.Buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 	}
-	e.options = jsonopts.Struct{}
-	e.options.Join(opts...)
-	e.escapeRunes = makeEscapeRunes(
-		e.options.Flags.Get(jsonflags.EscapeForHTML),
-		e.options.Flags.Get(jsonflags.EscapeForJS),
-		e.options.EscapeFunc,
+	e.Struct = jsonopts.Struct{}
+	e.Struct.Join(opts...)
+	e.EscapeRunes = jsonwire.MakeEscapeRunes(
+		e.Flags.Get(jsonflags.EscapeForHTML),
+		e.Flags.Get(jsonflags.EscapeForJS),
+		e.EscapeFunc,
 	)
-	if e.options.Flags.Get(jsonflags.Expand) && !e.options.Flags.Has(jsonflags.Indent) {
-		e.options.Indent = "\t"
+	if e.Flags.Get(jsonflags.Expand) && !e.Flags.Has(jsonflags.Indent) {
+		e.Indent = "\t"
 	}
 }
 
-// needFlush determines whether to flush at this point.
-func (e *Encoder) needFlush() bool {
+// NeedFlush determines whether to flush at this point.
+func (e *encoderState) NeedFlush() bool {
 	// NOTE: This function is carefully written to be inlinable.
 
 	// Avoid flushing if e.wr is nil since there is no underlying writer.
 	// Flush if less than 25% of the capacity remains.
 	// Flushing at some constant fraction ensures that the buffer stops growing
 	// so long as the largest Token or Value fits within that unused capacity.
-	return e.wr != nil && (e.tokens.depth() == 1 || len(e.buf) > 3*cap(e.buf)/4)
+	return e.wr != nil && (e.Tokens.Depth() == 1 || len(e.Buf) > 3*cap(e.Buf)/4)
 }
 
-// flush flushes the buffer to the underlying io.Writer.
+// Flush flushes the buffer to the underlying io.Writer.
 // It may append a trailing newline after the top-level value.
-func (e *Encoder) flush() error {
+func (e *encoderState) Flush() error {
 	if e.wr == nil || e.avoidFlush() {
 		return nil
 	}
 
 	// In streaming mode, always emit a newline after the top-level value.
-	if e.tokens.depth() == 1 && !e.options.Flags.Get(jsonflags.OmitTopLevelNewline) {
-		e.buf = append(e.buf, '\n')
+	if e.Tokens.Depth() == 1 && !e.Flags.Get(jsonflags.OmitTopLevelNewline) {
+		e.Buf = append(e.Buf, '\n')
 	}
 
 	// Inform objectNameStack that we are about to flush the buffer content.
-	e.names.copyQuotedBuffer(e.buf)
+	e.Names.copyQuotedBuffer(e.Buf)
 
 	// Specialize bytes.Buffer for better performance.
 	if bb, ok := e.wr.(*bytes.Buffer); ok {
@@ -160,7 +160,7 @@ func (e *Encoder) flush() error {
 		// then the Write call simply increments the internal offset,
 		// otherwise Write operates as expected.
 		// See https://go.dev/issue/42986.
-		n, _ := bb.Write(e.buf) // never fails unless bb is nil
+		n, _ := bb.Write(e.Buf) // never fails unless bb is nil
 		e.baseOffset += int64(n)
 
 		// If the internal buffer of bytes.Buffer is too small,
@@ -172,23 +172,23 @@ func (e *Encoder) flush() error {
 			bb.Grow(avail + 1)
 		}
 
-		e.buf = bb.AvailableBuffer()
+		e.Buf = bb.AvailableBuffer()
 		return nil
 	}
 
 	// Flush the internal buffer to the underlying io.Writer.
-	n, err := e.wr.Write(e.buf)
+	n, err := e.wr.Write(e.Buf)
 	e.baseOffset += int64(n)
 	if err != nil {
 		// In the event of an error, preserve the unflushed portion.
 		// Thus, write errors aren't fatal so long as the io.Writer
 		// maintains consistent state after errors.
 		if n > 0 {
-			e.buf = e.buf[:copy(e.buf, e.buf[n:])]
+			e.Buf = e.Buf[:copy(e.Buf, e.Buf[n:])]
 		}
 		return &ioError{action: "write", err: err}
 	}
-	e.buf = e.buf[:0]
+	e.Buf = e.Buf[:0]
 
 	// Check whether to grow the buffer.
 	// Note that cap(e.buf) may already exceed maxBufferSize since
@@ -197,12 +197,12 @@ func (e *Encoder) flush() error {
 	const growthSizeFactor = 2 // higher value is faster
 	const growthRateFactor = 2 // higher value is slower
 	// By default, grow if below the maximum buffer size.
-	grow := cap(e.buf) <= maxBufferSize/growthSizeFactor
+	grow := cap(e.Buf) <= maxBufferSize/growthSizeFactor
 	// Growing can be expensive, so only grow
 	// if a sufficient number of bytes have been processed.
-	grow = grow && int64(cap(e.buf)) < e.previousOffsetEnd()/growthRateFactor
+	grow = grow && int64(cap(e.Buf)) < e.previousOffsetEnd()/growthRateFactor
 	if grow {
-		e.buf = make([]byte, 0, cap(e.buf)*growthSizeFactor)
+		e.Buf = make([]byte, 0, cap(e.Buf)*growthSizeFactor)
 	}
 
 	return nil
@@ -218,24 +218,24 @@ func (e *encodeBuffer) injectSyntacticErrorWithPosition(err error, pos int) erro
 	return err
 }
 
-func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + len64(e.buf) }
-func (e *encodeBuffer) unflushedBuffer() []byte  { return e.buf }
+func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.Buf)) }
+func (e *encodeBuffer) unflushedBuffer() []byte  { return e.Buf }
 
 // avoidFlush indicates whether to avoid flushing to ensure there is always
 // enough in the buffer to unwrite the last object member if it were empty.
-func (e *Encoder) avoidFlush() bool {
+func (e *encoderState) avoidFlush() bool {
 	switch {
-	case e.tokens.last.length() == 0:
+	case e.Tokens.Last.Length() == 0:
 		// Never flush after ObjectStart or ArrayStart since we don't know yet
 		// if the object or array will end up being empty.
 		return true
-	case e.tokens.last.needObjectValue():
+	case e.Tokens.Last.needObjectValue():
 		// Never flush before the object value since we don't know yet
 		// if the object value will end up being empty.
 		return true
-	case e.tokens.last.needObjectName() && len(e.buf) >= 2:
+	case e.Tokens.Last.NeedObjectName() && len(e.Buf) >= 2:
 		// Never flush after the object value if it does turn out to be empty.
-		switch string(e.buf[len(e.buf)-2:]) {
+		switch string(e.Buf[len(e.Buf)-2:]) {
 		case `ll`, `""`, `{}`, `[]`: // last two bytes of every empty value
 			return true
 		}
@@ -243,10 +243,10 @@ func (e *Encoder) avoidFlush() bool {
 	return false
 }
 
-// unwriteEmptyObjectMember unwrites the last object member if it is empty
+// UnwriteEmptyObjectMember unwrites the last object member if it is empty
 // and reports whether it performed an unwrite operation.
-func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
-	if last := e.tokens.last; !last.isObject() || !last.needObjectName() || last.length() == 0 {
+func (e *encoderState) UnwriteEmptyObjectMember(prevName *string) bool {
+	if last := e.Tokens.Last; !last.isObject() || !last.NeedObjectName() || last.Length() == 0 {
 		panic("BUG: must be called on an object after writing a value")
 	}
 
@@ -279,87 +279,51 @@ func (e *Encoder) unwriteEmptyObjectMember(prevName *string) bool {
 
 	// Unwrite the value, whitespace, colon, name, whitespace, and comma.
 	b = b[:len(b)-n]
-	b = trimSuffixWhitespace(b)
-	b = trimSuffixByte(b, ':')
-	b = trimSuffixString(b)
-	b = trimSuffixWhitespace(b)
-	b = trimSuffixByte(b, ',')
-	e.buf = b // store back truncated unflushed buffer
+	b = jsonwire.TrimSuffixWhitespace(b)
+	b = jsonwire.TrimSuffixByte(b, ':')
+	b = jsonwire.TrimSuffixString(b)
+	b = jsonwire.TrimSuffixWhitespace(b)
+	b = jsonwire.TrimSuffixByte(b, ',')
+	e.Buf = b // store back truncated unflushed buffer
 
 	// Undo state changes.
-	e.tokens.last.decrement() // for object member value
-	e.tokens.last.decrement() // for object member name
-	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-		if e.tokens.last.isActiveNamespace() {
-			e.namespaces.last().removeLast()
+	e.Tokens.Last.decrement() // for object member value
+	e.Tokens.Last.decrement() // for object member name
+	if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+		if e.Tokens.Last.isActiveNamespace() {
+			e.Namespaces.Last().removeLast()
 		}
-		e.names.clearLast()
+		e.Names.clearLast()
 		if prevName != nil {
-			e.names.copyQuotedBuffer(e.buf) // required by objectNameStack.replaceLastUnquotedName
-			e.names.replaceLastUnquotedName(*prevName)
+			e.Names.copyQuotedBuffer(e.Buf) // required by objectNameStack.replaceLastUnquotedName
+			e.Names.replaceLastUnquotedName(*prevName)
 		}
 	}
 	return true
 }
 
-// unwriteOnlyObjectMemberName unwrites the only object member name
+// UnwriteOnlyObjectMemberName unwrites the only object member name
 // and returns the unquoted name.
-func (e *Encoder) unwriteOnlyObjectMemberName() string {
-	if last := e.tokens.last; !last.isObject() || last.length() != 1 {
+func (e *encoderState) UnwriteOnlyObjectMemberName() string {
+	if last := e.Tokens.Last; !last.isObject() || last.Length() != 1 {
 		panic("BUG: must be called on an object after writing first name")
 	}
 
 	// Unwrite the name and whitespace.
-	b := trimSuffixString(e.buf)
-	isVerbatim := bytes.IndexByte(e.buf[len(b):], '\\') < 0
-	name := string(unescapeStringMayCopy(e.buf[len(b):], isVerbatim))
-	e.buf = trimSuffixWhitespace(b)
+	b := jsonwire.TrimSuffixString(e.Buf)
+	isVerbatim := bytes.IndexByte(e.Buf[len(b):], '\\') < 0
+	name := string(jsonwire.UnquoteMayCopy(e.Buf[len(b):], isVerbatim))
+	e.Buf = jsonwire.TrimSuffixWhitespace(b)
 
 	// Undo state changes.
-	e.tokens.last.decrement()
-	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-		if e.tokens.last.isActiveNamespace() {
-			e.namespaces.last().removeLast()
+	e.Tokens.Last.decrement()
+	if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+		if e.Tokens.Last.isActiveNamespace() {
+			e.Namespaces.Last().removeLast()
 		}
-		e.names.clearLast()
+		e.Names.clearLast()
 	}
 	return name
-}
-
-func trimSuffixWhitespace(b []byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	n := len(b) - 1
-	for n >= 0 && (b[n] == ' ' || b[n] == '\t' || b[n] == '\r' || b[n] == '\n') {
-		n--
-	}
-	return b[:n+1]
-}
-
-func trimSuffixString(b []byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if len(b) > 0 && b[len(b)-1] == '"' {
-		b = b[:len(b)-1]
-	}
-	for len(b) >= 2 && !(b[len(b)-1] == '"' && b[len(b)-2] != '\\') {
-		b = b[:len(b)-1] // trim all characters except an unescaped quote
-	}
-	if len(b) > 0 && b[len(b)-1] == '"' {
-		b = b[:len(b)-1]
-	}
-	return b
-}
-
-func hasSuffixByte(b []byte, c byte) bool {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	return len(b) > 0 && b[len(b)-1] == c
-}
-
-func trimSuffixByte(b []byte, c byte) []byte {
-	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if len(b) > 0 && b[len(b)-1] == c {
-		return b[:len(b)-1]
-	}
-	return b
 }
 
 // WriteToken writes the next token and advances the internal write offset.
@@ -372,12 +336,15 @@ func trimSuffixByte(b []byte, c byte) []byte {
 // the internal state remains unchanged.
 // The offset reported in SyntacticError will be relative to the OutputOffset.
 func (e *Encoder) WriteToken(t Token) error {
+	return e.s.WriteToken(t)
+}
+func (e *encoderState) WriteToken(t Token) error {
 	k := t.Kind()
-	b := e.buf // use local variable to avoid mutating e in case of error
+	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.tokens.mayAppendDelim(b, k)
-	if e.options.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, k)
+	if e.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -387,59 +354,59 @@ func (e *Encoder) WriteToken(t Token) error {
 	switch k {
 	case 'n':
 		b = append(b, "null"...)
-		err = e.tokens.appendLiteral()
+		err = e.Tokens.appendLiteral()
 	case 'f':
 		b = append(b, "false"...)
-		err = e.tokens.appendLiteral()
+		err = e.Tokens.appendLiteral()
 	case 't':
 		b = append(b, "true"...)
-		err = e.tokens.appendLiteral()
+		err = e.Tokens.appendLiteral()
 	case '"':
 		n0 := len(b) // offset before calling t.appendString
-		if b, err = t.appendString(b, !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes); err != nil {
+		if b, err = t.appendString(b, !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes); err != nil {
 			break
 		}
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
-			if !e.tokens.last.isValidNamespace() {
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
+			if !e.Tokens.Last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
+			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[n0:], false) {
 				err = newDuplicateNameError(b[n0:])
 				break
 			}
-			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+			e.Names.ReplaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
-		err = e.tokens.appendString()
+		err = e.Tokens.appendString()
 	case '0':
-		if b, err = t.appendNumber(b, e.options.Flags.Get(jsonflags.CanonicalizeNumbers)); err != nil {
+		if b, err = t.appendNumber(b, e.Flags.Get(jsonflags.CanonicalizeNumbers)); err != nil {
 			break
 		}
-		err = e.tokens.appendNumber()
+		err = e.Tokens.appendNumber()
 	case '{':
 		b = append(b, '{')
-		if err = e.tokens.pushObject(); err != nil {
+		if err = e.Tokens.pushObject(); err != nil {
 			break
 		}
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			e.names.push()
-			e.namespaces.push()
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+			e.Names.push()
+			e.Namespaces.push()
 		}
 	case '}':
 		b = append(b, '}')
-		if err = e.tokens.popObject(); err != nil {
+		if err = e.Tokens.popObject(); err != nil {
 			break
 		}
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-			e.names.pop()
-			e.namespaces.pop()
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+			e.Names.pop()
+			e.Namespaces.pop()
 		}
 	case '[':
 		b = append(b, '[')
-		err = e.tokens.pushArray()
+		err = e.Tokens.pushArray()
 	case ']':
 		b = append(b, ']')
-		err = e.tokens.popArray()
+		err = e.Tokens.popArray()
 	default:
 		err = &SyntacticError{str: "invalid json.Token"}
 	}
@@ -448,28 +415,28 @@ func (e *Encoder) WriteToken(t Token) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.buf = b
-	if e.needFlush() {
-		return e.flush()
+	e.Buf = b
+	if e.NeedFlush() {
+		return e.Flush()
 	}
 	return nil
 }
 
 const (
-	rawIntNumber  = -1
-	rawUintNumber = -2
+	rawIntNumber  = 'i'
+	rawUintNumber = 'u'
 )
 
-// writeNumber is specialized version of WriteToken, but optimized for numbers.
+// WriteNumber is specialized version of WriteToken, but optimized for numbers.
 // As a special-case, if bits is -1 or -2, it will treat v as
 // the raw-encoded bits of an int64 or uint64, respectively.
 // It is only called from arshal_default.go.
-func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
-	b := e.buf // use local variable to avoid mutating e in case of error
+func (e *encoderState) WriteNumber(v float64, bits int, quote bool) error {
+	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.tokens.mayAppendDelim(b, '0')
-	if e.options.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, '0')
+	if e.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, '0')
 	}
 	pos := len(b) // offset before the token
@@ -484,29 +451,29 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 		case rawUintNumber:
 			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
 		default:
-			b = appendNumber(b, v, bits)
+			b = jsonwire.AppendFloat(b, v, bits)
 		}
 		b = append(b, '"')
 
 		// Escape the string if necessary.
-		if e.escapeRunes.escapeFunc != nil {
+		if e.EscapeRunes.HasEscapeFunc() {
 			b2 := append(e.unusedCache, b[n0+len(`"`):len(b)-len(`"`)]...)
-			b, _ = appendString(b[:n0], string(b2), false, e.escapeRunes)
+			b, _ = jsonwire.AppendQuote(b[:n0], string(b2), false, e.EscapeRunes)
 			e.unusedCache = b2[:0]
 		}
 
 		// Update the state machine.
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
-			if !e.tokens.last.isValidNamespace() {
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
+			if !e.Tokens.Last.isValidNamespace() {
 				return errInvalidNamespace
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[n0:], false) {
+			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[n0:], false) {
 				err := newDuplicateNameError(b[n0:])
 				return e.injectSyntacticErrorWithPosition(err, pos)
 			}
-			e.names.replaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+			e.Names.ReplaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
 		}
-		if err := e.tokens.appendString(); err != nil {
+		if err := e.Tokens.appendString(); err != nil {
 			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
 	} else {
@@ -516,17 +483,17 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 		case rawUintNumber:
 			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
 		default:
-			b = appendNumber(b, v, bits)
+			b = jsonwire.AppendFloat(b, v, bits)
 		}
-		if err := e.tokens.appendNumber(); err != nil {
+		if err := e.Tokens.appendNumber(); err != nil {
 			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.buf = b
-	if e.needFlush() {
-		return e.flush()
+	e.Buf = b
+	if e.NeedFlush() {
+		return e.Flush()
 	}
 	return nil
 }
@@ -542,27 +509,30 @@ func (e *Encoder) writeNumber(v float64, bits int, quote bool) error {
 // The offset reported in SyntacticError will be relative to the OutputOffset
 // plus the offset into v of any encountered syntax error.
 func (e *Encoder) WriteValue(v RawValue) error {
+	return e.s.WriteValue(v)
+}
+func (e *encoderState) WriteValue(v RawValue) error {
 	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
 
 	k := v.Kind()
-	b := e.buf // use local variable to avoid mutating e in case of error
+	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.tokens.mayAppendDelim(b, k)
-	if e.options.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, k)
+	if e.Flags.Get(jsonflags.Expand) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the value
 
 	// Append the value the output.
 	var n int
-	n += consumeWhitespace(v[n:])
-	b, m, err := e.reformatValue(b, v[n:], e.tokens.depth())
+	n += jsonwire.ConsumeWhitespace(v[n:])
+	b, m, err := e.reformatValue(b, v[n:], e.Tokens.Depth())
 	if err != nil {
 		return e.injectSyntacticErrorWithPosition(err, pos+n+m)
 	}
 	n += m
-	n += consumeWhitespace(v[n:])
+	n += jsonwire.ConsumeWhitespace(v[n:])
 	if len(v) > n {
 		err = newInvalidCharacterError(v[n:], "after top-level value")
 		return e.injectSyntacticErrorWithPosition(err, pos+n)
@@ -571,34 +541,34 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	// Append the kind to the state machine.
 	switch k {
 	case 'n', 'f', 't':
-		err = e.tokens.appendLiteral()
+		err = e.Tokens.appendLiteral()
 	case '"':
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && e.tokens.last.needObjectName() {
-			if !e.tokens.last.isValidNamespace() {
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
+			if !e.Tokens.Last.isValidNamespace() {
 				err = errInvalidNamespace
 				break
 			}
-			if e.tokens.last.isActiveNamespace() && !e.namespaces.last().insertQuoted(b[pos:], false) {
+			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
 				err = newDuplicateNameError(b[pos:])
 				break
 			}
-			e.names.replaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
+			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
-		err = e.tokens.appendString()
+		err = e.Tokens.appendString()
 	case '0':
-		err = e.tokens.appendNumber()
+		err = e.Tokens.appendNumber()
 	case '{':
-		if err = e.tokens.pushObject(); err != nil {
+		if err = e.Tokens.pushObject(); err != nil {
 			break
 		}
-		if err = e.tokens.popObject(); err != nil {
+		if err = e.Tokens.popObject(); err != nil {
 			panic("BUG: popObject should never fail immediately after pushObject: " + err.Error())
 		}
 	case '[':
-		if err = e.tokens.pushArray(); err != nil {
+		if err = e.Tokens.pushArray(); err != nil {
 			break
 		}
-		if err = e.tokens.popArray(); err != nil {
+		if err = e.Tokens.popArray(); err != nil {
 			panic("BUG: popArray should never fail immediately after pushArray: " + err.Error())
 		}
 	}
@@ -607,32 +577,32 @@ func (e *Encoder) WriteValue(v RawValue) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.buf = b
-	if e.needFlush() {
-		return e.flush()
+	e.Buf = b
+	if e.NeedFlush() {
+		return e.Flush()
 	}
 	return nil
 }
 
 // appendWhitespace appends whitespace that immediately precedes the next token.
-func (e *Encoder) appendWhitespace(b []byte, next Kind) []byte {
-	if e.tokens.needDelim(next) == ':' {
+func (e *encoderState) appendWhitespace(b []byte, next Kind) []byte {
+	if e.Tokens.needDelim(next) == ':' {
 		return append(b, ' ')
 	} else {
-		return e.appendIndent(b, e.tokens.needIndent(next))
+		return e.AppendIndent(b, e.Tokens.NeedIndent(next))
 	}
 }
 
-// appendIndent appends the appropriate number of indentation characters
+// AppendIndent appends the appropriate number of indentation characters
 // for the current nested level, n.
-func (e *Encoder) appendIndent(b []byte, n int) []byte {
+func (e *encoderState) AppendIndent(b []byte, n int) []byte {
 	if n == 0 {
 		return b
 	}
 	b = append(b, '\n')
-	b = append(b, e.options.IndentPrefix...)
+	b = append(b, e.IndentPrefix...)
 	for ; n > 1; n-- {
-		b = append(b, e.options.Indent...)
+		b = append(b, e.Indent...)
 	}
 	return b
 }
@@ -640,42 +610,42 @@ func (e *Encoder) appendIndent(b []byte, n int) []byte {
 // reformatValue parses a JSON value from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, int, error) {
-	// TODO: Should this update valueFlags as input?
+func (e *encoderState) reformatValue(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+	// TODO: Should this update ValueFlags as input?
 	if len(src) == 0 {
 		return dst, 0, io.ErrUnexpectedEOF
 	}
 	switch k := Kind(src[0]).normalize(); k {
 	case 'n':
-		if consumeNull(src) == 0 {
-			n, err := consumeLiteral(src, "null")
+		if jsonwire.ConsumeNull(src) == 0 {
+			n, err := jsonwire.ConsumeLiteral(src, "null")
 			return dst, n, err
 		}
 		return append(dst, "null"...), len("null"), nil
 	case 'f':
-		if consumeFalse(src) == 0 {
-			n, err := consumeLiteral(src, "false")
+		if jsonwire.ConsumeFalse(src) == 0 {
+			n, err := jsonwire.ConsumeLiteral(src, "false")
 			return dst, n, err
 		}
 		return append(dst, "false"...), len("false"), nil
 	case 't':
-		if consumeTrue(src) == 0 {
-			n, err := consumeLiteral(src, "true")
+		if jsonwire.ConsumeTrue(src) == 0 {
+			n, err := jsonwire.ConsumeLiteral(src, "true")
 			return dst, n, err
 		}
 		return append(dst, "true"...), len("true"), nil
 	case '"':
-		if n := consumeSimpleString(src); n > 0 && e.escapeRunes.escapeFunc == nil {
+		if n := jsonwire.ConsumeSimpleString(src); n > 0 && !e.EscapeRunes.HasEscapeFunc() {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
 			return dst, n, nil
 		}
-		return reformatString(dst, src, !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes)
+		return jsonwire.ReformatString(dst, src, !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes)
 	case '0':
-		if n := consumeSimpleNumber(src); n > 0 && !e.options.Flags.Get(jsonflags.CanonicalizeNumbers) {
+		if n := jsonwire.ConsumeSimpleNumber(src); n > 0 && !e.Flags.Get(jsonflags.CanonicalizeNumbers) {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple numbers verbatim
 			return dst, n, nil
 		}
-		return reformatNumber(dst, src, e.options.Flags.Get(jsonflags.CanonicalizeNumbers))
+		return jsonwire.ReformatNumber(dst, src, e.Flags.Get(jsonflags.CanonicalizeNumbers))
 	case '{':
 		return e.reformatObject(dst, src, depth)
 	case '[':
@@ -688,7 +658,7 @@ func (e *Encoder) reformatValue(dst []byte, src RawValue, depth int) ([]byte, in
 // reformatObject parses a JSON object from the start of src and
 // appends it to the end of src, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+func (e *encoderState) reformatObject(dst []byte, src RawValue, depth int) ([]byte, int, error) {
 	// Append object start.
 	if len(src) == 0 || src[0] != '{' {
 		panic("BUG: reformatObject must be called with a buffer that starts with '{'")
@@ -699,7 +669,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 	n := len("{")
 
 	// Append (possible) object end.
-	n += consumeWhitespace(src[n:])
+	n += jsonwire.ConsumeWhitespace(src[n:])
 	if uint(len(src)) <= uint(n) {
 		return dst, n, io.ErrUnexpectedEOF
 	}
@@ -711,40 +681,40 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 
 	var err error
 	var names *objectNamespace
-	if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) {
-		e.namespaces.push()
-		defer e.namespaces.pop()
-		names = e.namespaces.last()
+	if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+		e.Namespaces.push()
+		defer e.Namespaces.pop()
+		names = e.Namespaces.Last()
 	}
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.options.Flags.Get(jsonflags.Expand) {
-			dst = e.appendIndent(dst, depth)
+		if e.Flags.Get(jsonflags.Expand) {
+			dst = e.AppendIndent(dst, depth)
 		}
 
 		// Append object name.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
-		m := consumeSimpleString(src[n:])
-		if m > 0 && e.escapeRunes.escapeFunc == nil {
+		m := jsonwire.ConsumeSimpleString(src[n:])
+		if m > 0 && !e.EscapeRunes.HasEscapeFunc() {
 			dst = append(dst, src[n:n+m]...)
 		} else {
-			dst, m, err = reformatString(dst, src[n:], !e.options.Flags.Get(jsonflags.AllowInvalidUTF8), e.options.Flags.Get(jsonflags.PreserveRawStrings), e.escapeRunes)
+			dst, m, err = jsonwire.ReformatString(dst, src[n:], !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes)
 			if err != nil {
 				return dst, n + m, err
 			}
 		}
 		// TODO: Specify whether the name is verbatim or not.
-		if !e.options.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(src[n:n+m], false) {
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(src[n:n+m], false) {
 			return dst, n, newDuplicateNameError(src[n : n+m])
 		}
 		n += m
 
 		// Append colon.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
@@ -753,12 +723,12 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 		}
 		dst = append(dst, ':')
 		n += len(":")
-		if e.options.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Expand) {
 			dst = append(dst, ' ')
 		}
 
 		// Append object value.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
@@ -769,7 +739,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 		n += m
 
 		// Append comma or object end.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
@@ -779,8 +749,8 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 			n += len(",")
 			continue
 		case '}':
-			if e.options.Flags.Get(jsonflags.Expand) {
-				dst = e.appendIndent(dst, depth-1)
+			if e.Flags.Get(jsonflags.Expand) {
+				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, '}')
 			n += len("}")
@@ -794,7 +764,7 @@ func (e *Encoder) reformatObject(dst []byte, src RawValue, depth int) ([]byte, i
 // reformatArray parses a JSON array from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+func (e *encoderState) reformatArray(dst []byte, src RawValue, depth int) ([]byte, int, error) {
 	// Append array start.
 	if len(src) == 0 || src[0] != '[' {
 		panic("BUG: reformatArray must be called with a buffer that starts with '['")
@@ -805,7 +775,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 	n := len("[")
 
 	// Append (possible) array end.
-	n += consumeWhitespace(src[n:])
+	n += jsonwire.ConsumeWhitespace(src[n:])
 	if uint(len(src)) <= uint(n) {
 		return dst, n, io.ErrUnexpectedEOF
 	}
@@ -819,12 +789,12 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.options.Flags.Get(jsonflags.Expand) {
-			dst = e.appendIndent(dst, depth)
+		if e.Flags.Get(jsonflags.Expand) {
+			dst = e.AppendIndent(dst, depth)
 		}
 
 		// Append array value.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
@@ -836,7 +806,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 		n += m
 
 		// Append comma or array end.
-		n += consumeWhitespace(src[n:])
+		n += jsonwire.ConsumeWhitespace(src[n:])
 		if uint(len(src)) <= uint(n) {
 			return dst, n, io.ErrUnexpectedEOF
 		}
@@ -846,8 +816,8 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 			n += len(",")
 			continue
 		case ']':
-			if e.options.Flags.Get(jsonflags.Expand) {
-				dst = e.appendIndent(dst, depth-1)
+			if e.Flags.Get(jsonflags.Expand) {
+				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, ']')
 			n += len("]")
@@ -863,7 +833,7 @@ func (e *Encoder) reformatArray(dst []byte, src RawValue, depth int) ([]byte, in
 // The number of bytes actually written to the underlying io.Writer may be less
 // than this offset due to internal buffering effects.
 func (e *Encoder) OutputOffset() int64 {
-	return e.previousOffsetEnd()
+	return e.s.previousOffsetEnd()
 }
 
 // UnusedBuffer returns a zero-length buffer with a possible non-zero capacity.
@@ -886,11 +856,11 @@ func (e *Encoder) UnusedBuffer() []byte {
 	// without using unsafe.Pointer. Thus, we just return a different buffer.
 	// Should this ever alias e.buf, we need to consider how it operates with
 	// the specialized performance optimization for bytes.Buffer.
-	n := 1 << bits.Len(uint(e.maxValue|63)) // fast approximation for max length
-	if cap(e.unusedCache) < n {
-		e.unusedCache = make([]byte, 0, n)
+	n := 1 << bits.Len(uint(e.s.maxValue|63)) // fast approximation for max length
+	if cap(e.s.unusedCache) < n {
+		e.s.unusedCache = make([]byte, 0, n)
 	}
-	return e.unusedCache
+	return e.s.unusedCache
 }
 
 // StackDepth returns the depth of the state machine for written JSON data.
@@ -900,7 +870,7 @@ func (e *Encoder) UnusedBuffer() []byte {
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (e *Encoder) StackDepth() int {
 	// NOTE: Keep in sync with Decoder.StackDepth.
-	return e.tokens.depth() - 1
+	return e.s.Tokens.Depth() - 1
 }
 
 // StackIndex returns information about the specified stack level.
@@ -917,13 +887,13 @@ func (e *Encoder) StackDepth() int {
 // A complete JSON object must have an even length.
 func (e *Encoder) StackIndex(i int) (Kind, int) {
 	// NOTE: Keep in sync with Decoder.StackIndex.
-	switch s := e.tokens.index(i); {
+	switch s := e.s.Tokens.index(i); {
 	case i > 0 && s.isObject():
-		return '{', s.length()
+		return '{', s.Length()
 	case i > 0 && s.isArray():
-		return '[', s.length()
+		return '[', s.Length()
 	default:
-		return 0, s.length()
+		return 0, s.Length()
 	}
 }
 
@@ -931,221 +901,6 @@ func (e *Encoder) StackIndex(i int) (Kind, int) {
 // Object names are only present if AllowDuplicateNames is false, otherwise
 // object members are represented using their index within the object.
 func (e *Encoder) StackPointer() string {
-	e.names.copyQuotedBuffer(e.buf)
-	return string(e.appendStackPointer(nil))
-}
-
-// appendString appends src to dst as a JSON string per RFC 7159, section 7.
-//
-// If validateUTF8 is specified, this rejects input that contains invalid UTF-8
-// otherwise invalid bytes are replaced with the Unicode replacement character.
-// If escapeRune is provided, it specifies which runes to escape using
-// hexadecimal sequences. If nil, the shortest representable form is used,
-// which is also the canonical form for strings (RFC 8785, section 3.2.2.2).
-//
-// Note that this API allows full control over the formatting of strings
-// except for whether a forward solidus '/' may be formatted as '\/' and
-// the casing of hexadecimal Unicode escape sequences.
-func appendString[Bytes ~[]byte | ~string](dst []byte, src Bytes, validateUTF8 bool, escape *escapeRunes) ([]byte, error) {
-	var i, n int
-	var hasInvalidUTF8 bool
-	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
-	dst = append(dst, '"')
-	if escape == nil || escape.canonical {
-		// Optimize for canonical formatting.
-		for uint(len(src)) > uint(n) {
-			// Handle single-byte ASCII.
-			if c := src[n]; c < utf8.RuneSelf {
-				n++
-				if escapeCanonical.escapeASCII(c) {
-					dst = append(dst, src[i:n-1]...)
-					dst = appendEscapedASCII(dst, c)
-					i = n
-				}
-				continue
-			}
-
-			// Handle multi-byte Unicode.
-			_, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:])))
-			n += rn
-			if rn == 1 { // must be utf8.RuneError since we already checked for single-byte ASCII
-				hasInvalidUTF8 = true
-				dst = append(dst, src[i:n-rn]...)
-				dst = append(dst, "\ufffd"...)
-				i = n
-			}
-		}
-	} else {
-		// Handle arbitrary escaping.
-		for uint(len(src)) > uint(n) {
-			// Handle single-byte ASCII.
-			if c := src[n]; c < utf8.RuneSelf {
-				n++
-				if escape.escapeASCII(c) {
-					dst = append(dst, src[i:n-1]...)
-					if escape.escapeASCIIAsUTF16(c) {
-						dst = appendEscapedUTF16(dst, uint16(c))
-					} else {
-						dst = appendEscapedASCII(dst, c)
-					}
-					i = n
-				}
-				continue
-			}
-
-			// Handle multi-byte Unicode.
-			switch r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:]))); {
-			case r == utf8.RuneError && rn == 1:
-				hasInvalidUTF8 = true
-				dst = append(dst, src[i:n]...)
-				if escape.escapeRune(r) {
-					dst = append(dst, `\ufffd`...)
-				} else {
-					dst = append(dst, "\ufffd"...)
-				}
-				n += rn
-				i = n
-			case escape.escapeRune(r):
-				dst = append(dst, src[i:n]...)
-				dst = appendEscapedUnicode(dst, r)
-				n += rn
-				i = n
-			default:
-				n += rn
-			}
-		}
-	}
-	dst = append(dst, src[i:n]...)
-	dst = append(dst, '"')
-	if validateUTF8 && hasInvalidUTF8 {
-		return dst, errInvalidUTF8
-	}
-	return dst, nil
-}
-
-func appendEscapedASCII(dst []byte, c byte) []byte {
-	switch c {
-	case '"', '\\':
-		dst = append(dst, '\\', c)
-	case '\b':
-		dst = append(dst, "\\b"...)
-	case '\f':
-		dst = append(dst, "\\f"...)
-	case '\n':
-		dst = append(dst, "\\n"...)
-	case '\r':
-		dst = append(dst, "\\r"...)
-	case '\t':
-		dst = append(dst, "\\t"...)
-	default:
-		dst = appendEscapedUTF16(dst, uint16(c))
-	}
-	return dst
-}
-
-func appendEscapedUnicode(dst []byte, r rune) []byte {
-	if r1, r2 := utf16.EncodeRune(r); r1 != '\ufffd' && r2 != '\ufffd' {
-		dst = appendEscapedUTF16(dst, uint16(r1))
-		dst = appendEscapedUTF16(dst, uint16(r2))
-	} else {
-		dst = appendEscapedUTF16(dst, uint16(r))
-	}
-	return dst
-}
-
-func appendEscapedUTF16(dst []byte, x uint16) []byte {
-	const hex = "0123456789abcdef"
-	return append(dst, '\\', 'u', hex[(x>>12)&0xf], hex[(x>>8)&0xf], hex[(x>>4)&0xf], hex[(x>>0)&0xf])
-}
-
-// reformatString consumes a JSON string from src and appends it to dst,
-// reformatting it if necessary for the given escapeRune parameter.
-// It returns the appended output and the number of consumed input bytes.
-func reformatString(dst, src []byte, validateUTF8, preserveRaw bool, escape *escapeRunes) ([]byte, int, error) {
-	// TODO: Should this update valueFlags as input?
-	var flags valueFlags
-	n, err := consumeString(&flags, src, validateUTF8)
-	if err != nil {
-		return dst, n, err
-	}
-	if preserveRaw || (escape.canonical && flags.isCanonical()) {
-		dst = append(dst, src[:n]...) // copy the string verbatim
-		return dst, n, nil
-	}
-
-	// TODO: Implement a direct, raw-to-raw reformat for strings.
-	// If the escapeRune option would have resulted in no changes to the output,
-	// it would be faster to simply append src to dst without going through
-	// an intermediary representation in a separate buffer.
-	b, _ := unescapeString(nil, src[:n])
-	dst, _ = appendString(dst, string(b), validateUTF8, escape)
-	return dst, n, nil
-}
-
-// appendNumber appends src to dst as a JSON number per RFC 7159, section 6.
-// It formats numbers similar to the ES6 number-to-string conversion.
-// See https://go.dev/issue/14135.
-//
-// The output is identical to ECMA-262, 6th edition, section 7.1.12.1 and with
-// RFC 8785, section 3.2.2.3 for 64-bit floating-point numbers except for -0,
-// which is formatted as -0 instead of just 0.
-//
-// For 32-bit floating-point numbers,
-// the output is a 32-bit equivalent of the algorithm.
-// Note that ECMA-262 specifies no algorithm for 32-bit numbers.
-func appendNumber(dst []byte, src float64, bits int) []byte {
-	if bits == 32 {
-		src = float64(float32(src))
-	}
-
-	abs := math.Abs(src)
-	fmt := byte('f')
-	if abs != 0 {
-		if bits == 64 && (float64(abs) < 1e-6 || float64(abs) >= 1e21) ||
-			bits == 32 && (float32(abs) < 1e-6 || float32(abs) >= 1e21) {
-			fmt = 'e'
-		}
-	}
-	dst = strconv.AppendFloat(dst, src, fmt, -1, bits)
-	if fmt == 'e' {
-		// Clean up e-09 to e-9.
-		n := len(dst)
-		if n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
-			dst[n-2] = dst[n-1]
-			dst = dst[:n-1]
-		}
-	}
-	return dst
-}
-
-// reformatNumber consumes a JSON string from src and appends it to dst,
-// canonicalizing it if specified.
-// It returns the appended output and the number of consumed input bytes.
-func reformatNumber(dst, src []byte, canonicalize bool) ([]byte, int, error) {
-	n, err := consumeNumber(src)
-	if err != nil {
-		return dst, n, err
-	}
-	if !canonicalize {
-		dst = append(dst, src[:n]...) // copy the number verbatim
-		return dst, n, nil
-	}
-
-	// Canonicalize the number per RFC 8785, section 3.2.2.3.
-	// As an optimization, we can copy integer numbers below 2⁵³ verbatim.
-	const maxExactIntegerDigits = 16 // len(strconv.AppendUint(nil, 1<<53, 10))
-	if n < maxExactIntegerDigits && consumeSimpleNumber(src[:n]) == n {
-		dst = append(dst, src[:n]...) // copy the number verbatim
-		return dst, n, nil
-	}
-	fv, _ := strconv.ParseFloat(string(src[:n]), 64)
-	switch {
-	case fv == 0:
-		fv = 0 // normalize negative zero as just zero
-	case math.IsInf(fv, +1):
-		fv = +math.MaxFloat64
-	case math.IsInf(fv, -1):
-		fv = -math.MaxFloat64
-	}
-	return appendNumber(dst, fv, 64), n, nil
+	e.s.Names.copyQuotedBuffer(e.s.Buf)
+	return string(e.s.appendStackPointer(nil))
 }

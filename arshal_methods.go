@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 // Interfaces for custom serialization.
@@ -96,11 +97,12 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case jsonMarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			prevDepth, prevLength := enc.tokens.depthLength()
-			enc.options.Flags.Set(jsonflags.WithinArshalCall | 1)
+			xe := export.Encoder(enc)
+			prevDepth, prevLength := xe.Tokens.DepthLength()
+			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalJSONV2(enc, mo)
-			enc.options.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := enc.tokens.depthLength()
+			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
+			currDepth, currLength := xe.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
 				err = errors.New("must write exactly one JSON value")
 			}
@@ -138,7 +140,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			val := enc.UnusedBuffer()
-			val, err = appendString(val, string(s), true, nil)
+			val, err = jsonwire.AppendQuote(val, s, true, nil)
 			if err != nil {
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
@@ -155,11 +157,12 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case jsonUnmarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
-			prevDepth, prevLength := dec.tokens.depthLength()
-			dec.options.Flags.Set(jsonflags.WithinArshalCall | 1)
+			xd := export.Decoder(dec)
+			prevDepth, prevLength := xd.Tokens.DepthLength()
+			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalJSONV2(dec, uo)
-			dec.options.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := dec.tokens.depthLength()
+			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
+			currDepth, currLength := xd.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
 				err = errors.New("must read exactly one JSON value")
 			}
@@ -188,8 +191,9 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case textUnmarshalerType:
 		fncs.nonDefault = true
 		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
-			var flags valueFlags
-			val, err := dec.readValue(&flags)
+			xd := export.Decoder(dec)
+			var flags jsonwire.ValueFlags
+			val, err := xd.ReadValue(&flags)
 			if err != nil {
 				return err // must be a syntactic or I/O error
 			}
@@ -197,7 +201,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				err = errors.New("JSON value must be string type")
 				return &SemanticError{action: "unmarshal", JSONKind: val.Kind(), GoType: t, Err: err}
 			}
-			s := unescapeStringMayCopy(val, flags.isVerbatim())
+			s := jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			unmarshaler := va.addrWhen(needAddr).Interface().(encoding.TextUnmarshaler)
 			if err := unmarshaler.UnmarshalText(s); err != nil {
 				err = wrapSkipFunc(err, "unmarshal method")

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"fmt"
@@ -157,9 +157,9 @@ func TestStateMachine(t *testing.T) {
 				switch op := op.(type) {
 				case stackLengths:
 					var got []int
-					for i := 0; i < state.depth(); i++ {
+					for i := 0; i < state.Depth(); i++ {
 						e := state.index(i)
-						got = append(got, e.length())
+						got = append(got, e.Length())
 					}
 					want := []int(op)
 					if !reflect.DeepEqual(got, want) {
@@ -299,7 +299,7 @@ func TestObjectNamespace(t *testing.T) {
 					t.Fatalf("%d: objectNamespace{%v}.insert(%v) = %v, want %v", i, strings.Join(wantNames, " "), op.name, gotInserted, op.wantInserted)
 				}
 				if gotInserted {
-					b, _ := unescapeString(nil, []byte(op.name))
+					b, _ := AppendUnquote(nil, []byte(op.name))
 					wantNames = append(wantNames, string(b))
 				}
 			case removeLast:
@@ -326,63 +326,12 @@ func TestObjectNamespace(t *testing.T) {
 
 		// Insert a large number of names.
 		for i := 0; i < 64; i++ {
-			ns.insertUnquoted([]byte(fmt.Sprintf(`name%d`, i)))
+			ns.InsertUnquoted([]byte(fmt.Sprintf(`name%d`, i)))
 		}
 
 		// Verify that we did switch to using a Go map.
 		if ns.mapNames == nil {
 			t.Errorf("objectNamespace.mapNames = nil, want non-nil")
-		}
-	}
-}
-
-func TestUintSet(t *testing.T) {
-	type operation any // has | insert
-	type has struct {
-		in   uint
-		want bool
-	}
-	type insert struct {
-		in   uint
-		want bool
-	}
-
-	// Sequence of operations to perform (order matters).
-	ops := []operation{
-		has{0, false},
-		has{63, false},
-		has{64, false},
-		has{1234, false},
-		insert{3, true},
-		has{2, false},
-		has{3, true},
-		has{4, false},
-		has{63, false},
-		insert{3, false},
-		insert{63, true},
-		has{63, true},
-		insert{64, true},
-		insert{64, false},
-		has{64, true},
-		insert{3264, true},
-		has{3264, true},
-		insert{3, false},
-		has{3, true},
-	}
-
-	var us uintSet
-	for i, op := range ops {
-		switch op := op.(type) {
-		case has:
-			if got := us.has(op.in); got != op.want {
-				t.Fatalf("%d: uintSet.has(%v) = %v, want %v", i, op.in, got, op.want)
-			}
-		case insert:
-			if got := us.insert(op.in); got != op.want {
-				t.Fatalf("%d: uintSet.insert(%v) = %v, want %v", i, op.in, got, op.want)
-			}
-		default:
-			panic(fmt.Sprintf("unknown operation: %T", op))
 		}
 	}
 }

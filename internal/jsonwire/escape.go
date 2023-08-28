@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsonwire
 
 import "unicode/utf8"
 
 // Validity of these checked in TestEscapeRunesTables.
 var (
-	escapeCanonical = escapeRunes{
+	escapeCanonical = EscapeRunes{
 		asciiCache: [...]int8{
 			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -21,7 +21,7 @@ var (
 		},
 		canonical: true,
 	}
-	escapeHTMLJS = escapeRunes{
+	escapeHTMLJS = EscapeRunes{
 		asciiCache: [...]int8{
 			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 			-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -35,24 +35,26 @@ var (
 		escapeHTML: true,
 		escapeJS:   true,
 	}
-	escapeHTML = escapeRunes{asciiCache: escapeHTMLJS.asciiCache, escapeHTML: true}
-	escapeJS   = escapeRunes{asciiCache: escapeCanonical.asciiCache, escapeJS: true}
+	escapeHTML = EscapeRunes{asciiCache: escapeHTMLJS.asciiCache, escapeHTML: true}
+	escapeJS   = EscapeRunes{asciiCache: escapeCanonical.asciiCache, escapeJS: true}
 )
 
-// escapeRunes reports whether a rune must be escaped.
-type escapeRunes struct {
+// EscapeRunes reports whether a rune must be escaped.
+type EscapeRunes struct {
 	// asciiCache is a cache of whether an ASCII character must be escaped,
 	// where 0 means not escaped, -1 escapes with the short sequence (e.g., \n),
 	// and +1 escapes with the \uXXXX sequence.
 	asciiCache [utf8.RuneSelf]int8
 
-	canonical  bool            // whether there are no custom escapes
-	escapeHTML bool            // should escape '<', '>', and '&'
-	escapeJS   bool            // should escape '\u2028' and '\u2029'
+	canonical  bool // whether there are no custom escapes
+	escapeHTML bool // should escape '<', '>', and '&'
+	escapeJS   bool // should escape '\u2028' and '\u2029'
+
 	escapeFunc func(rune) bool // arbitrary runes that need escaping; may be nil
 }
 
-func makeEscapeRunes(html, js bool, fn func(rune) bool) *escapeRunes {
+// MakeEscapeRunes constructs an escape table for the escape parameters.
+func MakeEscapeRunes(html, js bool, fn func(rune) bool) *EscapeRunes {
 	if fn == nil {
 		switch [2]bool{html, js} {
 		case [2]bool{false, false}:
@@ -68,8 +70,8 @@ func makeEscapeRunes(html, js bool, fn func(rune) bool) *escapeRunes {
 	return makeEscapeRunesSlow(html, js, fn)
 }
 
-func makeEscapeRunesSlow(html, js bool, fn func(rune) bool) *escapeRunes {
-	e := escapeRunes{escapeHTML: html, escapeJS: js, escapeFunc: fn}
+func makeEscapeRunesSlow(html, js bool, fn func(rune) bool) *EscapeRunes {
+	e := EscapeRunes{escapeHTML: html, escapeJS: js, escapeFunc: fn}
 	e.canonical = !e.escapeHTML && !e.escapeJS && e.escapeFunc == nil
 
 	// Escape characters that are required by JSON.
@@ -98,19 +100,26 @@ func makeEscapeRunesSlow(html, js bool, fn func(rune) bool) *escapeRunes {
 	return &e
 }
 
-// escapeASCII reports whether c must be escaped.
+// IsCanonical reports whether this uses canonical escaping,
+// which is the minimal amount of escaping to produce a valid JSON string.
+func (e *EscapeRunes) IsCanonical() bool { return e.canonical }
+
+// HasEscapeFunc reports whether EscapeFunc is in use.
+func (e *EscapeRunes) HasEscapeFunc() bool { return e.escapeFunc != nil }
+
+// needEscapeASCII reports whether c must be escaped.
 // It assumes c < utf8.RuneSelf.
-func (e *escapeRunes) escapeASCII(c byte) bool {
+func (e *EscapeRunes) needEscapeASCII(c byte) bool {
 	return e.asciiCache[c] != 0
 }
 
-// escapeASCIIAsUTF16 reports whether c must be escaped using a \uXXXX sequence.
-func (e *escapeRunes) escapeASCIIAsUTF16(c byte) bool {
+// needEscapeASCIIAsUTF16 reports whether c must be escaped using a \uXXXX sequence.
+func (e *EscapeRunes) needEscapeASCIIAsUTF16(c byte) bool {
 	return e.asciiCache[c] > 0
 }
 
-// escapeRune reports whether r must be escaped.
+// needEscapeRune reports whether r must be escaped.
 // It assumes r >= utf8.RuneSelf.
-func (e *escapeRunes) escapeRune(r rune) bool {
+func (e *EscapeRunes) needEscapeRune(r rune) bool {
 	return (e.escapeJS && (r == '\u2028' || r == '\u2029')) || (e.escapeFunc != nil && e.escapeFunc(r))
 }

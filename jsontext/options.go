@@ -2,14 +2,23 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package jsontext
 
 import (
 	"strings"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
+
+// Options configures [NewEncoder], [Encoder.Reset], [NewDecoder],
+// and [Decoder.Reset] with specific features.
+// The Options type is identical to [encoding/json.Options] and
+// [encoding/json/v2.Options]. Options from the other packages may
+// be passed to functionality in this package, but are ignored.
+// Options from this packed may be used with the other packages.
+type Options = jsonopts.Options
 
 // AllowDuplicateNames specifies that JSON objects may contain
 // duplicate member names. Disabling the duplicate name check may provide
@@ -18,8 +27,6 @@ import (
 // which leaves the handling of duplicate names as unspecified behavior.
 //
 // This affects either encoding or decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.AllowDuplicateNames] instead.
 func AllowDuplicateNames(v bool) Options {
 	if v {
 		return jsonflags.AllowDuplicateNames | 1
@@ -34,8 +41,6 @@ func AllowDuplicateNames(v bool) Options {
 // RFC 7493, section 2.1, and RFC 8259, section 8.1.
 //
 // This affects either encoding or decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.AllowInvalidUTF8] instead.
 func AllowInvalidUTF8(v bool) Options {
 	if v {
 		return jsonflags.AllowInvalidUTF8 | 1
@@ -49,8 +54,6 @@ func AllowInvalidUTF8(v bool) Options {
 // the output is safe to embed within HTML.
 //
 // This only affects encoding and is ignored when decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.EscapeForHTML] instead.
 func EscapeForHTML(v bool) Options {
 	if v {
 		return jsonflags.EscapeForHTML | 1
@@ -64,8 +67,6 @@ func EscapeForHTML(v bool) Options {
 // the output is valid to embed within JavaScript. See RFC 8259, section 12.
 //
 // This only affects encoding and is ignored when decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.EscapeForJS] instead.
 func EscapeForJS(v bool) Options {
 	if v {
 		return jsonflags.EscapeForJS | 1
@@ -86,8 +87,6 @@ func EscapeForJS(v bool) Options {
 // which is also the formatting specified by RFC 8785, section 3.2.2.2.
 //
 // This only affects encoding and is ignored when decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.WithEscapeFunc] instead.
 func WithEscapeFunc(fn func(rune) bool) Options {
 	return jsonopts.EscapeFunc(fn)
 }
@@ -101,8 +100,6 @@ func WithEscapeFunc(fn func(rune) bool) Options {
 // where no whitespace is emitted between JSON values.
 //
 // This only affects encoding and is ignored when decoding.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.Expand] instead.
 func Expand(v bool) Options {
 	if v {
 		return jsonflags.Expand | 1
@@ -122,8 +119,6 @@ func Expand(v bool) Options {
 //
 // This only affects encoding and is ignored when decoding.
 // Use of this option implies [Expand] being set to true.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.WithIndent] instead.
 func WithIndent(indent string) Options {
 	// Fast-path: Return a constant for common indents, which avoids allocating.
 	// These are derived from analyzing the Go module proxy on 2023-07-01.
@@ -144,7 +139,7 @@ func WithIndent(indent string) Options {
 
 	// Otherwise, allocate for this unique value.
 	if s := strings.Trim(indent, " \t"); len(s) > 0 {
-		panic("json: invalid character " + quoteRune([]byte(s)) + " in indent")
+		panic("json: invalid character " + jsonwire.QuoteRune(s) + " in indent")
 	}
 	return jsonopts.Indent(indent)
 }
@@ -157,11 +152,9 @@ func WithIndent(indent string) Options {
 //
 // This only affects encoding and is ignored when decoding.
 // Use of this option implies [Expand] being set to true.
-//
-// Deprecated: Use [github.com/go-json-experiment/json/jsontext.WithIndentPrefix] instead.
 func WithIndentPrefix(prefix string) Options {
 	if s := strings.Trim(prefix, " \t"); len(s) > 0 {
-		panic("json: invalid character " + quoteRune([]byte(s)) + " in indent prefix")
+		panic("json: invalid character " + jsonwire.QuoteRune(s) + " in indent prefix")
 	}
 	return jsonopts.IndentPrefix(prefix)
 }
