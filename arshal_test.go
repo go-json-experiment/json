@@ -265,6 +265,19 @@ type (
 		Array     [1]string         `json:",omitzero,format:invalid"`
 		Interface any               `json:",omitzero,format:invalid"`
 	}
+	structDurationFormat struct {
+		D1  time.Duration
+		D2  time.Duration `json:",format:units"`
+		D3  time.Duration `json:",format:sec"`
+		D4  time.Duration `json:",string,format:sec"`
+		D5  time.Duration `json:",format:milli"`
+		D6  time.Duration `json:",string,format:milli"`
+		D7  time.Duration `json:",format:micro"`
+		D8  time.Duration `json:",string,format:micro"`
+		D9  time.Duration `json:",format:nano"`
+		D10 time.Duration `json:",string,format:nano"`
+		D11 time.Duration `json:",format:base60"`
+	}
 	structTimeFormat struct {
 		T1  time.Time
 		T2  time.Time `json:",format:ANSIC"`
@@ -287,6 +300,14 @@ type (
 		T19 time.Time `json:",format:TimeOnly"`
 		T20 time.Time `json:",format:'2006-01-02'"`
 		T21 time.Time `json:",format:'\"weird\"2006'"`
+		T22 time.Time `json:",format:unix"`
+		T23 time.Time `json:",string,format:unix"`
+		T24 time.Time `json:",format:unixmilli"`
+		T25 time.Time `json:",string,format:unixmilli"`
+		T26 time.Time `json:",format:unixmicro"`
+		T27 time.Time `json:",string,format:unixmicro"`
+		T28 time.Time `json:",format:unixnano"`
+		T29 time.Time `json:",string,format:unixnano"`
 	}
 	structInlined struct {
 		X             structInlinedL1 `json:",inline"`
@@ -3751,6 +3772,35 @@ func TestMarshal(t *testing.T) {
 		in:   time.Duration(0),
 		want: `"0s"`,
 	}, {
+		name: jsontest.Name("Duration/Format"),
+		opts: []Options{Expand(true)},
+		in: structDurationFormat{
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+		},
+		want: `{
+	"D1": "12h34m56.078090012s",
+	"D2": "12h34m56.078090012s",
+	"D3": 45296.078090012,
+	"D4": "45296.078090012",
+	"D5": 45296078.090012,
+	"D6": "45296078.090012",
+	"D7": 45296078090.012,
+	"D8": "45296078090.012",
+	"D9": 45296078090012,
+	"D10": "45296078090012",
+	"D11": "12:34:56.078090012"
+}`,
+	}, {
 		name: jsontest.Name("Time/Zero"),
 		in: struct {
 			T1 time.Time
@@ -3772,6 +3822,14 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Time/Format"),
 		opts: []Options{Expand(true)},
 		in: structTimeFormat{
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
+			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
@@ -3815,7 +3873,15 @@ func TestMarshal(t *testing.T) {
 	"T18": "1234-01-02",
 	"T19": "03:04:05",
 	"T20": "1234-01-02",
-	"T21": "\"weird\"1234"
+	"T21": "\"weird\"1234",
+	"T22": -23225777754.999999994,
+	"T23": "-23225777754.999999994",
+	"T24": -23225777754999.999994,
+	"T25": "-23225777754999.999994",
+	"T26": -23225777754999999.994,
+	"T27": "-23225777754999999.994",
+	"T28": -23225777754999999994,
+	"T29": "-23225777754999999994"
 }`,
 	}, {
 		name: jsontest.Name("Time/Format/Invalid"),
@@ -3823,7 +3889,7 @@ func TestMarshal(t *testing.T) {
 			T time.Time `json:",format:UndefinedConstant"`
 		}{},
 		want:    `{"T"`,
-		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
+		wantErr: &SemanticError{action: "marshal", GoType: timeTimeType, Err: errors.New(`invalid format flag: "UndefinedConstant"`)},
 	}, {
 		name: jsontest.Name("Time/Format/YearOverflow"),
 		in: struct {
@@ -7691,7 +7757,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(struct {
 			D time.Duration `json:",string,format:nanos"`
 		}{1}),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType, Err: fmt.Errorf(`cannot parse "+12345" as signed integer: %w`, strconv.ErrSyntax)},
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType, Err: fmt.Errorf(`invalid duration "+12345": %w`, strconv.ErrSyntax)},
 	}, {
 		name:  jsontest.Name("Duration/Nanos/Mismatch"),
 		inBuf: `{"D":"34293h33m9.123456789s"}`,
@@ -7703,15 +7769,14 @@ func TestUnmarshal(t *testing.T) {
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType},
 	}, {
-		name:  jsontest.Name("Duration/Nanos/Invalid"),
+		name:  jsontest.Name("Duration/Nanos"),
 		inBuf: `{"D":1.324}`,
 		inVal: addr(struct {
 			D time.Duration `json:",format:nanos"`
-		}{1}),
+		}{-1}),
 		want: addr(struct {
 			D time.Duration `json:",format:nanos"`
 		}{1}),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: timeDurationType, Err: fmt.Errorf(`cannot parse "1.324" as signed integer: %w`, strconv.ErrSyntax)},
 	}, {
 		name:  jsontest.Name("Duration/String/Mismatch"),
 		inBuf: `{"D":-123456789123456789}`,
@@ -7807,7 +7872,15 @@ func TestUnmarshal(t *testing.T) {
 			"T18": "1234-01-02",
 			"T19": "03:04:05",
 			"T20": "1234-01-02",
-			"T21": "\"weird\"1234"
+			"T21": "\"weird\"1234",
+			"T22": -23225777754.999999994,
+			"T23": "-23225777754.999999994",
+			"T24": -23225777754999.999994,
+			"T25": "-23225777754999.999994",
+			"T26": -23225777754999999.994,
+			"T27": "-23225777754999999.994",
+			"T28": -23225777754999999994,
+			"T29": "-23225777754999999994"
 		}`,
 		inVal: new(structTimeFormat),
 		want: addr(structTimeFormat{
@@ -7832,10 +7905,44 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(time.TimeOnly, "03:04:05"),
 			mustParseTime("2006-01-02", "1234-01-02"),
 			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
 		}),
 	}, {
+		name: jsontest.Name("Time/Format/UnixString"),
+		inBuf: `{
+			"T23": -23225777754.999999994,
+			"T25": -23225777754999.999994,
+			"T27": -23225777754999999.994,
+			"T29": -23225777754999999994
+		}`,
+		inVal: new(structTimeFormat),
+		want: addr(structTimeFormat{
+			T23: time.Unix(-23225777755, 6).UTC(),
+			T25: time.Unix(-23225777755, 6).UTC(),
+			T27: time.Unix(-23225777755, 6).UTC(),
+			T29: time.Unix(-23225777755, 6).UTC(),
+		}),
+	}, {
+		name: jsontest.Name("Time/Format/UnixString/Invalid"),
+		inBuf: `{
+			"T22": "-23225777754.999999994",
+			"T24": "-23225777754999.999994",
+			"T26": "-23225777754999999.994",
+			"T28": "-23225777754999999994"
+		}`,
+		inVal:   new(structTimeFormat),
+		want:    new(structTimeFormat),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeTimeType},
+	}, {
 		name:  jsontest.Name("Time/Format/Null"),
-		inBuf: `{"T1": null,"T2": null,"T3": null,"T4": null,"T5": null,"T6": null,"T7": null,"T8": null,"T9": null,"T10": null,"T11": null,"T12": null,"T13": null,"T14": null,"T15": null,"T16": null,"T17": null,"T18": null,"T19": null,"T20": null,"T21": null}`,
+		inBuf: `{"T1":null,"T2":null,"T3":null,"T4":null,"T5":null,"T6":null,"T7":null,"T8":null,"T9":null,"T10":null,"T11":null,"T12":null,"T13":null,"T14":null,"T15":null,"T16":null,"T17":null,"T18":null,"T19":null,"T20":null,"T21":null,"T22":null,"T23":null,"T24":null,"T25":null,"T26":null,"T27":null,"T28":null,"T29":null}`,
 		inVal: addr(structTimeFormat{
 			mustParseTime(time.RFC3339Nano, "1234-01-02T03:04:05.000000006Z"),
 			mustParseTime(time.ANSIC, "Mon Jan  2 03:04:05 1234"),
@@ -7858,6 +7965,14 @@ func TestUnmarshal(t *testing.T) {
 			mustParseTime(time.TimeOnly, "03:04:05"),
 			mustParseTime("2006-01-02", "1234-01-02"),
 			mustParseTime(`\"weird\"2006`, `\"weird\"1234`),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
+			time.Unix(-23225777755, 6).UTC(),
 		}),
 		want: new(structTimeFormat),
 	}, {
@@ -7883,7 +7998,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct {
 			T time.Time `json:",format:UndefinedConstant"`
 		}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: timeTimeType, Err: errors.New(`undefined format layout: UndefinedConstant`)},
+		wantErr: &SemanticError{action: "unmarshal", GoType: timeTimeType, Err: errors.New(`invalid format flag: "UndefinedConstant"`)},
 	}, {
 		name:    jsontest.Name("Time/Format/SingleDigitHour"),
 		inBuf:   `{"T":"2000-01-01T1:12:34Z"}`,

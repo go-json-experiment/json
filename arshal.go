@@ -140,12 +140,20 @@ func putStructOptions(o *jsonopts.Struct) {
 //     formatted in RFC 3339 with nanosecond precision.
 //     If the format matches one of the format constants declared
 //     in the time package (e.g., RFC1123), then that format is used.
+//     If the format is "unix", "unixmilli", "unixmicro", or "unixnano",
+//     then the timestamp is encoded as a JSON number of the number of seconds
+//     (or milliseconds, microseconds, or nanoseconds) since the Unix epoch,
+//     which is January 1st, 1970 at 00:00:00 UTC.
 //     Otherwise, the format is used as-is with [time.Time.Format] if non-empty.
 //
 //   - A Go [time.Duration] is encoded as a JSON string containing the duration
 //     formatted according to [time.Duration.String].
-//     If the format is "nanos", it is encoded as a JSON number
-//     containing the number of nanoseconds in the duration.
+//     If the format is "sec", "milli", "micro", or "nano",
+//     then the duration is encoded as a JSON number of the number of seconds
+//     (or milliseconds, microseconds, or nanoseconds) in the duration.
+//     If the format is "base60", it is encoded as a JSON string
+//     using the "H:MM:SS.SSSSSSSSS" representation.
+//     If the format is "units", it uses [time.Duration.String].
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
 //     have no default representation and result in a [SemanticError].
@@ -349,12 +357,20 @@ func marshalEncode(out *Encoder, in any, mo *jsonopts.Struct) (err error) {
 //     formatted in RFC 3339 with nanosecond precision.
 //     If the format matches one of the format constants declared in
 //     the time package (e.g., RFC1123), then that format is used for parsing.
+//     If the format is "unix", "unixmilli", "unixmicro", or "unixnano",
+//     then the timestamp is decoded from a JSON number of the number of seconds
+//     (or milliseconds, microseconds, or nanoseconds) since the Unix epoch,
+//     which is January 1st, 1970 at 00:00:00 UTC.
 //     Otherwise, the format is used as-is with [time.Time.Parse] if non-empty.
 //
 //   - A Go [time.Duration] is decoded from a JSON string by
 //     passing the decoded string to [time.ParseDuration].
-//     If the format is "nanos", it is instead decoded from a JSON number
-//     containing the number of nanoseconds in the duration.
+//     If the format is "sec", "milli", "micro", or "nano",
+//     then the duration is decoded from a JSON number of the number of seconds
+//     (or milliseconds, microseconds, or nanoseconds) in the duration.
+//     If the format is "base60", it is decoded from a JSON string
+//     using the "H:MM:SS.SSSSSSSSS" representation.
+//     If the format is "units", it uses [time.ParseDuration].
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
 //     have no default representation and result in a [SemanticError].

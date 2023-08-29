@@ -5,12 +5,17 @@
 package json
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"math"
+	"math/bits"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -32,35 +37,31 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	switch t {
 	case timeDurationType:
 		fncs.nonDefault = true
-		marshalNanos := fncs.marshal
 		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			xe := export.Encoder(enc)
+			var m durationArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
-				if mo.Format == "nanos" {
-					mo.Format = ""
-					return marshalNanos(enc, va, mo)
-				} else {
+				if !m.initFormat(mo.Format) {
 					return newInvalidFormatError("marshal", t, mo.Format)
 				}
 			}
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
 			td := *va.Addr().Interface().(*time.Duration)
 			b := enc.UnusedBuffer()
-			b = append(b, '"')
-			b = append(b, td.String()...) // never contains special characters
-			b = append(b, '"')
+			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
+				b = append(b, '"')
+			}
+			b = m.appendMarshal(b, td) // never contains special characters
+			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
+				b = append(b, '"')
+			}
 			return enc.WriteValue(b)
 		}
-		unmarshalNanos := fncs.unmarshal
 		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
-			// TODO: Should there be a flag that specifies that we can unmarshal
-			// from either form since there would be no ambiguity?
 			xd := export.Decoder(dec)
+			var u durationArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
-				if uo.Format == "nanos" {
-					uo.Format = ""
-					return unmarshalNanos(dec, va, uo)
-				} else {
+				if !u.initFormat(uo.Format) {
 					return newInvalidFormatError("unmarshal", t, uo.Format)
 				}
 			}
@@ -76,8 +77,21 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*td = time.Duration(0)
 				return nil
 			case '"':
+				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
+				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-				td2, err := time.ParseDuration(string(val))
+				td2, err := u.unmarshal(val)
+				if err != nil {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
+				}
+				*td = td2
+				return nil
+			case '0':
+				if !u.isNumeric() {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
+				}
+				td2, err := u.unmarshal(val)
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
@@ -89,60 +103,42 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	case timeTimeType:
 		fncs.nonDefault = true
-		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
+		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
 			xe := export.Encoder(enc)
-			format := time.RFC3339Nano
-			isRFC3339 := true
+			var m timeArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
-				var err error
-				format, isRFC3339, err = checkTimeFormat(mo.Format)
-				if err != nil {
-					return &SemanticError{action: "marshal", GoType: t, Err: err}
+				if !m.initFormat(mo.Format) {
+					return newInvalidFormatError("marshal", t, mo.Format)
 				}
 			}
 
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
 			tt := *va.Addr().Interface().(*time.Time)
 			b := enc.UnusedBuffer()
-			b = append(b, '"')
-			b = tt.AppendFormat(b, format)
-			b = append(b, '"')
-			if isRFC3339 {
-				// Not all Go timestamps can be represented as valid RFC 3339.
-				// Explicitly check for these edge cases.
-				// See https://go.dev/issue/4556 and https://go.dev/issue/54580.
-				var err error
-				switch b := b[len(`"`) : len(b)-len(`"`)]; {
-				case b[len("9999")] != '-': // year must be exactly 4 digits wide
-					err = errors.New("year outside of range [0,9999]")
-				case b[len(b)-1] != 'Z':
-					c := b[len(b)-len("Z07:00")]
-					if ('0' <= c && c <= '9') || parseDec2(b[len(b)-len("07:00"):]) >= 24 {
-						err = errors.New("timezone hour outside of range [0,23]")
-					}
-				}
-				if err != nil {
-					return &SemanticError{action: "marshal", GoType: t, Err: err}
-				}
-				return enc.WriteValue(b) // RFC 3339 never needs JSON escaping
+			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
+				b = append(b, '"')
 			}
-			// The format may contain special characters that need escaping.
+			b, err = m.appendMarshal(b, tt)
+			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
+				b = append(b, '"')
+			}
+			if err != nil {
+				return &SemanticError{action: "marshal", GoType: t, Err: err}
+			}
+			// Custom formats may contain characters that need escaping.
 			// Verify that the result is a valid JSON string (common case),
 			// otherwise escape the string correctly (slower case).
-			if jsonwire.ConsumeSimpleString(b) != len(b) {
-				b, _ = jsonwire.AppendQuote(nil, b[len(`"`):len(b)-len(`"`)], true, nil)
+			if m.hasCustomFormat() && jsonwire.ConsumeSimpleString(b) != len(b) {
+				b, _ = jsonwire.AppendQuote(nil, string(b[len(`"`):len(b)-len(`"`)]), true, nil)
 			}
 			return enc.WriteValue(b)
 		}
-		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
+		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) (err error) {
 			xd := export.Decoder(dec)
-			format := time.RFC3339
-			isRFC3339 := true
+			var u timeArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
-				var err error
-				format, isRFC3339, err = checkTimeFormat(uo.Format)
-				if err != nil {
-					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
+				if !u.initFormat(uo.Format) {
+					return newInvalidFormatError("unmarshal", t, uo.Format)
 				}
 			}
 
@@ -152,37 +148,26 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			if err != nil {
 				return err
 			}
-			k := val.Kind()
-			switch k {
+			switch k := val.Kind(); k {
 			case 'n':
 				*tt = time.Time{}
 				return nil
 			case '"':
-				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-				tt2, err := time.Parse(format, string(val))
-				if isRFC3339 && err == nil {
-					// TODO(https://go.dev/issue/54580): RFC 3339 specifies
-					// the exact grammar of a valid timestamp. However,
-					// the parsing functionality in "time" is too loose and
-					// incorrectly accepts invalid timestamps as valid.
-					// Remove these manual checks when "time" checks it for us.
-					newParseError := func(layout, value, layoutElem, valueElem, message string) error {
-						return &time.ParseError{Layout: layout, Value: value, LayoutElem: layoutElem, ValueElem: valueElem, Message: message}
-					}
-					switch {
-					case val[len("2006-01-02T")+1] == ':': // hour must be two digits
-						err = newParseError(format, string(val), "15", string(val[len("2006-01-02T"):][:1]), "")
-					case val[len("2006-01-02T15:04:05")] == ',': // sub-second separator must be a period
-						err = newParseError(format, string(val), ".", ",", "")
-					case val[len(val)-1] != 'Z':
-						switch {
-						case parseDec2(val[len(val)-len("07:00"):]) >= 24: // timezone hour must be in range
-							err = newParseError(format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone hour out of range")
-						case parseDec2(val[len(val)-len("00"):]) >= 60: // timezone minute must be in range
-							err = newParseError(format, string(val), "Z07:00", string(val[len(val)-len("Z07:00"):]), ": timezone minute out of range")
-						}
-					}
+				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 				}
+				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
+				tt2, err := u.unmarshal(val)
+				if err != nil {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
+				}
+				*tt = tt2
+				return nil
+			case '0':
+				if !u.isNumeric() {
+					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
+				}
+				tt2, err := u.unmarshal(val)
 				if err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
@@ -196,60 +181,448 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	return fncs
 }
 
-func checkTimeFormat(format string) (string, bool, error) {
+type durationArshaler struct {
+	// base records the representation where:
+	//   - 0 uses time.Duration.String
+	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the duration as
+	//     nanoseconds, microseconds, milliseconds, or seconds.
+	//   - 60 uses a "H:MM:SS.SSSSSSSSS" encoding
+	base uint
+}
+
+func (a *durationArshaler) initFormat(format string) (ok bool) {
+	switch format {
+	case "units":
+		a.base = 0
+	case "sec":
+		a.base = 1e9
+	case "milli":
+		a.base = 1e6
+	case "micro":
+		a.base = 1e3
+	case "nano", "nanos": // TODO: Remove "nanos".
+		a.base = 1e0
+	case "base60": // see https://en.wikipedia.org/wiki/Sexagesimal#Modern_usage
+		a.base = 60
+	default:
+		return false
+	}
+	return true
+}
+
+func (a *durationArshaler) isNumeric() bool {
+	return a.base != 0 && a.base != 60
+}
+
+func (a *durationArshaler) appendMarshal(b []byte, d time.Duration) []byte {
+	switch a.base {
+	case 0:
+		return append(b, d.String()...)
+	case 60:
+		return appendDurationBase60(b, d)
+	default:
+		return appendDurationBase10(b, d, a.base)
+	}
+}
+
+func (a *durationArshaler) unmarshal(b []byte) (time.Duration, error) {
+	switch a.base {
+	case 0:
+		return time.ParseDuration(string(b))
+	case 60:
+		return parseDurationBase60(b)
+	default:
+		return parseDurationBase10(b, a.base)
+	}
+}
+
+type timeArshaler struct {
+	// base records the representation where:
+	//   - 0 uses RFC 3339 encoding of the timestamp
+	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the timestamp as
+	//     seconds, milliseconds, microseconds, or nanoseconds since Unix epoch.
+	//   - math.MaxUint uses time.Time.Format to encode the timestamp
+	base   uint
+	format string // time format passed to time.Parse
+}
+
+func (a *timeArshaler) initFormat(format string) bool {
 	// We assume that an exported constant in the time package will
 	// always start with an uppercase ASCII letter.
-	if len(format) > 0 && 'A' <= format[0] && format[0] <= 'Z' {
-		switch format {
-		case "ANSIC":
-			return time.ANSIC, false, nil
-		case "UnixDate":
-			return time.UnixDate, false, nil
-		case "RubyDate":
-			return time.RubyDate, false, nil
-		case "RFC822":
-			return time.RFC822, false, nil
-		case "RFC822Z":
-			return time.RFC822Z, false, nil
-		case "RFC850":
-			return time.RFC850, false, nil
-		case "RFC1123":
-			return time.RFC1123, false, nil
-		case "RFC1123Z":
-			return time.RFC1123Z, false, nil
-		case "RFC3339":
-			return time.RFC3339, true, nil
-		case "RFC3339Nano":
-			return time.RFC3339Nano, true, nil
-		case "Kitchen":
-			return time.Kitchen, false, nil
-		case "Stamp":
-			return time.Stamp, false, nil
-		case "StampMilli":
-			return time.StampMilli, false, nil
-		case "StampMicro":
-			return time.StampMicro, false, nil
-		case "StampNano":
-			return time.StampNano, false, nil
-		case "DateTime":
-			return time.DateTime, false, nil
-		case "DateOnly":
-			return time.DateOnly, false, nil
-		case "TimeOnly":
-			return time.TimeOnly, false, nil
-		default:
-			// Reject any format that is an exported Go identifier in case
-			// new format constants are added to the time package.
-			if strings.TrimFunc(format, isLetterOrDigit) == "" {
-				return "", false, fmt.Errorf("undefined format layout: %v", format)
+	if len(format) == 0 {
+		return false
+	}
+	a.base = math.MaxUint // implies custom format
+	if c := format[0]; !('a' <= c && c <= 'z') && !('A' <= c && c <= 'Z') {
+		a.format = format
+		return true
+	}
+	switch format {
+	case "ANSIC":
+		a.format = time.ANSIC
+	case "UnixDate":
+		a.format = time.UnixDate
+	case "RubyDate":
+		a.format = time.RubyDate
+	case "RFC822":
+		a.format = time.RFC822
+	case "RFC822Z":
+		a.format = time.RFC822Z
+	case "RFC850":
+		a.format = time.RFC850
+	case "RFC1123":
+		a.format = time.RFC1123
+	case "RFC1123Z":
+		a.format = time.RFC1123Z
+	case "RFC3339":
+		a.base = 0
+		a.format = time.RFC3339
+	case "RFC3339Nano":
+		a.base = 0
+		a.format = time.RFC3339Nano
+	case "Kitchen":
+		a.format = time.Kitchen
+	case "Stamp":
+		a.format = time.Stamp
+	case "StampMilli":
+		a.format = time.StampMilli
+	case "StampMicro":
+		a.format = time.StampMicro
+	case "StampNano":
+		a.format = time.StampNano
+	case "DateTime":
+		a.format = time.DateTime
+	case "DateOnly":
+		a.format = time.DateOnly
+	case "TimeOnly":
+		a.format = time.TimeOnly
+	case "unix":
+		a.base = 1e0
+	case "unixmilli":
+		a.base = 1e3
+	case "unixmicro":
+		a.base = 1e6
+	case "unixnano":
+		a.base = 1e9
+	default:
+		// Reject any Go identifier in case new constants are supported.
+		if strings.TrimFunc(format, isLetterOrDigit) == "" {
+			return false
+		}
+		a.format = format
+	}
+	return true
+}
+
+func (a *timeArshaler) isNumeric() bool {
+	return int(a.base) > 0
+}
+
+func (a *timeArshaler) hasCustomFormat() bool {
+	return a.base == math.MaxUint
+}
+
+func (a *timeArshaler) appendMarshal(b []byte, t time.Time) ([]byte, error) {
+	switch a.base {
+	case 0:
+		// TODO(https://go.dev/issue/60204): Use cmp.Or(a.format, time.RFC3339Nano).
+		format := a.format
+		if format == "" {
+			format = time.RFC3339Nano
+		}
+		n0 := len(b)
+		b = t.AppendFormat(b, format)
+		// Not all Go timestamps can be represented as valid RFC 3339.
+		// Explicitly check for these edge cases.
+		// See https://go.dev/issue/4556 and https://go.dev/issue/54580.
+		switch b := b[n0:]; {
+		case b[len("9999")] != '-': // year must be exactly 4 digits wide
+			return b, errors.New("year outside of range [0,9999]")
+		case b[len(b)-1] != 'Z':
+			c := b[len(b)-len("Z07:00")]
+			if ('0' <= c && c <= '9') || parseDec2(b[len(b)-len("07:00"):]) >= 24 {
+				return b, errors.New("timezone hour outside of range [0,23]")
 			}
 		}
+		return b, nil
+	case math.MaxUint:
+		return t.AppendFormat(b, a.format), nil
+	default:
+		return appendTimeUnix(b, t, a.base), nil
 	}
-	return format, false, nil
+}
+
+func (a *timeArshaler) unmarshal(b []byte) (time.Time, error) {
+	switch a.base {
+	case 0:
+		// Use time.Time.UnmarshalText to avoid possible string allocation.
+		var t time.Time
+		if err := t.UnmarshalText(b); err != nil {
+			return t, err
+		}
+		// TODO(https://go.dev/issue/57912):
+		// RFC 3339 specifies the grammar for a valid timestamp.
+		// However, the parsing functionality in "time" is too loose and
+		// incorrectly accepts invalid timestamps as valid.
+		// Remove these manual checks when "time" checks it for us.
+		newParseError := func(layout, value, layoutElem, valueElem, message string) error {
+			return &time.ParseError{Layout: layout, Value: value, LayoutElem: layoutElem, ValueElem: valueElem, Message: message}
+		}
+		switch {
+		case b[len("2006-01-02T")+1] == ':': // hour must be two digits
+			return t, newParseError(time.RFC3339, string(b), "15", string(b[len("2006-01-02T"):][:1]), "")
+		case b[len("2006-01-02T15:04:05")] == ',': // sub-second separator must be a period
+			return t, newParseError(time.RFC3339, string(b), ".", ",", "")
+		case b[len(b)-1] != 'Z':
+			switch {
+			case parseDec2(b[len(b)-len("07:00"):]) >= 24: // timezone hour must be in range
+				return t, newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone hour out of range")
+			case parseDec2(b[len(b)-len("00"):]) >= 60: // timezone minute must be in range
+				return t, newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone minute out of range")
+			}
+		}
+		return t, nil
+	case math.MaxUint:
+		return time.Parse(a.format, string(b))
+	default:
+		return parseTimeUnix(b, a.base)
+	}
+}
+
+// appendDurationBase10 appends d formatted as a decimal fractional number,
+// where pow10 is a power-of-10 used to scale down the number.
+func appendDurationBase10(b []byte, d time.Duration, pow10 uint) []byte {
+	b, n := mayAppendDurationSign(b, d)            // append sign
+	whole, frac := bits.Div64(0, n, uint64(pow10)) // compute whole and frac fields
+	b = strconv.AppendUint(b, whole, 10)           // append whole field
+	return appendFracBase10(b, uint(frac), pow10)  // append frac field
+}
+
+// parseDurationBase10 parses d from a decimal fractional number,
+// where pow10 is a power-of-10 used to scale up the number.
+func parseDurationBase10(b []byte, pow10 uint) (time.Duration, error) {
+	suffix, neg := consumeSign(b)                            // consume sign
+	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
+	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
+	frac, okFrac := parseFracBase10(fracBytes, pow10)        // parse frac field
+	hi, lo := bits.Mul64(whole, uint64(pow10))               // overflow if hi > 0
+	sum, co := bits.Add64(lo, uint64(frac), 0)               // overflow if co > 0
+	switch d := mayApplyDurationSign(sum, neg); {            // overflow if neg != (d < 0)
+	case (!okWhole && whole != math.MaxUint64) || !okFrac:
+		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrSyntax)
+	case !okWhole || hi > 0 || co > 0 || neg != (d < 0):
+		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrRange)
+	default:
+		return d, nil
+	}
+}
+
+// appendDurationBase60 appends d formatted with H:MM:SS.SSS notation.
+func appendDurationBase60(b []byte, d time.Duration) []byte {
+	b, n := mayAppendDurationSign(b, d)                    // append sign
+	n, nsec := bits.Div64(0, n, 1e9)                       // compute nsec field
+	n, sec := bits.Div64(0, n, 60)                         // compute sec field
+	hour, min := bits.Div64(0, n, 60)                      // compute hour and min fields
+	b = strconv.AppendUint(b, hour, 10)                    // append hour field
+	b = append(b, ':', '0'+byte(min/10), '0'+byte(min%10)) // append min field
+	b = append(b, ':', '0'+byte(sec/10), '0'+byte(sec%10)) // append sec field
+	return appendFracBase10(b, uint(nsec), 1e9)            // append nsec field
+}
+
+// parseDurationBase60 parses d formatted with H:MM:SS.SSS notation.
+// The exact grammar is `-?(0|[1-9][0-9]*):[0-5][0-9]:[0-5][0-9]([.][0-9]+)?`.
+func parseDurationBase60(b []byte) (time.Duration, error) {
+	checkBase60 := func(b []byte) bool {
+		return len(b) == 2 && ('0' <= b[0] && b[0] <= '5') && '0' <= b[1] && b[1] <= '9'
+	}
+	suffix, neg := consumeSign(b)                            // consume sign
+	hourBytes, suffix := bytesCutByte(suffix, ':', false)    // consume hour field
+	minBytes, suffix := bytesCutByte(suffix, ':', false)     // consume min field
+	secBytes, nsecBytes := bytesCutByte(suffix, '.', true)   // consume sec and nsec fields
+	hour, okHour := jsonwire.ParseUint(hourBytes)            // parse hour field; may overflow
+	min := parseDec2(minBytes)                               // parse min field
+	sec := parseDec2(secBytes)                               // parse sec field
+	nsec, okNsec := parseFracBase10(nsecBytes, 1e9)          // parse nsec field
+	n := uint64(min)*60*1e9 + uint64(sec)*1e9 + uint64(nsec) // cannot overflow
+	hi, lo := bits.Mul64(hour, 60*60*1e9)                    // overflow if hi > 0
+	sum, co := bits.Add64(lo, n, 0)                          // overflow if co > 0
+	switch d := mayApplyDurationSign(sum, neg); {            // overflow if neg != (d < 0)
+	case (!okHour && hour != math.MaxUint64) || !checkBase60(minBytes) || !checkBase60(secBytes) || !okNsec:
+		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrSyntax)
+	case !okHour || hi > 0 || co > 0 || neg != (d < 0):
+		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrRange)
+	default:
+		return d, nil
+	}
+}
+
+// mayAppendDurationSign appends a negative sign if n is negative.
+func mayAppendDurationSign(b []byte, d time.Duration) ([]byte, uint64) {
+	if d < 0 {
+		b = append(b, '-')
+		d *= -1
+	}
+	return b, uint64(d)
+}
+
+// mayApplyDurationSign inverts n if neg is specified.
+func mayApplyDurationSign(n uint64, neg bool) time.Duration {
+	if neg {
+		return -1 * time.Duration(n)
+	} else {
+		return +1 * time.Duration(n)
+	}
+}
+
+// appendTimeUnix appends t formatted as a decimal fractional number,
+// where pow10 is a power-of-10 used to scale up the number.
+func appendTimeUnix(b []byte, t time.Time, pow10 uint) []byte {
+	sec, nsec := t.Unix(), int64(t.Nanosecond())
+	if sec < 0 {
+		b = append(b, '-')
+		sec, nsec = negateSecNano(sec, nsec)
+	}
+	switch {
+	case pow10 == 1e0: // fast case where units is in seconds
+		b = strconv.AppendUint(b, uint64(sec), 10)
+		return appendFracBase10(b, uint(nsec), 1e9)
+	case uint64(sec) < 1e9: // intermediate case where units is not seconds, but no overflow
+		b = strconv.AppendUint(b, uint64(sec)*uint64(pow10)+uint64(uint(nsec)/(1e9/pow10)), 10)
+		return appendFracBase10(b, (uint(nsec)*pow10)%1e9, 1e9)
+	default: // slow case where units is not seconds and overflow would occur
+		b = strconv.AppendUint(b, uint64(sec), 10)
+		b = appendPaddedBase10(b, uint(uint(nsec)/(1e9/pow10)), pow10)
+		return appendFracBase10(b, (uint(nsec)*pow10)%1e9, 1e9)
+	}
+}
+
+// parseTimeUnix parses t formatted as a decimal fractional number,
+// where pow10 is a power-of-10 used to scale down the number.
+func parseTimeUnix(b []byte, pow10 uint) (time.Time, error) {
+	suffix, neg := consumeSign(b)                            // consume sign
+	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
+	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
+	frac, okFrac := parseFracBase10(fracBytes, 1e9/pow10)    // parse frac field
+	var sec, nsec int64
+	switch {
+	case pow10 == 1e0: // fast case where units is in seconds
+		sec = int64(whole) // check overflow later after negation
+		nsec = int64(frac) // cannot overflow
+	case okWhole: // intermediate case where units is not seconds, but no overflow
+		sec = int64(whole / uint64(pow10))                         // check overflow later after negation
+		nsec = int64((uint(whole)%pow10)*(1e9/pow10) + uint(frac)) // cannot overflow
+	case !okWhole && whole == math.MaxUint64: // slow case where units is not seconds and overflow occurred
+		width := int(math.Log10(float64(pow10)))                                // compute len(strconv.Itoa(pow10-1))
+		whole, okWhole = jsonwire.ParseUint(wholeBytes[:len(wholeBytes)-width]) // parse the upper whole field
+		mid, _ := parsePaddedBase10(wholeBytes[len(wholeBytes)-width:], pow10)  // parse the lower whole field
+		sec = int64(whole)                                                      // check overflow later after negation
+		nsec = int64(uint(mid)*(1e9/pow10) + frac)                              // cannot overflow
+	}
+	if neg {
+		sec, nsec = negateSecNano(sec, nsec)
+	}
+	switch t := time.Unix(sec, nsec).UTC(); {
+	case (!okWhole && whole != math.MaxUint64) || !okFrac:
+		return time.Time{}, fmt.Errorf("invalid time %q: %w", b, strconv.ErrSyntax)
+	case !okWhole || neg != (t.Unix() < 0):
+		return time.Time{}, fmt.Errorf("invalid time %q: %w", b, strconv.ErrRange)
+	default:
+		return t, nil
+	}
+}
+
+// negateSecNano negates a Unix timestamp, where nsec must be within [0, 1e9).
+func negateSecNano(sec, nsec int64) (int64, int64) {
+	sec = ^sec               // twos-complement negation (i.e., -1*sec + 1)
+	nsec = -nsec + 1e9       // negate nsec and add 1e9 (which is the extra +1 from sec negation)
+	sec += int64(nsec / 1e9) // handle possible overflow of nsec if it started as zero
+	nsec %= 1e9              // ensure nsec stays within [0, 1e9)
+	return sec, nsec
+}
+
+// appendFracBase10 appends the fraction of n/max10,
+// where max10 is a power-of-10 that is larger than n.
+func appendFracBase10(b []byte, n, max10 uint) []byte {
+	if n == 0 {
+		return b
+	}
+	return bytes.TrimRight(appendPaddedBase10(append(b, '.'), n, max10), "0")
+}
+
+// parseFracBase10 parses the fraction of n/max10,
+// where max10 is a power-of-10 that is larger than n.
+func parseFracBase10(b []byte, max10 uint) (n uint, ok bool) {
+	switch {
+	case len(b) == 0:
+		return 0, true
+	case len(b) < len(".0") || b[0] != '.':
+		return 0, false
+	}
+	return parsePaddedBase10(b[len("."):], max10)
+}
+
+// appendPaddedBase10 appends a zero-padded encoding of n,
+// where max10 is a power-of-10 that is larger than n.
+func appendPaddedBase10(b []byte, n, max10 uint) []byte {
+	if n < max10/10 {
+		// Formatting of n is shorter than log10(max10),
+		// so add max10/10 to ensure the length is equal to log10(max10).
+		i := len(b)
+		b = strconv.AppendUint(b, uint64(n+max10/10), 10)
+		b[i]-- // subtract the addition of max10/10
+		return b
+	}
+	return strconv.AppendUint(b, uint64(n), 10)
+}
+
+// parsePaddedBase10 parses b as the zero-padded encoding of n,
+// where max10 is a power-of-10 that is larger than n.
+// Truncated suffix is treated as implicit zeros.
+// Extended suffix is ignored, but verified to contain only digits.
+func parsePaddedBase10(b []byte, max10 uint) (n uint, ok bool) {
+	pow10 := uint(1)
+	for pow10 < max10 {
+		n *= 10
+		if len(b) > 0 {
+			if b[0] < '0' || '9' < b[0] {
+				return n, false
+			}
+			n += uint(b[0] - '0')
+			b = b[1:]
+		}
+		pow10 *= 10
+	}
+	if len(b) > 0 && len(bytes.TrimRight(b, "0123456789")) > 0 {
+		return n, false // trailing characters are not digits
+	}
+	return n, true
+}
+
+// consumeSign consumes an optional leading negative sign.
+func consumeSign(b []byte) ([]byte, bool) {
+	if len(b) > 0 && b[0] == '-' {
+		return b[len("-"):], true
+	}
+	return b, false
+}
+
+// bytesCutByte is similar to bytes.Cut(b, []byte{c}),
+// except c may optionally be included as part of the suffix.
+func bytesCutByte(b []byte, c byte, include bool) ([]byte, []byte) {
+	if i := bytes.IndexByte(b, c); i >= 0 {
+		if include {
+			return b[:i], b[i:]
+		}
+		return b[:i], b[i+1:]
+	}
+	return b, nil
 }
 
 // parseDec2 parses b as an unsigned, base-10, 2-digit number.
-// It panics if len(b) < 2. The result is undefined if digits are not base-10.
+// The result is undefined if digits are not base-10.
 func parseDec2(b []byte) byte {
+	if len(b) < 2 {
+		return 0
+	}
 	return 10*(b[0]-'0') + (b[1] - '0')
 }
