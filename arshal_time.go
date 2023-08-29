@@ -201,7 +201,7 @@ func (a *durationArshaler) initFormat(format string) (ok bool) {
 		a.base = 1e6
 	case "micro":
 		a.base = 1e3
-	case "nano", "nanos": // TODO: Remove "nanos".
+	case "nano":
 		a.base = 1e0
 	case "base60": // see https://en.wikipedia.org/wiki/Sexagesimal#Modern_usage
 		a.base = 60

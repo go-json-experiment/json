@@ -1024,10 +1024,10 @@ func TestMergeComposite(t *testing.T) {
 // formatted and parsed using time.Duration.String and time.ParseDuration.
 //
 // Users of v2 can opt into the v1 behavior by setting
-// the "format:nanos" option in the `json` struct field tag:
+// the "format:nano" option in the `json` struct field tag:
 //
 //	struct {
-//		Duration time.Duration `json:",format:nanos"`
+//		Duration time.Duration `json:",format:nano"`
 //	}
 //
 // Related issue:

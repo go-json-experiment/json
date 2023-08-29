@@ -3724,14 +3724,14 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Duration/Zero"),
 		in: struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{0, 0},
 		want: `{"D1":"0s","D2":0}`,
 	}, {
 		name: jsontest.Name("Duration/Positive"),
 		in: struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{
 			123456789123456789,
 			123456789123456789,
@@ -3741,7 +3741,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Duration/Negative"),
 		in: struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{
 			-123456789123456789,
 			-123456789123456789,
@@ -3750,9 +3750,9 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Duration/Nanos/String"),
 		in: struct {
-			D1 time.Duration `json:",string,format:nanos"`
-			D2 time.Duration `json:",string,format:nanos"`
-			D3 time.Duration `json:",string,format:nanos"`
+			D1 time.Duration `json:",string,format:nano"`
+			D2 time.Duration `json:",string,format:nano"`
+			D3 time.Duration `json:",string,format:nano"`
 		}{
 			math.MinInt64,
 			0,
@@ -7694,33 +7694,33 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `{"D1":null,"D2":null}`,
 		inVal: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{1, 1}),
 		want: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{0, 0}),
 	}, {
 		name:  jsontest.Name("Duration/Zero"),
 		inBuf: `{"D1":"0s","D2":0}`,
 		inVal: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{1, 1}),
 		want: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{0, 0}),
 	}, {
 		name:  jsontest.Name("Duration/Positive"),
 		inBuf: `{"D1":"34293h33m9.123456789s","D2":123456789123456789}`,
 		inVal: new(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}),
 		want: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{
 			123456789123456789,
 			123456789123456789,
@@ -7730,11 +7730,11 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `{"D1":"-34293h33m9.123456789s","D2":-123456789123456789}`,
 		inVal: new(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}),
 		want: addr(struct {
 			D1 time.Duration
-			D2 time.Duration `json:",format:nanos"`
+			D2 time.Duration `json:",format:nano"`
 		}{
 			-123456789123456789,
 			-123456789123456789,
@@ -7743,39 +7743,39 @@ func TestUnmarshal(t *testing.T) {
 		name:  jsontest.Name("Duration/Nanos/String"),
 		inBuf: `{"D":"12345"}`,
 		inVal: addr(struct {
-			D time.Duration `json:",string,format:nanos"`
+			D time.Duration `json:",string,format:nano"`
 		}{1}),
 		want: addr(struct {
-			D time.Duration `json:",string,format:nanos"`
+			D time.Duration `json:",string,format:nano"`
 		}{12345}),
 	}, {
 		name:  jsontest.Name("Duration/Nanos/String/Invalid"),
 		inBuf: `{"D":"+12345"}`,
 		inVal: addr(struct {
-			D time.Duration `json:",string,format:nanos"`
+			D time.Duration `json:",string,format:nano"`
 		}{1}),
 		want: addr(struct {
-			D time.Duration `json:",string,format:nanos"`
+			D time.Duration `json:",string,format:nano"`
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType, Err: fmt.Errorf(`invalid duration "+12345": %w`, strconv.ErrSyntax)},
 	}, {
 		name:  jsontest.Name("Duration/Nanos/Mismatch"),
 		inBuf: `{"D":"34293h33m9.123456789s"}`,
 		inVal: addr(struct {
-			D time.Duration `json:",format:nanos"`
+			D time.Duration `json:",format:nano"`
 		}{1}),
 		want: addr(struct {
-			D time.Duration `json:",format:nanos"`
+			D time.Duration `json:",format:nano"`
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: timeDurationType},
 	}, {
 		name:  jsontest.Name("Duration/Nanos"),
 		inBuf: `{"D":1.324}`,
 		inVal: addr(struct {
-			D time.Duration `json:",format:nanos"`
+			D time.Duration `json:",format:nano"`
 		}{-1}),
 		want: addr(struct {
-			D time.Duration `json:",format:nanos"`
+			D time.Duration `json:",format:nano"`
 		}{1}),
 	}, {
 		name:  jsontest.Name("Duration/String/Mismatch"),
