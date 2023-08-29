@@ -14,6 +14,9 @@ import (
 
 // Options configures [NewEncoder], [Encoder.Reset], [NewDecoder],
 // and [Decoder.Reset] with specific features.
+// Each function takes in a variadic list of options, where properties
+// set in latter options override the value of previously set properties.
+//
 // The Options type is identical to [encoding/json.Options] and
 // [encoding/json/v2.Options]. Options from the other packages may
 // be passed to functionality in this package, but are ignored.
@@ -164,8 +167,8 @@ func WithIndentPrefix(prefix string) Options {
 
 // WithByteLimit sets a limit on the number of bytes of input or output bytes
 // that may be consumed or produced for each top-level JSON value.
-// If a Decoder or Encoder call would need to consume/produce more than
-// a total of n bytes to make progress on the top-level JSON value,
+// If a [Decoder] or [Encoder] method call would need to consume/produce
+// more than a total of n bytes to make progress on the top-level JSON value,
 // then the call will report an error.
 // Whitespace before and within the top-level value are counted against the limit.
 // Whitespace after a top-level value are counted against the limit
@@ -179,8 +182,8 @@ func WithByteLimit(n int64) Options {
 
 // WithDepthLimit sets a limit on the maximum depth of JSON nesting
 // that may be consumed or produced for each top-level JSON value.
-// If a Decoder or Encoder call would need to consume or produce a depth
-// greater than n to make progress on the top-level JSON value,
+// If a [Decoder] or [Encoder] method call would need to consume or produce
+// a depth greater than n to make progress on the top-level JSON value,
 // then the call will report an error.
 //
 // A non-positive limit is equivalent to no limit at all.

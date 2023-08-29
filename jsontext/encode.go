@@ -20,30 +20,30 @@ import (
 // It is used to write a stream of top-level JSON values,
 // each terminated with a newline character.
 //
-// WriteToken and WriteValue calls may be interleaved.
+// [Encoder.WriteToken] and [Encoder.WriteValue] calls may be interleaved.
 // For example, the following JSON value:
 //
 //	{"name":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
 //
 // can be composed with the following calls (ignoring errors for brevity):
 //
-//	e.WriteToken(ObjectStart)           // {
-//	e.WriteToken(String("name"))        // "name"
-//	e.WriteToken(String("value"))       // "value"
-//	e.WriteValue(RawValue(`"array"`))   // "array"
-//	e.WriteToken(ArrayStart)            // [
-//	e.WriteToken(Null)                  // null
-//	e.WriteToken(False)                 // false
-//	e.WriteValue(RawValue("true"))      // true
-//	e.WriteToken(Float(3.14159))        // 3.14159
-//	e.WriteToken(ArrayEnd)              // ]
-//	e.WriteValue(RawValue(`"object"`))  // "object"
-//	e.WriteValue(RawValue(`{"k":"v"}`)) // {"k":"v"}
-//	e.WriteToken(ObjectEnd)             // }
+//	e.WriteToken(ObjectStart)        // {
+//	e.WriteToken(String("name"))     // "name"
+//	e.WriteToken(String("value"))    // "value"
+//	e.WriteValue(Value(`"array"`))   // "array"
+//	e.WriteToken(ArrayStart)         // [
+//	e.WriteToken(Null)               // null
+//	e.WriteToken(False)              // false
+//	e.WriteValue(Value("true"))      // true
+//	e.WriteToken(Float(3.14159))     // 3.14159
+//	e.WriteToken(ArrayEnd)           // ]
+//	e.WriteValue(Value(`"object"`))  // "object"
+//	e.WriteValue(Value(`{"k":"v"}`)) // {"k":"v"}
+//	e.WriteToken(ObjectEnd)          // }
 //
 // The above is one of many possible sequence of calls and
 // may not represent the most sensible method to call for any given token/value.
-// For example, it is probably more common to call WriteToken with a string
+// For example, it is probably more common to call [Encoder.WriteToken] with a string
 // for object names.
 type Encoder struct {
 	s encoderState
@@ -73,7 +73,7 @@ type encodeBuffer struct {
 
 	wr io.Writer
 
-	// maxValue is the approximate maximum RawValue size passed to WriteValue.
+	// maxValue is the approximate maximum Value size passed to WriteValue.
 	maxValue int
 	// unusedCache is the buffer returned by the UnusedBuffer method.
 	unusedCache []byte
@@ -87,7 +87,7 @@ type encodeBuffer struct {
 // It flushes the internal buffer when the buffer is sufficiently full or
 // when a top-level value has been written.
 //
-// If w is a bytes.Buffer, then the encoder appends directly into the buffer
+// If w is a [bytes.Buffer], then the encoder appends directly into the buffer
 // without copying the contents from an intermediate buffer.
 func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 	e := new(Encoder)
@@ -97,7 +97,8 @@ func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 
 // Reset resets an encoder such that it is writing afresh to w and
 // configured with the provided options. Reset must not be called on
-// a Encoder passed to [MarshalerV2.MarshalJSONV2] or [MarshalFuncV2].
+// a Encoder passed to the [encoding/json/v2.MarshalerV2.MarshalJSONV2] method
+// or the [encoding/json/v2.MarshalFuncV2] function.
 func (e *Encoder) Reset(w io.Writer, opts ...Options) {
 	switch {
 	case e == nil:
@@ -332,9 +333,9 @@ func (e *encoderState) UnwriteOnlyObjectMemberName() string {
 // For example, it is an error to provide a number when the encoder
 // is expecting an object name (which is always a string), or
 // to provide an end object delimiter when the encoder is finishing an array.
-// If the provided token is invalid, then it reports a SyntacticError and
-// the internal state remains unchanged.
-// The offset reported in SyntacticError will be relative to the OutputOffset.
+// If the provided token is invalid, then it reports a [SyntacticError] and
+// the internal state remains unchanged. The offset reported
+// in [SyntacticError] will be relative to the [Encoder.OutputOffset].
 func (e *Encoder) WriteToken(t Token) error {
 	return e.s.WriteToken(t)
 }
@@ -504,14 +505,14 @@ func (e *encoderState) WriteNumber(v float64, bits int, quote bool) error {
 // according to how the Encoder is configured to format whitespace and strings.
 //
 // The provided value kind must be consistent with the JSON grammar
-// (see examples on Encoder.WriteToken). If the provided value is invalid,
-// then it reports a SyntacticError and the internal state remains unchanged.
-// The offset reported in SyntacticError will be relative to the OutputOffset
-// plus the offset into v of any encountered syntax error.
-func (e *Encoder) WriteValue(v RawValue) error {
+// (see examples on [Encoder.WriteToken]). If the provided value is invalid,
+// then it reports a [SyntacticError] and the internal state remains unchanged.
+// The offset reported in [SyntacticError] will be relative to the
+// [Encoder.OutputOffset] plus the offset into v of any encountered syntax error.
+func (e *Encoder) WriteValue(v Value) error {
 	return e.s.WriteValue(v)
 }
-func (e *encoderState) WriteValue(v RawValue) error {
+func (e *encoderState) WriteValue(v Value) error {
 	e.maxValue |= len(v) // bitwise OR is a fast approximation of max
 
 	k := v.Kind()
@@ -610,7 +611,7 @@ func (e *encoderState) AppendIndent(b []byte, n int) []byte {
 // reformatValue parses a JSON value from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *encoderState) reformatValue(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+func (e *encoderState) reformatValue(dst []byte, src Value, depth int) ([]byte, int, error) {
 	// TODO: Should this update ValueFlags as input?
 	if len(src) == 0 {
 		return dst, 0, io.ErrUnexpectedEOF
@@ -658,7 +659,7 @@ func (e *encoderState) reformatValue(dst []byte, src RawValue, depth int) ([]byt
 // reformatObject parses a JSON object from the start of src and
 // appends it to the end of src, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *encoderState) reformatObject(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte, int, error) {
 	// Append object start.
 	if len(src) == 0 || src[0] != '{' {
 		panic("BUG: reformatObject must be called with a buffer that starts with '{'")
@@ -764,7 +765,7 @@ func (e *encoderState) reformatObject(dst []byte, src RawValue, depth int) ([]by
 // reformatArray parses a JSON array from the start of src and
 // appends it to the end of dst, reformatting whitespace and strings as needed.
 // It returns the extended dst buffer and the number of consumed input bytes.
-func (e *encoderState) reformatArray(dst []byte, src RawValue, depth int) ([]byte, int, error) {
+func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, int, error) {
 	// Append array start.
 	if len(src) == 0 || src[0] != '[' {
 		panic("BUG: reformatArray must be called with a buffer that starts with '['")
@@ -830,15 +831,15 @@ func (e *encoderState) reformatArray(dst []byte, src RawValue, depth int) ([]byt
 
 // OutputOffset returns the current output byte offset. It gives the location
 // of the next byte immediately after the most recently written token or value.
-// The number of bytes actually written to the underlying io.Writer may be less
+// The number of bytes actually written to the underlying [io.Writer] may be less
 // than this offset due to internal buffering effects.
 func (e *Encoder) OutputOffset() int64 {
 	return e.s.previousOffsetEnd()
 }
 
 // UnusedBuffer returns a zero-length buffer with a possible non-zero capacity.
-// This buffer is intended to be used to populate a RawValue
-// being passed to an immediately succeeding WriteValue call.
+// This buffer is intended to be used to populate a [Value]
+// being passed to an immediately succeeding [Encoder.WriteValue] call.
 //
 // Example usage:
 //
@@ -852,7 +853,7 @@ func (e *Encoder) OutputOffset() int64 {
 func (e *Encoder) UnusedBuffer() []byte {
 	// NOTE: We don't return e.buf[len(e.buf):cap(e.buf)] since WriteValue would
 	// need to take special care to avoid mangling the data while reformatting.
-	// WriteValue can't easily identify whether the input RawValue aliases e.buf
+	// WriteValue can't easily identify whether the input Value aliases e.buf
 	// without using unsafe.Pointer. Thus, we just return a different buffer.
 	// Should this ever alias e.buf, we need to consider how it operates with
 	// the specialized performance optimization for bytes.Buffer.
@@ -865,8 +866,8 @@ func (e *Encoder) UnusedBuffer() []byte {
 
 // StackDepth returns the depth of the state machine for written JSON data.
 // Each level on the stack represents a nested JSON object or array.
-// It is incremented whenever an ObjectStart or ArrayStart token is encountered
-// and decremented whenever an ObjectEnd or ArrayEnd token is encountered.
+// It is incremented whenever an [ObjectStart] or [ArrayStart] token is encountered
+// and decremented whenever an [ObjectEnd] or [ArrayEnd] token is encountered.
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (e *Encoder) StackDepth() int {
 	// NOTE: Keep in sync with Decoder.StackDepth.
@@ -874,7 +875,7 @@ func (e *Encoder) StackDepth() int {
 }
 
 // StackIndex returns information about the specified stack level.
-// It must be a number between 0 and StackDepth, inclusive.
+// It must be a number between 0 and [Encoder.StackDepth], inclusive.
 // For each level, it reports the kind:
 //
 //   - 0 for a level of zero,
@@ -898,7 +899,7 @@ func (e *Encoder) StackIndex(i int) (Kind, int) {
 }
 
 // StackPointer returns a JSON Pointer (RFC 6901) to the most recently written value.
-// Object names are only present if AllowDuplicateNames is false, otherwise
+// Object names are only present if [AllowDuplicateNames] is false, otherwise
 // object members are represented using their index within the object.
 func (e *Encoder) StackPointer() string {
 	e.s.Names.copyQuotedBuffer(e.s.Buf)

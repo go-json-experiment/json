@@ -11,6 +11,38 @@
 // The [Encoder] and [Decoder] types are used to encode or decode
 // a stream of JSON values or tokens.
 //
+// A JSON token refers to the basic structural elements of JSON:
+//
+//   - a JSON literal (i.e., null, true, or false)
+//   - a JSON string (e.g., "hello, world!")
+//   - a JSON number (e.g., 123.456)
+//   - a start or end delimiter for a JSON object (i.e., '{' or '}')
+//   - a start or end delimiter for a JSON array (i.e., '[' or ']')
+//
+// A JSON token is represented by the [Token] type in Go. Technically,
+// there are two additional structural characters (i.e., ':' and ','),
+// but there is no Token representation for them since their presence
+// can be inferred by the structure of the JSON grammar itself.
+// For example, there must always be an implicit colon between
+// the name and value of a JSON object member.
+//
+// A JSON value refers to a complete unit of JSON data:
+//
+//   - a JSON literal, string, or number
+//   - a JSON object (e.g., `{"name":"value"}`)
+//   - a JSON array (e.g., `[1,2,3,]`)
+//
+// A JSON value is represented by the [Value] type in Go and is a []byte
+// containing the raw textual representation of the value. There is some overlap
+// between tokens and values as both contain literals, strings, and numbers.
+// However, only a value can represent the entirety of a JSON object or array.
+//
+// The [Encoder] and [Decoder] types contain methods to read or write the next
+// [Token] or [Value] in a sequence. They maintain a state machine to validate
+// whether the sequence of JSON tokens and/or values produces a valid JSON.
+// [Options] may be passed to the [NewEncoder] or [NewDecoder] constructors
+// to configure the syntactic behavior of encoding and decoding.
+//
 // # Terminology
 //
 // This package uses the terms "encode" and "decode" for syntactic functionality
@@ -27,9 +59,9 @@
 // This package uses JSON terminology when discussing JSON, which may differ
 // from related concepts in Go or elsewhere in computing literature.
 //
-//   - A JSON "object" refers to an unordered collection of name/value members.
-//   - A JSON "array" refers to an ordered sequence of elements.
-//   - A JSON "value" refers to either a literal (i.e., null, false, or true),
+//   - a JSON "object" refers to an unordered collection of name/value members.
+//   - a JSON "array" refers to an ordered sequence of elements.
+//   - a JSON "value" refers to either a literal (i.e., null, false, or true),
 //     string, number, object, or array.
 //
 // See RFC 8259 for more information.

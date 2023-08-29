@@ -25,20 +25,17 @@ import (
 //   - an entire JSON object (e.g., {"fizz":"buzz"} )
 //   - an entire JSON array (e.g., [1,2,3] )
 //
-// Value can represent entire array or object values, while Token cannot.
+// Value can represent entire array or object values, while [Token] cannot.
 // Value may contain leading and/or trailing whitespace.
 type Value []byte
 
-// Deprecated: Use [Value] instead.
-type RawValue = Value
-
 // Clone returns a copy of v.
-func (v RawValue) Clone() RawValue {
+func (v Value) Clone() Value {
 	return bytes.Clone(v)
 }
 
 // String returns the string formatting of v.
-func (v RawValue) String() string {
+func (v Value) String() string {
 	if v == nil {
 		return "null"
 	}
@@ -53,7 +50,7 @@ func (v RawValue) String() string {
 // that all names in each object are unique.
 // It does not verify whether numbers are representable within the limits
 // of any common numeric type (e.g., float64, int64, or uint64).
-func (v RawValue) IsValid() bool {
+func (v Value) IsValid() bool {
 	d := getBufferedDecoder(v)
 	defer putBufferedDecoder(d)
 	_, errVal := d.ReadValue()
@@ -66,7 +63,7 @@ func (v RawValue) IsValid() bool {
 // It does not reformat JSON strings to use any other representation.
 // It is guaranteed to succeed if the input is valid.
 // If the value is already compacted, then the buffer is not mutated.
-func (v *RawValue) Compact() error {
+func (v *Value) Compact() error {
 	return v.reformat(false, false, "", "")
 }
 
@@ -81,7 +78,7 @@ func (v *RawValue) Compact() error {
 // If the value is already indented properly, then the buffer is not mutated.
 //
 // The prefix and indent strings must be composed of only spaces and/or tabs.
-func (v *RawValue) Indent(prefix, indent string) error {
+func (v *Value) Indent(prefix, indent string) error {
 	return v.reformat(false, true, prefix, indent)
 }
 
@@ -103,7 +100,7 @@ func (v *RawValue) Indent(prefix, indent string) error {
 //
 // It is guaranteed to succeed if the input is valid.
 // If the value is already canonicalized, then the buffer is not mutated.
-func (v *RawValue) Canonicalize() error {
+func (v *Value) Canonicalize() error {
 	return v.reformat(true, false, "", "")
 }
 
@@ -113,7 +110,7 @@ func (v *RawValue) Canonicalize() error {
 // MarshalJSON returns v as the JSON encoding of v.
 // It returns the stored value as the raw JSON output without any validation.
 // If v is nil, then this returns a JSON null.
-func (v RawValue) MarshalJSON() ([]byte, error) {
+func (v Value) MarshalJSON() ([]byte, error) {
 	// NOTE: This matches the behavior of v1 json.RawMessage.MarshalJSON.
 	if v == nil {
 		return []byte("null"), nil
@@ -123,10 +120,10 @@ func (v RawValue) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON sets v as the JSON encoding of b.
 // It stores a copy of the provided raw JSON input without any validation.
-func (v *RawValue) UnmarshalJSON(b []byte) error {
+func (v *Value) UnmarshalJSON(b []byte) error {
 	// NOTE: This matches the behavior of v1 json.RawMessage.UnmarshalJSON.
 	if v == nil {
-		return errors.New("json.RawValue: UnmarshalJSON on nil pointer")
+		return errors.New("json.Value: UnmarshalJSON on nil pointer")
 	}
 	*v = append((*v)[:0], b...)
 	return nil
@@ -134,14 +131,14 @@ func (v *RawValue) UnmarshalJSON(b []byte) error {
 
 // Kind returns the starting token kind.
 // For a valid value, this will never include '}' or ']'.
-func (v RawValue) Kind() Kind {
+func (v Value) Kind() Kind {
 	if v := v[jsonwire.ConsumeWhitespace(v):]; len(v) > 0 {
 		return Kind(v[0]).normalize()
 	}
 	return invalidKind
 }
 
-func (v *RawValue) reformat(canonical, multiline bool, prefix, indent string) error {
+func (v *Value) reformat(canonical, multiline bool, prefix, indent string) error {
 	// Write the entire value to reformat all tokens and whitespace.
 	e := getBufferedEncoder()
 	defer putBufferedEncoder(e)

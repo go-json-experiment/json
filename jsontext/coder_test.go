@@ -24,10 +24,10 @@ func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
 
 var (
 	zeroToken Token
-	zeroValue RawValue
+	zeroValue Value
 )
 
-// tokOrVal is either a Token or a RawValue.
+// tokOrVal is either a Token or a Value.
 type tokOrVal interface{ Kind() Kind }
 
 type coderTestdataEntry struct {
@@ -694,7 +694,7 @@ func TestCoderMaxDepth(t *testing.T) {
 				t.Fatalf("Encoder.WriteToken = %v, want %v", err, wantErr)
 			}
 		}
-		checkWriteValue := func(t *testing.T, val RawValue, wantErr error) {
+		checkWriteValue := func(t *testing.T, val Value, wantErr error) {
 			t.Helper()
 			if err := enc.WriteValue(val); !reflect.DeepEqual(err, wantErr) {
 				t.Fatalf("Encoder.WriteValue = %v, want %v", err, wantErr)

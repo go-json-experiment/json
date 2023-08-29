@@ -116,7 +116,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				if which, _ := implementsWhich(tf,
 					jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType,
 					jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
-				); which != nil && tf != rawValueType {
+				); which != nil && tf != jsontextValueType {
 					err := fmt.Errorf("inlined Go struct field %s of type %s must not implement JSON marshal or unmarshal methods", sf.Name, tf)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
@@ -125,7 +125,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// a finite number of JSON object members backed by a Go struct.
 				if tf.Kind() == reflect.Struct {
 					if f.unknown {
-						err := fmt.Errorf("inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a json.RawValue", sf.Name, tf)
+						err := fmt.Errorf("inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a jsontext.Value", sf.Name, tf)
 						return structFields{}, &SemanticError{GoType: t, Err: err}
 					}
 					if qe.visitChildren {
@@ -136,20 +136,20 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				}
 
 				// Handle an inlined field that serializes to/from any number of
-				// JSON object members back by a Go map or RawValue.
+				// JSON object members back by a Go map or jsontext.Value.
 				switch {
-				case tf == rawValueType:
+				case tf == jsontextValueType:
 					f.fncs = nil // specially handled in arshal_inlined.go
 				case tf.Kind() == reflect.Map && tf.Key() == stringType:
 					f.fncs = lookupArshaler(tf.Elem())
 				default:
-					err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or json.RawValue", sf.Name, tf)
+					err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or jsontext.Value", sf.Name, tf)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 
 				// Reject multiple inlined fallback fields within the same struct.
 				if inlinedFallbackIndex >= 0 {
-					err := fmt.Errorf("inlined Go struct fields %s and %s cannot both be a Go map or json.RawValue", t.Field(inlinedFallbackIndex).Name, sf.Name)
+					err := fmt.Errorf("inlined Go struct fields %s and %s cannot both be a Go map or jsontext.Value", t.Field(inlinedFallbackIndex).Name, sf.Name)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 				inlinedFallbackIndex = i

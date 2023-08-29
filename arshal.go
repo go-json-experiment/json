@@ -181,12 +181,12 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 	return marshalEncode(enc, in, &xe.Struct)
 }
 
-// MarshalEncode serializes a Go value into an [Encoder] according to the provided
-// marshal options (while ignoring unmarshal, encode, or decode options).
+// MarshalEncode serializes a Go value into an [jsontext.Encoder] according to
+// the provided marshal options (while ignoring unmarshal, encode, or decode options).
 // Unlike [Marshal] and [MarshalWrite], encode options are ignored because
-// they must have already been specified on the provided [Encoder].
+// they must have already been specified on the provided [jsontext.Encoder].
 // See [Marshal] for details about the conversion of a Go value into JSON.
-func MarshalEncode(out *Encoder, in any, opts ...Options) (err error) {
+func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	mo := getStructOptions()
 	defer putStructOptions(mo)
 	mo.Join(opts...)
@@ -195,10 +195,10 @@ func MarshalEncode(out *Encoder, in any, opts ...Options) (err error) {
 	return marshalEncode(out, in, mo)
 }
 
-func marshalEncode(out *Encoder, in any, mo *jsonopts.Struct) (err error) {
+func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(in)
 	if !v.IsValid() || (v.Kind() == reflect.Pointer && v.IsNil()) {
-		return out.WriteToken(Null)
+		return out.WriteToken(jsontext.Null)
 	}
 	// Shallow copy non-pointer values to obtain an addressable value.
 	// It is beneficial to performance to always pass pointers to avoid this.
@@ -400,7 +400,7 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 	return unmarshalFull(dec, out, &xd.Struct)
 }
 
-func unmarshalFull(in *Decoder, out any, uo *jsonopts.Struct) error {
+func unmarshalFull(in *jsontext.Decoder, out any, uo *jsonopts.Struct) error {
 	switch err := unmarshalDecode(in, out, uo); err {
 	case nil:
 		return export.Decoder(in).CheckEOF()
@@ -411,15 +411,15 @@ func unmarshalFull(in *Decoder, out any, uo *jsonopts.Struct) error {
 	}
 }
 
-// UnmarshalDecode deserializes a Go value from a [Decoder] according to the
-// provided unmarshal options (while ignoring marshal, encode, or decode options).
+// UnmarshalDecode deserializes a Go value from a [jsontext.Decoder] according to
+// the provided unmarshal options (while ignoring marshal, encode, or decode options).
 // Unlike [Unmarshal] and [UnmarshalRead], decode options are ignored because
-// they must have already been specified on the provided [Decoder].
+// they must have already been specified on the provided [jsontext.Decoder].
 // The input may be a stream of one or more JSON values,
 // where this only unmarshals the next JSON value in the stream.
 // The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
-func UnmarshalDecode(in *Decoder, out any, opts ...Options) (err error) {
+func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
 	uo := getStructOptions()
 	defer putStructOptions(uo)
 	uo.Join(opts...)
@@ -428,7 +428,7 @@ func UnmarshalDecode(in *Decoder, out any, opts ...Options) (err error) {
 	return unmarshalDecode(in, out, uo)
 }
 
-func unmarshalDecode(in *Decoder, out any, uo *jsonopts.Struct) (err error) {
+func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(out)
 	if !v.IsValid() || v.Kind() != reflect.Pointer || v.IsNil() {
 		var t reflect.Type
@@ -474,12 +474,12 @@ func newAddressableValue(t reflect.Type) addressableValue {
 
 // All marshal and unmarshal behavior is implemented using these signatures.
 // The *jsonopts.Struct argument is guaranteed to identical to or at least
-// a strict super-set of the options in Encoder.options or Decoder.options.
+// a strict super-set of the options in Encoder.Struct or Decoder.Struct.
 // It is identical for Marshal, Unmarshal, MarshalWrite, and UnmarshalRead.
 // It is a super-set for MarshalEncode and UnmarshalDecode.
 type (
-	marshaler   = func(*Encoder, addressableValue, *jsonopts.Struct) error
-	unmarshaler = func(*Decoder, addressableValue, *jsonopts.Struct) error
+	marshaler   = func(*jsontext.Encoder, addressableValue, *jsonopts.Struct) error
+	unmarshaler = func(*jsontext.Decoder, addressableValue, *jsonopts.Struct) error
 )
 
 type arshaler struct {

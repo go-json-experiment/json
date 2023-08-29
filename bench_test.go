@@ -19,6 +19,7 @@ import (
 	jsonv1 "encoding/json"
 
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 var benchV1 = os.Getenv("BENCHMARK_V1") != ""
@@ -205,10 +206,10 @@ func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
 
 type jsonArshalerV2 struct{}
 
-func (*jsonArshalerV2) MarshalJSONV2(enc *Encoder, opts Options) error {
-	return enc.WriteToken(String("method"))
+func (*jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts Options) error {
+	return enc.WriteToken(jsontext.String("method"))
 }
-func (*jsonArshalerV2) UnmarshalJSONV2(dec *Decoder, opts Options) error {
+func (*jsonArshalerV2) UnmarshalJSONV2(dec *jsontext.Decoder, opts Options) error {
 	b, err := dec.ReadValue()
 	if string(b) != `"method"` {
 		return fmt.Errorf("UnmarshalJSONV2: got %q, want %q", b, `"method"`)
@@ -379,9 +380,9 @@ func runArshal(t testing.TB, arshalName string, newValue func() any, data []byte
 	}
 }
 
-func mustDecodeTokens(t testing.TB, data []byte) []Token {
-	var tokens []Token
-	dec := NewDecoder(bytes.NewReader(data))
+func mustDecodeTokens(t testing.TB, data []byte) []jsontext.Token {
+	var tokens []jsontext.Token
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
 	for {
 		tok, err := dec.ReadToken()
 		if err != nil {
@@ -395,9 +396,9 @@ func mustDecodeTokens(t testing.TB, data []byte) []Token {
 		// since this more closely matches common use cases.
 		switch tok.Kind() {
 		case '"':
-			tokens = append(tokens, String(tok.String()))
+			tokens = append(tokens, jsontext.String(tok.String()))
 		case '0':
-			tokens = append(tokens, Float(tok.Float()))
+			tokens = append(tokens, jsontext.Float(tok.Float()))
 		default:
 			tokens = append(tokens, tok.Clone())
 		}
@@ -405,7 +406,7 @@ func mustDecodeTokens(t testing.TB, data []byte) []Token {
 	return tokens
 }
 
-func runCode(t testing.TB, codeName, typeName, modeName string, buffer, data []byte, tokens []Token) {
+func runCode(t testing.TB, codeName, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
 	switch codeName {
 	case "Encode":
 		runEncode(t, typeName, modeName, buffer, data, tokens)
@@ -414,7 +415,7 @@ func runCode(t testing.TB, codeName, typeName, modeName string, buffer, data []b
 	}
 }
 
-func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []Token) {
+func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
 	if benchV1 {
 		if modeName == "Buffered" {
 			t.Skip("no support for direct buffered input in v1")
@@ -432,12 +433,12 @@ func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 		return
 	}
 
-	var enc *Encoder
+	var enc *jsontext.Encoder
 	switch modeName {
 	case "Streaming":
-		enc = NewEncoder(bytesBuffer{bytes.NewBuffer(buffer[:0])})
+		enc = jsontext.NewEncoder(bytesBuffer{bytes.NewBuffer(buffer[:0])})
 	case "Buffered":
-		enc = NewEncoder(bytes.NewBuffer(buffer[:0]))
+		enc = jsontext.NewEncoder(bytes.NewBuffer(buffer[:0]))
 	}
 	switch typeName {
 	case "Token":
@@ -453,7 +454,7 @@ func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 	}
 }
 
-func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []Token) {
+func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
 	if benchV1 {
 		if modeName == "Buffered" {
 			t.Skip("no support for direct buffered output in v1")
@@ -478,12 +479,12 @@ func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 		return
 	}
 
-	var dec *Decoder
+	var dec *jsontext.Decoder
 	switch modeName {
 	case "Streaming":
-		dec = NewDecoder(bytesBuffer{bytes.NewBuffer(data)})
+		dec = jsontext.NewDecoder(bytesBuffer{bytes.NewBuffer(data)})
 	case "Buffered":
-		dec = NewDecoder(bytes.NewBuffer(data))
+		dec = jsontext.NewDecoder(bytes.NewBuffer(data))
 	}
 	switch typeName {
 	case "Token":
@@ -550,7 +551,7 @@ func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 		return
 	}
 
-	dec := NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
+	dec := jsontext.NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
 	switch typeName {
 	case "Token":
 		for dec.PeekKind() > 0 {
@@ -565,10 +566,10 @@ func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 	}
 }
 
-func TestBenchmarkRawValue(t *testing.T) { runRawValue(t) }
-func BenchmarkRawValue(b *testing.B)     { runRawValue(b) }
+func TestBenchmarkTextValue(t *testing.T) { runValue(t) }
+func BenchmarkTextValue(b *testing.B)     { runValue(b) }
 
-func runRawValue(tb testing.TB) {
+func runValue(tb testing.TB) {
 	if testing.Short() {
 		tb.Skip() // CitmCatalog is not loaded in short mode
 	}
@@ -580,31 +581,31 @@ func runRawValue(tb testing.TB) {
 	}
 
 	runTestOrBench(tb, "IsValid", len64(data), func(tb testing.TB) {
-		RawValue(data).IsValid()
+		jsontext.Value(data).IsValid()
 	})
 
 	methods := []struct {
 		name   string
-		format func(*RawValue) error
+		format func(*jsontext.Value) error
 	}{
-		{"Compact", (*RawValue).Compact},
-		{"Indent", func(v *RawValue) error { return v.Indent("\t", "    ") }},
-		{"Canonicalize", (*RawValue).Canonicalize},
+		{"Compact", (*jsontext.Value).Compact},
+		{"Indent", func(v *jsontext.Value) error { return v.Indent("\t", "    ") }},
+		{"Canonicalize", (*jsontext.Value).Canonicalize},
 	}
 
-	var v RawValue
+	var v jsontext.Value
 	for _, method := range methods {
 		runTestOrBench(tb, method.name, len64(data), func(tb testing.TB) {
 			v = append(v[:0], data...) // reset with original input
 			if err := method.format(&v); err != nil {
-				tb.Errorf("RawValue.%v error: %v", method.name, err)
+				tb.Errorf("jsontext.Value.%v error: %v", method.name, err)
 			}
 		})
 		v = append(v[:0], data...)
 		method.format(&v)
 		runTestOrBench(tb, method.name+"/Noop", len64(data), func(tb testing.TB) {
 			if err := method.format(&v); err != nil {
-				tb.Errorf("RawValue.%v error: %v", method.name, err)
+				tb.Errorf("jsontext.Value.%v error: %v", method.name, err)
 			}
 		})
 	}

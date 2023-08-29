@@ -696,9 +696,9 @@ func TestPointerReceiver(t *testing.T) {
 // The reason for the change is that v2 prioritizes performance and
 // the guarantee that marshaling operates primarily in a streaming manner.
 //
-// The v2 API provides RawValue.Canonicalize if stability is needed:
+// The v2 API provides jsontext.Value.Canonicalize if stability is needed:
 //
-//	(*json.RawValue)(&b).Canonicalize()
+//	(*jsontext.Value)(&b).Canonicalize()
 //
 // Related issue:
 //
@@ -1071,8 +1071,8 @@ func TestTimeDurations(t *testing.T) {
 // In v2, unmarshaling a JSON number beyond the representation of a Go float
 // would use the closest representable value (i.e., ±math.MaxFloatX).
 //
-// The rationale for the change is to ensure that
-// if a JSON value is syntactically valid according to json.RawValue.IsValid,
+// The rationale for the change is to ensure that if a JSON value
+// is syntactically valid according to jsontext.Value.IsValid,
 // then it is always valid to unmarshal that into a Go any value.
 func TestMaxFloats(t *testing.T) {
 	for _, json := range jsonPackages {

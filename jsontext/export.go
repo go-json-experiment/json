@@ -17,7 +17,7 @@ var Internal exporter
 type exporter struct{}
 
 // Export exposes internal functionality from "jsontext" to "json".
-// This cannot be statically called by other packages since
+// This cannot be dynamically called by other packages since
 // they cannot obtain a reference to the internal.AllowInternalUse value.
 func (exporter) Export(p *internal.NotForPublicUse) export {
 	if p != &internal.AllowInternalUse {

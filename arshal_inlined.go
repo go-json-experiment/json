@@ -13,6 +13,7 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // This package supports "inlining" a Go struct field, where the contents
@@ -23,15 +24,15 @@ import (
 // nested struct are virtually hoisted up to the parent struct using rules
 // similar to how Go embedding works (but operating within the JSON namespace).
 //
-// However, inlined fields may also be of a Go map type with a string key
-// or a RawValue. Such inlined fields are called "fallback" fields since they
+// However, inlined fields may also be of a Go map type with a string key or
+// a jsontext.Value. Such inlined fields are called "fallback" fields since they
 // represent any arbitrary JSON object member. Explicitly named fields take
 // precedence over the inlined fallback. Only one inlined fallback is allowed.
 
-var rawValueType = reflect.TypeOf((*RawValue)(nil)).Elem()
+var jsontextValueType = reflect.TypeOf((*jsontext.Value)(nil)).Elem()
 
 // marshalInlinedFallbackAll marshals all the members in an inlined fallback.
-func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.Struct, f *structField, insertUnquotedName func([]byte) bool) error {
+func marshalInlinedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct, f *structField, insertUnquotedName func([]byte) bool) error {
 	v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 	if len(f.index) > 1 {
 		v = v.fieldByIndex(f.index[1:], false)
@@ -44,9 +45,9 @@ func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.S
 		return nil
 	}
 
-	if v.Type() == rawValueType {
+	if v.Type() == jsontextValueType {
 		// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
-		b := *v.Addr().Interface().(*RawValue)
+		b := *v.Addr().Interface().(*jsontext.Value)
 		if len(b) == 0 { // TODO: Should this be nil? What if it were all whitespace?
 			return nil
 		}
@@ -61,18 +62,18 @@ func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.S
 			if err == io.EOF {
 				err = io.ErrUnexpectedEOF
 			}
-			return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
+			return &SemanticError{action: "marshal", GoType: jsontextValueType, Err: err}
 		}
 		if tok.Kind() != '{' {
 			err := errors.New("inlined raw value must be a JSON object")
-			return &SemanticError{action: "marshal", JSONKind: tok.Kind(), GoType: rawValueType, Err: err}
+			return &SemanticError{action: "marshal", JSONKind: tok.Kind(), GoType: jsontextValueType, Err: err}
 		}
 		for dec.PeekKind() != '}' {
 			// Parse the JSON object name.
 			var flags jsonwire.ValueFlags
 			val, err := xd.ReadValue(&flags)
 			if err != nil {
-				return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
+				return &SemanticError{action: "marshal", GoType: jsontextValueType, Err: err}
 			}
 			if insertUnquotedName != nil {
 				name := jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -87,17 +88,17 @@ func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.S
 			// Parse the JSON object value.
 			val, err = xd.ReadValue(&flags)
 			if err != nil {
-				return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
+				return &SemanticError{action: "marshal", GoType: jsontextValueType, Err: err}
 			}
 			if err := enc.WriteValue(val); err != nil {
 				return err
 			}
 		}
 		if _, err := dec.ReadToken(); err != nil {
-			return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
+			return &SemanticError{action: "marshal", GoType: jsontextValueType, Err: err}
 		}
 		if err := xd.CheckEOF(); err != nil {
-			return &SemanticError{action: "marshal", GoType: rawValueType, Err: err}
+			return &SemanticError{action: "marshal", GoType: jsontextValueType, Err: err}
 		}
 		return nil
 	} else {
@@ -163,15 +164,15 @@ func marshalInlinedFallbackAll(enc *Encoder, va addressableValue, mo *jsonopts.S
 }
 
 // unmarshalInlinedFallbackNext unmarshals only the next member in an inlined fallback.
-func unmarshalInlinedFallbackNext(dec *Decoder, va addressableValue, uo *jsonopts.Struct, f *structField, quotedName, unquotedName []byte) error {
+func unmarshalInlinedFallbackNext(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct, f *structField, quotedName, unquotedName []byte) error {
 	v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 	if len(f.index) > 1 {
 		v = v.fieldByIndex(f.index[1:], true)
 	}
 	v = v.indirect(true)
 
-	if v.Type() == rawValueType {
-		b := v.Addr().Interface().(*RawValue)
+	if v.Type() == jsontextValueType {
+		b := v.Addr().Interface().(*jsontext.Value)
 		if len(*b) == 0 { // TODO: Should this be nil? What if it were all whitespace?
 			*b = append(*b, '{')
 		} else {
@@ -186,16 +187,16 @@ func unmarshalInlinedFallbackNext(dec *Decoder, va addressableValue, uo *jsonopt
 				}
 			} else {
 				err := errors.New("inlined raw value must be a JSON object")
-				return &SemanticError{action: "unmarshal", GoType: rawValueType, Err: err}
+				return &SemanticError{action: "unmarshal", GoType: jsontextValueType, Err: err}
 			}
 		}
 		*b = append(*b, quotedName...)
 		*b = append(*b, ':')
-		rawValue, err := dec.ReadValue()
+		val, err := dec.ReadValue()
 		if err != nil {
 			return err
 		}
-		*b = append(*b, rawValue...)
+		*b = append(*b, val...)
 		*b = append(*b, '}')
 		return nil
 	} else {

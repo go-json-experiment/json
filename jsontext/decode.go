@@ -48,7 +48,7 @@ import (
 // It is used to read a stream of top-level JSON values,
 // each separated by optional whitespace characters.
 //
-// ReadToken and ReadValue calls may be interleaved.
+// [Decoder.ReadToken] and [Decoder.ReadValue] calls may be interleaved.
 // For example, the following JSON value:
 //
 //	{"name":"value","array":[null,false,true,3.14159],"object":{"k":"v"}}
@@ -71,7 +71,7 @@ import (
 //
 // The above is one of many possible sequence of calls and
 // may not represent the most sensible method to call for any given token/value.
-// For example, it is probably more common to call ReadToken to obtain a
+// For example, it is probably more common to call [Decoder.ReadToken] to obtain a
 // string token for object names.
 type Decoder struct {
 	s decoderState
@@ -114,7 +114,7 @@ type decodeBuffer struct {
 
 // NewDecoder constructs a new streaming decoder reading from r.
 //
-// If r is a bytes.Buffer, then the decoder parses directly from the buffer
+// If r is a [bytes.Buffer], then the decoder parses directly from the buffer
 // without first copying the contents to an intermediate buffer.
 // Additional writes to the buffer must not occur while the decoder is in use.
 func NewDecoder(r io.Reader, opts ...Options) *Decoder {
@@ -125,7 +125,8 @@ func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 
 // Reset resets a decoder such that it is reading afresh from r and
 // configured with the provided options. Reset must not be called on an
-// a Decoder passed to [UnmarshalerV2.UnmarshalJSONV2] or [UnmarshalFuncV2].
+// a Decoder passed to the [encoding/json/v2.UnmarshalerV2.UnmarshalJSONV2] method
+// or the [encoding/json/v2.UnmarshalFuncV2] function.
 func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	switch {
 	case d == nil:
@@ -346,7 +347,7 @@ func (d *decoderState) checkDelim(delim byte, next Kind) error {
 	return d.injectSyntacticErrorWithPosition(err, pos)
 }
 
-// SkipValue is semantically equivalent to calling ReadValue and discarding
+// SkipValue is semantically equivalent to calling [Decoder.ReadValue] and discarding
 // the result except that memory is not wasted trying to hold the entire result.
 func (d *Decoder) SkipValue() error {
 	return d.s.SkipValue()
@@ -376,9 +377,9 @@ func (d *decoderState) SkipValue() error {
 	}
 }
 
-// ReadToken reads the next Token, advancing the read offset.
+// ReadToken reads the next [Token], advancing the read offset.
 // The returned token is only valid until the next Peek, Read, or Skip call.
-// It returns io.EOF if there are no more tokens.
+// It returns [io.EOF] if there are no more tokens.
 func (d *Decoder) ReadToken() (Token, error) {
 	return d.s.ReadToken()
 }
@@ -577,13 +578,13 @@ func (d *decoderState) ReadToken() (Token, error) {
 // The returned value is only valid until the next Peek, Read, or Skip call and
 // may not be mutated while the Decoder remains in use.
 // If the decoder is currently at the end token for an object or array,
-// then it reports a SyntacticError and the internal state remains unchanged.
-// It returns io.EOF if there are no more values.
-func (d *Decoder) ReadValue() (RawValue, error) {
+// then it reports a [SyntacticError] and the internal state remains unchanged.
+// It returns [io.EOF] if there are no more values.
+func (d *Decoder) ReadValue() (Value, error) {
 	var flags jsonwire.ValueFlags
 	return d.s.ReadValue(&flags)
 }
-func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (RawValue, error) {
+func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (Value, error) {
 	// Determine the next kind.
 	var err error
 	var next Kind
@@ -997,7 +998,7 @@ func (d *decoderState) consumeArray(flags *jsonwire.ValueFlags, pos, depth int) 
 
 // InputOffset returns the current input byte offset. It gives the location
 // of the next byte immediately after the most recently returned token or value.
-// The number of bytes actually read from the underlying io.Reader may be more
+// The number of bytes actually read from the underlying [io.Reader] may be more
 // than this offset due to internal buffering effects.
 func (d *Decoder) InputOffset() int64 {
 	return d.s.previousOffsetEnd()
@@ -1013,8 +1014,8 @@ func (d *Decoder) UnreadBuffer() []byte {
 
 // StackDepth returns the depth of the state machine for read JSON data.
 // Each level on the stack represents a nested JSON object or array.
-// It is incremented whenever an ObjectStart or ArrayStart token is encountered
-// and decremented whenever an ObjectEnd or ArrayEnd token is encountered.
+// It is incremented whenever an [ObjectStart] or [ArrayStart] token is encountered
+// and decremented whenever an [ObjectEnd] or [ArrayEnd] token is encountered.
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (d *Decoder) StackDepth() int {
 	// NOTE: Keep in sync with Encoder.StackDepth.
@@ -1022,7 +1023,7 @@ func (d *Decoder) StackDepth() int {
 }
 
 // StackIndex returns information about the specified stack level.
-// It must be a number between 0 and StackDepth, inclusive.
+// It must be a number between 0 and [Decoder.StackDepth], inclusive.
 // For each level, it reports the kind:
 //
 //   - 0 for a level of zero,
@@ -1046,7 +1047,7 @@ func (d *Decoder) StackIndex(i int) (Kind, int) {
 }
 
 // StackPointer returns a JSON Pointer (RFC 6901) to the most recently read value.
-// Object names are only present if AllowDuplicateNames is false, otherwise
+// Object names are only present if [AllowDuplicateNames] is false, otherwise
 // object members are represented using their index within the object.
 func (d *Decoder) StackPointer() string {
 	d.s.Names.copyQuotedBuffer(d.s.buf)

@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 const errorPrefix = "json: "
@@ -29,7 +31,7 @@ type SemanticError struct {
 	JSONPointer string
 
 	// JSONKind is the JSON kind that could not be handled.
-	JSONKind Kind // may be zero if unknown
+	JSONKind jsontext.Kind // may be zero if unknown
 	// GoType is the Go type that could not be handled.
 	GoType reflect.Type // may be nil if unknown
 

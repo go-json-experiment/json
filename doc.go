@@ -7,8 +7,36 @@
 // primitive data types such as booleans, strings, and numbers,
 // in addition to structured data types such as objects and arrays.
 //
-// The [Marshal] and [Unmarshal] functions are used to encode/decode Go values
-// to/from JSON text.
+// [Marshal] and [Unmarshal] encode and decode Go values
+// to/from JSON text contained within a []byte.
+// [MarshalWrite] and [UnmarshalRead] operate on JSON text
+// by writing to or reading from an [io.Writer] or [io.Reader].
+// [MarshalEncode] and [UnmarshalDecode] operate on JSON text
+// by encoding to or decoding from a [jsontext.Encoder] or [jsontext.Decoder].
+// [Options] may be passed to each of the marshal or unmarshal functions
+// to configure the semantic behavior of marshaling and unmarshaling
+// (i.e., alter how JSON data is understood as Go data and vice versa).
+// [jsontext.Options] may also be passed to the marshal or unmarshal functions
+// to configure the syntactic behavior of encoding or decoding.
+//
+// The data types of JSON are mapped to/from the data types of Go based on
+// the closest logical equivalent between the two type systems. For example,
+// a JSON boolean corresponds with a Go bool,
+// a JSON string corresponds with a Go string,
+// a JSON number corresponds with a Go int, uint or float,
+// a JSON array corresponds with a Go slice or array, and
+// a JSON object corresponds with a Go struct or map.
+// See the documentation on [Marshal] and [Unmarshal] for a comprehensive list
+// of how the JSON and Go type systems correspond.
+//
+// Arbitrary Go types can customize their JSON representation by implementing
+// [MarshalerV1], [MarshalerV2], [UnmarshalerV1], or [UnmarshalerV2].
+// This provides authors of Go types with control over how their types are
+// serialized as JSON. Alternatively, users can implement functions that match
+// [MarshalFuncV1], [MarshalFuncV2], [UnmarshalFuncV1], or [UnmarshalFuncV2]
+// to specify the JSON representation for arbitrary types.
+// This provides callers of JSON functionality with control over
+// how any arbitrary type is serialized as JSON.
 //
 // # JSON Representation of Go structs
 //

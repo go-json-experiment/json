@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 func TestIntern(t *testing.T) {
@@ -40,7 +41,7 @@ func BenchmarkIntern(b *testing.B) {
 				data = ts.Data()
 			}
 		}
-		dec := NewDecoder(bytes.NewReader(data))
+		dec := jsontext.NewDecoder(bytes.NewReader(data))
 		for {
 			k, n := dec.StackIndex(dec.StackDepth())
 			isObjectName := k == '{' && n%2 == 0

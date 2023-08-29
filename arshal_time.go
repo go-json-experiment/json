@@ -18,6 +18,7 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 var (
@@ -37,7 +38,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	switch t {
 	case timeDurationType:
 		fncs.nonDefault = true
-		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) error {
+		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			xe := export.Encoder(enc)
 			var m durationArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
@@ -57,7 +58,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			return enc.WriteValue(b)
 		}
-		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) error {
+		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			xd := export.Decoder(dec)
 			var u durationArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
@@ -103,7 +104,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	case timeTimeType:
 		fncs.nonDefault = true
-		fncs.marshal = func(enc *Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
+		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
 			xe := export.Encoder(enc)
 			var m timeArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
@@ -133,7 +134,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			return enc.WriteValue(b)
 		}
-		fncs.unmarshal = func(dec *Decoder, va addressableValue, uo *jsonopts.Struct) (err error) {
+		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) (err error) {
 			xd := export.Decoder(dec)
 			var u timeArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {

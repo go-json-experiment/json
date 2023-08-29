@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-// ApepndQuote appends src to dst as a JSON string per RFC 7159, section 7.
+// AppendQuote appends src to dst as a JSON string per RFC 7159, section 7.
 //
 // If validateUTF8 is specified, this rejects input that contains invalid UTF-8
 // otherwise invalid bytes are replaced with the Unicode replacement character.

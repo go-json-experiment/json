@@ -296,7 +296,7 @@ var decoderErrorTestdata = []struct {
 	opts: []Options{AllowInvalidUTF8(true)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
-		{'"', RawValue("\"living\xde\xad\xbe\xef\""), nil, ""},
+		{'"', Value("\"living\xde\xad\xbe\xef\""), nil, ""},
 	},
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
@@ -765,8 +765,8 @@ func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, in 
 			if gotOut.String() != wantOut.String() {
 				t.Fatalf("%s: %d: Decoder.ReadToken = %v, want %v", where, i, gotOut, wantOut)
 			}
-		case RawValue:
-			var gotOut RawValue
+		case Value:
+			var gotOut Value
 			gotOut, gotErr = dec.ReadValue()
 			if string(gotOut) != string(wantOut) {
 				t.Fatalf("%s: %d: Decoder.ReadValue = %s, want %s", where, i, gotOut, wantOut)
@@ -878,7 +878,7 @@ func TestBlockingDecoder(t *testing.T) {
 	// Test synchronous ReadToken calls.
 	for _, want := range values {
 		go func() {
-			errCh <- enc.WriteValue(RawValue(want))
+			errCh <- enc.WriteValue(Value(want))
 		}()
 
 		tok, err := dec.ReadToken()
@@ -908,7 +908,7 @@ func TestBlockingDecoder(t *testing.T) {
 	// Test synchronous ReadValue calls.
 	for _, want := range values {
 		go func() {
-			errCh <- enc.WriteValue(RawValue(want))
+			errCh <- enc.WriteValue(Value(want))
 		}()
 
 		got, err := dec.ReadValue()

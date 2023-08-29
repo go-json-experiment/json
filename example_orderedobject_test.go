@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // OrderedObject is an ordered sequence of name/value members in a JSON object.
@@ -28,8 +29,8 @@ type ObjectMember[V any] struct {
 }
 
 // MarshalJSONV2 encodes obj as a JSON object into enc.
-func (obj *OrderedObject[V]) MarshalJSONV2(enc *json.Encoder, opts json.Options) error {
-	if err := enc.WriteToken(json.ObjectStart); err != nil {
+func (obj *OrderedObject[V]) MarshalJSONV2(enc *jsontext.Encoder, opts json.Options) error {
+	if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
 		return err
 	}
 	for i := range *obj {
@@ -41,14 +42,14 @@ func (obj *OrderedObject[V]) MarshalJSONV2(enc *json.Encoder, opts json.Options)
 			return err
 		}
 	}
-	if err := enc.WriteToken(json.ObjectEnd); err != nil {
+	if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
 		return err
 	}
 	return nil
 }
 
 // UnmarshalJSONV2 decodes a JSON object from dec into obj.
-func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *json.Decoder, opts json.Options) error {
+func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *jsontext.Decoder, opts json.Options) error {
 	if k := dec.PeekKind(); k != '{' {
 		return fmt.Errorf("expected object start, but encountered %v", k)
 	}
@@ -72,22 +73,22 @@ func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *json.Decoder, opts json.Option
 }
 
 // The exact order of JSON object can be preserved through the use of a
-// specialized type that implements MarshalerV2 and UnmarshalerV2.
+// specialized type that implements [MarshalerV2] and [UnmarshalerV2].
 func Example_orderedObject() {
 	// Round-trip marshal and unmarshal an ordered object.
 	// We expect the order and duplicity of JSON object members to be preserved.
-	// Specify AllowDuplicateNames since this object contains "fizz" twice.
+	// Specify jsontext.AllowDuplicateNames since this object contains "fizz" twice.
 	want := OrderedObject[string]{
 		{"fizz", "buzz"},
 		{"hello", "world"},
 		{"fizz", "wuzz"},
 	}
-	b, err := json.Marshal(&want, json.AllowDuplicateNames(true))
+	b, err := json.Marshal(&want, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		log.Fatal(err)
 	}
 	var got OrderedObject[string]
-	err = json.Unmarshal(b, &got, json.AllowDuplicateNames(true))
+	err = json.Unmarshal(b, &got, jsontext.AllowDuplicateNames(true))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func Example_orderedObject() {
 	}
 
 	// Print the serialized JSON object.
-	(*json.RawValue)(&b).Indent("", "\t") // indent for readability
+	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
 	fmt.Println(string(b))
 
 	// Output:

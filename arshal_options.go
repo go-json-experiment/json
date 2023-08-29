@@ -12,28 +12,65 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonopts"
 )
 
-// Options configures [Marshal], [MarshalWrite], [MarshalEncode],
+// Options configure [Marshal], [MarshalWrite], [MarshalEncode],
 // [Unmarshal], [UnmarshalRead], and [UnmarshalDecode] with specific features.
+// Each function takes in a variadic list of options, where properties
+// set in latter options override the value of previously set properties.
+//
 // The Options type is identical to [encoding/json.Options] and
 // [encoding/json/jsontext.Options]. Options from the other packages can
 // be used interchangeably with functionality in this package.
 //
-// List of options and what operations it affects:
+// Options represent either a singular option or a set of options.
+// It can be functionally thought of as a Go map of option properties
+// (even though the underlying implementation avoids Go maps for performance).
 //
-//   - [StringifyNumbers] affects marshaling and unmarshaling.
-//   - [Deterministic] affects marshaling only.
-//   - [FormatNilSliceAsNull] affects marshaling only.
-//   - [FormatNilMapAsNull] affects marshaling only.
-//   - [DiscardUnknownMembers] affects marshaling only.
-//   - [RejectUnknownMembers] affects unmarshaling only.
-//   - [WithMarshalers] affects marshaling only.
-//   - [WithUnmarshalers] affects unmarshaling only.
+// The constructors (e.g., [Deterministic]) return a singular option value:
+//
+//	opt := Deterministic(true)
+//
+// which is analogous to creating a single entry map:
+//
+//	opt := Options{"Deterministic": true}
+//
+// [JoinOptions] composes multiple options values to together:
+//
+//	out := JoinOptions(opts...)
+//
+// which is analogous to making a new map and copying the options over:
+//
+//	out := make(Options)
+//	for _, m := range opts {
+//		for k, v := range m {
+//			out[k] = v
+//		}
+//	}
+//
+// [GetOption] looks up the value of options parameter:
+//
+//	v, ok := GetOption(opts, Deterministic)
+//
+// which is analogous to a Go map lookup:
+//
+//	v, ok := Options["Deterministic"]
+//
+// There is a single Options type, which is used with both marshal and unmarshal.
+// Some options affect both operations, while others only affect one operation:
+//
+//   - [StringifyNumbers] affects marshaling and unmarshaling
+//   - [Deterministic] affects marshaling only
+//   - [FormatNilSliceAsNull] affects marshaling only
+//   - [FormatNilMapAsNull] affects marshaling only
+//   - [DiscardUnknownMembers] affects marshaling only
+//   - [RejectUnknownMembers] affects unmarshaling only
+//   - [WithMarshalers] affects marshaling only
+//   - [WithUnmarshalers] affects unmarshaling only
 //
 // Options that do not affect a particular operation are ignored.
 type Options = jsonopts.Options
 
 // JoinOptions coalesces the provided list of options into a single Options.
-// Properties set in latter options override previously set properties.
+// Properties set in latter options override the value of previously set properties.
 func JoinOptions(srcs ...Options) Options {
 	var dst jsonopts.Struct
 	for _, src := range srcs {
@@ -49,10 +86,10 @@ func JoinOptions(srcs ...Options) Options {
 //
 //	v, ok := json.GetOption(opts, json.Deterministic)
 //
-// Generally speaking, the presence bit should be ignored
-// when introspecting the options to alter the behavior of
+// Options are most commonly introspected to alter the JSON representation of
 // [MarshalerV2.MarshalJSONV2] and [MarshalerV2.MarshalJSONV2] methods, and
 // [MarshalFuncV2] and [UnmarshalFuncV2] functions.
+// In such cases, the presence bit should generally be ignored.
 func GetOption[T any](opts Options, setter func(T) Options) (T, bool) {
 	return jsonopts.GetOption(opts, setter)
 }
@@ -61,7 +98,7 @@ func GetOption[T any](opts Options, setter func(T) Options) (T, bool) {
 // It is equivalent to all boolean options under [Options],
 // [encoding/json.Options], and [encoding/json/jsontext.Options]
 // being set to false. All non-boolean options are set to the zero value,
-// except for [WithIndent], which defaults to "\t".
+// except for [jsontext.WithIndent], which defaults to "\t".
 func DefaultOptionsV2() Options {
 	return &jsonopts.DefaultOptionsV2
 }

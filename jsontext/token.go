@@ -29,7 +29,7 @@ const (
 //   - a start or end delimiter for a JSON object (i.e., { or } )
 //   - a start or end delimiter for a JSON array (i.e., [ or ] )
 //
-// A Token cannot represent entire array or object values, while a RawValue can.
+// A Token cannot represent entire array or object values, while a [Value] can.
 // There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
 type Token struct {
@@ -158,7 +158,7 @@ func Uint(n uint64) Token {
 }
 
 // Clone makes a copy of the Token such that its value remains valid
-// even after a subsequent Decoder.Read call.
+// even after a subsequent [Decoder.Read] call.
 func (t Token) Clone() Token {
 	// TODO: Allow caller to avoid any allocations?
 	if raw := t.raw; raw != nil {

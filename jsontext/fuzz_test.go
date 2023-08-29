@@ -74,7 +74,7 @@ func FuzzCoder(f *testing.F) {
 				if err := enc.WriteToken(tokVal); err != nil {
 					t.Fatalf("Encoder.WriteToken error: %v", err)
 				}
-			case RawValue:
+			case Value:
 				if err := enc.WriteValue(tokVal); err != nil {
 					t.Fatalf("Encoder.WriteValue error: %v", err)
 				}
@@ -134,8 +134,8 @@ func FuzzResumableDecoder(f *testing.F) {
 	})
 }
 
-func FuzzRawValueReformat(f *testing.F) {
-	for _, td := range rawValueTestdata {
+func FuzzValueReformat(f *testing.F) {
+	for _, td := range valueTestdata {
 		f.Add([]byte(td.in))
 	}
 
@@ -171,37 +171,37 @@ func FuzzRawValueReformat(f *testing.F) {
 			t.Errorf("invalid input per RFC 8259 implies invalid per RFC 7493")
 		}
 
-		gotValid := RawValue(b).IsValid()
+		gotValid := Value(b).IsValid()
 		wantValid := validRFC7493
 		if gotValid != wantValid {
-			t.Errorf("RawValue.IsValid = %v, want %v", gotValid, wantValid)
+			t.Errorf("Value.IsValid = %v, want %v", gotValid, wantValid)
 		}
 
-		gotCompacted := RawValue(string(b))
+		gotCompacted := Value(string(b))
 		gotCompactOk := gotCompacted.Compact() == nil
 		wantCompactOk := validRFC7159
 		if !bytes.Equal(stripWhitespace(gotCompacted), stripWhitespace(b)) {
-			t.Errorf("stripWhitespace(RawValue.Compact) = %s, want %s", stripWhitespace(gotCompacted), stripWhitespace(b))
+			t.Errorf("stripWhitespace(Value.Compact) = %s, want %s", stripWhitespace(gotCompacted), stripWhitespace(b))
 		}
 		if gotCompactOk != wantCompactOk {
-			t.Errorf("RawValue.Compact success mismatch: got %v, want %v", gotCompactOk, wantCompactOk)
+			t.Errorf("Value.Compact success mismatch: got %v, want %v", gotCompactOk, wantCompactOk)
 		}
 
-		gotIndented := RawValue(string(b))
+		gotIndented := Value(string(b))
 		gotIndentOk := gotIndented.Indent("", " ") == nil
 		wantIndentOk := validRFC7159
 		if !bytes.Equal(stripWhitespace(gotIndented), stripWhitespace(b)) {
-			t.Errorf("stripWhitespace(RawValue.Indent) = %s, want %s", stripWhitespace(gotIndented), stripWhitespace(b))
+			t.Errorf("stripWhitespace(Value.Indent) = %s, want %s", stripWhitespace(gotIndented), stripWhitespace(b))
 		}
 		if gotIndentOk != wantIndentOk {
-			t.Errorf("RawValue.Indent success mismatch: got %v, want %v", gotIndentOk, wantIndentOk)
+			t.Errorf("Value.Indent success mismatch: got %v, want %v", gotIndentOk, wantIndentOk)
 		}
 
-		gotCanonicalized := RawValue(string(b))
+		gotCanonicalized := Value(string(b))
 		gotCanonicalizeOk := gotCanonicalized.Canonicalize() == nil
 		wantCanonicalizeOk := validRFC7493
 		if gotCanonicalizeOk != wantCanonicalizeOk {
-			t.Errorf("RawValue.Canonicalize success mismatch: got %v, want %v", gotCanonicalizeOk, wantCanonicalizeOk)
+			t.Errorf("Value.Canonicalize success mismatch: got %v, want %v", gotCanonicalizeOk, wantCanonicalizeOk)
 		}
 	})
 }

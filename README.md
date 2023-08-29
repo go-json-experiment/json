@@ -13,7 +13,7 @@ Do not depend on this in publicly available modules.
 compatible with v1 in terms of both API and default behavior to ease migration.
 For example, the `Marshal` and `Unmarshal` functions are the most widely used
 declarations in the v1 package. It seems sensible for equivalent functionality
-in v2 to be named the same and have the same signature.
+in v2 to be named the same and have a compatible signature.
 Behaviorally, we should aim for 95% to 99% backwards compatibility.
 We do not aim for 100% compatibility since we want the freedom to break
 certain behaviors that are now considered to have been a mistake.
@@ -100,22 +100,28 @@ packing or parsing of JSON data. They operate on `Token` and `Value` types
 which represent the common data structures that are representable in JSON.
 `Encoder` and `Decoder` do not aim to provide any interpretation of the data.
 
-Functions like `Marshal`, `MarshalFull`, `MarshalNext`, `Unmarshal`,
-`UnmarshalFull`, and `UnmarshalNext` provide semantic meaning by correlating
+Functions like `Marshal`, `MarshalWrite`, `MarshalEncode`, `Unmarshal`,
+`UnmarshalRead`, and `UnmarshalDecode` provide semantic meaning by correlating
 any arbitrary Go type with some JSON representation of that type (as stored in
 data types like `[]byte`, `io.Writer`, `io.Reader`, `Encoder`, or `Decoder`).
 
 ![API overview](api.png)
 
-This diagram provides a high-level overview of the v2 `json` package.
+This diagram provides a high-level overview of the v2 `json` and `jsontext` packages.
 Purple blocks represent types, while blue blocks represent functions or methods.
 The arrows and their direction represent the approximate flow of data.
 The bottom half of the diagram contains functionality that is only concerned
-with syntax, while the upper half contains functionality that assigns
-semantic meaning to syntactic data handled by the bottom half.
+with syntax (implemented by the `jsontext` package),
+while the upper half contains functionality that assigns
+semantic meaning to syntactic data handled by the bottom half
+(as implemented by the v2 `json` package).
 
 In contrast to v1 `encoding/json`, options are represented as separate types
 rather than being setter methods on the `Encoder` or `Decoder` types.
+Some options affects JSON serialization at the syntactic layer,
+while others affect it at the semantic layer.
+Some options only affect JSON when decoding,
+while others affect JSON while encoding.
 
 ## Behavior changes
 
@@ -251,9 +257,9 @@ https://github.com/go-json-experiment/jsonbench.
   One advantange is because it does not sort the keys for a `map[string]any`,
   while alternatives (except `SonicJSON` and `JSONIterator`) do sort the keys.
 
-#### RawValue types
+#### TextValue types
 
-![Benchmark Marshal Rawvalue](benchmark-marshal-rawvalue.png)
+![Benchmark Marshal TextValue](benchmark-marshal-rawvalue.png)
 
 * This compares performance when marshaling from a `jsontext.Value`.
   This mostly exercises the underlying encoder and
@@ -299,9 +305,9 @@ https://github.com/go-json-experiment/jsonbench.
 * Aside from `SonicJSON`, `JSONv2` is generally just as fast
   or faster than all the alternatives.
 
-#### RawValue types
+#### TextValue types
 
-![Benchmark Unmarshal Rawvalue](benchmark-unmarshal-rawvalue.png)
+![Benchmark Unmarshal TextValue](benchmark-unmarshal-rawvalue.png)
 
 * This compares performance when unmarshaling into a `jsontext.Value`.
   This mostly exercises the underlying decoder and

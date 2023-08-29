@@ -13,7 +13,7 @@ import (
 	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
-type rawValueTestdataEntry struct {
+type valueTestdataEntry struct {
 	name                jsontest.CaseName
 	in                  string
 	wantValid           bool
@@ -25,15 +25,15 @@ type rawValueTestdataEntry struct {
 	wantCanonicalizeErr error  // implies wantCompacted is in
 }
 
-var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
-	// Initialize rawValueTestdata from coderTestdata.
+var valueTestdata = append(func() (out []valueTestdataEntry) {
+	// Initialize valueTestdata from coderTestdata.
 	for _, td := range coderTestdata {
 		// NOTE: The Compact method preserves the raw formatting of strings,
 		// while the Encoder (by default) does not.
 		if td.name.Name == "ComplicatedString" {
 			td.outCompacted = strings.TrimSpace(td.in)
 		}
-		out = append(out, rawValueTestdataEntry{
+		out = append(out, valueTestdataEntry{
 			name:              td.name,
 			in:                td.in,
 			wantValid:         true,
@@ -43,7 +43,7 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 		})
 	}
 	return out
-}(), []rawValueTestdataEntry{{
+}(), []valueTestdataEntry{{
 	name: jsontest.Name("RFC8785/Primitives"),
 	in: `{
 		"numbers": [333333333.33333329, 1E30, 4.50,
@@ -141,8 +141,8 @@ var rawValueTestdata = append(func() (out []rawValueTestdataEntry) {
 	wantCanonicalizeErr: io.ErrUnexpectedEOF,
 }}...)
 
-func TestRawValueMethods(t *testing.T) {
-	for _, td := range rawValueTestdata {
+func TestValueMethods(t *testing.T) {
+	for _, td := range valueTestdata {
 		t.Run(td.name.Name, func(t *testing.T) {
 			if td.wantIndented == "" {
 				td.wantIndented = td.wantCompacted
@@ -160,37 +160,37 @@ func TestRawValueMethods(t *testing.T) {
 				td.wantCanonicalized = td.in
 			}
 
-			v := RawValue(td.in)
+			v := Value(td.in)
 			gotValid := v.IsValid()
 			if gotValid != td.wantValid {
-				t.Errorf("%s: RawValue.IsValid = %v, want %v", td.name.Where, gotValid, td.wantValid)
+				t.Errorf("%s: Value.IsValid = %v, want %v", td.name.Where, gotValid, td.wantValid)
 			}
 
-			gotCompacted := RawValue(td.in)
+			gotCompacted := Value(td.in)
 			gotCompactErr := gotCompacted.Compact()
 			if string(gotCompacted) != td.wantCompacted {
-				t.Errorf("%s: RawValue.Compact = %s, want %s", td.name.Where, gotCompacted, td.wantCompacted)
+				t.Errorf("%s: Value.Compact = %s, want %s", td.name.Where, gotCompacted, td.wantCompacted)
 			}
 			if !reflect.DeepEqual(gotCompactErr, td.wantCompactErr) {
-				t.Errorf("%s: RawValue.Compact error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCompactErr, td.wantCompactErr)
+				t.Errorf("%s: Value.Compact error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCompactErr, td.wantCompactErr)
 			}
 
-			gotIndented := RawValue(td.in)
+			gotIndented := Value(td.in)
 			gotIndentErr := gotIndented.Indent("\t", "    ")
 			if string(gotIndented) != td.wantIndented {
-				t.Errorf("%s: RawValue.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
+				t.Errorf("%s: Value.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
 			}
 			if !reflect.DeepEqual(gotIndentErr, td.wantIndentErr) {
-				t.Errorf("%s: RawValue.Indent error mismatch:\ngot  %v\nwant %v", td.name.Where, gotIndentErr, td.wantIndentErr)
+				t.Errorf("%s: Value.Indent error mismatch:\ngot  %v\nwant %v", td.name.Where, gotIndentErr, td.wantIndentErr)
 			}
 
-			gotCanonicalized := RawValue(td.in)
+			gotCanonicalized := Value(td.in)
 			gotCanonicalizeErr := gotCanonicalized.Canonicalize()
 			if string(gotCanonicalized) != td.wantCanonicalized {
-				t.Errorf("%s: RawValue.Canonicalize = %s, want %s", td.name.Where, gotCanonicalized, td.wantCanonicalized)
+				t.Errorf("%s: Value.Canonicalize = %s, want %s", td.name.Where, gotCanonicalized, td.wantCanonicalized)
 			}
 			if !reflect.DeepEqual(gotCanonicalizeErr, td.wantCanonicalizeErr) {
-				t.Errorf("%s: RawValue.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCanonicalizeErr, td.wantCanonicalizeErr)
+				t.Errorf("%s: Value.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCanonicalizeErr, td.wantCanonicalizeErr)
 			}
 		})
 	}
