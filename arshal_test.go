@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
 	"github.com/go-json-experiment/json/jsontext"
@@ -231,6 +232,15 @@ type (
 		Base64    []byte `json:",format:base64"`
 		Base64URL []byte `json:",format:base64url"`
 		Array     []byte `json:",format:array"`
+	}
+	structFormatArrayBytes struct {
+		Base16    [4]byte `json:",format:base16"`
+		Base32    [4]byte `json:",format:base32"`
+		Base32Hex [4]byte `json:",format:base32hex"`
+		Base64    [4]byte `json:",format:base64"`
+		Base64URL [4]byte `json:",format:base64url"`
+		Array     [4]byte `json:",format:array"`
+		Default   [4]byte
 	}
 	structFormatFloats struct {
 		NonFinite        float64  `json:",format:nonfinite"`
@@ -1677,6 +1687,99 @@ func TestMarshal(t *testing.T) {
 	]
 }`,
 	}, {
+		name: jsontest.Name("Structs/OmitEmpty/Legacy/Zero"),
+		opts: []Options{jsonflags.OmitEmptyWithLegacyDefinition | 1},
+		in:   structOmitEmptyAll{},
+		want: `{}`,
+	}, {
+		name: jsontest.Name("Structs/OmitEmpty/Legacy/NonEmpty"),
+		opts: []Options{jsontext.Expand(true), jsonflags.OmitEmptyWithLegacyDefinition | 1},
+		in: structOmitEmptyAll{
+			Bool:                  true,
+			PointerBool:           addr(true),
+			String:                string("value"),
+			StringEmpty:           stringMarshalEmpty("value"),
+			StringNonEmpty:        stringMarshalNonEmpty("value"),
+			PointerString:         addr(string("value")),
+			PointerStringEmpty:    addr(stringMarshalEmpty("value")),
+			PointerStringNonEmpty: addr(stringMarshalNonEmpty("value")),
+			Bytes:                 []byte("value"),
+			BytesEmpty:            bytesMarshalEmpty([]byte("value")),
+			BytesNonEmpty:         bytesMarshalNonEmpty([]byte("value")),
+			PointerBytes:          addr([]byte("value")),
+			PointerBytesEmpty:     addr(bytesMarshalEmpty([]byte("value"))),
+			PointerBytesNonEmpty:  addr(bytesMarshalNonEmpty([]byte("value"))),
+			Float:                 math.Copysign(0, -1),
+			PointerFloat:          addr(math.Copysign(0, -1)),
+			Map:                   map[string]string{"": ""},
+			MapEmpty:              mapMarshalEmpty{"key": "value"},
+			MapNonEmpty:           mapMarshalNonEmpty{"key": "value"},
+			PointerMap:            addr(map[string]string{"": ""}),
+			PointerMapEmpty:       addr(mapMarshalEmpty{"key": "value"}),
+			PointerMapNonEmpty:    addr(mapMarshalNonEmpty{"key": "value"}),
+			Slice:                 []string{""},
+			SliceEmpty:            sliceMarshalEmpty{"value"},
+			SliceNonEmpty:         sliceMarshalNonEmpty{"value"},
+			PointerSlice:          addr([]string{""}),
+			PointerSliceEmpty:     addr(sliceMarshalEmpty{"value"}),
+			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}),
+			Pointer:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
+			Interface:             []string{""},
+		},
+		want: `{
+	"Bool": true,
+	"PointerBool": true,
+	"String": "value",
+	"StringEmpty": "",
+	"StringNonEmpty": "value",
+	"PointerString": "value",
+	"PointerStringEmpty": "",
+	"PointerStringNonEmpty": "value",
+	"Bytes": "dmFsdWU=",
+	"BytesEmpty": [],
+	"BytesNonEmpty": [
+		"value"
+	],
+	"PointerBytes": "dmFsdWU=",
+	"PointerBytesEmpty": [],
+	"PointerBytesNonEmpty": [
+		"value"
+	],
+	"PointerFloat": -0,
+	"Map": {
+		"": ""
+	},
+	"MapEmpty": {},
+	"MapNonEmpty": {
+		"key": "value"
+	},
+	"PointerMap": {
+		"": ""
+	},
+	"PointerMapEmpty": {},
+	"PointerMapNonEmpty": {
+		"key": "value"
+	},
+	"Slice": [
+		""
+	],
+	"SliceEmpty": [],
+	"SliceNonEmpty": [
+		"value"
+	],
+	"PointerSlice": [
+		""
+	],
+	"PointerSliceEmpty": [],
+	"PointerSliceNonEmpty": [
+		"value"
+	],
+	"Pointer": {},
+	"Interface": [
+		""
+	]
+}`,
+	}, {
 		name: jsontest.Name("Structs/OmitEmpty/NonEmptyString"),
 		in: struct {
 			X string `json:",omitempty"`
@@ -1773,6 +1876,61 @@ func TestMarshal(t *testing.T) {
 	"Base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
 	"Base64URL": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
 	"Array": [
+		1,
+		2,
+		3,
+		4
+	]
+}`}, {
+		name: jsontest.Name("Structs/Format/ArrayBytes"),
+		opts: []Options{jsontext.Expand(true)},
+		in: structFormatArrayBytes{
+			Base16:    [4]byte{1, 2, 3, 4},
+			Base32:    [4]byte{1, 2, 3, 4},
+			Base32Hex: [4]byte{1, 2, 3, 4},
+			Base64:    [4]byte{1, 2, 3, 4},
+			Base64URL: [4]byte{1, 2, 3, 4},
+			Array:     [4]byte{1, 2, 3, 4},
+			Default:   [4]byte{1, 2, 3, 4},
+		},
+		want: `{
+	"Base16": "01020304",
+	"Base32": "AEBAGBA=",
+	"Base32Hex": "0410610=",
+	"Base64": "AQIDBA==",
+	"Base64URL": "AQIDBA==",
+	"Array": [
+		1,
+		2,
+		3,
+		4
+	],
+	"Default": "AQIDBA=="
+}`}, {
+		name: jsontest.Name("Structs/Format/ArrayBytes/Legacy"),
+		opts: []Options{jsontext.Expand(true), jsonflags.FormatByteArrayAsArray | 1},
+		in: structFormatArrayBytes{
+			Base16:    [4]byte{1, 2, 3, 4},
+			Base32:    [4]byte{1, 2, 3, 4},
+			Base32Hex: [4]byte{1, 2, 3, 4},
+			Base64:    [4]byte{1, 2, 3, 4},
+			Base64URL: [4]byte{1, 2, 3, 4},
+			Array:     [4]byte{1, 2, 3, 4},
+			Default:   [4]byte{1, 2, 3, 4},
+		},
+		want: `{
+	"Base16": "01020304",
+	"Base32": "AEBAGBA=",
+	"Base32Hex": "0410610=",
+	"Base64": "AQIDBA==",
+	"Base64URL": "AQIDBA==",
+	"Array": [
+		1,
+		2,
+		3,
+		4
+	],
+	"Default": [
 		1,
 		2,
 		3,
@@ -3801,6 +3959,14 @@ func TestMarshal(t *testing.T) {
 	"D11": "12:34:56.078090012"
 }`,
 	}, {
+		name: jsontest.Name("Duration/Format/Legacy"),
+		opts: []Options{jsonflags.FormatTimeDurationAsNanosecond | 1},
+		in: structDurationFormat{
+			D1: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			D2: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+		},
+		want: `{"D1":45296078090012,"D2":"12h34m56.078090012s","D3":0,"D4":"0","D5":0,"D6":"0","D7":0,"D8":"0","D9":0,"D10":"0","D11":"0:00:00"}`,
+	}, {
 		name: jsontest.Name("Time/Zero"),
 		in: struct {
 			T1 time.Time
@@ -5400,6 +5566,49 @@ func TestUnmarshal(t *testing.T) {
 			Base64:    []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
 			Base64URL: []byte("\x00\x10\x83\x10Q\x87 \x92\x8b0ӏA\x14\x93QU\x97a\x96\x9bqן\x82\x18\xa3\x92Y\xa7\xa2\x9a\xab\xb2ۯ\xc3\x1c\xb3\xd3]\xb7㞻\xf3߿"),
 			Array:     []byte{1, 2, 3, 4},
+		}),
+	}, {
+		name: jsontest.Name("Structs/Format/ArrayBytes"),
+		inBuf: `{
+	"Base16": "01020304",
+	"Base32": "AEBAGBA=",
+	"Base32Hex": "0410610=",
+	"Base64": "AQIDBA==",
+	"Base64URL": "AQIDBA==",
+	"Array": [1, 2, 3, 4],
+	"Default": "AQIDBA=="
+}`,
+		inVal: new(structFormatArrayBytes),
+		want: addr(structFormatArrayBytes{
+			Base16:    [4]byte{1, 2, 3, 4},
+			Base32:    [4]byte{1, 2, 3, 4},
+			Base32Hex: [4]byte{1, 2, 3, 4},
+			Base64:    [4]byte{1, 2, 3, 4},
+			Base64URL: [4]byte{1, 2, 3, 4},
+			Array:     [4]byte{1, 2, 3, 4},
+			Default:   [4]byte{1, 2, 3, 4},
+		}),
+	}, {
+		name: jsontest.Name("Structs/Format/ArrayBytes/Legacy"),
+		opts: []Options{jsonflags.FormatByteArrayAsArray | 1},
+		inBuf: `{
+	"Base16": "01020304",
+	"Base32": "AEBAGBA=",
+	"Base32Hex": "0410610=",
+	"Base64": "AQIDBA==",
+	"Base64URL": "AQIDBA==",
+	"Array": [1, 2, 3, 4],
+	"Default": [1, 2, 3, 4]
+}`,
+		inVal: new(structFormatArrayBytes),
+		want: addr(structFormatArrayBytes{
+			Base16:    [4]byte{1, 2, 3, 4},
+			Base32:    [4]byte{1, 2, 3, 4},
+			Base32Hex: [4]byte{1, 2, 3, 4},
+			Base64:    [4]byte{1, 2, 3, 4},
+			Base64URL: [4]byte{1, 2, 3, 4},
+			Array:     [4]byte{1, 2, 3, 4},
+			Default:   [4]byte{1, 2, 3, 4},
 		}),
 	}, {
 		name: jsontest.Name("Structs/Format/Bytes/Array"),
@@ -7820,6 +8029,15 @@ func TestUnmarshal(t *testing.T) {
 			D time.Duration `json:",format:invalid"`
 		}{1}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: timeDurationType, Err: errors.New(`invalid format flag: "invalid"`)},
+	}, {
+		name:  jsontest.Name("Duration/Format/Legacy"),
+		inBuf: `{"D1":45296078090012,"D2":"12h34m56.078090012s"}`,
+		opts:  []Options{jsonflags.FormatTimeDurationAsNanosecond | 1},
+		inVal: new(structDurationFormat),
+		want: addr(structDurationFormat{
+			D1: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+			D2: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
+		}),
 	}, {
 		name:  jsontest.Name("Duration/IgnoreInvalidFormat"),
 		opts:  []Options{invalidFormatOption},

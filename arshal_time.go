@@ -38,6 +38,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	switch t {
 	case timeDurationType:
 		fncs.nonDefault = true
+		marshalNano := fncs.marshal
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			xe := export.Encoder(enc)
 			var m durationArshaler
@@ -45,6 +46,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				if !m.initFormat(mo.Format) {
 					return newInvalidFormatError("marshal", t, mo.Format)
 				}
+			} else if mo.Flags.Get(jsonflags.FormatTimeDurationAsNanosecond) {
+				return marshalNano(enc, va, mo)
 			}
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
 			td := *va.Addr().Interface().(*time.Duration)
@@ -58,6 +61,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			return enc.WriteValue(b)
 		}
+		unmarshalNano := fncs.unmarshal
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			xd := export.Decoder(dec)
 			var u durationArshaler
@@ -65,6 +69,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				if !u.initFormat(uo.Format) {
 					return newInvalidFormatError("unmarshal", t, uo.Format)
 				}
+			} else if uo.Flags.Get(jsonflags.FormatTimeDurationAsNanosecond) {
+				return unmarshalNano(dec, va, uo)
 			}
 
 			var flags jsonwire.ValueFlags

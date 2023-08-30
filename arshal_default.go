@@ -228,7 +228,7 @@ var (
 
 func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	// NOTE: This handles both []byte and [N]byte.
-	marshalDefault := fncs.marshal
+	marshalArray := fncs.marshal
 	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		encode, encodedLen := encodeBase64, encodedLenBase64
@@ -246,10 +246,12 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				encode, encodedLen = encodeBase16, encodedLenBase16
 			case "array":
 				mo.Format = ""
-				return marshalDefault(enc, va, mo)
+				return marshalArray(enc, va, mo)
 			default:
 				return newInvalidFormatError("marshal", t, mo.Format)
 			}
+		} else if mo.Flags.Get(jsonflags.FormatByteArrayAsArray) && va.Kind() == reflect.Array {
+			return marshalArray(enc, va, mo)
 		}
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && va.Kind() == reflect.Slice && va.IsNil() {
 			// TODO: Provide a "emitempty" format override?
@@ -268,7 +270,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		val[len(val)-1] = '"'
 		return enc.WriteValue(val)
 	}
-	unmarshalDefault := fncs.unmarshal
+	unmarshalArray := fncs.unmarshal
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		decode, decodedLen, encodedLen := decodeBase64, decodedLenBase64, encodedLenBase64
@@ -286,10 +288,12 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				decode, decodedLen, encodedLen = decodeBase16, decodedLenBase16, encodedLenBase16
 			case "array":
 				uo.Format = ""
-				return unmarshalDefault(dec, va, uo)
+				return unmarshalArray(dec, va, uo)
 			default:
 				return newInvalidFormatError("unmarshal", t, uo.Format)
 			}
+		} else if uo.Flags.Get(jsonflags.FormatByteArrayAsArray) && va.Kind() == reflect.Array {
+			return unmarshalArray(dec, va, uo)
 		}
 		var flags jsonwire.ValueFlags
 		val, err := xd.ReadValue(&flags)
@@ -922,6 +926,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				continue
 			}
 
+			// Check for the legacy definition of omitempty.
+			if f.omitempty && mo.Flags.Get(jsonflags.OmitEmptyWithLegacyDefinition) && isLegacyEmpty(v) {
+				continue
+			}
+
 			marshal := f.fncs.marshal
 			nonDefault := f.fncs.nonDefault
 			if mo.Marshalers != nil {
@@ -933,7 +942,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			// OmitEmpty skips the field if the marshaled JSON value is empty,
 			// which we can know up front if there are no custom marshalers,
 			// otherwise we must marshal the value and unwrite it if empty.
-			if f.omitempty && !nonDefault && f.isEmpty != nil && f.isEmpty(v) {
+			if f.omitempty && !mo.Flags.Get(jsonflags.OmitEmptyWithLegacyDefinition) &&
+				!nonDefault && f.isEmpty != nil && f.isEmpty(v) {
 				continue // fast path for omitempty
 			}
 
@@ -990,7 +1000,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			}
 
 			// Try unwriting the member if empty (slow path for omitempty).
-			if f.omitempty {
+			if f.omitempty && !mo.Flags.Get(jsonflags.OmitEmptyWithLegacyDefinition) {
 				var prevName *string
 				if prevIdx >= 0 {
 					prevName = &fields.flattened[prevIdx].name
@@ -1164,6 +1174,26 @@ func (va addressableValue) indirect(mayAlloc bool) addressableValue {
 		va = addressableValue{va.Elem()} // dereferenced pointer is always addressable
 	}
 	return va
+}
+
+// isLegacyEmpty reports whether a value is empty according to the v1 definition.
+func isLegacyEmpty(v addressableValue) bool {
+	// Equivalent to encoding/json.isEmptyValue@v1.21.0.
+	switch v.Kind() {
+	case reflect.Bool:
+		return v.Bool() == false
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.String, reflect.Map, reflect.Slice, reflect.Array:
+		return v.Len() == 0
+	case reflect.Pointer, reflect.Interface:
+		return v.IsNil()
+	}
+	return false
 }
 
 func makeSliceArshaler(t reflect.Type) *arshaler {
