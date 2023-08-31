@@ -113,7 +113,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				}
 				// Reject any types with custom serialization otherwise
 				// it becomes impossible to know what sub-fields to inline.
-				if which, _ := implementsWhich(tf,
+				if which := implementsWhich(tf,
 					jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType,
 					jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
 				); which != nil && tf != jsontextValueType {

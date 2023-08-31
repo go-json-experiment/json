@@ -95,14 +95,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	}
 
 	// Handle custom marshaler.
-	switch which, needAddr := implementsWhich(t, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which {
+	switch which := implementsWhich(t, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which {
 	case jsonMarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			xe := export.Encoder(enc)
 			prevDepth, prevLength := xe.Tokens.DepthLength()
 			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.addrWhen(needAddr).Interface().(MarshalerV2).MarshalJSONV2(enc, mo)
+			err := va.Addr().Interface().(MarshalerV2).MarshalJSONV2(enc, mo)
 			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xe.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
@@ -118,7 +118,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case jsonMarshalerV1Type:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			marshaler := va.addrWhen(needAddr).Interface().(MarshalerV1)
+			marshaler := va.Addr().Interface().(MarshalerV1)
 			val, err := marshaler.MarshalJSON()
 			if err != nil {
 				err = wrapSkipFunc(err, "marshal method")
@@ -134,7 +134,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	case textMarshalerType:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			marshaler := va.addrWhen(needAddr).Interface().(encoding.TextMarshaler)
+			marshaler := va.Addr().Interface().(encoding.TextMarshaler)
 			s, err := marshaler.MarshalText()
 			if err != nil {
 				err = wrapSkipFunc(err, "marshal method")
@@ -155,14 +155,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	}
 
 	// Handle custom unmarshaler.
-	switch which, needAddr := implementsWhich(t, jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType); which {
+	switch which := implementsWhich(t, jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType); which {
 	case jsonUnmarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			xd := export.Decoder(dec)
 			prevDepth, prevLength := xd.Tokens.DepthLength()
 			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.addrWhen(needAddr).Interface().(UnmarshalerV2).UnmarshalJSONV2(dec, uo)
+			err := va.Addr().Interface().(UnmarshalerV2).UnmarshalJSONV2(dec, uo)
 			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xd.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
@@ -182,7 +182,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			if err != nil {
 				return err // must be a syntactic or I/O error
 			}
-			unmarshaler := va.addrWhen(needAddr).Interface().(UnmarshalerV1)
+			unmarshaler := va.Addr().Interface().(UnmarshalerV1)
 			if err := unmarshaler.UnmarshalJSON(val); err != nil {
 				err = wrapSkipFunc(err, "unmarshal method")
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
@@ -204,7 +204,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return &SemanticError{action: "unmarshal", JSONKind: val.Kind(), GoType: t, Err: err}
 			}
 			s := jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-			unmarshaler := va.addrWhen(needAddr).Interface().(encoding.TextUnmarshaler)
+			unmarshaler := va.Addr().Interface().(encoding.TextUnmarshaler)
 			if err := unmarshaler.UnmarshalText(s); err != nil {
 				err = wrapSkipFunc(err, "unmarshal method")
 				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
@@ -219,24 +219,11 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 // implementsWhich is like t.Implements(ifaceType) for a list of interfaces,
 // but checks whether either t or reflect.PointerTo(t) implements the interface.
-// It returns the first interface type that matches and whether a value of t
-// needs to be addressed first before it implements the interface.
-func implementsWhich(t reflect.Type, ifaceTypes ...reflect.Type) (which reflect.Type, needAddr bool) {
+func implementsWhich(t reflect.Type, ifaceTypes ...reflect.Type) (which reflect.Type) {
 	for _, ifaceType := range ifaceTypes {
-		switch {
-		case t.Implements(ifaceType):
-			return ifaceType, false
-		case reflect.PointerTo(t).Implements(ifaceType):
-			return ifaceType, true
+		if t.Implements(ifaceType) || reflect.PointerTo(t).Implements(ifaceType) {
+			return ifaceType
 		}
 	}
-	return nil, false
-}
-
-// addrWhen returns va.Addr if addr is specified, otherwise it returns itself.
-func (va addressableValue) addrWhen(addr bool) reflect.Value {
-	if addr {
-		return va.Addr()
-	}
-	return va.Value
+	return nil
 }

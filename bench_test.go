@@ -180,9 +180,9 @@ var arshalTestdata = []struct {
 	new:  func() any { return new(time.Time) },
 }}
 
-type textArshaler struct{}
+type textArshaler struct{ _ [4]int }
 
-func (*textArshaler) MarshalText() ([]byte, error) {
+func (textArshaler) MarshalText() ([]byte, error) {
 	return []byte("method"), nil
 }
 func (*textArshaler) UnmarshalText(b []byte) error {
@@ -192,9 +192,9 @@ func (*textArshaler) UnmarshalText(b []byte) error {
 	return nil
 }
 
-type jsonArshalerV1 struct{}
+type jsonArshalerV1 struct{ _ [4]int }
 
-func (*jsonArshalerV1) MarshalJSON() ([]byte, error) {
+func (jsonArshalerV1) MarshalJSON() ([]byte, error) {
 	return []byte(`"method"`), nil
 }
 func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
@@ -204,9 +204,9 @@ func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type jsonArshalerV2 struct{}
+type jsonArshalerV2 struct{ _ [4]int }
 
-func (*jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts Options) error {
+func (jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts Options) error {
 	return enc.WriteToken(jsontext.String("method"))
 }
 func (*jsonArshalerV2) UnmarshalJSONV2(dec *jsontext.Decoder, opts Options) error {
