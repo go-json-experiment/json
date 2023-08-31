@@ -23,6 +23,11 @@ var (
 	jsonUnmarshalerV2Type = reflect.TypeOf((*UnmarshalerV2)(nil)).Elem()
 	textMarshalerType     = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 	textUnmarshalerType   = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
+
+	// TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead of this hack.
+	// This exists for now to provide performance benefits to netip types.
+	// There is no semantic difference with this change.
+	appenderToType = reflect.TypeOf((*interface{ AppendTo([]byte) []byte })(nil)).Elem()
 )
 
 // MarshalerV1 is implemented by types that can marshal themselves.
@@ -151,6 +156,29 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			return nil
+		}
+		// TODO(https://go.dev/issue/62384): Rely on encoding.TextAppender instead.
+		if implementsWhich(t, appenderToType) != nil && t.PkgPath() == "net/netip" {
+			fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+				appender := va.Addr().Interface().(interface{ AppendTo([]byte) []byte })
+				val := enc.UnusedBuffer()
+				val = append(val, '"')
+				val = appender.AppendTo(val)
+				val = append(val, '"')
+				// Check whether we need to escape any characters.
+				if jsonwire.ConsumeSimpleString(val) != len(val) {
+					var err error
+					val, err = jsonwire.AppendQuote(nil, val[len(`"`):len(val)-len(`"`)], true, nil)
+					if err != nil {
+						return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
+					}
+				}
+				if err := enc.WriteValue(val); err != nil {
+					// TODO: Avoid wrapping syntactic or I/O errors.
+					return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
+				}
+				return nil
+			}
 		}
 	}
 

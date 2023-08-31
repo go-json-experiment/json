@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/netip"
 	"reflect"
 	"strconv"
 	"strings"
@@ -2963,6 +2964,18 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Methods/IP"),
 		in:   net.IPv4(192, 168, 0, 100),
 		want: `"192.168.0.100"`,
+	}, {
+		name: jsontest.Name("Methods/NetIP"),
+		in: struct {
+			Addr     netip.Addr
+			AddrPort netip.AddrPort
+			Prefix   netip.Prefix
+		}{
+			Addr:     netip.AddrFrom4([4]byte{1, 2, 3, 4}),
+			AddrPort: netip.AddrPortFrom(netip.AddrFrom4([4]byte{1, 2, 3, 4}), 1234),
+			Prefix:   netip.PrefixFrom(netip.AddrFrom4([4]byte{1, 2, 3, 4}), 24),
+		},
+		want: `{"Addr":"1.2.3.4","AddrPort":"1.2.3.4:1234","Prefix":"1.2.3.4/24"}`,
 	}, {
 		// NOTE: Fixes https://go.dev/issue/46516.
 		name: jsontest.Name("Methods/Anonymous"),
