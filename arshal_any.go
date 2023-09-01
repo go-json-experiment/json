@@ -103,7 +103,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 			return enc.WriteToken(jsontext.Null)
 		}
 		// Optimize for marshaling an empty map without any preceding whitespace.
-		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+		if !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -118,7 +118,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 	}
 	// A Go map guarantees that each entry has a unique key
 	// The only possibility of duplicates is due to invalid UTF-8.
-	if !xe.Flags.Get(jsonflags.AllowInvalidUTF8) {
+	if !mo.Flags.Get(jsonflags.AllowInvalidUTF8) {
 		xe.Tokens.Last.DisableNamespace()
 	}
 	if !mo.Flags.Get(jsonflags.Deterministic) || len(obj) <= 1 {
@@ -168,7 +168,7 @@ func unmarshalObjectAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (map[string]
 		obj := make(map[string]any)
 		// A Go map guarantees that each entry has a unique key
 		// The only possibility of duplicates is due to invalid UTF-8.
-		if !xd.Flags.Get(jsonflags.AllowInvalidUTF8) {
+		if !uo.Flags.Get(jsonflags.AllowInvalidUTF8) {
 			xd.Tokens.Last.DisableNamespace()
 		}
 		for dec.PeekKind() != '}' {
@@ -217,7 +217,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 			return enc.WriteToken(jsontext.Null)
 		}
 		// Optimize for marshaling an empty slice without any preceding whitespace.
-		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+		if !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {

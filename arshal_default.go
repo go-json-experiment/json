@@ -127,7 +127,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't'), va.Bool())
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -200,7 +200,7 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		s := va.String()
-		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
 			b := xe.Buf
 			b = xe.Tokens.MayAppendDelim(b, '"')
 			b = append(b, '"')
@@ -446,7 +446,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Int(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -533,7 +533,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Uint(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -625,7 +625,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0'), fv, bits)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -755,7 +755,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty map without any preceding whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
@@ -785,7 +785,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// A Go map guarantees that each entry has a unique key.
 			// As such, disable the expensive duplicate name check if we know
 			// that every Go key will serialize as a unique JSON string.
-			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), xe.Flags.Get(jsonflags.AllowInvalidUTF8)) {
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), mo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
 				xe.Tokens.Last.DisableNamespace()
 			}
 
@@ -913,7 +913,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// will be rejected as duplicates since they semantically refer
 			// to the same Go value. This is an unusual interaction
 			// between syntax and semantics, but is more correct.
-			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), xd.Flags.Get(jsonflags.AllowInvalidUTF8)) {
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), uo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
 				xd.Tokens.Last.DisableNamespace()
 			}
 
@@ -922,7 +922,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// since existing presence alone is insufficient to indicate
 			// whether the input had a duplicate name.
 			var seen reflect.Value
-			if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && va.Len() > 0 {
+			if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && va.Len() > 0 {
 				seen = reflect.MakeMap(reflect.MapOf(k.Type(), emptyStructType))
 			}
 
@@ -941,7 +941,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 
 				if v2 := va.MapIndex(k.Value); v2.IsValid() {
-					if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
+					if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
 						// TODO: Unread the object name.
 						name := xd.PreviousTokenOrValue()
 						return newDuplicateNameError(dec.StackPointer(), nil, dec.InputOffset()-len64(name))
@@ -1078,20 +1078,20 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				b := xe.Buf
 				if xe.Tokens.Last.Length() > 0 {
 					b = append(b, ',')
-					if xe.Flags.Get(jsonflags.SpaceAfterComma) {
+					if mo.Flags.Get(jsonflags.SpaceAfterComma) {
 						b = append(b, ' ')
 					}
 				}
-				if xe.Flags.Get(jsonflags.Multiline) {
+				if mo.Flags.Get(jsonflags.Multiline) {
 					b = xe.AppendIndent(b, xe.Tokens.NeedIndent('"'))
 				}
 
 				// Append the token to the output and to the state machine.
 				n0 := len(b) // offset before calling AppendQuote
-				if !xe.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS | jsonflags.EscapeInvalidUTF8) {
+				if !mo.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS | jsonflags.EscapeInvalidUTF8) {
 					b = append(b, f.quotedName...)
 				} else {
-					b, _ = jsonwire.AppendQuote(b, f.name, &xe.Flags)
+					b, _ = jsonwire.AppendQuote(b, f.name, &mo.Flags)
 				}
 				xe.Buf = b
 				xe.Names.ReplaceLastQuotedOffset(n0)
@@ -1136,14 +1136,14 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			// Remember the previous written object member.
 			// The set of seen fields only needs to be updated to detect
 			// duplicate names with those from the inlined fallback.
-			if !xe.Flags.Get(jsonflags.AllowDuplicateNames) && fields.inlinedFallback != nil {
+			if !mo.Flags.Get(jsonflags.AllowDuplicateNames) && fields.inlinedFallback != nil {
 				seenIdxs.insert(uint(f.id))
 			}
 			prevIdx = f.id
 		}
 		if fields.inlinedFallback != nil && !(mo.Flags.Get(jsonflags.DiscardUnknownMembers) && fields.inlinedFallback.unknown) {
 			var insertUnquotedName func([]byte) bool
-			if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {
+			if !mo.Flags.Get(jsonflags.AllowDuplicateNames) {
 				insertUnquotedName = func(name []byte) bool {
 					// Check that the name from inlined fallback does not match
 					// one of the previously marshaled names from known fields.
@@ -1215,7 +1215,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						if uo.Flags.Get(jsonflags.RejectUnknownMembers) && (fields.inlinedFallback == nil || fields.inlinedFallback.unknown) {
 							return newUnmarshalErrorAfter(dec, t, ErrUnknownName)
 						}
-						if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && !xd.Namespaces.Last().InsertUnquoted(name) {
+						if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && !xd.Namespaces.Last().InsertUnquoted(name) {
 							// TODO: Unread the object name.
 							return newDuplicateNameError(dec.StackPointer(), nil, dec.InputOffset()-len64(val))
 						}
@@ -1234,7 +1234,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						continue
 					}
 				}
-				if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && !seenIdxs.insert(uint(f.id)) {
+				if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && !seenIdxs.insert(uint(f.id)) {
 					// TODO: Unread the object name.
 					return newDuplicateNameError(dec.StackPointer(), nil, dec.InputOffset()-len64(val))
 				}
@@ -1383,7 +1383,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty slice without any preceding whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
@@ -1624,7 +1624,7 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			return err
 		}
 		if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) &&
-			(uo.Flags.Get(jsonflags.StringifyNumbers) || uo.Flags.Get(jsonflags.StringifyBoolsAndStrings)) {
+			uo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringifyBoolsAndStrings) {
 			// A JSON null quoted within a JSON string should take effect
 			// within the pointer value, rather than the indirect value.
 			//
@@ -1664,7 +1664,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		}
 		// Optimize for the any type if there are no special options.
 		if optimizeCommon &&
-			t == anyType && !mo.Flags.Get(jsonflags.StringifyNumbers) && !mo.Flags.Get(jsonflags.StringifyBoolsAndStrings) && mo.Format == "" &&
+			t == anyType && !mo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringifyBoolsAndStrings) && mo.Format == "" &&
 			(mo.Marshalers == nil || !mo.Marshalers.(*Marshalers).fromAny) {
 			return marshalValueAny(enc, va.Elem().Interface(), mo)
 		}
@@ -1709,7 +1709,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			// Duplicate name check must be enforced since unmarshalValueAny
 			// does not implement merge semantics.
 			if optimizeCommon &&
-				t == anyType && !xd.Flags.Get(jsonflags.AllowDuplicateNames) && uo.Format == "" &&
+				t == anyType && !uo.Flags.Get(jsonflags.AllowDuplicateNames) && uo.Format == "" &&
 				(uo.Unmarshalers == nil || !uo.Unmarshalers.(*Unmarshalers).fromAny) {
 				v, err := unmarshalValueAny(dec, uo)
 				// We must check for nil interface values up front.
