@@ -12,3 +12,10 @@ type NotForPublicUse struct{}
 // AllowInternalUse is passed from "json" to "jsontext" to authenticate
 // that the caller can have access to internal functionality.
 var AllowInternalUse NotForPublicUse
+
+var (
+	// NewRawNumber returns new(jsonv1.Number).
+	NewRawNumber func() any
+	// RawNumberOf returns jsonv1.Number(b).
+	RawNumberOf func(b []byte) any
+)
