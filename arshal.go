@@ -5,7 +5,6 @@
 package json
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/go-json-experiment/json/internal"
+	"github.com/go-json-experiment/json/internal/bufpools"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -166,7 +166,7 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 	xe := export.Encoder(enc)
 	xe.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
 	err = marshalEncode(enc, in, &xe.Struct)
-	return bytes.Clone(xe.Buf), err
+	return xe.Wr.(*bufpools.Buffer).BytesClone(), err
 }
 
 // MarshalWrite serializes a Go value into an [io.Writer] according to the provided
@@ -219,6 +219,10 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 		xe := export.Encoder(out)
 		if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {
 			xe.Tokens.InvalidateDisabledNamespaces()
+		}
+		// TODO: Do we need this?
+		if err := export.Encoder(out).ForceFlush(); err != nil {
+			return err
 		}
 		return err
 	}

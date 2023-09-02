@@ -11,6 +11,7 @@ import (
 	"math/bits"
 	"strconv"
 
+	"github.com/go-json-experiment/json/internal/bufpools"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -65,21 +66,18 @@ type encoderState struct {
 //   - buf[0:len(buf)]        // written (but unflushed) portion of the buffer
 //   - buf[len(buf):cap(buf)] // unused portion of the buffer
 type encodeBuffer struct {
-	Buf []byte // may alias wr if it is a bytes.Buffer
+	Buf []byte // may alias wr if it is a bufpools.Buffer or bytes.Buffer
 
 	// baseOffset is added to len(buf) to obtain the absolute offset
 	// relative to the start of io.Writer stream.
 	baseOffset int64
 
-	wr io.Writer
+	Wr io.Writer
 
 	// maxValue is the approximate maximum Value size passed to WriteValue.
 	maxValue int
 	// unusedCache is the buffer returned by the UnusedBuffer method.
 	unusedCache []byte
-	// bufStats is statistics about buffer utilization.
-	// It is only used with pooled encoders in pools.go.
-	bufStats bufferStatistics
 }
 
 // NewEncoder constructs a new streaming encoder writing to w
@@ -113,9 +111,12 @@ func (e *Encoder) Reset(w io.Writer, opts ...Options) {
 
 func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	e.state.reset()
-	e.encodeBuffer = encodeBuffer{Buf: b, wr: w, bufStats: e.bufStats}
-	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
-		e.Buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
+	e.encodeBuffer = encodeBuffer{Buf: b, Wr: w}
+	switch bb := w.(type) {
+	case *bufpools.Buffer:
+		e.Buf = bb.AvailableBuffer()
+	case *bytes.Buffer:
+		e.Buf = bb.AvailableBuffer()
 	}
 	e.Struct = jsonopts.Struct{}
 	e.Struct.Join(opts...)
@@ -137,16 +138,18 @@ func (e *encoderState) NeedFlush() bool {
 	// Flush if less than 25% of the capacity remains.
 	// Flushing at some constant fraction ensures that the buffer stops growing
 	// so long as the largest Token or Value fits within that unused capacity.
-	return e.wr != nil && (e.Tokens.Depth() == 1 || len(e.Buf) > 3*cap(e.Buf)/4)
+	return e.Wr != nil && (e.Tokens.Depth() == 1 || len(e.Buf) > 3*cap(e.Buf)/4)
 }
 
 // Flush flushes the buffer to the underlying io.Writer.
 // It may append a trailing newline after the top-level value.
 func (e *encoderState) Flush() error {
-	if e.wr == nil || e.avoidFlush() {
+	if e.Wr == nil || e.avoidFlush() {
 		return nil
 	}
-
+	return e.ForceFlush()
+}
+func (e *encoderState) ForceFlush() error {
 	// In streaming mode, always emit a newline after the top-level value.
 	if e.Tokens.Depth() == 1 && !e.Flags.Get(jsonflags.OmitTopLevelNewline) {
 		e.Buf = append(e.Buf, '\n')
@@ -155,8 +158,9 @@ func (e *encoderState) Flush() error {
 	// Inform objectNameStack that we are about to flush the buffer content.
 	e.Names.copyQuotedBuffer(e.Buf)
 
-	// Specialize bytes.Buffer for better performance.
-	if bb, ok := e.wr.(*bytes.Buffer); ok {
+	// Specialize bufpools.Buffer and bytes.Buffer for better performance.
+	switch bb := e.Wr.(type) {
+	case *bufpools.Buffer:
 		// If e.buf already aliases the internal buffer of bb,
 		// then the Write call simply increments the internal offset,
 		// otherwise Write operates as expected.
@@ -175,10 +179,15 @@ func (e *encoderState) Flush() error {
 
 		e.Buf = bb.AvailableBuffer()
 		return nil
+	case *bytes.Buffer:
+		n, _ := bb.Write(e.Buf)
+		e.baseOffset += int64(n)
+		bb.Grow(bb.Len() / 4)
+		e.Buf = bb.AvailableBuffer()
 	}
 
 	// Flush the internal buffer to the underlying io.Writer.
-	n, err := e.wr.Write(e.Buf)
+	n, err := e.Wr.Write(e.Buf)
 	e.baseOffset += int64(n)
 	if err != nil {
 		// In the event of an error, preserve the unflushed portion.

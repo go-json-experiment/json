@@ -7,17 +7,16 @@ package jsontext
 import (
 	"bytes"
 	"io"
-	"math/bits"
 	"sync"
+
+	"github.com/go-json-experiment/json/internal/bufpools"
 )
 
 // TODO(https://go.dev/issue/47657): Use sync.PoolOf.
 
 var (
-	// This owns the internal buffer since there is no io.Writer to output to.
-	// Since the buffer can get arbitrarily large in normal usage,
-	// there is statistical tracking logic to determine whether to recycle
-	// the internal buffer or not based on a history of utilization.
+	// This implicitly owns the internal buffer by also owning
+	// the bufpools.Buffer used as the underlying io.Writer.
 	bufferedEncoderPool = &sync.Pool{New: func() any { return new(Encoder) }}
 
 	// This owns the internal buffer, but it is only used to temporarily store
@@ -31,53 +30,17 @@ var (
 	bytesBufferEncoderPool = &sync.Pool{New: func() any { return new(Encoder) }}
 )
 
-// bufferStatistics is statistics to track buffer utilization.
-// It is used to determine whether to recycle a buffer or not
-// to avoid https://go.dev/issue/23199.
-type bufferStatistics struct {
-	strikes int // number of times the buffer was under-utilized
-	prevLen int // length of previous buffer
-}
-
 func getBufferedEncoder(opts ...Options) *Encoder {
 	e := bufferedEncoderPool.Get().(*Encoder)
-	if e.s.Buf == nil {
-		// Round up to nearest 2ⁿ to make best use of malloc size classes.
-		// See runtime/sizeclasses.go on Go1.15.
-		// Logical OR with 63 to ensure 64 as the minimum buffer size.
-		n := 1 << bits.Len(uint(e.s.bufStats.prevLen|63))
-		e.s.Buf = make([]byte, 0, n)
+	if e.s.Wr == nil {
+		e.s.Wr = new(bufpools.Buffer)
 	}
-	e.s.reset(e.s.Buf[:0], nil, opts...)
+	e.s.reset(nil, e.s.Wr, opts...)
 	return e
 }
 func putBufferedEncoder(e *Encoder) {
-	// Recycle large buffers only if sufficiently utilized.
-	// If a buffer is under-utilized enough times sequentially,
-	// then it is discarded, ensuring that a single large buffer
-	// won't be kept alive by a continuous stream of small usages.
-	//
-	// The worst case utilization is computed as:
-	//	MIN_UTILIZATION_THRESHOLD / (1 + MAX_NUM_STRIKES)
-	//
-	// For the constants chosen below, this is (25%)/(1+4) ⇒ 5%.
-	// This may seem low, but it ensures a lower bound on
-	// the absolute worst-case utilization. Without this check,
-	// this would be theoretically 0%, which is infinitely worse.
-	//
-	// See https://go.dev/issue/27735.
-	switch {
-	case cap(e.s.Buf) <= 4<<10: // always recycle buffers smaller than 4KiB
-		e.s.bufStats.strikes = 0
-	case cap(e.s.Buf)/4 <= len(e.s.Buf): // at least 25% utilization
-		e.s.bufStats.strikes = 0
-	case e.s.bufStats.strikes < 4: // at most 4 strikes
-		e.s.bufStats.strikes++
-	default: // discard the buffer; too large and too often under-utilized
-		e.s.bufStats.strikes = 0
-		e.s.bufStats.prevLen = len(e.s.Buf) // heuristic for size to allocate next time
-		e.s.Buf = nil
-	}
+	e.s.Wr.(*bufpools.Buffer).Reset()
+	e.s.Buf = nil
 	bufferedEncoderPool.Put(e)
 }
 
@@ -93,7 +56,7 @@ func getStreamingEncoder(w io.Writer, opts ...Options) *Encoder {
 	}
 }
 func putStreamingEncoder(e *Encoder) {
-	if _, ok := e.s.wr.(*bytes.Buffer); ok {
+	if _, ok := e.s.Wr.(*bytes.Buffer); ok {
 		bytesBufferEncoderPool.Put(e)
 	} else {
 		if cap(e.s.Buf) > 64<<10 {

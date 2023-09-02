@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal/bufpools"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -176,24 +177,23 @@ func (v *Value) reformat(canonical, multiline bool, prefix, indent string) error
 	if err := e.s.WriteValue(*v); err != nil {
 		return err
 	}
+	buf := e.s.Wr.(*bufpools.Buffer).Bytes() // output as contiguous buffer
 
 	// For canonical output, we may need to reorder object members.
 	if canonical {
-		// Obtain a buffered encoder just to use its internal buffer as
-		// a scratch buffer in reorderObjects for reordering object members.
-		e2 := getBufferedEncoder()
-		defer putBufferedEncoder(e2)
+		scratch := bufpools.Get(len(buf))
+		defer bufpools.Put(scratch)
 
 		// Disable redundant checks performed earlier during encoding.
-		d := getBufferedDecoder(e.s.Buf)
+		d := getBufferedDecoder(buf)
 		defer putBufferedDecoder(d)
 		d.s.Flags.Set(jsonflags.AllowDuplicateNames | jsonflags.AllowInvalidUTF8 | 1)
-		reorderObjects(d, &e2.s.Buf) // per RFC 8785, section 3.2.3
+		reorderObjects(d, scratch) // per RFC 8785, section 3.2.3
 	}
 
 	// Store the result back into the value if different.
-	if !bytes.Equal(*v, e.s.Buf) {
-		*v = append((*v)[:0], e.s.Buf...)
+	if !bytes.Equal(*v, buf) {
+		*v = append((*v)[:0], buf...)
 	}
 	return nil
 }
@@ -235,7 +235,7 @@ func putMemberNames(ns *[]memberName) {
 //
 // The runtime is approximately O(n·log(n)) + O(m·log(m)),
 // where n is len(v) and m is the total number of object members.
-func reorderObjects(d *Decoder, scratch *[]byte) {
+func reorderObjects(d *Decoder, scratch []byte) {
 	switch tok, _ := d.ReadToken(); tok.Kind() {
 	case '{':
 		// Iterate and collect the name and offsets for every object member.
@@ -278,7 +278,7 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 		//
 		// The following invariant must hold:
 		//	sum([m.after-m.before for m in members]) == afterBody-beforeBody
-		sorted := (*scratch)[:0]
+		sorted := scratch[:0]
 		for i, member := range *members {
 			if d.s.buf[member.before] == ',' {
 				member.before++ // trim leading comma
@@ -292,11 +292,6 @@ func reorderObjects(d *Decoder, scratch *[]byte) {
 			panic("BUG: length invariant violated")
 		}
 		copy(d.s.buf[beforeBody:afterBody], sorted)
-
-		// Update scratch buffer to the largest amount ever used.
-		if len(sorted) > len(*scratch) {
-			*scratch = sorted
-		}
 	case '[':
 		for d.PeekKind() != ']' {
 			reorderObjects(d, scratch)
