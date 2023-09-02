@@ -1421,7 +1421,7 @@ func TestMarshal(t *testing.T) {
 			Bytes:         []byte{},                               // not omitted since allocated slice is non-zero
 			Int:           1,                                      // not omitted since 1 is non-zero
 			Uint:          1,                                      // not omitted since 1 is non-zero
-			Float:         math.Copysign(0, -1),                   // not omitted since -0 is technically non-zero
+			Float:         math.SmallestNonzeroFloat64,            // not omitted since still slightly above zero
 			Map:           map[string]string{},                    // not omitted since allocated map is non-zero
 			StructScalars: structScalars{unexported: true},        // not omitted since unexported is non-zero
 			StructSlices:  structSlices{Ignored: true},            // not omitted since Ignored is non-zero
@@ -1437,7 +1437,7 @@ func TestMarshal(t *testing.T) {
 	"Bytes": "",
 	"Int": 1,
 	"Uint": 1,
-	"Float": -0,
+	"Float": 5e-324,
 	"Map": {},
 	"StructScalars": {
 		"Bool": false,
@@ -1641,7 +1641,7 @@ func TestMarshal(t *testing.T) {
 			PointerSlice:          addr([]string{""}),
 			PointerSliceEmpty:     addr(sliceMarshalEmpty{"value"}),
 			PointerSliceNonEmpty:  addr(sliceMarshalNonEmpty{"value"}),
-			Pointer:               &structOmitZeroEmptyAll{Float: math.Copysign(0, -1)},
+			Pointer:               &structOmitZeroEmptyAll{Float: math.SmallestNonzeroFloat64},
 			Interface:             []string{""},
 		},
 		want: `{
@@ -1686,7 +1686,7 @@ func TestMarshal(t *testing.T) {
 		"value"
 	],
 	"Pointer": {
-		"Float": -0
+		"Float": 5e-324
 	},
 	"Interface": [
 		""
