@@ -443,6 +443,7 @@ type (
 
 	marshalJSONv2Func   func(*jsontext.Encoder, Options) error
 	marshalJSONv1Func   func() ([]byte, error)
+	appendTextFunc      func([]byte) ([]byte, error)
 	marshalTextFunc     func() ([]byte, error)
 	unmarshalJSONv2Func func(*jsontext.Decoder, Options) error
 	unmarshalJSONv1Func func([]byte) error
@@ -554,6 +555,9 @@ func (f marshalJSONv2Func) MarshalJSONV2(enc *jsontext.Encoder, opts Options) er
 func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 	return f()
 }
+func (f appendTextFunc) AppendText(b []byte) ([]byte, error) {
+	return f(b)
+}
 func (f marshalTextFunc) MarshalText() ([]byte, error) {
 	return f()
 }
@@ -631,6 +635,7 @@ var (
 	structMethodTextType         = reflect.TypeOf((*structMethodText)(nil)).Elem()
 	marshalJSONv2FuncType        = reflect.TypeOf((*marshalJSONv2Func)(nil)).Elem()
 	marshalJSONv1FuncType        = reflect.TypeOf((*marshalJSONv1Func)(nil)).Elem()
+	appendTextFuncType           = reflect.TypeOf((*appendTextFunc)(nil)).Elem()
 	marshalTextFuncType          = reflect.TypeOf((*marshalTextFunc)(nil)).Elem()
 	unmarshalJSONv2FuncType      = reflect.TypeOf((*unmarshalJSONv2Func)(nil)).Elem()
 	unmarshalJSONv1FuncType      = reflect.TypeOf((*unmarshalJSONv1Func)(nil)).Elem()
@@ -3056,6 +3061,27 @@ func TestMarshal(t *testing.T) {
 			return nil, SkipFunc
 		}),
 		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv1FuncType, Err: errors.New("marshal method cannot be skipped")},
+	}, {
+		name: jsontest.Name("Methods/AppendText"),
+		in:   appendTextFunc(func(b []byte) ([]byte, error) { return append(b, "hello"...), nil }),
+		want: `"hello"`,
+	}, {
+		name:    jsontest.Name("Methods/AppendText/Error"),
+		in:      appendTextFunc(func(b []byte) ([]byte, error) { return append(b, "hello"...), errors.New("some error") }),
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: appendTextFuncType, Err: errors.New("some error")},
+	}, {
+		name: jsontest.Name("Methods/AppendText/NeedEscape"),
+		in:   appendTextFunc(func(b []byte) ([]byte, error) { return append(b, `"`...), nil }),
+		want: `"\""`,
+	}, {
+		name:    jsontest.Name("Methods/AppendText/RejectInvalidUTF8"),
+		in:      appendTextFunc(func(b []byte) ([]byte, error) { return append(b, "\xde\xad\xbe\xef"...), nil }),
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: appendTextFuncType, Err: export.NewInvalidUTF8Error(0)},
+	}, {
+		name: jsontest.Name("Methods/AppendText/AllowInvalidUTF8"),
+		opts: []Options{jsontext.AllowInvalidUTF8(true)},
+		in:   appendTextFunc(func(b []byte) ([]byte, error) { return append(b, "\xde\xad\xbe\xef"...), nil }),
+		want: "\"\xde\xad\ufffd\ufffd\"",
 	}, {
 		name: jsontest.Name("Methods/Invalid/Text/Error"),
 		in: marshalTextFunc(func() ([]byte, error) {

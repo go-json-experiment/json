@@ -21,6 +21,7 @@ var (
 	jsonMarshalerV2Type   = reflect.TypeOf((*MarshalerV2)(nil)).Elem()
 	jsonUnmarshalerV1Type = reflect.TypeOf((*UnmarshalerV1)(nil)).Elem()
 	jsonUnmarshalerV2Type = reflect.TypeOf((*UnmarshalerV2)(nil)).Elem()
+	textAppenderType      = reflect.TypeOf((*encodingTextAppender)(nil)).Elem()
 	textMarshalerType     = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 	textUnmarshalerType   = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 
@@ -29,6 +30,12 @@ var (
 	// There is no semantic difference with this change.
 	appenderToType = reflect.TypeOf((*interface{ AppendTo([]byte) []byte })(nil)).Elem()
 )
+
+// TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead
+// and document public support for this method in json.Marshal.
+type encodingTextAppender interface {
+	AppendText(b []byte) ([]byte, error)
+}
 
 // MarshalerV1 is implemented by types that can marshal themselves.
 // It is recommended that types implement [MarshalerV2] unless the implementation
@@ -100,7 +107,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 	}
 
 	// Handle custom marshaler.
-	switch which := implementsWhich(t, jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType); which {
+	switch which := implementsWhich(t, jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType); which {
 	case jsonMarshalerV2Type:
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
@@ -133,6 +140,34 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			if err := enc.WriteValue(val); err != nil {
 				// TODO: Avoid wrapping semantic or I/O errors.
 				return &SemanticError{action: "marshal", JSONKind: jsontext.Value(val).Kind(), GoType: t, Err: err}
+			}
+			return nil
+		}
+	case textAppenderType:
+		fncs.nonDefault = true
+		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
+			appender := va.Addr().Interface().(encodingTextAppender)
+			val := enc.UnusedBuffer()
+			val = append(val, '"')
+			val, err = appender.AppendText(val)
+			if err != nil {
+				err = wrapSkipFunc(err, "marshal method")
+				// TODO: Avoid wrapping semantic errors.
+				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
+			}
+			val = append(val, '"')
+			// Check whether we need to escape any characters.
+			if jsonwire.ConsumeSimpleString(val) != len(val) {
+				var err error
+				validateUTF8 := !mo.Flags.Get(jsonflags.AllowInvalidUTF8)
+				val, err = jsonwire.AppendQuote(nil, val[len(`"`):len(val)-len(`"`)], validateUTF8, nil)
+				if err != nil {
+					return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
+				}
+			}
+			if err := enc.WriteValue(val); err != nil {
+				// TODO: Avoid wrapping syntactic or I/O errors.
+				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			return nil
 		}
