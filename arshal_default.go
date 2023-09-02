@@ -371,8 +371,10 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		x := math.Float64frombits(uint64(va.Int()))
-		return xe.WriteNumber(x, 'i', mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
+			return strconv.AppendInt(b, va.Int(), 10), nil
+		})
 	}
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
@@ -447,8 +449,10 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		x := math.Float64frombits(va.Uint())
-		return xe.WriteNumber(x, 'u', mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
+			return strconv.AppendUint(b, va.Uint(), 10), nil
+		})
 	}
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
@@ -528,7 +532,10 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		return xe.WriteNumber(fv, bits, mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
+			return jsonwire.AppendFloat(b, va.Float(), bits), nil
+		})
 	}
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
@@ -1590,6 +1597,14 @@ func makeInvalidArshaler(t reflect.Type) *arshaler {
 func newInvalidFormatError(action string, t reflect.Type, format string) error {
 	err := fmt.Errorf("invalid format flag: %q", format)
 	return &SemanticError{action: action, GoType: t, Err: err}
+}
+
+func stringOrNumberKind(isString bool) jsontext.Kind {
+	if isString {
+		return '"'
+	} else {
+		return '0'
+	}
 }
 
 type uintSet64 uint64

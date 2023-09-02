@@ -12,6 +12,30 @@ import (
 	"unicode/utf8"
 )
 
+// NeedEscape reports whether src needs escaping of any characters.
+// It reports true for inputs with invalid UTF-8.
+func NeedEscape[Bytes ~[]byte | ~string](src Bytes, escape *EscapeRunes) bool {
+	if escape == nil {
+		escape = &escapeCanonical
+	}
+	var i int
+	for uint(len(src)) > uint(i) {
+		if c := src[i]; c < utf8.RuneSelf {
+			if escape.needEscapeASCII(c) {
+				return true
+			}
+			i++
+		} else {
+			r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[i:])))
+			if r == utf8.RuneError || escape.needEscapeRune(r) {
+				return true
+			}
+			i += rn
+		}
+	}
+	return false
+}
+
 // AppendQuote appends src to dst as a JSON string per RFC 7159, section 7.
 //
 // If validateUTF8 is specified, this rejects input that contains invalid UTF-8

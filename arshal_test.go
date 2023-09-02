@@ -3089,11 +3089,18 @@ func TestMarshal(t *testing.T) {
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: errors.New("some error")},
 	}, {
-		name: jsontest.Name("Methods/Invalid/Text/UTF8"),
+		name: jsontest.Name("Methods/Text/RejectInvalidUTF8"),
 		in: marshalTextFunc(func() ([]byte, error) {
 			return []byte("\xde\xad\xbe\xef"), nil
 		}),
 		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: export.NewInvalidUTF8Error(0)},
+	}, {
+		name: jsontest.Name("Methods/Text/AllowInvalidUTF8"),
+		opts: []Options{jsontext.AllowInvalidUTF8(true)},
+		in: marshalTextFunc(func() ([]byte, error) {
+			return []byte("\xde\xad\xbe\xef"), nil
+		}),
+		want: "\"\xde\xad\ufffd\ufffd\"",
 	}, {
 		name: jsontest.Name("Methods/Invalid/Text/SkipFunc"),
 		in: marshalTextFunc(func() ([]byte, error) {

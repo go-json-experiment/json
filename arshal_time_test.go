@@ -89,17 +89,16 @@ var formatDurationTestdata = []struct {
 func TestFormatDuration(t *testing.T) {
 	var gotBuf []byte
 	check := func(td time.Duration, s string, base uint) {
-		a := durationArshaler{base}
-		gotBuf = a.appendMarshal(gotBuf[:0], td)
+		a := durationArshaler{td, base}
+		gotBuf, _ = a.appendMarshal(gotBuf[:0])
 		if string(gotBuf) != s {
 			t.Errorf("formatDuration(%d, %s) = %q, want %q", td, baseLabel(base), string(gotBuf), s)
 		}
-		gotTD, err := a.unmarshal(gotBuf)
-		if err != nil {
+		if err := a.unmarshal(gotBuf); err != nil {
 			t.Errorf("parseDuration(%q, %s) error: %v", gotBuf, baseLabel(base), err)
 		}
-		if gotTD != td {
-			t.Errorf("parseDuration(%q, %s) = %d, want %d", gotBuf, baseLabel(base), gotTD, td)
+		if a.td != td {
+			t.Errorf("parseDuration(%q, %s) = %d, want %d", gotBuf, baseLabel(base), a.td, td)
 		}
 	}
 	for _, tt := range formatDurationTestdata {
@@ -156,9 +155,10 @@ var parseDurationTestdata = []struct {
 
 func TestParseDuration(t *testing.T) {
 	for _, tt := range parseDurationTestdata {
-		switch got, err := (&durationArshaler{tt.base}).unmarshal([]byte(tt.in)); {
-		case got != tt.want:
-			t.Errorf("parseDuration(%q, %s) = %v, want %v", tt.in, baseLabel(tt.base), got, tt.want)
+		a := durationArshaler{base: tt.base}
+		switch err := a.unmarshal([]byte(tt.in)); {
+		case a.td != tt.want:
+			t.Errorf("parseDuration(%q, %s) = %v, want %v", tt.in, baseLabel(tt.base), a.td, tt.want)
 		case (err == nil) && tt.wantErr:
 			t.Errorf("parseDuration(%q, %s) error is nil, want non-nil", tt.in, baseLabel(tt.base))
 		case (err != nil) && !tt.wantErr:
@@ -174,13 +174,13 @@ func FuzzFormatDuration(f *testing.F) {
 	f.Fuzz(func(t *testing.T, want int64) {
 		var buf []byte
 		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9, 60} {
-			a := durationArshaler{base}
-			buf = a.appendMarshal(buf[:0], time.Duration(want))
-			switch got, err := a.unmarshal(buf); {
+			a := durationArshaler{td: time.Duration(want), base: base}
+			buf, _ = a.appendMarshal(buf[:0])
+			switch err := a.unmarshal(buf); {
 			case err != nil:
 				t.Fatalf("parseDuration(%q, %s) error: %v", buf, baseLabel(base), err)
-			case got != time.Duration(want):
-				t.Fatalf("parseDuration(%q, %s) = %v, want %v", buf, baseLabel(base), got, time.Duration(want))
+			case a.td != time.Duration(want):
+				t.Fatalf("parseDuration(%q, %s) = %v, want %v", buf, baseLabel(base), a.td, time.Duration(want))
 			}
 		}
 	})
@@ -192,7 +192,8 @@ func FuzzParseDuration(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, in []byte) {
 		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9, 60} {
-			if _, err := (&durationArshaler{base}).unmarshal(in); err == nil && base != 60 {
+			a := durationArshaler{base: base}
+			if err := a.unmarshal(in); err == nil && base != 60 {
 				if n, err := jsonwire.ConsumeNumber(in); err != nil || n != len(in) {
 					t.Fatalf("parseDuration(%q) error is nil for invalid JSON number", in)
 				}
@@ -274,11 +275,12 @@ var parseTimeTestdata = []struct {
 
 func TestParseTime(t *testing.T) {
 	for _, tt := range parseTimeTestdata {
-		switch got, err := (&timeArshaler{base: tt.base}).unmarshal([]byte(tt.in)); {
-		case got != tt.want:
-			t.Errorf("parseTime(%q, %s) = time.Unix(%d, %d), want time.Unix(%d, %d)", tt.in, baseLabel(tt.base), got.Unix(), got.Nanosecond(), tt.want.Unix(), tt.want.Nanosecond())
+		a := timeArshaler{base: tt.base}
+		switch err := a.unmarshal([]byte(tt.in)); {
+		case a.tt != tt.want:
+			t.Errorf("parseTime(%q, %s) = time.Unix(%d, %d), want time.Unix(%d, %d)", tt.in, baseLabel(tt.base), a.tt.Unix(), a.tt.Nanosecond(), tt.want.Unix(), tt.want.Nanosecond())
 		case (err == nil) && tt.wantErr:
-			t.Errorf("parseTime(%q, %s) = (time.Unix(%d, %d), nil), want non-nil error", tt.in, baseLabel(tt.base), got.Unix(), got.Nanosecond())
+			t.Errorf("parseTime(%q, %s) = (time.Unix(%d, %d), nil), want non-nil error", tt.in, baseLabel(tt.base), a.tt.Unix(), a.tt.Nanosecond())
 		case (err != nil) && !tt.wantErr:
 			t.Errorf("parseTime(%q, %s) error is non-nil, want nil", tt.in, baseLabel(tt.base))
 		}
@@ -293,13 +295,13 @@ func FuzzFormatTime(f *testing.F) {
 		want := time.Unix(wantSec, int64(uint64(wantNano)%1e9)).UTC()
 		var buf []byte
 		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9} {
-			a := timeArshaler{base: base}
-			buf, _ = a.appendMarshal(buf[:0], want)
-			switch got, err := a.unmarshal(buf); {
+			a := timeArshaler{tt: want, base: base}
+			buf, _ = a.appendMarshal(buf[:0])
+			switch err := a.unmarshal(buf); {
 			case err != nil:
 				t.Fatalf("parseTime(%q, %s) error: %v", buf, baseLabel(base), err)
-			case got != want:
-				t.Fatalf("parseTime(%q, %s) = time.Unix(%d, %d), want time.Unix(%d, %d)", buf, baseLabel(base), got.Unix(), got.Nanosecond(), want.Unix(), want.Nanosecond())
+			case a.tt != want:
+				t.Fatalf("parseTime(%q, %s) = time.Unix(%d, %d), want time.Unix(%d, %d)", buf, baseLabel(base), a.tt.Unix(), a.tt.Nanosecond(), want.Unix(), want.Nanosecond())
 			}
 		}
 	})
@@ -311,7 +313,8 @@ func FuzzParseTime(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, in []byte) {
 		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9} {
-			if _, err := (&timeArshaler{base: base}).unmarshal(in); err == nil {
+			a := timeArshaler{base: base}
+			if err := a.unmarshal(in); err == nil {
 				if n, err := jsonwire.ConsumeNumber(in); err != nil || n != len(in) {
 					t.Fatalf("parseTime(%q) error is nil for invalid JSON number", in)
 				}

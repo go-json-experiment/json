@@ -7,9 +7,7 @@ package jsontext
 import (
 	"bytes"
 	"io"
-	"math"
 	"math/bits"
-	"strconv"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
@@ -423,44 +421,49 @@ func (e *encoderState) WriteToken(t Token) error {
 	return nil
 }
 
-const (
-	rawIntNumber  = 'i'
-	rawUintNumber = 'u'
-)
-
-// WriteNumber is specialized version of WriteToken, but optimized for numbers.
-// As a special-case, if bits is -1 or -2, it will treat v as
-// the raw-encoded bits of an int64 or uint64, respectively.
-// It is only called from arshal_default.go.
-func (e *encoderState) WriteNumber(v float64, bits int, quote bool) error {
+// AppendRaw appends either a raw string (without double quotes) or number.
+// Specify safeASCII if the string output is guaranteed to be ASCII
+// without any characters (including '<', '>', and '&') that need escaping,
+// otherwise this will validate whether the string needs escaping.
+// The appended bytes for a JSON number must be valid.
+//
+// This is a specialized implementation of Encoder.WriteValue
+// that allows appending directly into the buffer.
+// It is only called from marshal logic in the "json" package.
+func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) ([]byte, error)) error {
 	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.Tokens.MayAppendDelim(b, '0')
+	b = e.Tokens.MayAppendDelim(b, k)
 	if e.Flags.Get(jsonflags.Expand) {
-		b = e.appendWhitespace(b, '0')
+		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
 
-	if quote {
-		// Append the value to the output.
-		n0 := len(b) // offset before appending the number
+	var err error
+	switch k {
+	case '"':
+		// Append directly into the encoder buffer by assuming that
+		// most of the time none of the characters need escaping.
 		b = append(b, '"')
-		switch bits {
-		case rawIntNumber:
-			b = strconv.AppendInt(b, int64(math.Float64bits(v)), 10)
-		case rawUintNumber:
-			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
-		default:
-			b = jsonwire.AppendFloat(b, v, bits)
+		if b, err = appendFn(b); err != nil {
+			return err
 		}
 		b = append(b, '"')
 
-		// Escape the string if necessary.
-		if e.EscapeRunes.HasEscapeFunc() {
-			b2 := append(e.unusedCache, b[n0+len(`"`):len(b)-len(`"`)]...)
-			b, _ = jsonwire.AppendQuote(b[:n0], string(b2), false, e.EscapeRunes)
+		// Check whether we need to escape the string and if necessary
+		// copy it to a scratch buffer and then escape it back.
+		isVerbatim := ((safeASCII && !e.EscapeRunes.HasEscapeFunc()) ||
+			!jsonwire.NeedEscape(b[pos+len(`"`):len(b)-len(`"`)], e.EscapeRunes))
+		if !isVerbatim {
+			var err error
+			validateUTF8 := !e.Flags.Get(jsonflags.AllowInvalidUTF8)
+			b2 := append(e.unusedCache, b[pos+len(`"`):len(b)-len(`"`)]...)
+			b, err = jsonwire.AppendQuote(b[:pos], string(b2), validateUTF8, e.EscapeRunes)
 			e.unusedCache = b2[:0]
+			if err != nil {
+				return e.injectSyntacticErrorWithPosition(err, pos)
+			}
 		}
 
 		// Update the state machine.
@@ -468,27 +471,24 @@ func (e *encoderState) WriteNumber(v float64, bits int, quote bool) error {
 			if !e.Tokens.Last.isValidNamespace() {
 				return errInvalidNamespace
 			}
-			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[n0:], false) {
-				err := newDuplicateNameError(b[n0:])
+			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], isVerbatim) {
+				err := newDuplicateNameError(b[pos:])
 				return e.injectSyntacticErrorWithPosition(err, pos)
 			}
-			e.Names.ReplaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
 		if err := e.Tokens.appendString(); err != nil {
 			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
-	} else {
-		switch bits {
-		case rawIntNumber:
-			b = strconv.AppendInt(b, int64(math.Float64bits(v)), 10)
-		case rawUintNumber:
-			b = strconv.AppendUint(b, uint64(math.Float64bits(v)), 10)
-		default:
-			b = jsonwire.AppendFloat(b, v, bits)
+	case '0':
+		if b, err = appendFn(b); err != nil {
+			return err
 		}
 		if err := e.Tokens.appendNumber(); err != nil {
 			return e.injectSyntacticErrorWithPosition(err, pos)
 		}
+	default:
+		panic("BUG: invalid kind")
 	}
 
 	// Finish off the buffer and store it back into e.

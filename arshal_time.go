@@ -49,17 +49,14 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			} else if mo.Flags.Get(jsonflags.FormatTimeDurationAsNanosecond) {
 				return marshalNano(enc, va, mo)
 			}
+
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
-			td := *va.Addr().Interface().(*time.Duration)
-			b := enc.UnusedBuffer()
-			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
-				b = append(b, '"')
+			m.td = *va.Addr().Interface().(*time.Duration)
+			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
+			if err := xe.AppendRaw(k, true, m.appendMarshal); err != nil {
+				return &SemanticError{action: "marshal", GoType: t, Err: err}
 			}
-			b = m.appendMarshal(b, td) // never contains special characters
-			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
-				b = append(b, '"')
-			}
-			return enc.WriteValue(b)
+			return nil
 		}
 		unmarshalNano := fncs.unmarshal
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
@@ -88,21 +85,19 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-				td2, err := u.unmarshal(val)
-				if err != nil {
+				if err := u.unmarshal(val); err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
-				*td = td2
+				*td = u.td
 				return nil
 			case '0':
 				if !u.isNumeric() {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 				}
-				td2, err := u.unmarshal(val)
-				if err != nil {
+				if err := u.unmarshal(val); err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
-				*td = td2
+				*td = u.td
 				return nil
 			default:
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
@@ -120,25 +115,12 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
-			tt := *va.Addr().Interface().(*time.Time)
-			b := enc.UnusedBuffer()
-			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
-				b = append(b, '"')
-			}
-			b, err = m.appendMarshal(b, tt)
-			if !m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers) {
-				b = append(b, '"')
-			}
-			if err != nil {
+			m.tt = *va.Addr().Interface().(*time.Time)
+			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
+			if err := xe.AppendRaw(k, !m.hasCustomFormat(), m.appendMarshal); err != nil {
 				return &SemanticError{action: "marshal", GoType: t, Err: err}
 			}
-			// Custom formats may contain characters that need escaping.
-			// Verify that the result is a valid JSON string (common case),
-			// otherwise escape the string correctly (slower case).
-			if m.hasCustomFormat() && jsonwire.ConsumeSimpleString(b) != len(b) {
-				b, _ = jsonwire.AppendQuote(nil, string(b[len(`"`):len(b)-len(`"`)]), true, nil)
-			}
-			return enc.WriteValue(b)
+			return nil
 		}
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) (err error) {
 			xd := export.Decoder(dec)
@@ -164,21 +146,19 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-				tt2, err := u.unmarshal(val)
-				if err != nil {
+				if err := u.unmarshal(val); err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
-				*tt = tt2
+				*tt = u.tt
 				return nil
 			case '0':
 				if !u.isNumeric() {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
 				}
-				tt2, err := u.unmarshal(val)
-				if err != nil {
+				if err := u.unmarshal(val); err != nil {
 					return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: err}
 				}
-				*tt = tt2
+				*tt = u.tt
 				return nil
 			default:
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t}
@@ -189,6 +169,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 }
 
 type durationArshaler struct {
+	td time.Duration
+
 	// base records the representation where:
 	//   - 0 uses time.Duration.String
 	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the duration as
@@ -221,29 +203,32 @@ func (a *durationArshaler) isNumeric() bool {
 	return a.base != 0 && a.base != 60
 }
 
-func (a *durationArshaler) appendMarshal(b []byte, d time.Duration) []byte {
+func (a *durationArshaler) appendMarshal(b []byte) ([]byte, error) {
 	switch a.base {
 	case 0:
-		return append(b, d.String()...)
+		return append(b, a.td.String()...), nil
 	case 60:
-		return appendDurationBase60(b, d)
+		return appendDurationBase60(b, a.td), nil
 	default:
-		return appendDurationBase10(b, d, a.base)
+		return appendDurationBase10(b, a.td, a.base), nil
 	}
 }
 
-func (a *durationArshaler) unmarshal(b []byte) (time.Duration, error) {
+func (a *durationArshaler) unmarshal(b []byte) (err error) {
 	switch a.base {
 	case 0:
-		return time.ParseDuration(string(b))
+		a.td, err = time.ParseDuration(string(b))
 	case 60:
-		return parseDurationBase60(b)
+		a.td, err = parseDurationBase60(b)
 	default:
-		return parseDurationBase10(b, a.base)
+		a.td, err = parseDurationBase10(b, a.base)
 	}
+	return err
 }
 
 type timeArshaler struct {
+	tt time.Time
+
 	// base records the representation where:
 	//   - 0 uses RFC 3339 encoding of the timestamp
 	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the timestamp as
@@ -329,7 +314,7 @@ func (a *timeArshaler) hasCustomFormat() bool {
 	return a.base == math.MaxUint
 }
 
-func (a *timeArshaler) appendMarshal(b []byte, t time.Time) ([]byte, error) {
+func (a *timeArshaler) appendMarshal(b []byte) ([]byte, error) {
 	switch a.base {
 	case 0:
 		// TODO(https://go.dev/issue/60204): Use cmp.Or(a.format, time.RFC3339Nano).
@@ -338,7 +323,7 @@ func (a *timeArshaler) appendMarshal(b []byte, t time.Time) ([]byte, error) {
 			format = time.RFC3339Nano
 		}
 		n0 := len(b)
-		b = t.AppendFormat(b, format)
+		b = a.tt.AppendFormat(b, format)
 		// Not all Go timestamps can be represented as valid RFC 3339.
 		// Explicitly check for these edge cases.
 		// See https://go.dev/issue/4556 and https://go.dev/issue/54580.
@@ -353,19 +338,18 @@ func (a *timeArshaler) appendMarshal(b []byte, t time.Time) ([]byte, error) {
 		}
 		return b, nil
 	case math.MaxUint:
-		return t.AppendFormat(b, a.format), nil
+		return a.tt.AppendFormat(b, a.format), nil
 	default:
-		return appendTimeUnix(b, t, a.base), nil
+		return appendTimeUnix(b, a.tt, a.base), nil
 	}
 }
 
-func (a *timeArshaler) unmarshal(b []byte) (time.Time, error) {
+func (a *timeArshaler) unmarshal(b []byte) (err error) {
 	switch a.base {
 	case 0:
 		// Use time.Time.UnmarshalText to avoid possible string allocation.
-		var t time.Time
-		if err := t.UnmarshalText(b); err != nil {
-			return t, err
+		if err := a.tt.UnmarshalText(b); err != nil {
+			return err
 		}
 		// TODO(https://go.dev/issue/57912):
 		// RFC 3339 specifies the grammar for a valid timestamp.
@@ -377,22 +361,24 @@ func (a *timeArshaler) unmarshal(b []byte) (time.Time, error) {
 		}
 		switch {
 		case b[len("2006-01-02T")+1] == ':': // hour must be two digits
-			return t, newParseError(time.RFC3339, string(b), "15", string(b[len("2006-01-02T"):][:1]), "")
+			return newParseError(time.RFC3339, string(b), "15", string(b[len("2006-01-02T"):][:1]), "")
 		case b[len("2006-01-02T15:04:05")] == ',': // sub-second separator must be a period
-			return t, newParseError(time.RFC3339, string(b), ".", ",", "")
+			return newParseError(time.RFC3339, string(b), ".", ",", "")
 		case b[len(b)-1] != 'Z':
 			switch {
 			case parseDec2(b[len(b)-len("07:00"):]) >= 24: // timezone hour must be in range
-				return t, newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone hour out of range")
+				return newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone hour out of range")
 			case parseDec2(b[len(b)-len("00"):]) >= 60: // timezone minute must be in range
-				return t, newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone minute out of range")
+				return newParseError(time.RFC3339, string(b), "Z07:00", string(b[len(b)-len("Z07:00"):]), ": timezone minute out of range")
 			}
 		}
-		return t, nil
+		return nil
 	case math.MaxUint:
-		return time.Parse(a.format, string(b))
+		a.tt, err = time.Parse(a.format, string(b))
+		return err
 	default:
-		return parseTimeUnix(b, a.base)
+		a.tt, err = parseTimeUnix(b, a.base)
+		return err
 	}
 }
 

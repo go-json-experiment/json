@@ -147,26 +147,9 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
 			appender := va.Addr().Interface().(encodingTextAppender)
-			val := enc.UnusedBuffer()
-			val = append(val, '"')
-			val, err = appender.AppendText(val)
-			if err != nil {
-				err = wrapSkipFunc(err, "marshal method")
-				// TODO: Avoid wrapping semantic errors.
-				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
-			}
-			val = append(val, '"')
-			// Check whether we need to escape any characters.
-			if jsonwire.ConsumeSimpleString(val) != len(val) {
-				var err error
-				validateUTF8 := !mo.Flags.Get(jsonflags.AllowInvalidUTF8)
-				val, err = jsonwire.AppendQuote(nil, val[len(`"`):len(val)-len(`"`)], validateUTF8, nil)
-				if err != nil {
-					return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
-				}
-			}
-			if err := enc.WriteValue(val); err != nil {
-				// TODO: Avoid wrapping syntactic or I/O errors.
+			if err := export.Encoder(enc).AppendRaw('"', false, appender.AppendText); err != nil {
+				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
+				err = wrapSkipFunc(err, "append method")
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			return nil
@@ -175,19 +158,12 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		fncs.nonDefault = true
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 			marshaler := va.Addr().Interface().(encoding.TextMarshaler)
-			s, err := marshaler.MarshalText()
-			if err != nil {
+			if err := export.Encoder(enc).AppendRaw('"', false, func(b []byte) ([]byte, error) {
+				b2, err := marshaler.MarshalText()
+				return append(b, b2...), err
+			}); err != nil {
+				// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
 				err = wrapSkipFunc(err, "marshal method")
-				// TODO: Avoid wrapping semantic errors.
-				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
-			}
-			val := enc.UnusedBuffer()
-			val, err = jsonwire.AppendQuote(val, s, true, nil)
-			if err != nil {
-				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
-			}
-			if err := enc.WriteValue(val); err != nil {
-				// TODO: Avoid wrapping syntactic or I/O errors.
 				return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 			}
 			return nil
@@ -196,20 +172,11 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		if implementsWhich(t, appenderToType) != nil && t.PkgPath() == "net/netip" {
 			fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 				appender := va.Addr().Interface().(interface{ AppendTo([]byte) []byte })
-				val := enc.UnusedBuffer()
-				val = append(val, '"')
-				val = appender.AppendTo(val)
-				val = append(val, '"')
-				// Check whether we need to escape any characters.
-				if jsonwire.ConsumeSimpleString(val) != len(val) {
-					var err error
-					val, err = jsonwire.AppendQuote(nil, val[len(`"`):len(val)-len(`"`)], true, nil)
-					if err != nil {
-						return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
-					}
-				}
-				if err := enc.WriteValue(val); err != nil {
-					// TODO: Avoid wrapping syntactic or I/O errors.
+				if err := export.Encoder(enc).AppendRaw('"', false, func(b []byte) ([]byte, error) {
+					return appender.AppendTo(b), nil
+				}); err != nil {
+					// TODO: Avoid wrapping semantic, syntactic, or I/O errors.
+					err = wrapSkipFunc(err, "append method")
 					return &SemanticError{action: "marshal", JSONKind: '"', GoType: t, Err: err}
 				}
 				return nil
