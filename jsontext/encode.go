@@ -361,7 +361,6 @@ func (e *encoderState) WriteToken(t Token) error {
 		b = append(b, "true"...)
 		err = e.Tokens.appendLiteral()
 	case '"':
-		n0 := len(b) // offset before calling t.appendString
 		if b, err = t.appendString(b, !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes); err != nil {
 			break
 		}
@@ -370,11 +369,11 @@ func (e *encoderState) WriteToken(t Token) error {
 				err = errInvalidNamespace
 				break
 			}
-			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[n0:], false) {
-				err = newDuplicateNameError(b[n0:])
+			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
+				err = newDuplicateNameError(b[pos:])
 				break
 			}
-			e.Names.ReplaceLastQuotedOffset(n0) // only replace if insertQuoted succeeds
+			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
 		err = e.Tokens.appendString()
 	case '0':
