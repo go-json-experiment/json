@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -71,6 +72,9 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 			}
 			return makeString(xd.StringCache, val), nil
 		case '0':
+			if uo.Flags.Get(jsonflags.UnmarshalAnyWithRawNumber) {
+				return internal.RawNumberOf(val), nil
+			}
 			fv, ok := jsonwire.ParseFloat(val, 64)
 			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
 				return nil, newUnmarshalErrorAfter(dec, float64Type, strconv.ErrRange)

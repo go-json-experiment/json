@@ -12,3 +12,14 @@ type NotForPublicUse struct{}
 // AllowInternalUse is passed from "json" to "jsontext" to authenticate
 // that the caller can have access to internal functionality.
 var AllowInternalUse NotForPublicUse
+
+var (
+	// TransformMarshalError converts a v2 error into a v1 error.
+	TransformMarshalError func(error) error
+	// TransformUnmarshalError converts a v2 error into a v1 error.
+	TransformUnmarshalError func(error) error
+	// NewRawNumber returns new(jsonv1.Number).
+	NewRawNumber func() any
+	// RawNumberOf returns jsonv1.Number(b).
+	RawNumberOf func(b []byte) any
+)

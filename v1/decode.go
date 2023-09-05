@@ -112,14 +112,25 @@ type UnmarshalTypeError struct {
 	Type   reflect.Type // type of Go value it could not be assigned to
 	Offset int64        // error occurred after reading Offset bytes
 	Struct string       // name of the struct type containing the field
-	Field  string       // the full path from root node to the field, include embedded struct
+	Field  string       // the full path from root node to the field
+	Err    error        // underlying error (may be nil)
 }
 
 func (e *UnmarshalTypeError) Error() string {
+	var s string
 	if e.Struct != "" || e.Field != "" {
-		return "json: cannot unmarshal " + e.Value + " into Go struct field " + e.Struct + "." + e.Field + " of type " + e.Type.String()
+		s = "json: cannot unmarshal " + e.Value + " into Go struct field " + e.Struct + "." + e.Field + " of type " + e.Type.String()
+	} else {
+		s = "json: cannot unmarshal " + e.Value + " into Go value of type " + e.Type.String()
 	}
-	return "json: cannot unmarshal " + e.Value + " into Go value of type " + e.Type.String()
+	if e.Err != nil {
+		s += ": " + e.Err.Error()
+	}
+	return s
+}
+
+func (e *UnmarshalTypeError) Unwrap() error {
+	return e.Err
 }
 
 // An UnmarshalFieldError describes a JSON object key that
@@ -203,7 +214,9 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 	k := val.Kind()
 	switch k {
 	case 'n':
-		*n = "" // TODO: Should we merge with legacy semantics?
+		if legacy, _ := jsonv2.GetOption(opts, MergeWithLegacySemantics); !legacy {
+			*n = ""
+		}
 		return nil
 	case '"':
 		if !stringify {

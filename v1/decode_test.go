@@ -437,13 +437,13 @@ var unmarshalTests = []struct {
 	{CaseName: Name(""), in: `"g-clef: \uD834\uDD1E"`, ptr: new(string), out: "g-clef: \U0001D11E"},
 	{CaseName: Name(""), in: `"invalid: \uD834x\uDD1E"`, ptr: new(string), out: "invalid: \uFFFDx\uFFFD"},
 	{CaseName: Name(""), in: "null", ptr: new(any), out: nil},
-	{CaseName: Name(""), in: `{"X": [1,2,3], "Y": 4}`, ptr: new(T), out: T{Y: 4}, err: &UnmarshalTypeError{"array", reflect.TypeFor[string](), 7, "T", "X"}},
-	{CaseName: Name(""), in: `{"X": 23}`, ptr: new(T), out: T{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "T", "X"}},
+	{CaseName: Name(""), in: `{"X": [1,2,3], "Y": 4}`, ptr: new(T), out: T{Y: 4}, err: &UnmarshalTypeError{"array", reflect.TypeFor[string](), 7, "T", "X", nil}},
+	{CaseName: Name(""), in: `{"X": 23}`, ptr: new(T), out: T{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "T", "X", nil}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), out: tx{}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), out: tx{}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), err: fmt.Errorf("json: unknown field \"x\""), disallowUnknownFields: true},
-	{CaseName: Name(""), in: `{"S": 23}`, ptr: new(W), out: W{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[SS](), 0, "W", "S"}},
-	{CaseName: Name(""), in: `{"T": {"X": 23}}`, ptr: new(TOuter), out: TOuter{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "TOuter", "T.X"}},
+	{CaseName: Name(""), in: `{"S": 23}`, ptr: new(W), out: W{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[SS](), 0, "W", "S", nil}},
+	{CaseName: Name(""), in: `{"T": {"X": 23}}`, ptr: new(TOuter), out: TOuter{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "TOuter", "T.X", nil}},
 	{CaseName: Name(""), in: `{"F1":1,"F2":2,"F3":3}`, ptr: new(V), out: V{F1: float64(1), F2: int32(2), F3: Number("3")}},
 	{CaseName: Name(""), in: `{"F1":1,"F2":2,"F3":3}`, ptr: new(V), out: V{F1: Number("1"), F2: int32(2), F3: Number("3")}, useNumber: true},
 	{CaseName: Name(""), in: `{"k1":1,"k2":"s","k3":[1,2.0,3e-3],"k4":{"kk1":"s","kk2":2}}`, ptr: new(any), out: ifaceNumAsFloat64},
@@ -2104,7 +2104,6 @@ func TestUnmarshalTypeError(t *testing.T) {
 }
 
 func TestUnmarshalSyntax(t *testing.T) {
-	var x any
 	tests := []struct {
 		CaseName
 		in string
@@ -2121,6 +2120,7 @@ func TestUnmarshalSyntax(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			skipKnownFailure(t)
+			var x any
 			err := Unmarshal([]byte(tt.in), &x)
 			if _, ok := err.(*SyntaxError); !ok {
 				t.Errorf("%s: Unmarshal(%#q, any):\n\tgot:  %T\n\twant: %T",
