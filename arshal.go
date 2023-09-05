@@ -166,6 +166,9 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 	xe := export.Encoder(enc)
 	xe.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
 	err = marshalEncode(enc, in, &xe.Struct)
+	if err != nil && xe.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return nil, internal.TransformMarshalError(err)
+	}
 	return bytes.Clone(xe.Buf), err
 }
 
@@ -178,7 +181,11 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 	defer export.PutStreamingEncoder(enc)
 	xe := export.Encoder(enc)
 	xe.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
-	return marshalEncode(enc, in, &xe.Struct)
+	err = marshalEncode(enc, in, &xe.Struct)
+	if err != nil && xe.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return internal.TransformMarshalError(err)
+	}
+	return err
 }
 
 // MarshalEncode serializes a Go value into an [jsontext.Encoder] according to
@@ -192,7 +199,11 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	mo.Join(opts...)
 	xe := export.Encoder(out)
 	mo.CopyCoderOptions(&xe.Struct)
-	return marshalEncode(out, in, mo)
+	err = marshalEncode(out, in, mo)
+	if err != nil && xe.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return internal.TransformMarshalError(err)
+	}
+	return err
 }
 
 func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err error) {
@@ -384,7 +395,11 @@ func Unmarshal(in []byte, out any, opts ...Options) (err error) {
 	dec := export.GetBufferedDecoder(in, opts...)
 	defer export.PutBufferedDecoder(dec)
 	xd := export.Decoder(dec)
-	return unmarshalFull(dec, out, &xd.Struct)
+	err = unmarshalFull(dec, out, &xd.Struct)
+	if err != nil && xd.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return internal.TransformUnmarshalError(err)
+	}
+	return err
 }
 
 // UnmarshalRead deserializes a Go value from an [io.Reader] according to the
@@ -397,7 +412,11 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 	dec := export.GetStreamingDecoder(in, opts...)
 	defer export.PutStreamingDecoder(dec)
 	xd := export.Decoder(dec)
-	return unmarshalFull(dec, out, &xd.Struct)
+	err = unmarshalFull(dec, out, &xd.Struct)
+	if err != nil && xd.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return internal.TransformUnmarshalError(err)
+	}
+	return err
 }
 
 func unmarshalFull(in *jsontext.Decoder, out any, uo *jsonopts.Struct) error {
@@ -425,7 +444,11 @@ func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error)
 	uo.Join(opts...)
 	xd := export.Decoder(in)
 	uo.CopyCoderOptions(&xd.Struct)
-	return unmarshalDecode(in, out, uo)
+	err = unmarshalDecode(in, out, uo)
+	if err != nil && uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+		return internal.TransformUnmarshalError(err)
+	}
+	return err
 }
 
 func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err error) {

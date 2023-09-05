@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -156,7 +157,9 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.SetBool(false)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetBool(false)
+			}
 			return nil
 		case 't', 'f':
 			if !uo.Flags.Get(jsonflags.StringifyBoolsAndStrings) {
@@ -228,7 +231,9 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetString("")
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetString("")
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -350,7 +355,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetZero()
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) || va.Kind() == reflect.Slice {
+				va.SetZero()
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -435,7 +442,9 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetInt(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetInt(0)
+			}
 			return nil
 		case '"':
 			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
@@ -515,7 +524,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetUint(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetUint(0)
+			}
 			return nil
 		case '"':
 			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
@@ -605,7 +616,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetFloat(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetFloat(0)
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -957,7 +970,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 		once.Do(init)
-		if errInit != nil {
+		if errInit != nil && !mo.Flags.Get(jsonflags.IgnoreStructErrors) {
 			err := *errInit // shallow copy SemanticError
 			err.action = "marshal"
 			return &err
@@ -1031,7 +1044,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 				// Append the token to the output and to the state machine.
 				n0 := len(b) // offset before calling AppendQuote
-				if !xe.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS) {
+				if !xe.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS | jsonflags.EscapeInvalidUTF8) {
 					b = append(b, f.quotedName...)
 				} else {
 					b, _ = jsonwire.AppendQuote(b, f.name, &xe.Flags)
@@ -1131,7 +1144,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '{':
 			once.Do(init)
-			if errInit != nil {
+			if errInit != nil && !uo.Flags.Get(jsonflags.IgnoreStructErrors) {
 				err := *errInit // shallow copy SemanticError
 				err.action = "unmarshal"
 				return &err
@@ -1465,7 +1478,9 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.SetZero()
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetZero()
+			}
 			return nil
 		case '[':
 			once.Do(init)
@@ -1636,7 +1651,11 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			case '"':
 				v = newAddressableValue(stringType)
 			case '0':
-				v = newAddressableValue(float64Type)
+				if uo.Flags.Get(jsonflags.UnmarshalAnyWithRawNumber) {
+					v = addressableValue{reflect.ValueOf(internal.NewRawNumber()).Elem()}
+				} else {
+					v = newAddressableValue(float64Type)
+				}
 			case '{':
 				v = newAddressableValue(mapStringAnyType)
 			case '[':
