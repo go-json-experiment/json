@@ -50,6 +50,7 @@ const (
 		AllowInvalidUTF8 |
 		EscapeForHTML |
 		EscapeForJS |
+		EscapeInvalidUTF8 |
 		Deterministic |
 		FormatNilMapAsNull |
 		FormatNilSliceAsNull |
@@ -87,6 +88,7 @@ const (
 	CanonicalizeNumbers // encode only; for internal use by jsontext.Value.Canonicalize
 	EscapeForHTML       // encode only
 	EscapeForJS         // encode only
+	EscapeInvalidUTF8   // encode only; only exposed in v1
 	Multiline           // encode only
 	SpaceAfterColon     // encode only
 	SpaceAfterComma     // encode only
@@ -129,6 +131,7 @@ const (
 	ReportLegacyErrorValues        // marshal or unmarshal
 	SkipUnaddressableMethods       // marshal or unmarshal
 	StringifyWithLegacySemantics   // marshal or unmarshal
+	StringifyBoolsAndStrings       // marshal or unmarshal; for internal use by json.Marshal
 	UnmarshalAnyWithRawNumber      // unmarshal; for internal use by jsonv1.Decoder.UseNumber
 	UnmarshalArrayFromAnyLength    // unmarshal
 

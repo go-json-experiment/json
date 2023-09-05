@@ -2,11 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package json implements legacy support for v1 [encoding/json].
-//
-// The entirety of the v1 API will eventually live in this package.
-// For the time being, it only contains options needed to configure the v2 API
-// to operate under v1 semantics.
 package json
 
 import (
@@ -33,11 +28,17 @@ type Options = jsonopts.Options
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
 // It is equivalent to the following boolean options being set to true:
 //
+//   - [EscapeInvalidUTF8]
 //   - [FormatByteArrayAsArray]
 //   - [FormatTimeDurationAsNanosecond]
+//   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
+//   - [MergeWithLegacySemantics]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [RejectFloatOverflow]
+//   - [ReportLegacyErrorValues]
+//   - [SkipUnaddressableMethods]
+//   - [StringifyWithLegacySemantics]
 //   - [UnmarshalArrayFromAnyLength]
 //   - [jsonv2.Deterministic]
 //   - [jsonv2.FormatNilSliceAsNull]
@@ -58,6 +59,21 @@ type Options = jsonopts.Options
 //	jsonv2.Unmarshal(b, v, jsonv1.DefaultOptionsV1())
 func DefaultOptionsV1() Options {
 	return &jsonopts.DefaultOptionsV1
+}
+
+// EscapeInvalidUTF8 specifies that bytes of invalid UTF-8 within JSON strings
+// should be escaped as a hexadecimal Unicode codepoint (i.e., \ufffd)
+// of the Unicode replacement character as opposed to being encoded
+// as the Unicode replacement character itself (with any escaping).
+// This option has no effect if [jsontext.AllowInvalidUTF8] is false.
+//
+// This only affects encoding and is ignored when decoding.
+func EscapeInvalidUTF8(v bool) Options {
+	if v {
+		return jsonflags.EscapeInvalidUTF8 | 1
+	} else {
+		return jsonflags.EscapeInvalidUTF8 | 0
+	}
 }
 
 // FormatByteArrayAsArray specifies that a [N]byte array is formatted
@@ -93,6 +109,18 @@ func FormatTimeDurationAsNanosecond(v bool) Options {
 	}
 }
 
+// TODO: empty structs
+// TODO: invalid tags
+// TODO: embedded unexported struct type
+// The v1 default is true.
+func IgnoreStructErrors(v bool) Options {
+	if v {
+		return jsonflags.IgnoreStructErrors | 1
+	} else {
+		return jsonflags.IgnoreStructErrors | 0
+	}
+}
+
 // MatchCaseSensitiveDelimiter specifies that underscores and dashes are
 // not to be ignored when performing case-insensitive name matching which
 // occurs under [jsonv2.MatchCaseInsensitiveNames] or the `nocase` tag option.
@@ -107,6 +135,17 @@ func MatchCaseSensitiveDelimiter(v bool) Options {
 		return jsonflags.MatchCaseSensitiveDelimiter | 1
 	} else {
 		return jsonflags.MatchCaseSensitiveDelimiter | 0
+	}
+}
+
+// TODO: null being ignored instead of clear.
+// TODO: other odd behavior?
+// The v1 default is true.
+func MergeWithLegacySemantics(v bool) Options {
+	if v {
+		return jsonflags.MergeWithLegacySemantics | 1
+	} else {
+		return jsonflags.MergeWithLegacySemantics | 0
 	}
 }
 
@@ -147,6 +186,53 @@ func RejectFloatOverflow(v bool) Options {
 	}
 }
 
+// ReportLegacyErrorValues converts v2 errors into
+//
+// TODO: Lazy errors?
+//
+// This only affects marshaling and is ignored when unmarshaling.
+// The v1 default is true.
+func ReportLegacyErrorValues(v bool) Options {
+	if v {
+		return jsonflags.ReportLegacyErrorValues | 1
+	} else {
+		return jsonflags.ReportLegacyErrorValues | 0
+	}
+}
+
+// SkipUnaddressableMethods specifies that [Marshaler] and [Unmarshaler]
+// methods declared on a pointer receiver are not called on values that
+// are not addressable (e.g., values derived from a map or interface value).
+// This option exists to maintain compatibility for behavior that
+// has been widely regarded as a bug. Unfortunately, the effect of this option
+// is not consistent and more heavily applies to marshaling than unmarshaling.
+//
+// The v1 default is true.
+func SkipUnaddressableMethods(v bool) Options {
+	if v {
+		return jsonflags.SkipUnaddressableMethods | 1
+	} else {
+		return jsonflags.SkipUnaddressableMethods | 0
+	}
+}
+
+// StringifyWithLegacySemantics specifies that the `string` tag option
+// may stringify bools and string values. It only takes effect on fields
+// where the top-level type is a bool, string, or numeric type.
+// Specifically, `string` will not stringify bool, string, or numeric types
+// within a composite data type (e.g., array, slice, struct, map, or interface).
+// It treats a quoted "null" as if it were a JSON null. TODO: keep this behavior?
+//
+// This affects either marshaling or unmarshaling.
+// The v1 default is true.
+func StringifyWithLegacySemantics(v bool) Options {
+	if v {
+		return jsonflags.StringifyWithLegacySemantics | 1
+	} else {
+		return jsonflags.StringifyWithLegacySemantics | 0
+	}
+}
+
 // UnmarshalArrayFromAnyLength specifies that Go arrays can be unmarshaled
 // from input JSON arrays of any length. If the JSON array is too short,
 // then the remaining Go array elements are zeroed. If the JSON array
@@ -159,5 +245,15 @@ func UnmarshalArrayFromAnyLength(v bool) Options {
 		return jsonflags.UnmarshalArrayFromAnyLength | 1
 	} else {
 		return jsonflags.UnmarshalArrayFromAnyLength | 0
+	}
+}
+
+// unmarshalAnyWithRawNumber specifies that unmarshaling a JSON number into
+// an empty Go interface should use the Number type instead of a float64.
+func unmarshalAnyWithRawNumber(v bool) Options {
+	if v {
+		return jsonflags.UnmarshalAnyWithRawNumber | 1
+	} else {
+		return jsonflags.UnmarshalAnyWithRawNumber | 0
 	}
 }
