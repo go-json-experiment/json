@@ -19,69 +19,63 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode"
+
+	"github.com/go-json-experiment/json/internal/jsonflags"
 )
 
 func TestAppendQuote(t *testing.T) {
-	var (
-		escapeNothing    = MakeEscapeRunes(false, false, nil)
-		escapeHTML       = MakeEscapeRunes(true, true, nil)
-		escapeNonASCII   = MakeEscapeRunes(false, false, func(r rune) bool { return r > unicode.MaxASCII })
-		escapeEverything = MakeEscapeRunes(false, false, func(r rune) bool { return true })
-	)
-
 	tests := []struct {
 		in          string
-		escapeRune  *EscapeRunes
+		flags       jsonflags.Bools
 		want        string
 		wantErr     error
 		wantErrUTF8 error
 	}{
-		{"", nil, `""`, nil, nil},
-		{"hello", nil, `"hello"`, nil, nil},
-		{"\x00", nil, `"\u0000"`, nil, nil},
-		{"\x1f", nil, `"\u001f"`, nil, nil},
-		{"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", nil, `"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, nil, nil},
-		{" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", nil, "\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", nil, nil},
-		{"x\x80\ufffd", nil, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xff\ufffd", nil, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\x80\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xff\ufffd", escapeNonASCII, "\"x\\ufffd\\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xc0", nil, "\"x\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xc0\x80", nil, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xe0", nil, "\"x\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xe0\x80", nil, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xe0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xf0", nil, "\"x\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xf0\x80", nil, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xf0\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xf0\x80\x80\x80", nil, "\"x\ufffd\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"x\xed\xba\xad", nil, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
-		{"\"\\/\b\f\n\r\t", nil, `"\"\\/\b\f\n\r\t"`, nil, nil},
-		{"\"\\/\b\f\n\r\t", escapeEverything, `"\u0022\u005c\u002f\u0008\u000c\u000a\u000d\u0009"`, nil, nil},
-		{"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃).", nil, `"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃)."`, nil, nil},
-		{"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃).", escapeNonASCII, `"\u0669(-\u032e\u032e\u0303-\u0303)\u06f6 \u0669(\u25cf\u032e\u032e\u0303\u2022\u0303)\u06f6 \u0669(\u0361\u0e4f\u032f\u0361\u0e4f)\u06f6 \u0669(-\u032e\u032e\u0303\u2022\u0303)."`, nil, nil},
-		{"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃).", escapeEverything, `"\u0669\u0028\u002d\u032e\u032e\u0303\u002d\u0303\u0029\u06f6\u0020\u0669\u0028\u25cf\u032e\u032e\u0303\u2022\u0303\u0029\u06f6\u0020\u0669\u0028\u0361\u0e4f\u032f\u0361\u0e4f\u0029\u06f6\u0020\u0669\u0028\u002d\u032e\u032e\u0303\u2022\u0303\u0029\u002e"`, nil, nil},
-		{"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", nil, "\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", nil, nil},
-		{"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", escapeEverything, `"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\ud83d\ude02"`, nil, nil},
-		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", nil, "\"\\u0000\\u001f\u0020\\\"\u0026\u003c\u003e\\\\\u007f\u0080\u2028\u2029\ufffd\U0001f602\"", nil, nil},
-		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", escapeNothing, "\"\\u0000\\u001f\u0020\\\"\u0026\u003c\u003e\\\\\u007f\u0080\u2028\u2029\ufffd\U0001f602\"", nil, nil},
-		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", escapeHTML, "\"\\u0000\\u001f\u0020\\\"\\u0026\\u003c\\u003e\\\\\u007f\u0080\\u2028\\u2029\ufffd\U0001f602\"", nil, nil},
-		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", escapeNonASCII, "\"\\u0000\\u001f\u0020\\\"\u0026\u003c\u003e\\\\\u007f\\u0080\\u2028\\u2029\\ufffd\\ud83d\\ude02\"", nil, nil},
-		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", escapeEverything, "\"\\u0000\\u001f\\u0020\\u0022\\u0026\\u003c\\u003e\\u005c\\u007f\\u0080\\u2028\\u2029\\ufffd\\ud83d\\ude02\"", nil, nil},
+		{"", 0, `""`, nil, nil},
+		{"hello", 0, `"hello"`, nil, nil},
+		{"\x00", 0, `"\u0000"`, nil, nil},
+		{"\x1f", 0, `"\u001f"`, nil, nil},
+		{"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 0, `"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"`, nil, nil},
+		{" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", 0, "\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", nil, nil},
+		{" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", jsonflags.EscapeForHTML, "\" !#$%\\u0026'()*+,-./0123456789:;\\u003c=\\u003e?@[]^_`{|}~\x7f\"", nil, nil},
+		{" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f", jsonflags.EscapeForJS, "\" !#$%&'()*+,-./0123456789:;<=>?@[]^_`{|}~\x7f\"", nil, nil},
+		{"\u2027\u2028\u2029\u2030", 0, "\"\u2027\u2028\u2029\u2030\"", nil, nil},
+		{"\u2027\u2028\u2029\u2030", jsonflags.EscapeForHTML, "\"\u2027\u2028\u2029\u2030\"", nil, nil},
+		{"\u2027\u2028\u2029\u2030", jsonflags.EscapeForJS, "\"\u2027\\u2028\\u2029\u2030\"", nil, nil},
+		{"x\x80\ufffd", 0, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xff\ufffd", 0, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xc0", 0, "\"x\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xc0\x80", 0, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xe0", 0, "\"x\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xe0\x80", 0, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xe0\x80\x80", 0, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xf0", 0, "\"x\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xf0\x80", 0, "\"x\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xf0\x80\x80", 0, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xf0\x80\x80\x80", 0, "\"x\ufffd\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"x\xed\xba\xad", 0, "\"x\ufffd\ufffd\ufffd\"", nil, ErrInvalidUTF8},
+		{"\"\\/\b\f\n\r\t", 0, `"\"\\/\b\f\n\r\t"`, nil, nil},
+		{"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃).", 0, `"٩(-̮̮̃-̃)۶ ٩(●̮̮̃•̃)۶ ٩(͡๏̯͡๏)۶ ٩(-̮̮̃•̃)."`, nil, nil},
+		{"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602", 0, "\"\u0080\u00f6\u20ac\ud799\ue000\ufb33\ufffd\U0001f602\"", nil, nil},
+		{"\u0000\u001f\u0020\u0022\u0026\u003c\u003e\u005c\u007f\u0080\u2028\u2029\ufffd\U0001f602", 0, "\"\\u0000\\u001f\u0020\\\"\u0026\u003c\u003e\\\\\u007f\u0080\u2028\u2029\ufffd\U0001f602\"", nil, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			got, gotErr := AppendQuote(nil, tt.in, false, tt.escapeRune)
+			var flags jsonflags.Flags
+			flags.Set(tt.flags | 1)
+
+			flags.Set(jsonflags.AllowInvalidUTF8 | 1)
+			got, gotErr := AppendQuote(nil, tt.in, &flags)
 			if string(got) != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("AppendQuote(nil, %q, false, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
+				t.Errorf("AppendQuote(nil, %q, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
-			switch got, gotErr := AppendQuote(nil, tt.in, true, tt.escapeRune); {
+			flags.Set(jsonflags.AllowInvalidUTF8 | 0)
+			switch got, gotErr := AppendQuote(nil, tt.in, &flags); {
 			case tt.wantErrUTF8 == nil && (string(got) != tt.want || !reflect.DeepEqual(gotErr, tt.wantErr)):
-				t.Errorf("AppendQuote(nil, %q, true, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
+				t.Errorf("AppendQuote(nil, %q, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			case tt.wantErrUTF8 != nil && (!strings.HasPrefix(tt.want, string(got)) || !reflect.DeepEqual(gotErr, tt.wantErrUTF8)):
-				t.Errorf("AppendQuote(nil, %q, true, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErrUTF8)
+				t.Errorf("AppendQuote(nil, %q, ...) = (%s, %v), want (%s, %v)", tt.in, got, gotErr, tt.want, tt.wantErrUTF8)
 			}
 		})
 	}

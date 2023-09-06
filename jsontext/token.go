@@ -8,6 +8,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
@@ -207,20 +208,20 @@ func (t Token) Bool() bool {
 
 // appendString appends a JSON string to dst and returns it.
 // It panics if t is not a JSON string.
-func (t Token) appendString(dst []byte, validateUTF8, preserveRaw bool, escape *jsonwire.EscapeRunes) ([]byte, error) {
+func (t Token) appendString(dst []byte, flags *jsonflags.Flags) ([]byte, error) {
 	if raw := t.raw; raw != nil {
 		// Handle raw string value.
 		buf := raw.PreviousBuffer()
 		if Kind(buf[0]) == '"' {
-			if !escape.HasEscapeFunc() && jsonwire.ConsumeSimpleString(buf) == len(buf) {
+			if jsonwire.ConsumeSimpleString(buf) == len(buf) {
 				return append(dst, buf...), nil
 			}
-			dst, _, err := jsonwire.ReformatString(dst, buf, validateUTF8, preserveRaw, escape)
+			dst, _, err := jsonwire.ReformatString(dst, buf, flags)
 			return dst, err
 		}
 	} else if len(t.str) != 0 && t.num == 0 {
 		// Handle exact string value.
-		return jsonwire.AppendQuote(dst, t.str, validateUTF8, escape)
+		return jsonwire.AppendQuote(dst, t.str, flags)
 	}
 
 	panic("invalid JSON token kind: " + t.Kind().String())

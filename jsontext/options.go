@@ -78,22 +78,6 @@ func EscapeForJS(v bool) Options {
 	}
 }
 
-// WithEscapeFunc specifies a function to determine whether to escape characters
-// within JSON strings as a hexadecimal Unicode codepoint (e.g., \ufffd).
-// The function must be deterministic and is not guaranteed to be called
-// for every encoded character in a string.
-//
-// This can be composed with [EscapeForHTML] and [EscapeForJS] such that
-// any option may specify that a particular character should be escaped.
-// If nil and neither [EscapeForHTML] nor [EscapeForJS] are specified,
-// then the shortest and simplest encoding will be used,
-// which is also the formatting specified by RFC 8785, section 3.2.2.2.
-//
-// This only affects encoding and is ignored when decoding.
-func WithEscapeFunc(fn func(rune) bool) Options {
-	return jsonopts.EscapeFunc(fn)
-}
-
 // Expand specifies that the JSON output should be expanded,
 // where every JSON object member or JSON array element
 // appears on a new, indented line according to the nesting depth.

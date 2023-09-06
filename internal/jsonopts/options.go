@@ -25,11 +25,10 @@ type Struct struct {
 }
 
 type CoderValues struct {
-	EscapeFunc   func(rune) bool // jsonflags.EscapeFunc
-	Indent       string          // jsonflags.Indent
-	IndentPrefix string          // jsonflags.IndentPrefix
-	ByteLimit    int64           // jsonflags.ByteLimit
-	DepthLimit   int             // jsonflags.DepthLimit
+	Indent       string // jsonflags.Indent
+	IndentPrefix string // jsonflags.IndentPrefix
+	ByteLimit    int64  // jsonflags.ByteLimit
+	DepthLimit   int    // jsonflags.DepthLimit
 }
 
 type ArshalValues struct {
@@ -48,7 +47,7 @@ type ArshalValues struct {
 var DefaultOptionsV2 = Struct{
 	Flags: jsonflags.Flags{
 		Presence: uint64(jsonflags.AllFlags),
-		Value:    uint64(0),
+		Values:   uint64(0),
 	},
 	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Expand is set to false
 }
@@ -57,7 +56,7 @@ var DefaultOptionsV2 = Struct{
 var DefaultOptionsV1 = Struct{
 	Flags: jsonflags.Flags{
 		Presence: uint64(jsonflags.AllFlags),
-		Value:    uint64(jsonflags.DefaultV1Flags),
+		Values:   uint64(jsonflags.DefaultV1Flags),
 	},
 	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Expand is set to false
 }
@@ -92,13 +91,9 @@ func GetOption[T any](opts Options, setter func(T) Options) (T, bool) {
 	var zero T
 	switch opt := setter(zero).(type) {
 	case jsonflags.Bools:
-		v, ok := structOpts.Flags.GetOk(opt)
+		v := structOpts.Flags.Get(opt)
+		ok := structOpts.Flags.Has(opt)
 		return any(v).(T), ok
-	case EscapeFunc:
-		if !structOpts.Flags.Has(jsonflags.EscapeFunc) {
-			return zero, false
-		}
-		return any(structOpts.EscapeFunc).(T), true
 	case Indent:
 		if !structOpts.Flags.Has(jsonflags.Indent) {
 			return zero, false
@@ -136,9 +131,6 @@ func (dst *Struct) Join(srcs ...Options) {
 			continue
 		case jsonflags.Bools:
 			dst.Flags.Set(src)
-		case EscapeFunc:
-			dst.Flags.Set(jsonflags.EscapeFunc | 1)
-			dst.EscapeFunc = src
 		case Indent:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.Indent | 1)
 			dst.Indent = string(src)
@@ -154,9 +146,6 @@ func (dst *Struct) Join(srcs ...Options) {
 		case *Struct:
 			dst.Flags.Join(src.Flags)
 			if src.Flags.Has(jsonflags.NonBooleanFlags) {
-				if src.Flags.Has(jsonflags.EscapeFunc) {
-					dst.EscapeFunc = src.EscapeFunc
-				}
 				if src.Flags.Has(jsonflags.Indent) {
 					dst.Indent = src.Indent
 				}
@@ -187,16 +176,14 @@ func (dst *Struct) Join(srcs ...Options) {
 }
 
 type (
-	EscapeFunc   func(rune) bool // jsontext.WithEscapeFunc
-	Indent       string          // jsontext.WithIndent
-	IndentPrefix string          // jsontext.WithIndentPrefix
-	ByteLimit    int64           // jsontext.WithByteLimit
-	DepthLimit   int             // jsontext.WithDepthLimit
+	Indent       string // jsontext.WithIndent
+	IndentPrefix string // jsontext.WithIndentPrefix
+	ByteLimit    int64  // jsontext.WithByteLimit
+	DepthLimit   int    // jsontext.WithDepthLimit
 	// type for jsonflags.Marshalers declared in "json" package
 	// type for jsonflags.Unmarshalers declared in "json" package
 )
 
-func (EscapeFunc) JSONOptions(internal.NotForPublicUse)   {}
 func (Indent) JSONOptions(internal.NotForPublicUse)       {}
 func (IndentPrefix) JSONOptions(internal.NotForPublicUse) {}
 func (ByteLimit) JSONOptions(internal.NotForPublicUse)    {}

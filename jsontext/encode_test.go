@@ -20,7 +20,7 @@ import (
 // TestEncoder tests whether we can produce JSON with either tokens or raw values.
 func TestEncoder(t *testing.T) {
 	for _, td := range coderTestdata {
-		for _, formatName := range []string{"Compact", "Escaped", "Indented"} {
+		for _, formatName := range []string{"Compact", "Indented"} {
 			for _, typeName := range []string{"Token", "Value", "TokenDelims"} {
 				t.Run(path.Join(td.name.Name, typeName, formatName), func(t *testing.T) {
 					testEncoder(t, td.name.Where, formatName, typeName, td)
@@ -36,11 +36,6 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 	opts = append(opts, jsonflags.OmitTopLevelNewline|1)
 	want = td.outCompacted
 	switch formatName {
-	case "Escaped":
-		opts = append(opts, WithEscapeFunc(func(rune) bool { return true }))
-		if td.outEscaped != "" {
-			want = td.outEscaped
-		}
 	case "Indented":
 		opts = append(opts, Expand(true))
 		opts = append(opts, WithIndentPrefix("\t"))
@@ -80,7 +75,7 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 			default:
 				val := Value(tok.String())
 				if tok.Kind() == '"' {
-					val, _ = jsonwire.AppendQuote(nil, tok.String(), false, nil)
+					val, _ = jsonwire.AppendQuote(nil, tok.String(), &jsonflags.Flags{})
 				}
 				if err := enc.WriteValue(val); err != nil {
 					t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)

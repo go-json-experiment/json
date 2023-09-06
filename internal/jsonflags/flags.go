@@ -8,12 +8,11 @@ package jsonflags
 
 import "github.com/go-json-experiment/json/internal"
 
-// Bools represents zero or more boolean flag, all set to true or false.
+// Bools represents zero or more boolean flags, all set to true or false.
 // The least-significant bit is the boolean value of all flags in the set.
-// The remaining bits identify a particular flag.
+// The remaining bits identify which particular flags.
 //
 // In common usage, this is OR'd with 0 or 1. For example:
-//
 //   - (AllowInvalidUTF8 | 0) means "AllowInvalidUTF8 is false"
 //   - (Expand | Indent | 1) means "Expand and Indent are true"
 type Bools uint64
@@ -37,7 +36,6 @@ const (
 	// where the value is some other concrete Go type.
 	// The value of the flag is stored within jsonopts.Struct.
 	NonBooleanFlags = 0 |
-		EscapeFunc |
 		Indent |
 		IndentPrefix |
 		ByteLimit |
@@ -81,7 +79,6 @@ const (
 	CanonicalizeNumbers // encode only; for internal use by jsontext.Value.Canonicalize
 	EscapeForHTML       // encode only
 	EscapeForJS         // encode only
-	EscapeFunc          // encode only; non-boolean flag
 	Expand              // encode only
 	Indent              // encode only; non-boolean flag
 	IndentPrefix        // encode only; non-boolean flag
@@ -128,13 +125,13 @@ const (
 	maxArshalV1Flag
 )
 
-// Flags is a set boolean flags.
+// Flags is a set of boolean flags.
 // If the presence bit is zero, then the value bit must also be zero.
 // The least-significant bit of both fields is always zero.
 //
 // Unlike Bools, which can represent a set of bools that are all true or false,
 // Flags represents a set of bools, each individually may be true or false.
-type Flags struct{ Presence, Value uint64 }
+type Flags struct{ Presence, Values uint64 }
 
 // Join joins two sets of flags such that the latter takes precedence.
 func (dst *Flags) Join(src Flags) {
@@ -144,8 +141,8 @@ func (dst *Flags) Join(src Flags) {
 	//	e.g., dst := Flags{Presence: 0b_1100_0011, Value: 0b_1000_0011}
 	//	e.g., src := Flags{Presence: 0b_0101_1010, Value: 0b_1001_0010}
 	dst.Presence |= src.Presence // e.g., 0b_1100_0011 | 0b_0101_1010 -> 0b_110_11011
-	dst.Value &= ^src.Presence   // e.g., 0b_1000_0011 & 0b_1010_0101 -> 0b_100_00001
-	dst.Value |= src.Value       // e.g., 0b_1000_0001 | 0b_1001_0010 -> 0b_100_10011
+	dst.Values &= ^src.Presence  // e.g., 0b_1000_0011 & 0b_1010_0101 -> 0b_100_00001
+	dst.Values |= src.Values     // e.g., 0b_1000_0001 | 0b_1001_0010 -> 0b_100_10011
 }
 
 // Set sets both the presence and value for the provided bool (or set of bools).
@@ -156,24 +153,17 @@ func (fs *Flags) Set(f Bools) {
 	// then copy over all the identifier bits to the value if LSB is 1.
 	//	e.g., fs := Flags{Presence: 0b_0101_0010, Value: 0b_0001_0010}
 	//	e.g., f := 0b_1001_0001
-	id := uint64(f) &^ uint64(1) // e.g., 0b_1001_0001 & 0b_1111_1110 -> 0b_1001_0000
-	fs.Presence |= id            // e.g., 0b_0101_0010 | 0b_1001_0000 -> 0b_1101_0011
-	fs.Value &= ^id              // e.g., 0b_0001_0010 & 0b_0110_1111 -> 0b_0000_0010
-	fs.Value |= uint64(f&1) * id // e.g., 0b_0000_0010 | 0b_1001_0000 -> 0b_1001_0010
+	id := uint64(f) &^ uint64(1)  // e.g., 0b_1001_0001 & 0b_1111_1110 -> 0b_1001_0000
+	fs.Presence |= id             // e.g., 0b_0101_0010 | 0b_1001_0000 -> 0b_1101_0011
+	fs.Values &= ^id              // e.g., 0b_0001_0010 & 0b_0110_1111 -> 0b_0000_0010
+	fs.Values |= uint64(f&1) * id // e.g., 0b_0000_0010 | 0b_1001_0000 -> 0b_1001_0010
 }
 
 // Get reports whether the bool (or any of the bools) is true.
 // This is generally only used with a singular bool.
 // The value bit of f (i.e., the LSB) is ignored.
 func (fs Flags) Get(f Bools) bool {
-	return fs.Value&uint64(f) > 0
-}
-
-// GetOk reports the value of the bool and whether it was set.
-// This is generally only used with a singular bool.
-// The value bit of f (i.e., the LSB) is ignored.
-func (fs Flags) GetOk(f Bools) (v, ok bool) {
-	return fs.Get(f), fs.Has(f)
+	return fs.Values&uint64(f) > 0
 }
 
 // Has reports whether the bool (or any of the bools) is set.
@@ -190,5 +180,5 @@ func (fs *Flags) Clear(f Bools) {
 	//	e.g., f := 0b_0001_1000
 	mask := uint64(^f)  // e.g., 0b_0001_1000 -> 0b_1110_0111
 	fs.Presence &= mask // e.g., 0b_0101_0010 &  0b_1110_0111 -> 0b_0100_0010
-	fs.Value &= mask    // e.g., 0b_0001_0010 &  0b_1110_0111 -> 0b_0000_0010
+	fs.Values &= mask   // e.g., 0b_0001_0010 &  0b_1110_0111 -> 0b_0000_0010
 }

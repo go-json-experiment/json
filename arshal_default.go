@@ -170,7 +170,7 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		s := va.String()
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s, xe.EscapeRunes) {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
 			b := xe.Buf
 			b = xe.Tokens.MayAppendDelim(b, '"')
 			b = append(b, '"')
@@ -984,10 +984,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 				// Append the token to the output and to the state machine.
 				n0 := len(b) // offset before calling AppendQuote
-				if xe.EscapeRunes.IsCanonical() {
+				if !xe.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS) {
 					b = append(b, f.quotedName...)
 				} else {
-					b, _ = jsonwire.AppendQuote(b, f.name, false, xe.EscapeRunes)
+					b, _ = jsonwire.AppendQuote(b, f.name, &xe.Flags)
 				}
 				xe.Buf = b
 				if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {

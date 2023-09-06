@@ -111,7 +111,7 @@ func marshalInlinedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *j
 		mv := newAddressableValue(m.Type().Elem())
 		marshalKey := func(mk addressableValue) error {
 			xe := export.Encoder(enc)
-			b, err := jsonwire.AppendQuote(enc.UnusedBuffer(), mk.String(), !xe.Flags.Get(jsonflags.AllowInvalidUTF8), nil)
+			b, err := jsonwire.AppendQuote(enc.UnusedBuffer(), mk.String(), &xe.Flags)
 			if err != nil {
 				return err
 			}

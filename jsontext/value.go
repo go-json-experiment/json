@@ -150,7 +150,6 @@ func (v *Value) reformat(canonical, multiline bool, prefix, indent string) error
 		eo.Flags.Set(jsonflags.PreserveRawStrings | 0)  // per RFC 8785, section 3.2.2.2
 		eo.Flags.Set(jsonflags.EscapeForHTML | 0)       // per RFC 8785, section 3.2.2.2
 		eo.Flags.Set(jsonflags.EscapeForJS | 0)         // per RFC 8785, section 3.2.2.2
-		eo.Flags.Set(jsonflags.EscapeFunc | 0)          // per RFC 8785, section 3.2.2.2
 		eo.Flags.Set(jsonflags.Expand | 0)              // per RFC 8785, section 3.2.1
 	} else {
 		if s := strings.TrimLeft(prefix, " \t"); len(s) > 0 {

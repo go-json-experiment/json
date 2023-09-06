@@ -1056,9 +1056,17 @@ func TestMarshal(t *testing.T) {
 		want: `{"":"empty",",":"comma","\"":"quote"}`,
 	}, {
 		name: jsontest.Name("Structs/EscapedNames"),
-		opts: []Options{jsontext.WithEscapeFunc(func(rune) bool { return true })},
-		in:   structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"},
-		want: `{"":"\u0065\u006d\u0070\u0074\u0079","\u002c":"\u0063\u006f\u006d\u006d\u0061","\u0022":"\u0071\u0075\u006f\u0074\u0065"}`,
+		opts: []Options{jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true)},
+		in: struct {
+			S string "json:\"'abc<>&\u2028\u2029xyz'\""
+			M any
+			I structInlineTextValue
+		}{
+			S: "abc<>&\u2028\u2029xyz",
+			M: map[string]string{"abc<>&\u2028\u2029xyz": "abc<>&\u2028\u2029xyz"},
+			I: structInlineTextValue{X: jsontext.Value(`{"abc<>&` + "\u2028\u2029" + `xyz":"abc<>&` + "\u2028\u2029" + `xyz"}`)},
+		},
+		want: `{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz","M":{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz"},"I":{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz"}}`,
 	}, {
 		name: jsontest.Name("Structs/NoCase"),
 		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
@@ -1354,59 +1362,6 @@ func TestMarshal(t *testing.T) {
 		"Interface": null
 	},
 	"Interface": null
-}`,
-	}, {
-		name: jsontest.Name("Structs/Stringified/Escaped"),
-		opts: []Options{
-			jsontext.Expand(true),
-			jsontext.WithEscapeFunc(func(rune) bool { return true }),
-		},
-		in: structStringifiedAll{
-			Bool:   true,
-			String: "hello",
-			Bytes:  []byte{1, 2, 3},
-			Int:    -64,     // should be stringified and escaped
-			Uint:   +64,     // should be stringified and escaped
-			Float:  3.14159, // should be stringified and escaped
-		},
-		want: `{
-	"\u0042\u006f\u006f\u006c": true,
-	"\u0053\u0074\u0072\u0069\u006e\u0067": "\u0068\u0065\u006c\u006c\u006f",
-	"\u0042\u0079\u0074\u0065\u0073": "\u0041\u0051\u0049\u0044",
-	"\u0049\u006e\u0074": "\u002d\u0036\u0034",
-	"\u0055\u0069\u006e\u0074": "\u0036\u0034",
-	"\u0046\u006c\u006f\u0061\u0074": "\u0033\u002e\u0031\u0034\u0031\u0035\u0039",
-	"\u004d\u0061\u0070": {},
-	"\u0053\u0074\u0072\u0075\u0063\u0074\u0053\u0063\u0061\u006c\u0061\u0072\u0073": {
-		"\u0042\u006f\u006f\u006c": false,
-		"\u0053\u0074\u0072\u0069\u006e\u0067": "",
-		"\u0042\u0079\u0074\u0065\u0073": "",
-		"\u0049\u006e\u0074": "\u0030",
-		"\u0055\u0069\u006e\u0074": "\u0030",
-		"\u0046\u006c\u006f\u0061\u0074": "\u0030"
-	},
-	"\u0053\u0074\u0072\u0075\u0063\u0074\u004d\u0061\u0070\u0073": {
-		"\u004d\u0061\u0070\u0042\u006f\u006f\u006c": {},
-		"\u004d\u0061\u0070\u0053\u0074\u0072\u0069\u006e\u0067": {},
-		"\u004d\u0061\u0070\u0042\u0079\u0074\u0065\u0073": {},
-		"\u004d\u0061\u0070\u0049\u006e\u0074": {},
-		"\u004d\u0061\u0070\u0055\u0069\u006e\u0074": {},
-		"\u004d\u0061\u0070\u0046\u006c\u006f\u0061\u0074": {}
-	},
-	"\u0053\u0074\u0072\u0075\u0063\u0074\u0053\u006c\u0069\u0063\u0065\u0073": {
-		"\u0053\u006c\u0069\u0063\u0065\u0042\u006f\u006f\u006c": [],
-		"\u0053\u006c\u0069\u0063\u0065\u0053\u0074\u0072\u0069\u006e\u0067": [],
-		"\u0053\u006c\u0069\u0063\u0065\u0042\u0079\u0074\u0065\u0073": [],
-		"\u0053\u006c\u0069\u0063\u0065\u0049\u006e\u0074": [],
-		"\u0053\u006c\u0069\u0063\u0065\u0055\u0069\u006e\u0074": [],
-		"\u0053\u006c\u0069\u0063\u0065\u0046\u006c\u006f\u0061\u0074": []
-	},
-	"\u0053\u006c\u0069\u0063\u0065": [],
-	"\u0041\u0072\u0072\u0061\u0079": [
-		""
-	],
-	"\u0050\u006f\u0069\u006e\u0074\u0065\u0072": null,
-	"\u0049\u006e\u0074\u0065\u0072\u0066\u0061\u0063\u0065": null
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitZero/Zero"),

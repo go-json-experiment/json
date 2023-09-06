@@ -16,6 +16,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
@@ -363,7 +364,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		out.name = opt
 		tag = tag[n:]
 	}
-	b, _ := jsonwire.AppendQuote(nil, out.name, false, nil)
+	b, _ := jsonwire.AppendQuote(nil, out.name, &jsonflags.Flags{})
 	out.quotedName = string(b)
 
 	// Handle any additional tag options (if any).

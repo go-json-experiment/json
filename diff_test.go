@@ -731,8 +731,7 @@ func TestMapDeterminism(t *testing.T) {
 // In v1, JSON string encoding escapes special characters related to HTML.
 // In v2, JSON string encoding uses a normalized representation (per RFC 8785).
 //
-// Users of v2 can opt into the v1 behavior by setting WithEscapeFunc.
-// See the EscapeHTML example.
+// Users of v2 can opt into the v1 behavior by setting EscapeForHTML and EscapeForJS.
 //
 // Escaping HTML-specific characters in a JSON library is a layering violation.
 // It presumes that JSON is always used with HTML and ignores other

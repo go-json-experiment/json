@@ -54,7 +54,6 @@ type encoderState struct {
 	encodeBuffer
 	jsonopts.Struct
 
-	EscapeRunes  *jsonwire.EscapeRunes
 	SeenPointers map[any]struct{} // only used when marshaling; identical to json.seenPointers
 }
 
@@ -117,11 +116,6 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	}
 	e.Struct = jsonopts.Struct{}
 	e.Struct.Join(opts...)
-	e.EscapeRunes = jsonwire.MakeEscapeRunes(
-		e.Flags.Get(jsonflags.EscapeForHTML),
-		e.Flags.Get(jsonflags.EscapeForJS),
-		e.EscapeFunc,
-	)
 	if e.Flags.Get(jsonflags.Expand) && !e.Flags.Has(jsonflags.Indent) {
 		e.Indent = "\t"
 	}
@@ -361,7 +355,7 @@ func (e *encoderState) WriteToken(t Token) error {
 		b = append(b, "true"...)
 		err = e.Tokens.appendLiteral()
 	case '"':
-		if b, err = t.appendString(b, !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes); err != nil {
+		if b, err = t.appendString(b, &e.Flags); err != nil {
 			break
 		}
 		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
@@ -452,13 +446,11 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 
 		// Check whether we need to escape the string and if necessary
 		// copy it to a scratch buffer and then escape it back.
-		isVerbatim := ((safeASCII && !e.EscapeRunes.HasEscapeFunc()) ||
-			!jsonwire.NeedEscape(b[pos+len(`"`):len(b)-len(`"`)], e.EscapeRunes))
+		isVerbatim := safeASCII || !jsonwire.NeedEscape(b[pos+len(`"`):len(b)-len(`"`)])
 		if !isVerbatim {
 			var err error
-			validateUTF8 := !e.Flags.Get(jsonflags.AllowInvalidUTF8)
 			b2 := append(e.unusedCache, b[pos+len(`"`):len(b)-len(`"`)]...)
-			b, err = jsonwire.AppendQuote(b[:pos], string(b2), validateUTF8, e.EscapeRunes)
+			b, err = jsonwire.AppendQuote(b[:pos], string(b2), &e.Flags)
 			e.unusedCache = b2[:0]
 			if err != nil {
 				return e.injectSyntacticErrorWithPosition(err, pos)
@@ -635,11 +627,11 @@ func (e *encoderState) reformatValue(dst []byte, src Value, depth int) ([]byte, 
 		}
 		return append(dst, "true"...), len("true"), nil
 	case '"':
-		if n := jsonwire.ConsumeSimpleString(src); n > 0 && !e.EscapeRunes.HasEscapeFunc() {
+		if n := jsonwire.ConsumeSimpleString(src); n > 0 {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
 			return dst, n, nil
 		}
-		return jsonwire.ReformatString(dst, src, !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes)
+		return jsonwire.ReformatString(dst, src, &e.Flags)
 	case '0':
 		if n := jsonwire.ConsumeSimpleNumber(src); n > 0 && !e.Flags.Get(jsonflags.CanonicalizeNumbers) {
 			dst, src = append(dst, src[:n]...), src[n:] // copy simple numbers verbatim
@@ -699,10 +691,10 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 			return dst, n, io.ErrUnexpectedEOF
 		}
 		m := jsonwire.ConsumeSimpleString(src[n:])
-		if m > 0 && !e.EscapeRunes.HasEscapeFunc() {
+		if m > 0 {
 			dst = append(dst, src[n:n+m]...)
 		} else {
-			dst, m, err = jsonwire.ReformatString(dst, src[n:], !e.Flags.Get(jsonflags.AllowInvalidUTF8), e.Flags.Get(jsonflags.PreserveRawStrings), e.EscapeRunes)
+			dst, m, err = jsonwire.ReformatString(dst, src[n:], &e.Flags)
 			if err != nil {
 				return dst, n + m, err
 			}

@@ -96,7 +96,7 @@ func ConsumeSimpleString(b []byte) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if len(b) > 0 && b[0] == '"' {
 		n++
-		for len(b) > n && b[n] < utf8.RuneSelf && !escapeHTML.needEscapeASCII(b[n]) {
+		for len(b) > n && b[n] < utf8.RuneSelf && escapeASCII[b[n]] == 0 {
 			n++
 		}
 		if uint(len(b)) > uint(n) && b[n] == '"' {

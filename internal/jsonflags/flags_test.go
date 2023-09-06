@@ -23,31 +23,31 @@ func TestFlags(t *testing.T) {
 		Get{in: AllowDuplicateNames, want: false, wantOk: true},
 		Set{in: AllowDuplicateNames | 1},
 		Get{in: AllowDuplicateNames, want: true, wantOk: true},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames), Value: uint64(AllowDuplicateNames)}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames), Values: uint64(AllowDuplicateNames)}},
 		Get{in: AllowInvalidUTF8, want: false, wantOk: false},
 		Set{in: AllowInvalidUTF8 | 1},
 		Get{in: AllowInvalidUTF8, want: true, wantOk: true},
 		Set{in: AllowInvalidUTF8 | 0},
 		Get{in: AllowInvalidUTF8, want: false, wantOk: true},
 		Get{in: AllowDuplicateNames, want: true, wantOk: true},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(AllowDuplicateNames)}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
 		Set{in: AllowDuplicateNames | AllowInvalidUTF8 | 0},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(0)}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(0)}},
 		Set{in: AllowDuplicateNames | AllowInvalidUTF8 | 0},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(0)}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(0)}},
 		Set{in: AllowDuplicateNames | AllowInvalidUTF8 | 1},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
-		Join{in: Flags{Presence: 0, Value: 0}},
-		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
-		Join{in: Flags{Presence: uint64(Expand | AllowInvalidUTF8), Value: uint64(AllowDuplicateNames)}},
-		Check{want: Flags{Presence: uint64(Expand | AllowDuplicateNames | AllowInvalidUTF8), Value: uint64(AllowDuplicateNames)}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
+		Join{in: Flags{Presence: 0, Values: 0}},
+		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
+		Join{in: Flags{Presence: uint64(Expand | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
+		Check{want: Flags{Presence: uint64(Expand | AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
 		Clear{in: AllowDuplicateNames | AllowInvalidUTF8},
-		Check{want: Flags{Presence: uint64(Expand), Value: uint64(0)}},
+		Check{want: Flags{Presence: uint64(Expand), Values: uint64(0)}},
 		Set{in: AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | 1},
 		Set{in: Expand | StringifyNumbers | RejectFloatOverflow | 0},
-		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | Expand | StringifyNumbers | RejectFloatOverflow), Value: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors)}},
+		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | Expand | StringifyNumbers | RejectFloatOverflow), Values: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors)}},
 		Clear{in: ^AllCoderFlags},
-		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Expand), Value: uint64(AllowInvalidUTF8)}},
+		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Expand), Values: uint64(AllowInvalidUTF8)}},
 	}
 	var fs Flags
 	for i, call := range calls {
@@ -59,7 +59,9 @@ func TestFlags(t *testing.T) {
 		case Clear:
 			fs.Clear(call.in)
 		case Get:
-			if got, gotOk := fs.GetOk(call.in); got != call.want || gotOk != call.wantOk {
+			got := fs.Get(call.in)
+			gotOk := fs.Has(call.in)
+			if got != call.want || gotOk != call.wantOk {
 				t.Fatalf("%d: GetOk = (%v, %v), want (%v, %v)", i, got, gotOk, call.want, call.wantOk)
 			}
 		case Check:
