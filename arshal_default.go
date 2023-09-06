@@ -167,7 +167,24 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
-		return enc.WriteToken(jsontext.String(va.String()))
+
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		s := va.String()
+		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s, xe.EscapeRunes) {
+			b := xe.Buf
+			b = xe.Tokens.MayAppendDelim(b, '"')
+			b = append(b, '"')
+			b = append(b, s...)
+			b = append(b, '"')
+			xe.Buf = b
+			xe.Tokens.Last.Increment()
+			if xe.NeedFlush() {
+				return xe.Flush()
+			}
+			return nil
+		}
+
+		return enc.WriteToken(jsontext.String(s))
 	}
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
