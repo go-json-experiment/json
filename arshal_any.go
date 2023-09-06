@@ -96,8 +96,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 		}
 		// Optimize for marshaling an empty map without any preceding whitespace.
 		if !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = xe.Tokens.MayAppendDelim(xe.Buf, '{')
-			xe.Buf = append(xe.Buf, "{}"...)
+			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -210,8 +209,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 		}
 		// Optimize for marshaling an empty slice without any preceding whitespace.
 		if !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = xe.Tokens.MayAppendDelim(xe.Buf, '[')
-			xe.Buf = append(xe.Buf, "[]"...)
+			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
