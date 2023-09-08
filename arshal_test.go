@@ -611,6 +611,7 @@ var (
 	uint16Type                   = reflect.TypeOf((*uint16)(nil)).Elem()
 	uint32Type                   = reflect.TypeOf((*uint32)(nil)).Elem()
 	uint64Type                   = reflect.TypeOf((*uint64)(nil)).Elem()
+	float32Type                  = reflect.TypeOf((*float32)(nil)).Elem()
 	sliceStringType              = reflect.TypeOf((*[]string)(nil)).Elem()
 	array1StringType             = reflect.TypeOf((*[1]string)(nil)).Elem()
 	array0ByteType               = reflect.TypeOf((*[0]byte)(nil)).Elem()
@@ -4963,14 +4964,21 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(float32(math.Pi)),
 	}, {
 		name:  jsontest.Name("Floats/Float32/Underflow"),
-		inBuf: `-1e1000`,
+		inBuf: `1e-1000`,
 		inVal: addr(float32(32.32)),
-		want:  addr(float32(-math.MaxFloat32)),
+		want:  addr(float32(0)),
 	}, {
 		name:  jsontest.Name("Floats/Float32/Overflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float32(32.32)),
 		want:  addr(float32(-math.MaxFloat32)),
+	}, {
+		name:    jsontest.Name("Floats/Float32/Overflow/RejectFloatOverflow"),
+		opts:    []Options{jsonflags.RejectFloatOverflow | 1},
+		inBuf:   `1e1000`,
+		inVal:   addr(float32(32.32)),
+		want:    addr(float32(32.32)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: float32Type, Err: strconv.ErrRange},
 	}, {
 		name:  jsontest.Name("Floats/Float64/Pi"),
 		inBuf: `3.14159265358979323846264338327950288419716939937510582097494459`,
@@ -4978,14 +4986,33 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(float64(math.Pi)),
 	}, {
 		name:  jsontest.Name("Floats/Float64/Underflow"),
-		inBuf: `-1e1000`,
+		inBuf: `1e-1000`,
 		inVal: addr(float64(64.64)),
-		want:  addr(float64(-math.MaxFloat64)),
+		want:  addr(float64(0)),
 	}, {
 		name:  jsontest.Name("Floats/Float64/Overflow"),
 		inBuf: `-1e1000`,
 		inVal: addr(float64(64.64)),
 		want:  addr(float64(-math.MaxFloat64)),
+	}, {
+		name:    jsontest.Name("Floats/Float64/Overflow/RejectFloatOverflow"),
+		opts:    []Options{jsonflags.RejectFloatOverflow | 1},
+		inBuf:   `1e1000`,
+		inVal:   addr(float64(64.64)),
+		want:    addr(float64(64.64)),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: float64Type, Err: strconv.ErrRange},
+	}, {
+		name:  jsontest.Name("Floats/Any/Overflow"),
+		inBuf: `1e1000`,
+		inVal: new(any),
+		want:  addr(any(float64(math.MaxFloat64))),
+	}, {
+		name:    jsontest.Name("Floats/Any/Overflow/RejectFloatOverflow"),
+		opts:    []Options{jsonflags.RejectFloatOverflow | 1},
+		inBuf:   `1e1000`,
+		inVal:   new(any),
+		want:    new(any),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: float64Type, Err: strconv.ErrRange},
 	}, {
 		name:  jsontest.Name("Floats/Named"),
 		inBuf: `64.64`,

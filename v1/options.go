@@ -35,6 +35,7 @@ type Options = jsonopts.Options
 //   - [FormatTimeDurationAsNanosecond]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
+//   - [RejectFloatOverflow]
 //   - [jsonv2.Deterministic]
 //   - [jsonv2.FormatNilSliceAsNull]
 //   - [jsonv2.FormatNilMapAsNull]
@@ -119,5 +120,20 @@ func OmitEmptyWithLegacyDefinition(v bool) Options {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 1
 	} else {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 0
+	}
+}
+
+// RejectFloatOverflow specifies that unmarshaling a JSON number that
+// exceeds the maximum representation of a Go float32 or float64
+// results in an error, rather than succeeding with the floating-point values
+// set to either [math.MaxFloat32] or [math.MaxFloat64].
+//
+// This only affects unmarshaling and is ignored when marshaling.
+// The v1 default is true.
+func RejectFloatOverflow(v bool) Options {
+	if v {
+		return jsonflags.RejectFloatOverflow | 1
+	} else {
+		return jsonflags.RejectFloatOverflow | 0
 	}
 }

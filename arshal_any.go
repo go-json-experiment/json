@@ -6,6 +6,7 @@ package json
 
 import (
 	"reflect"
+	"strconv"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
@@ -70,7 +71,10 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 			}
 			return makeString(xd.StringCache, val), nil
 		case '0':
-			fv, _ := jsonwire.ParseFloat(val, 64) // ignore error since readValue guarantees val is valid
+			fv, ok := jsonwire.ParseFloat(val, 64)
+			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
+				return nil, &SemanticError{action: "unmarshal", JSONKind: k, GoType: float64Type, Err: strconv.ErrRange}
+			}
 			return fv, nil
 		default:
 			panic("BUG: invalid kind: " + k.String())

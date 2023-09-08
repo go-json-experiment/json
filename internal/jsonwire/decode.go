@@ -627,13 +627,13 @@ func ParseFloat(b []byte, bits int) (v float64, ok bool) {
 	if math.IsInf(fv, 0) {
 		switch {
 		case bits == 32 && math.IsInf(fv, +1):
-			return +math.MaxFloat32, true
+			fv = +math.MaxFloat32
 		case bits == 64 && math.IsInf(fv, +1):
-			return +math.MaxFloat64, true
+			fv = +math.MaxFloat64
 		case bits == 32 && math.IsInf(fv, -1):
-			return -math.MaxFloat32, true
+			fv = -math.MaxFloat32
 		case bits == 64 && math.IsInf(fv, -1):
-			return -math.MaxFloat64, true
+			fv = -math.MaxFloat64
 		}
 	}
 	return fv, err == nil

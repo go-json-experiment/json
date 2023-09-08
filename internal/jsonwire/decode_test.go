@@ -421,8 +421,8 @@ func TestParseFloat(t *testing.T) {
 		{"-9007199254740993", -9007199254740992, -9007199254740992, true}, // -(1<<53 + 1)
 		{"9007199254740993", 9007199254740992, 9007199254740992, true},    // +(1<<53 + 1)
 
-		{"-1e1000", -math.MaxFloat32, -math.MaxFloat64, true},
-		{"1e1000", +math.MaxFloat32, +math.MaxFloat64, true},
+		{"-1e1000", -math.MaxFloat32, -math.MaxFloat64, false},
+		{"1e1000", +math.MaxFloat32, +math.MaxFloat64, false},
 	}
 
 	for _, tt := range tests {

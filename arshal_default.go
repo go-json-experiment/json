@@ -590,11 +590,10 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
-			// NOTE: Floating-point parsing is by nature a lossy operation.
-			// We never report an overflow condition since we can always
-			// round the input to the closest representable finite value.
-			// For extremely large numbers, the closest value is ±MaxFloat.
-			fv, _ := jsonwire.ParseFloat(val, bits)
+			fv, ok := jsonwire.ParseFloat(val, bits)
+			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
+				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: strconv.ErrRange}
+			}
 			va.SetFloat(fv)
 			return nil
 		}
