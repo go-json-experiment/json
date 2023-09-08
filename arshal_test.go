@@ -600,54 +600,54 @@ func (valueStringer) String() string    { return "" }
 func (*pointerStringer) String() string { return "" }
 
 var (
-	namedBoolType                = reflect.TypeOf((*namedBool)(nil)).Elem()
-	intType                      = reflect.TypeOf((*int)(nil)).Elem()
-	int8Type                     = reflect.TypeOf((*int8)(nil)).Elem()
-	int16Type                    = reflect.TypeOf((*int16)(nil)).Elem()
-	int32Type                    = reflect.TypeOf((*int32)(nil)).Elem()
-	int64Type                    = reflect.TypeOf((*int64)(nil)).Elem()
-	uintType                     = reflect.TypeOf((*uint)(nil)).Elem()
-	uint8Type                    = reflect.TypeOf((*uint8)(nil)).Elem()
-	uint16Type                   = reflect.TypeOf((*uint16)(nil)).Elem()
-	uint32Type                   = reflect.TypeOf((*uint32)(nil)).Elem()
-	uint64Type                   = reflect.TypeOf((*uint64)(nil)).Elem()
-	float32Type                  = reflect.TypeOf((*float32)(nil)).Elem()
-	sliceStringType              = reflect.TypeOf((*[]string)(nil)).Elem()
-	array1StringType             = reflect.TypeOf((*[1]string)(nil)).Elem()
-	array0ByteType               = reflect.TypeOf((*[0]byte)(nil)).Elem()
-	array1ByteType               = reflect.TypeOf((*[1]byte)(nil)).Elem()
-	array2ByteType               = reflect.TypeOf((*[2]byte)(nil)).Elem()
-	array3ByteType               = reflect.TypeOf((*[3]byte)(nil)).Elem()
-	array4ByteType               = reflect.TypeOf((*[4]byte)(nil)).Elem()
-	mapStringStringType          = reflect.TypeOf((*map[string]string)(nil)).Elem()
-	structAllType                = reflect.TypeOf((*structAll)(nil)).Elem()
-	structConflictingType        = reflect.TypeOf((*structConflicting)(nil)).Elem()
-	structNoneExportedType       = reflect.TypeOf((*structNoneExported)(nil)).Elem()
-	structMalformedTagType       = reflect.TypeOf((*structMalformedTag)(nil)).Elem()
-	structUnexportedTagType      = reflect.TypeOf((*structUnexportedTag)(nil)).Elem()
-	structUnexportedEmbeddedType = reflect.TypeOf((*structUnexportedEmbedded)(nil)).Elem()
-	structUnknownTextValueType   = reflect.TypeOf((*structUnknownTextValue)(nil)).Elem()
-	allMethodsType               = reflect.TypeOf((*allMethods)(nil)).Elem()
-	allMethodsExceptJSONv2Type   = reflect.TypeOf((*allMethodsExceptJSONv2)(nil)).Elem()
-	allMethodsExceptJSONv1Type   = reflect.TypeOf((*allMethodsExceptJSONv1)(nil)).Elem()
-	allMethodsExceptTextType     = reflect.TypeOf((*allMethodsExceptText)(nil)).Elem()
-	onlyMethodJSONv2Type         = reflect.TypeOf((*onlyMethodJSONv2)(nil)).Elem()
-	onlyMethodJSONv1Type         = reflect.TypeOf((*onlyMethodJSONv1)(nil)).Elem()
-	onlyMethodTextType           = reflect.TypeOf((*onlyMethodText)(nil)).Elem()
-	structMethodJSONv2Type       = reflect.TypeOf((*structMethodJSONv2)(nil)).Elem()
-	structMethodJSONv1Type       = reflect.TypeOf((*structMethodJSONv1)(nil)).Elem()
-	structMethodTextType         = reflect.TypeOf((*structMethodText)(nil)).Elem()
-	marshalJSONv2FuncType        = reflect.TypeOf((*marshalJSONv2Func)(nil)).Elem()
-	marshalJSONv1FuncType        = reflect.TypeOf((*marshalJSONv1Func)(nil)).Elem()
-	appendTextFuncType           = reflect.TypeOf((*appendTextFunc)(nil)).Elem()
-	marshalTextFuncType          = reflect.TypeOf((*marshalTextFunc)(nil)).Elem()
-	unmarshalJSONv2FuncType      = reflect.TypeOf((*unmarshalJSONv2Func)(nil)).Elem()
-	unmarshalJSONv1FuncType      = reflect.TypeOf((*unmarshalJSONv1Func)(nil)).Elem()
-	unmarshalTextFuncType        = reflect.TypeOf((*unmarshalTextFunc)(nil)).Elem()
-	nocaseStringType             = reflect.TypeOf((*nocaseString)(nil)).Elem()
-	ioReaderType                 = reflect.TypeOf((*io.Reader)(nil)).Elem()
-	fmtStringerType              = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
-	chanStringType               = reflect.TypeOf((*chan string)(nil)).Elem()
+	namedBoolType                = reflect.TypeFor[namedBool]()
+	intType                      = reflect.TypeFor[int]()
+	int8Type                     = reflect.TypeFor[int8]()
+	int16Type                    = reflect.TypeFor[int16]()
+	int32Type                    = reflect.TypeFor[int32]()
+	int64Type                    = reflect.TypeFor[int64]()
+	uintType                     = reflect.TypeFor[uint]()
+	uint8Type                    = reflect.TypeFor[uint8]()
+	uint16Type                   = reflect.TypeFor[uint16]()
+	uint32Type                   = reflect.TypeFor[uint32]()
+	uint64Type                   = reflect.TypeFor[uint64]()
+	float32Type                  = reflect.TypeFor[float32]()
+	sliceStringType              = reflect.TypeFor[[]string]()
+	array1StringType             = reflect.TypeFor[[1]string]()
+	array0ByteType               = reflect.TypeFor[[0]byte]()
+	array1ByteType               = reflect.TypeFor[[1]byte]()
+	array2ByteType               = reflect.TypeFor[[2]byte]()
+	array3ByteType               = reflect.TypeFor[[3]byte]()
+	array4ByteType               = reflect.TypeFor[[4]byte]()
+	mapStringStringType          = reflect.TypeFor[map[string]string]()
+	structAllType                = reflect.TypeFor[structAll]()
+	structConflictingType        = reflect.TypeFor[structConflicting]()
+	structNoneExportedType       = reflect.TypeFor[structNoneExported]()
+	structMalformedTagType       = reflect.TypeFor[structMalformedTag]()
+	structUnexportedTagType      = reflect.TypeFor[structUnexportedTag]()
+	structUnexportedEmbeddedType = reflect.TypeFor[structUnexportedEmbedded]()
+	structUnknownTextValueType   = reflect.TypeFor[structUnknownTextValue]()
+	allMethodsType               = reflect.TypeFor[allMethods]()
+	allMethodsExceptJSONv2Type   = reflect.TypeFor[allMethodsExceptJSONv2]()
+	allMethodsExceptJSONv1Type   = reflect.TypeFor[allMethodsExceptJSONv1]()
+	allMethodsExceptTextType     = reflect.TypeFor[allMethodsExceptText]()
+	onlyMethodJSONv2Type         = reflect.TypeFor[onlyMethodJSONv2]()
+	onlyMethodJSONv1Type         = reflect.TypeFor[onlyMethodJSONv1]()
+	onlyMethodTextType           = reflect.TypeFor[onlyMethodText]()
+	structMethodJSONv2Type       = reflect.TypeFor[structMethodJSONv2]()
+	structMethodJSONv1Type       = reflect.TypeFor[structMethodJSONv1]()
+	structMethodTextType         = reflect.TypeFor[structMethodText]()
+	marshalJSONv2FuncType        = reflect.TypeFor[marshalJSONv2Func]()
+	marshalJSONv1FuncType        = reflect.TypeFor[marshalJSONv1Func]()
+	appendTextFuncType           = reflect.TypeFor[appendTextFunc]()
+	marshalTextFuncType          = reflect.TypeFor[marshalTextFunc]()
+	unmarshalJSONv2FuncType      = reflect.TypeFor[unmarshalJSONv2Func]()
+	unmarshalJSONv1FuncType      = reflect.TypeFor[unmarshalJSONv1Func]()
+	unmarshalTextFuncType        = reflect.TypeFor[unmarshalTextFunc]()
+	nocaseStringType             = reflect.TypeFor[nocaseString]()
+	ioReaderType                 = reflect.TypeFor[io.Reader]()
+	fmtStringerType              = reflect.TypeFor[fmt.Stringer]()
+	chanStringType               = reflect.TypeFor[chan string]()
 )
 
 func addr[T any](v T) *T {
@@ -913,7 +913,7 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Maps/DuplicateName/NoCaseString"),
 		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
 		want:    `{"hello":""`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeOf(nocaseString("")), Err: export.NewDuplicateNameError([]byte(`"hello"`), len64(`{"hello":"",`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeFor[nocaseString](), Err: export.NewDuplicateNameError([]byte(`"hello"`), len64(`{"hello":"",`))},
 	}, {
 		name: jsontest.Name("Maps/DuplicateName/NaNs/Deterministic+AllowDuplicateNames"),
 		opts: []Options{
@@ -1036,7 +1036,7 @@ func TestMarshal(t *testing.T) {
 			return m
 		}(),
 		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
-		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveMap{}), Err: errors.New("encountered a cycle")},
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeFor[recursiveMap](), Err: errors.New("encountered a cycle")},
 	}, {
 		name: jsontest.Name("Maps/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -1813,7 +1813,7 @@ func TestMarshal(t *testing.T) {
 			for i := 0; i < 100; i++ {
 				fields = append(fields, reflect.StructField{
 					Name: fmt.Sprintf("X%d", i),
-					Type: reflect.TypeOf(stringMarshalEmpty("")),
+					Type: reflect.TypeFor[stringMarshalEmpty](),
 					Tag:  `json:",omitempty"`,
 				})
 			}
@@ -2661,7 +2661,7 @@ func TestMarshal(t *testing.T) {
 			return s
 		}(),
 		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
-		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf(recursiveSlice{}), Err: errors.New("encountered a cycle")},
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeFor[recursiveSlice](), Err: errors.New("encountered a cycle")},
 	}, {
 		name: jsontest.Name("Slices/NonCyclicSlice"),
 		in: func() []any {
@@ -2756,7 +2756,7 @@ func TestMarshal(t *testing.T) {
 			return p
 		}(),
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
-		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeOf((*recursivePointer)(nil)), Err: errors.New("encountered a cycle")},
+		wantErr: &SemanticError{action: "marshal", GoType: reflect.TypeFor[*recursivePointer](), Err: errors.New("encountered a cycle")},
 	}, {
 		name: jsontest.Name("Pointers/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
