@@ -36,6 +36,7 @@ type Options = jsonopts.Options
 //   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [RejectFloatOverflow]
+//   - [UnmarshalArrayFromAnyLength]
 //   - [jsonv2.Deterministic]
 //   - [jsonv2.FormatNilSliceAsNull]
 //   - [jsonv2.FormatNilMapAsNull]
@@ -135,5 +136,20 @@ func RejectFloatOverflow(v bool) Options {
 		return jsonflags.RejectFloatOverflow | 1
 	} else {
 		return jsonflags.RejectFloatOverflow | 0
+	}
+}
+
+// UnmarshalArrayFromAnyLength specifies that Go arrays can be unmarshaled
+// from input JSON arrays of any length. If the JSON array is too short,
+// then the remaining Go array elements are zeroed. If the JSON array
+// is too long, then the excess JSON array elements are skipped over.
+//
+// This only affects unmarshaling and is ignored when marshaling.
+// The v1 default is true.
+func UnmarshalArrayFromAnyLength(v bool) Options {
+	if v {
+		return jsonflags.UnmarshalArrayFromAnyLength | 1
+	} else {
+		return jsonflags.UnmarshalArrayFromAnyLength | 0
 	}
 }

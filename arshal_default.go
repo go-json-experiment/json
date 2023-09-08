@@ -1403,6 +1403,12 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			var i int
 			for dec.PeekKind() != ']' {
 				if i >= n {
+					if uo.Flags.Get(jsonflags.UnmarshalArrayFromAnyLength) {
+						if err := dec.SkipValue(); err != nil {
+							return err
+						}
+						continue
+					}
 					err := errors.New("too many array elements")
 					return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 				}
@@ -1417,6 +1423,12 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 			if i < n {
+				if uo.Flags.Get(jsonflags.UnmarshalArrayFromAnyLength) {
+					for ; i < n; i++ {
+						va.Index(i).SetZero()
+					}
+					return nil
+				}
 				err := errors.New("too few array elements")
 				return &SemanticError{action: "unmarshal", GoType: t, Err: err}
 			}

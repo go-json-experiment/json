@@ -6673,11 +6673,23 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr([1]string{}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too few array elements")},
 	}, {
+		name:  jsontest.Name("Arrays/Invalid/Underflow/UnmarshalArrayFromAnyLength"),
+		opts:  []Options{jsonflags.UnmarshalArrayFromAnyLength | 1},
+		inBuf: `[-1,-2]`,
+		inVal: addr([4]int{1, 2, 3, 4}),
+		want:  addr([4]int{-1, -2, 0, 0}),
+	}, {
 		name:    jsontest.Name("Arrays/Invalid/Overflow"),
 		inBuf:   `["1","2"]`,
 		inVal:   new([1]string),
 		want:    addr([1]string{"1"}),
 		wantErr: &SemanticError{action: "unmarshal", GoType: array1StringType, Err: errors.New("too many array elements")},
+	}, {
+		name:  jsontest.Name("Arrays/Invalid/Overflow/UnmarshalArrayFromAnyLength"),
+		opts:  []Options{jsonflags.UnmarshalArrayFromAnyLength | 1},
+		inBuf: `[-1,-2,-3,-4,-5,-6]`,
+		inVal: addr([4]int{1, 2, 3, 4}),
+		want:  addr([4]int{-1, -2, -3, -4}),
 	}, {
 		name:    jsontest.Name("Arrays/Invalid/Bool"),
 		inBuf:   `true`,
