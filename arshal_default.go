@@ -1041,12 +1041,12 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				insertUnquotedName = func(name []byte) bool {
 					// Check that the name from inlined fallback does not match
 					// one of the previously marshaled names from known fields.
-					if foldedFields := fields.byFoldedName[string(foldName(name))]; len(foldedFields) > 0 {
+					if foldedFields := fields.lookupByFoldedName(name); len(foldedFields) > 0 {
 						if f := fields.byActualName[string(name)]; f != nil {
 							return seenIdxs.insert(uint(f.id))
 						}
 						for _, f := range foldedFields {
-							if f.nocase {
+							if f.matchFoldedName(name, &mo.Flags) {
 								return seenIdxs.insert(uint(f.id))
 							}
 						}
@@ -1099,8 +1099,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				name := jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 				f := fields.byActualName[string(name)]
 				if f == nil {
-					for _, f2 := range fields.byFoldedName[string(foldName(name))] {
-						if f2.nocase {
+					for _, f2 := range fields.lookupByFoldedName(name) {
+						if f2.matchFoldedName(name, &uo.Flags) {
 							f = f2
 							break
 						}

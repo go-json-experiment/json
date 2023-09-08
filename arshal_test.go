@@ -74,9 +74,11 @@ type (
 		Quote string `json:"'\"'"`
 	}
 	structNoCase struct {
-		AaA string `json:",nocase"`
-		AAa string `json:",nocase"`
-		AAA string
+		Aaa  string `json:",strictcase"`
+		AA_A string
+		AaA  string `json:",nocase"`
+		AAa  string `json:",nocase"`
+		AAA  string
 	}
 	structScalars struct {
 		unexported bool
@@ -382,11 +384,12 @@ type (
 		X map[string]int `json:",inline"`
 	}
 	structNoCaseInlineTextValue struct {
-		AAA string         `json:",omitempty"`
-		AaA string         `json:",omitempty,nocase"`
-		AAa string         `json:",omitempty,nocase"`
-		Aaa string         `json:",omitempty"`
-		X   jsontext.Value `json:",inline"`
+		AAA  string         `json:",omitempty,strictcase"`
+		AA_b string         `json:",omitempty"`
+		AaA  string         `json:",omitempty,nocase"`
+		AAa  string         `json:",omitempty,nocase"`
+		Aaa  string         `json:",omitempty"`
+		X    jsontext.Value `json:",inline"`
 	}
 	structNoCaseInlineMapStringAny struct {
 		AAA string     `json:",omitempty"`
@@ -1069,8 +1072,18 @@ func TestMarshal(t *testing.T) {
 		want: `{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz","M":{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz"},"I":{"abc\u003c\u003e\u0026\u2028\u2029xyz":"abc\u003c\u003e\u0026\u2028\u2029xyz"}}`,
 	}, {
 		name: jsontest.Name("Structs/NoCase"),
-		in:   structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"},
-		want: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+		in:   structNoCase{AaA: "AaA", AAa: "AAa", Aaa: "Aaa", AAA: "AAA", AA_A: "AA_A"},
+		want: `{"Aaa":"Aaa","AA_A":"AA_A","AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+	}, {
+		name: jsontest.Name("Structs/NoCase/MatchCaseInsensitiveNames"),
+		opts: []Options{MatchCaseInsensitiveNames(true)},
+		in:   structNoCase{AaA: "AaA", AAa: "AAa", Aaa: "Aaa", AAA: "AAA", AA_A: "AA_A"},
+		want: `{"Aaa":"Aaa","AA_A":"AA_A","AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+	}, {
+		name: jsontest.Name("Structs/NoCase/MatchCaseInsensitiveNames+MatchCaseSensitiveDelimiter"),
+		opts: []Options{MatchCaseInsensitiveNames(true), jsonflags.MatchCaseSensitiveDelimiter | 1},
+		in:   structNoCase{AaA: "AaA", AAa: "AAa", Aaa: "Aaa", AAA: "AAA", AA_A: "AA_A"},
+		want: `{"Aaa":"Aaa","AA_A":"AA_A","AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 	}, {
 		name: jsontest.Name("Structs/Normal"),
 		opts: []Options{jsontext.Expand(true)},
@@ -2504,6 +2517,39 @@ func TestMarshal(t *testing.T) {
 		},
 		want:    `{"AAA":"x","AaA":"x"`,
 		wantErr: export.NewDuplicateNameError([]byte(`"aaa"`), 0),
+	}, {
+		name: jsontest.Name("Structs/DuplicateName/MatchCaseInsensitiveDelimiter"),
+		in: structNoCaseInlineTextValue{
+			AaA: "x",
+			X:   jsontext.Value(`{"aa_a": ""}`),
+		},
+		want:    `{"AaA":"x"`,
+		wantErr: export.NewDuplicateNameError([]byte(`"aa_a"`), 0),
+	}, {
+		name: jsontest.Name("Structs/DuplicateName/MatchCaseSensitiveDelimiter"),
+		opts: []Options{jsonflags.MatchCaseSensitiveDelimiter | 1},
+		in: structNoCaseInlineTextValue{
+			AaA: "x",
+			X:   jsontext.Value(`{"aa_a": ""}`),
+		},
+		want: `{"AaA":"x","aa_a":""}`,
+	}, {
+		name: jsontest.Name("Structs/DuplicateName/MatchCaseInsensitiveNames+MatchCaseSensitiveDelimiter"),
+		opts: []Options{MatchCaseInsensitiveNames(true), jsonflags.MatchCaseSensitiveDelimiter | 1},
+		in: structNoCaseInlineTextValue{
+			AaA: "x",
+			X:   jsontext.Value(`{"aa_a": ""}`),
+		},
+		want: `{"AaA":"x","aa_a":""}`,
+	}, {
+		name: jsontest.Name("Structs/DuplicateName/MatchCaseInsensitiveNames+MatchCaseSensitiveDelimiter"),
+		opts: []Options{MatchCaseInsensitiveNames(true), jsonflags.MatchCaseSensitiveDelimiter | 1},
+		in: structNoCaseInlineTextValue{
+			AA_b: "x",
+			X:    jsontext.Value(`{"aa_b": ""}`),
+		},
+		want:    `{"AA_b":"x"`,
+		wantErr: export.NewDuplicateNameError([]byte(`"aa_b"`), 0),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferent"),
 		in: structNoCaseInlineMapStringAny{
@@ -6306,9 +6352,26 @@ func TestUnmarshal(t *testing.T) {
 		want:  addr(structWeirdNames{Empty: "empty", Comma: "comma", Quote: "quote"}),
 	}, {
 		name:  jsontest.Name("Structs/NoCase/Exact"),
-		inBuf: `{"AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
+		inBuf: `{"Aaa":"Aaa","AA_A":"AA_A","AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 		inVal: new(structNoCase),
-		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", AAA: "AAA"}),
+		want:  addr(structNoCase{AaA: "AaA", AAa: "AAa", Aaa: "Aaa", AAA: "AAA", AA_A: "AA_A"}),
+	}, {
+		name:  jsontest.Name("Structs/NoCase/CaseInsensitiveDefault"),
+		inBuf: `{"aa_a":"aa_a"}`,
+		inVal: new(structNoCase),
+		want:  addr(structNoCase{AaA: "aa_a"}),
+	}, {
+		name:  jsontest.Name("Structs/NoCase/MatchCaseSensitiveDelimiter"),
+		opts:  []Options{jsonflags.MatchCaseSensitiveDelimiter | 1},
+		inBuf: `{"aa_a":"aa_a"}`,
+		inVal: new(structNoCase),
+		want:  addr(structNoCase{}),
+	}, {
+		name:  jsontest.Name("Structs/NoCase/MatchCaseInsensitiveNames+MatchCaseSensitiveDelimiter"),
+		opts:  []Options{MatchCaseInsensitiveNames(true), jsonflags.MatchCaseSensitiveDelimiter | 1},
+		inBuf: `{"aa_a":"aa_a"}`,
+		inVal: new(structNoCase),
+		want:  addr(structNoCase{AA_A: "aa_a"}),
 	}, {
 		name:  jsontest.Name("Structs/NoCase/Merge/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},

@@ -33,6 +33,7 @@ type Options = jsonopts.Options
 //
 //   - [FormatByteArrayAsArray]
 //   - [FormatTimeDurationAsNanosecond]
+//   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [jsonv2.Deterministic]
 //   - [jsonv2.FormatNilSliceAsNull]
@@ -79,6 +80,23 @@ func FormatTimeDurationAsNanosecond(v bool) Options {
 		return jsonflags.FormatTimeDurationAsNanosecond | 1
 	} else {
 		return jsonflags.FormatTimeDurationAsNanosecond | 0
+	}
+}
+
+// MatchCaseSensitiveDelimiter specifies that underscores and dashes are
+// not to be ignored when performing case-insensitive name matching which
+// occurs under [jsonv2.MatchCaseInsensitiveNames] or the `nocase` tag option.
+// Thus, case-insensitive name matching is identical to [strings.EqualFold].
+// Use of this option diminishes the ability of case-insensitive matching
+// to be able to match common case variants (e.g, "foo_bar" with "fooBar").
+//
+// This affects either marshaling or unmarshaling.
+// The v1 default is true.
+func MatchCaseSensitiveDelimiter(v bool) Options {
+	if v {
+		return jsonflags.MatchCaseSensitiveDelimiter | 1
+	} else {
+		return jsonflags.MatchCaseSensitiveDelimiter | 0
 	}
 }
 

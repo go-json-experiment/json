@@ -61,6 +61,7 @@ import (
 //   - [Deterministic] affects marshaling only
 //   - [FormatNilSliceAsNull] affects marshaling only
 //   - [FormatNilMapAsNull] affects marshaling only
+//   - [MatchCaseInsensitiveNames] affects marshaling and unmarshaling
 //   - [DiscardUnknownMembers] affects marshaling only
 //   - [RejectUnknownMembers] affects unmarshaling only
 //   - [WithMarshalers] affects marshaling only
@@ -167,9 +168,6 @@ func FormatNilMapAsNull(v bool) Options {
 	}
 }
 
-/*
-TODO: Implement MatchCaseInsensitiveNames.
-
 // MatchCaseInsensitiveNames specifies that JSON object members are matched
 // against Go struct fields using a case-insensitive match of the name.
 // Go struct fields explicitly marked with `strictcase` or `nocase`
@@ -187,7 +185,6 @@ func MatchCaseInsensitiveNames(v bool) Options {
 		return jsonflags.MatchCaseInsensitiveNames | 0
 	}
 }
-*/
 
 // DiscardUnknownMembers specifies that marshaling should ignore any
 // JSON object members stored in Go struct fields dedicated to storing

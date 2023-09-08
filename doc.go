@@ -90,8 +90,15 @@
 //     if the JSON object name does not exactly match the JSON name
 //     for any of the struct fields, then it attempts to match the struct field
 //     using a case-insensitive match that also ignores dashes and underscores.
-//     If multiple fields match, the first declared field in breadth-first order
-//     takes precedence. This option has no effect when marshaling.
+//     If multiple fields match,
+//     the first declared field in breadth-first order takes precedence.
+//     This takes precedence even if [MatchCaseInsensitiveNames] is set to false.
+//     This cannot be specified together with the "strictcase" option.
+//
+//   - strictcase: When unmarshaling, the "strictcase" option specifies that the
+//     JSON object name must exactly match the JSON name for the struct field.
+//     This takes precedence even if [MatchCaseInsensitiveNames] is set to true.
+//     This cannot be specified together with the "nocase" option.
 //
 //   - inline: The "inline" option specifies that
 //     the JSON representable content of this field type is to be promoted

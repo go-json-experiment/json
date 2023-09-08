@@ -35,6 +35,12 @@ type structFields struct {
 	inlinedFallback *structField
 }
 
+// lookupByFoldedName looks up name by a case-insensitive match
+// that also ignores the presence of dashes and underscores.
+func (fs *structFields) lookupByFoldedName(name []byte) []*structField {
+	return fs.byFoldedName[string(foldName(name))]
+}
+
 type structField struct {
 	id      int   // unique numeric ID in breadth-first ordering
 	index   []int // index into a struct according to reflect.Type.FieldByIndex
@@ -300,11 +306,38 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	return fs, nil
 }
 
+// matchFoldedName matches a case-insensitive name depending on the options.
+// It assumes that foldName(f.name) == foldName(name).
+//
+// Case-insensitive matching is used if the `nocase` tag option is specified
+// or the MatchCaseInsensitiveNames call option is specified
+// (and the `strictcase` tag option is not specified).
+// Functionally, the `nocase` and `strictcase` tag options take precedence.
+//
+// The v1 definition of case-insensitivity operated under strings.EqualFold
+// and would strictly compare dashes and underscores,
+// while the v2 definition would ignore the presence of dashes and underscores.
+// Thus, if the MatchCaseSensitiveDelimiter call option is specified,
+// the match is further restricted to using strings.EqualFold.
+func (f *structField) matchFoldedName(name []byte, flags *jsonflags.Flags) bool {
+	if f.casing == nocase || (flags.Get(jsonflags.MatchCaseInsensitiveNames) && f.casing != strictcase) {
+		if !flags.Get(jsonflags.MatchCaseSensitiveDelimiter) || strings.EqualFold(string(name), f.name) {
+			return true
+		}
+	}
+	return false
+}
+
+const (
+	nocase     = 1
+	strictcase = 2
+)
+
 type fieldOptions struct {
 	name       string
 	quotedName string // quoted name per RFC 8785, section 3.2.2.2.
 	hasName    bool
-	nocase     bool
+	casing     int8 // either 0, nocase, or strictcase
 	inline     bool
 	unknown    bool
 	omitzero   bool
@@ -397,7 +430,9 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		}
 		switch opt {
 		case "nocase":
-			out.nocase = true
+			out.casing |= nocase
+		case "strictcase":
+			out.casing |= strictcase
 		case "inline":
 			out.inline = true
 		case "unknown":
@@ -427,7 +462,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 			// This catches invalid mutants such as "omitEmpty" or "omit_empty".
 			normOpt := strings.ReplaceAll(strings.ToLower(opt), "_", "")
 			switch normOpt {
-			case "nocase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
+			case "nocase", "strictcase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
 				err = firstError(err, fmt.Errorf("Go struct field %s has invalid appearance of `%s` tag option; specify `%s` instead", sf.Name, opt, normOpt))
 			}
 
@@ -437,7 +472,10 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		}
 
 		// Reject duplicates.
-		if seenOpts[opt] {
+		switch {
+		case out.casing == nocase|strictcase:
+			err = firstError(err, fmt.Errorf("Go struct field %s cannot have both `nocase` and `structcase` tag options", sf.Name))
+		case seenOpts[opt]:
 			err = firstError(err, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt))
 		}
 		seenOpts[opt] = true

@@ -44,7 +44,7 @@ func TestMakeStructFields(t *testing.T) {
 			flattened: []structField{
 				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "F1", quotedName: `"F1"`}},
 				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "json_name", quotedName: `"json_name"`, hasName: true}},
-				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", quotedName: `"json_name_nocase"`, hasName: true, nocase: true}},
+				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", quotedName: `"json_name_nocase"`, hasName: true, casing: nocase}},
 			},
 		},
 	}, {
@@ -559,7 +559,20 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			FieldName int `json:",nocase"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, nocase: true},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: nocase},
+	}, {
+		name: jsontest.Name("StrictCaseOption"),
+		in: struct {
+			FieldName int `json:",strictcase"`
+		}{},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: strictcase},
+	}, {
+		name: jsontest.Name("BothCaseOptions"),
+		in: struct {
+			FieldName int `json:",nocase,strictcase"`
+		}{},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: nocase | strictcase},
+		wantErr:  errors.New("Go struct field FieldName cannot have both `nocase` and `structcase` tag options"),
 	}, {
 		name: jsontest.Name("InlineOption"),
 		in: struct {
@@ -631,7 +644,7 @@ func TestParseTagOptions(t *testing.T) {
 		wantOpts: fieldOptions{
 			name:       "FieldName",
 			quotedName: `"FieldName"`,
-			nocase:     true,
+			casing:     nocase,
 			inline:     true,
 			unknown:    true,
 			omitzero:   true,
@@ -647,7 +660,7 @@ func TestParseTagOptions(t *testing.T) {
 		wantOpts: fieldOptions{
 			name:       "FieldName",
 			quotedName: `"FieldName"`,
-			nocase:     true,
+			casing:     nocase,
 			inline:     true,
 			unknown:    true,
 			omitzero:   true,
