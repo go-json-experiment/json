@@ -53,7 +53,7 @@ func AllowInvalidUTF8(v bool) Options {
 }
 
 // EscapeForHTML specifies that '<', '>', and '&' characters within JSON strings
-// should be escaped as a hexadecimal Unicode codepoint (e.g., \ufffd) so that
+// should be escaped as a hexadecimal Unicode codepoint (e.g., \u003c) so that
 // the output is safe to embed within HTML.
 //
 // This only affects encoding and is ignored when decoding.
@@ -66,7 +66,7 @@ func EscapeForHTML(v bool) Options {
 }
 
 // EscapeForJS specifies that U+2028 and U+2029 characters within JSON strings
-// should be escaped as a hexadecimal Unicode codepoint (e.g., \ufffd) so that
+// should be escaped as a hexadecimal Unicode codepoint (e.g., \u2028) so that
 // the output is valid to embed within JavaScript. See RFC 8259, section 12.
 //
 // This only affects encoding and is ignored when decoding.

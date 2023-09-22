@@ -9,7 +9,9 @@
 // in addition to structured data types such as objects and arrays.
 //
 // The [Encoder] and [Decoder] types are used to encode or decode
-// a stream of JSON values or tokens.
+// a stream of JSON tokens or values.
+//
+// # Tokens and Values
 //
 // A JSON token refers to the basic structural elements of JSON:
 //
@@ -21,7 +23,7 @@
 //
 // A JSON token is represented by the [Token] type in Go. Technically,
 // there are two additional structural characters (i.e., ':' and ','),
-// but there is no Token representation for them since their presence
+// but there is no [Token] representation for them since their presence
 // can be inferred by the structure of the JSON grammar itself.
 // For example, there must always be an implicit colon between
 // the name and value of a JSON object member.
@@ -45,11 +47,13 @@
 //
 // # Terminology
 //
-// This package uses the terms "encode" and "decode" for syntactic functionality
+// The terms "encode" and "decode" are used for syntactic functionality
 // that is concerned with processing JSON based on its grammar, and
-// uses the terms "marshal" and "unmarshal" for semantic functionality
+// the terms "marshal" and "unmarshal" are used for semantic functionality
 // that determines the meaning of JSON values as Go values and vice-versa.
-// It aims to provide a clear distinction between functionality that
+// This package (i.e., [jsontext]) deals with JSON at a syntactic layer,
+// while [encoding/json/v2] deals with JSON at a semantic layer.
+// The goal is to provide a clear distinction between functionality that
 // is purely concerned with encoding versus that of marshaling.
 // For example, one can directly encode a stream of JSON tokens without
 // needing to marshal a concrete Go value representing them.

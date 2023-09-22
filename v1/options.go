@@ -25,6 +25,8 @@ var (
 
 // Options are a set of options to configure the v2 "json" package
 // to operate with v1 semantics for particular features.
+// Values of this type can be passed to v2 functions like
+// [jsonv2.Marshal] or [jsonv2.Unmarshal].
 // Instead of referencing this type, use ["encoding/json/v2".Options].
 type Options = jsonopts.Options
 
@@ -48,6 +50,12 @@ type Options = jsonopts.Options
 // All other boolean options are set to false.
 // All non-boolean options are set to the zero value,
 // except for [jsontext.WithIndent], which defaults to "\t".
+//
+// The [Marshal] and [Unmarshal] functions in this package are
+// semantically identical to calling the v2 equivalents with this option:
+//
+//	jsonv2.Marshal(v, jsonv1.DefaultOptionsV1())
+//	jsonv2.Unmarshal(b, v, jsonv1.DefaultOptionsV1())
 func DefaultOptionsV1() Options {
 	return &jsonopts.DefaultOptionsV1
 }

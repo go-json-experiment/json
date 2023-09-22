@@ -494,6 +494,8 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 // The Encoder does not simply copy the provided value verbatim, but
 // parses it to ensure that it is syntactically valid and reformats it
 // according to how the Encoder is configured to format whitespace and strings.
+// If [AllowInvalidUTF8] is specified, then any invalid UTF-8 is mangled
+// as the Unicode replacement character, U+FFFD.
 //
 // The provided value kind must be consistent with the JSON grammar
 // (see examples on [Encoder.WriteToken]). If the provided value is invalid,

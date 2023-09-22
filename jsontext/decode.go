@@ -574,7 +574,10 @@ func (d *decoderState) ReadToken() (Token, error) {
 }
 
 // ReadValue returns the next raw JSON value, advancing the read offset.
-// The value is stripped of any leading or trailing whitespace.
+// The value is stripped of any leading or trailing whitespace and
+// contains the exact bytes of the input, which may contain invalid UTF-8
+// if [AllowInvalidUTF8] is specified.
+//
 // The returned value is only valid until the next Peek, Read, or Skip call and
 // may not be mutated while the Decoder remains in use.
 // If the decoder is currently at the end token for an object or array,
