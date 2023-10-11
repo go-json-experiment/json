@@ -15,7 +15,7 @@ import (
 // Options configure [Marshal], [MarshalWrite], [MarshalEncode],
 // [Unmarshal], [UnmarshalRead], and [UnmarshalDecode] with specific features.
 // Each function takes in a variadic list of options, where properties
-// set in latter options override the value of previously set properties.
+// set in later options override the value of previously set properties.
 //
 // The Options type is identical to [encoding/json.Options] and
 // [encoding/json/jsontext.Options]. Options from the other packages can
@@ -71,7 +71,7 @@ import (
 type Options = jsonopts.Options
 
 // JoinOptions coalesces the provided list of options into a single Options.
-// Properties set in latter options override the value of previously set properties.
+// Properties set in later options override the value of previously set properties.
 func JoinOptions(srcs ...Options) Options {
 	var dst jsonopts.Struct
 	for _, src := range srcs {
