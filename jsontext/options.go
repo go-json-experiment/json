@@ -20,7 +20,7 @@ import (
 // The Options type is identical to [encoding/json.Options] and
 // [encoding/json/v2.Options]. Options from the other packages may
 // be passed to functionality in this package, but are ignored.
-// Options from this packed may be used with the other packages.
+// Options from this package may be used with the other packages.
 type Options = jsonopts.Options
 
 // AllowDuplicateNames specifies that JSON objects may contain
