@@ -129,15 +129,6 @@ func (dst *Struct) Join(srcs ...Options) {
 		switch src := src.(type) {
 		case nil:
 			continue
-		case optionsArshaler:
-			src.OptionsArshal(dst, internal.NotForPublicUse{})
-		case optionsCoder:
-			src.OptionsCode(dst, internal.NotForPublicUse{})
-		// Alternate to avoid exporting named interface, if we prefer that?
-		//case interface{OptionsArshal(*Struct,internal.NotForPublicUse)}:
-		//	src.OptionsArshal(dst, internal.NotForPublicUse{})
-		//case interface{OptionsCode(*Struct,internal.NotForPublicUse)}:
-		//	src.OptionsCode(dst, internal.NotForPublicUse{})
 		case jsonflags.Bools:
 			dst.Flags.Set(src)
 		case Indent:
@@ -178,6 +169,15 @@ func (dst *Struct) Join(srcs ...Options) {
 				dst.Format = src.Format
 				dst.FormatDepth = src.FormatDepth
 			}
+		case optionsArshaler:
+			src.OptionsArshal(dst, internal.NotForPublicUse{})
+		case optionsCoder:
+			src.OptionsCode(dst, internal.NotForPublicUse{})
+		// Alternate to avoid exporting named interface, if we prefer that?
+		//case interface{OptionsArshal(*Struct,internal.NotForPublicUse)}:
+		//	src.OptionsArshal(dst, internal.NotForPublicUse{})
+		//case interface{OptionsCode(*Struct,internal.NotForPublicUse)}:
+		//	src.OptionsCode(dst, internal.NotForPublicUse{})
 		default:
 			JoinUnknownOption(dst, src)
 		}
