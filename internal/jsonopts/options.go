@@ -126,51 +126,60 @@ var JoinUnknownOption = func(*Struct, Options) { panic("unknown option") }
 
 func (dst *Struct) Join(srcs ...Options) {
 	for _, src := range srcs {
-		switch src := src.(type) {
+		switch typedSrc := src.(type) {
 		case nil:
 			continue
+		case OptionsArshaler:
+			typedSrc.OptionsArshal(dst, internal.NotForPublicUse{})
+		case OptionsCoder:
+			typedSrc.OptionsCode(dst, internal.NotForPublicUse{})
+		// Alternate to avoid exporting named interface, if we prefer that?
+		//case interface{OptionsArshal(*Struct,internal.NotForPublicUse)}:
+		//	typedSrc.OptionsArshal(dst, internal.NotForPublicUse{})
+		//case interface{OptionsCode(*Struct,internal.NotForPublicUse)}:
+		//	typedSrc.OptionsCode(dst, internal.NotForPublicUse{})
 		case jsonflags.Bools:
-			dst.Flags.Set(src)
+			dst.Flags.Set(typedSrc)
 		case Indent:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.Indent | 1)
-			dst.Indent = string(src)
+			dst.Indent = string(typedSrc)
 		case IndentPrefix:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.IndentPrefix | 1)
-			dst.IndentPrefix = string(src)
+			dst.IndentPrefix = string(typedSrc)
 		case ByteLimit:
 			dst.Flags.Set(jsonflags.ByteLimit | 1)
-			dst.ByteLimit = int64(src)
+			dst.ByteLimit = int64(typedSrc)
 		case DepthLimit:
 			dst.Flags.Set(jsonflags.DepthLimit | 1)
-			dst.DepthLimit = int(src)
+			dst.DepthLimit = int(typedSrc)
 		case *Struct:
-			dst.Flags.Join(src.Flags)
-			if src.Flags.Has(jsonflags.NonBooleanFlags) {
-				if src.Flags.Has(jsonflags.Indent) {
-					dst.Indent = src.Indent
+			dst.Flags.Join(typedSrc.Flags)
+			if typedSrc.Flags.Has(jsonflags.NonBooleanFlags) {
+				if typedSrc.Flags.Has(jsonflags.Indent) {
+					dst.Indent = typedSrc.Indent
 				}
-				if src.Flags.Has(jsonflags.IndentPrefix) {
-					dst.IndentPrefix = src.IndentPrefix
+				if typedSrc.Flags.Has(jsonflags.IndentPrefix) {
+					dst.IndentPrefix = typedSrc.IndentPrefix
 				}
-				if src.Flags.Has(jsonflags.ByteLimit) {
-					dst.ByteLimit = src.ByteLimit
+				if typedSrc.Flags.Has(jsonflags.ByteLimit) {
+					dst.ByteLimit = typedSrc.ByteLimit
 				}
-				if src.Flags.Has(jsonflags.DepthLimit) {
-					dst.DepthLimit = src.DepthLimit
+				if typedSrc.Flags.Has(jsonflags.DepthLimit) {
+					dst.DepthLimit = typedSrc.DepthLimit
 				}
-				if src.Flags.Has(jsonflags.Marshalers) {
-					dst.Marshalers = src.Marshalers
+				if typedSrc.Flags.Has(jsonflags.Marshalers) {
+					dst.Marshalers = typedSrc.Marshalers
 				}
-				if src.Flags.Has(jsonflags.Unmarshalers) {
-					dst.Unmarshalers = src.Unmarshalers
+				if typedSrc.Flags.Has(jsonflags.Unmarshalers) {
+					dst.Unmarshalers = typedSrc.Unmarshalers
 				}
 			}
-			if src.Format != "" {
-				dst.Format = src.Format
-				dst.FormatDepth = src.FormatDepth
+			if typedSrc.Format != "" {
+				dst.Format = typedSrc.Format
+				dst.FormatDepth = typedSrc.FormatDepth
 			}
 		default:
-			JoinUnknownOption(dst, src)
+			JoinUnknownOption(dst, typedSrc)
 		}
 	}
 }
