@@ -129,9 +129,9 @@ func (dst *Struct) Join(srcs ...Options) {
 		switch src := src.(type) {
 		case nil:
 			continue
-		case OptionsArshaler:
+		case optionsArshaler:
 			src.OptionsArshal(dst, internal.NotForPublicUse{})
-		case OptionsCoder:
+		case optionsCoder:
 			src.OptionsCode(dst, internal.NotForPublicUse{})
 		// Alternate to avoid exporting named interface, if we prefer that?
 		//case interface{OptionsArshal(*Struct,internal.NotForPublicUse)}:

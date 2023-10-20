@@ -4,10 +4,10 @@ import (
 	"github.com/go-json-experiment/json/internal"
 )
 
-type OptionsArshaler interface {
+type optionsArshaler interface {
 	OptionsArshal(dst *Struct, _ internal.NotForPublicUse)
 }
 
-type OptionsCoder interface {
+type optionsCoder interface {
 	OptionsCode(dst *Struct, _ internal.NotForPublicUse)
 }
