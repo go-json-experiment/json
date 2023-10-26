@@ -1,11 +1,11 @@
-package json_test
+package myjson_test
 
 import (
 	"reflect"
 	"testing"
 
 	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/internal/jsonopts"
+	"myjson"
 )
 
 type Foo struct {
@@ -21,7 +21,7 @@ func TestMarshalViaStruct(t *testing.T) {
 		in      any
 		wantOut []byte
 		wantErr bool
-		opts    []jsonopts.Options
+		opts    []json.Options
 	}{
 		{
 			name:    "No options",
@@ -35,14 +35,14 @@ func TestMarshalViaStruct(t *testing.T) {
 			in:      Foo{Name: "John", Age: 41, Citizen: true},
 			wantOut: []byte(`{"Name":"John","Age":41,"Citizen":true,"Map":null}`),
 			wantErr: false,
-			opts:    []jsonopts.Options{json.FormatNilMapAsNull(true)},
+			opts:    []json.Options{json.FormatNilMapAsNull(true)},
 		},
 		{
 			name:    "Format Nil Map as Null — Struct",
 			in:      Foo{Name: "John", Age: 41, Citizen: true},
 			wantOut: []byte(`{"Name":"John","Age":41,"Citizen":true,"Map":null}`),
 			wantErr: false,
-			opts: []jsonopts.Options{json.MarshalOptions{
+			opts: []json.Options{&myjson.MarshalOptions{
 				FormatNilMapAsNull: true,
 			}},
 		},

@@ -6,8 +6,6 @@
 // These flags are shared across both "json", "jsontext", and "jsonopts".
 package jsonflags
 
-import "github.com/go-json-experiment/json/internal"
-
 // Bools represents zero or more boolean flags, all set to true or false.
 // The least-significant bit is the boolean value of all flags in the set.
 // The remaining bits identify which particular flags.
@@ -17,7 +15,7 @@ import "github.com/go-json-experiment/json/internal"
 //   - (Expand | Indent | 1) means "Expand and Indent are true"
 type Bools uint64
 
-func (Bools) JSONOptions(internal.NotForPublicUse) {}
+func (Bools) JSONOptions() {}
 
 const (
 	// AllFlags is the set of all flags.

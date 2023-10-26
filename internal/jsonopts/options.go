@@ -5,14 +5,13 @@
 package jsonopts
 
 import (
-	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 )
 
 // Options is the common options type shared across json packages.
 type Options interface {
 	// JSONOptions is exported so related json packages can implement Options.
-	JSONOptions(internal.NotForPublicUse)
+	JSONOptions()
 }
 
 // Struct is the combination of all options in struct form.
@@ -72,7 +71,7 @@ func (dst *Struct) CopyCoderOptions(src *Struct) {
 	dst.CoderValues = src.CoderValues
 }
 
-func (*Struct) JSONOptions(internal.NotForPublicUse) {}
+func (*Struct) JSONOptions() {}
 
 // GetUnknownOption is injected by the "json" package to handle Options
 // declared in that package so that "jsonopts" can handle them.
@@ -169,17 +168,14 @@ func (dst *Struct) Join(srcs ...Options) {
 				dst.Format = src.Format
 				dst.FormatDepth = src.FormatDepth
 			}
-		case optionsArshaler:
-			src.OptionsArshal(dst, internal.NotForPublicUse{})
-		case optionsCoder:
-			src.OptionsCode(dst, internal.NotForPublicUse{})
-		// Alternate to avoid exporting named interface, if we prefer that?
-		//case interface{OptionsArshal(*Struct,internal.NotForPublicUse)}:
-		//	src.OptionsArshal(dst, internal.NotForPublicUse{})
-		//case interface{OptionsCode(*Struct,internal.NotForPublicUse)}:
-		//	src.OptionsCode(dst, internal.NotForPublicUse{})
 		default:
-			JoinUnknownOption(dst, src)
+			unknown := true
+			if joiner, ok := src.(interface{ Join(*Struct, Options) bool }); ok {
+				unknown = joiner.Join(dst, src)
+			}
+			if unknown {
+				JoinUnknownOption(dst, src)
+			}
 		}
 	}
 }
@@ -193,7 +189,7 @@ type (
 	// type for jsonflags.Unmarshalers declared in "json" package
 )
 
-func (Indent) JSONOptions(internal.NotForPublicUse)       {}
-func (IndentPrefix) JSONOptions(internal.NotForPublicUse) {}
-func (ByteLimit) JSONOptions(internal.NotForPublicUse)    {}
-func (DepthLimit) JSONOptions(internal.NotForPublicUse)   {}
+func (Indent) JSONOptions()       {}
+func (IndentPrefix) JSONOptions() {}
+func (ByteLimit) JSONOptions()    {}
+func (DepthLimit) JSONOptions()   {}
