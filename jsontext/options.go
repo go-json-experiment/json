@@ -95,6 +95,38 @@ func Expand(v bool) Options {
 	}
 }
 
+// SpaceAfterColon specifies that the JSON output should emit single-line output
+// where each key has a space after the colon.
+//
+// If set to false, then the output is compact with no white space after the key and colon.
+//
+// This option is overriden by Expand, WithIndent, and WithIndentPrefix.
+//
+// This only affects encoding and is ignored when decoding.
+func SpaceAfterColon(v bool) Options {
+	if v {
+		return jsonflags.SpaceAfterColon | 1
+	} else {
+		return jsonflags.SpaceAfterColon | 0
+	}
+}
+
+// SpaceAfterComma specifies that the JSON output should emit single-line output
+// where each non-final element has a space after the comma.
+//
+// If set to false, then the output is compact with no white space after the element and comma.
+//
+// This option is overriden by Expand, WithIndent, and WithIndentPrefix.
+//
+// This only affects encoding and is ignored when decoding.
+func SpaceAfterComma(v bool) Options {
+	if v {
+		return jsonflags.SpaceAfterComma | 1
+	} else {
+		return jsonflags.SpaceAfterComma | 0
+	}
+}
+
 // WithIndent specifies that the encoder should emit multiline output
 // where each element in a JSON object or array begins on a new, indented line
 // beginning with the indent prefix (see [WithIndentPrefix])

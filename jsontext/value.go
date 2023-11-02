@@ -143,6 +143,8 @@ func (v *Value) reformat(canonical, multiline bool, prefix, indent string) error
 	e := getBufferedEncoder()
 	defer putBufferedEncoder(e)
 	eo := &e.s.Struct
+	eo.Flags.Set(jsonflags.SpaceAfterColon | 0)
+	eo.Flags.Set(jsonflags.SpaceAfterComma | 0)
 	if canonical {
 		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 0)    // per RFC 8785, section 3.2.4
 		eo.Flags.Set(jsonflags.AllowDuplicateNames | 0) // per RFC 8785, section 3.1

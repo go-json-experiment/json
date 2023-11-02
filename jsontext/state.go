@@ -258,11 +258,17 @@ func (m stateMachine) NeedIndent(next Kind) (n int) {
 }
 
 // MayAppendDelim appends a colon or comma that may precede the next token.
-func (m stateMachine) MayAppendDelim(b []byte, next Kind) []byte {
+func (m stateMachine) MayAppendDelim(b []byte, next Kind, spaceAfterColon, spaceAfterComma bool) []byte {
 	switch {
 	case m.Last.needImplicitColon():
+		if spaceAfterColon {
+			return append(b, ':', ' ')
+		}
 		return append(b, ':')
 	case m.Last.needImplicitComma(next) && len(m.Stack) != 0: // comma not needed for top-level values
+		if spaceAfterComma {
+			return append(b, ',', ' ')
+		}
 		return append(b, ',')
 	default:
 		return b

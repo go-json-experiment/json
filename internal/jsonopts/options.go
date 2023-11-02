@@ -130,12 +130,22 @@ func (dst *Struct) Join(srcs ...Options) {
 		case nil:
 			continue
 		case jsonflags.Bools:
+			switch src {
+			case jsonflags.Expand:
+				dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
+			case jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon:
+				if dst.Flags.Has(jsonflags.Expand) {
+					continue
+				}
+			}
 			dst.Flags.Set(src)
 		case Indent:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.Indent | 1)
+			dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
 			dst.Indent = string(src)
 		case IndentPrefix:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.IndentPrefix | 1)
+			dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
 			dst.IndentPrefix = string(src)
 		case ByteLimit:
 			dst.Flags.Set(jsonflags.ByteLimit | 1)

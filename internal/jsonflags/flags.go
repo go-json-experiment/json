@@ -80,6 +80,8 @@ const (
 	EscapeForHTML       // encode only
 	EscapeForJS         // encode only
 	Expand              // encode only
+	SpaceAfterColon     // encode only
+	SpaceAfterComma     // encode only
 	Indent              // encode only; non-boolean flag
 	IndentPrefix        // encode only; non-boolean flag
 	ByteLimit           // encode or decode; non-boolean flag
