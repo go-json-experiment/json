@@ -132,7 +132,7 @@ func (dst *Struct) Join(srcs ...Options) {
 		case jsonflags.Bools:
 			switch src {
 			case jsonflags.Expand:
-				dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
+				dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			case jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon:
 				if dst.Flags.Has(jsonflags.Expand) {
 					continue
@@ -141,11 +141,11 @@ func (dst *Struct) Join(srcs ...Options) {
 			dst.Flags.Set(src)
 		case Indent:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.Indent | 1)
-			dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
+			dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			dst.Indent = string(src)
 		case IndentPrefix:
 			dst.Flags.Set(jsonflags.Expand | jsonflags.IndentPrefix | 1)
-			dst.Flags.Set(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon | 0)
+			dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			dst.IndentPrefix = string(src)
 		case ByteLimit:
 			dst.Flags.Set(jsonflags.ByteLimit | 1)
