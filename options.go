@@ -7,7 +7,6 @@ package json
 import (
 	"fmt"
 
-	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 )
@@ -69,6 +68,7 @@ import (
 //
 // Options that do not affect a particular operation are ignored.
 type Options = jsonopts.Options
+type OptionsStruct = jsonopts.Struct
 
 // JoinOptions coalesces the provided list of options into a single Options.
 // Properties set in later options override the value of previously set properties.
@@ -237,8 +237,8 @@ type (
 	unmarshalersOption Unmarshalers
 )
 
-func (*marshalersOption) JSONOptions(internal.NotForPublicUse)   {}
-func (*unmarshalersOption) JSONOptions(internal.NotForPublicUse) {}
+func (*marshalersOption) JSONOptions()   {}
+func (*unmarshalersOption) JSONOptions() {}
 
 // Inject support into "jsonopts" to handle these types.
 func init() {
