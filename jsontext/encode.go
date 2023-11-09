@@ -724,13 +724,9 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		if src[n] != ':' {
 			return dst, n, newInvalidCharacterError(src[n:], "after object name (expecting ':')")
 		}
-		if e.Flags.Get(jsonflags.SpaceAfterColon) {
-			dst = append(dst, ':', ' ')
-		} else {
-			dst = append(dst, ':')
-		}
+		dst = append(dst, ':')
 		n += len(":")
-		if e.Flags.Get(jsonflags.Multiline) {
+		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
 			dst = append(dst, ' ')
 		}
 
