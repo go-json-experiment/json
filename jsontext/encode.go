@@ -116,7 +116,7 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	}
 	e.Struct = jsonopts.Struct{}
 	e.Struct.Join(opts...)
-	if e.Flags.Get(jsonflags.Expand) && !e.Flags.Has(jsonflags.Indent) {
+	if e.Flags.Get(jsonflags.Multiline) && !e.Flags.Has(jsonflags.Indent) {
 		e.Indent = "\t"
 	}
 }
@@ -582,11 +582,11 @@ func (e *encoderState) WriteValue(v Value) error {
 // appendWhitespace appends whitespace that immediately precedes the next token.
 func (e *encoderState) appendWhitespace(b []byte, next Kind) []byte {
 	if delim := e.Tokens.needDelim(next); delim == ':' {
-		if e.Flags.Get(jsonflags.Expand | jsonflags.SpaceAfterColon) {
+		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
 			return append(b, ' ')
 		}
 	} else {
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			return e.AppendIndent(b, e.Tokens.NeedIndent(next))
 		}
 		if delim == ',' && e.Flags.Get(jsonflags.SpaceAfterComma) {
@@ -692,7 +692,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			dst = e.AppendIndent(dst, depth)
 		}
 
@@ -730,7 +730,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 			dst = append(dst, ':')
 		}
 		n += len(":")
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			dst = append(dst, ' ')
 		}
 
@@ -760,7 +760,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 			n += len(",")
 			continue
 		case '}':
-			if e.Flags.Get(jsonflags.Expand) {
+			if e.Flags.Get(jsonflags.Multiline) {
 				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, '}')
@@ -800,7 +800,7 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			dst = e.AppendIndent(dst, depth)
 		}
 
@@ -831,7 +831,7 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 			n += len(",")
 			continue
 		case ']':
-			if e.Flags.Get(jsonflags.Expand) {
+			if e.Flags.Get(jsonflags.Multiline) {
 				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, ']')

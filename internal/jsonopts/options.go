@@ -49,7 +49,7 @@ var DefaultOptionsV2 = Struct{
 		Presence: uint64(jsonflags.AllFlags),
 		Values:   uint64(0),
 	},
-	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Expand is set to false
+	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Multiline is set to false
 }
 
 // DefaultOptionsV1 is the set of all options that define default v1 behavior.
@@ -58,7 +58,7 @@ var DefaultOptionsV1 = Struct{
 		Presence: uint64(jsonflags.AllFlags),
 		Values:   uint64(jsonflags.DefaultV1Flags),
 	},
-	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Expand is set to false
+	CoderValues: CoderValues{Indent: "\t"}, // Indent is set, but Multiline is set to false
 }
 
 // CopyCoderOptions copies coder-specific options from src to dst.
@@ -131,20 +131,20 @@ func (dst *Struct) Join(srcs ...Options) {
 			continue
 		case jsonflags.Bools:
 			switch src {
-			case jsonflags.Expand:
+			case jsonflags.Multiline:
 				dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			case jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon:
-				if dst.Flags.Has(jsonflags.Expand) {
+				if dst.Flags.Has(jsonflags.Multiline) {
 					continue
 				}
 			}
 			dst.Flags.Set(src)
 		case Indent:
-			dst.Flags.Set(jsonflags.Expand | jsonflags.Indent | 1)
+			dst.Flags.Set(jsonflags.Multiline | jsonflags.Indent | 1)
 			dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			dst.Indent = string(src)
 		case IndentPrefix:
-			dst.Flags.Set(jsonflags.Expand | jsonflags.IndentPrefix | 1)
+			dst.Flags.Set(jsonflags.Multiline | jsonflags.IndentPrefix | 1)
 			dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
 			dst.IndentPrefix = string(src)
 		case ByteLimit:

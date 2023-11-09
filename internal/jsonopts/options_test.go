@@ -23,17 +23,17 @@ func makeFlags(f ...jsonflags.Bools) (fs jsonflags.Flags) {
 
 func TestCopyCoderOptions(t *testing.T) {
 	got := &Struct{
-		Flags:        makeFlags(jsonflags.Indent|jsonflags.AllowInvalidUTF8|0, jsonflags.Expand|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
+		Flags:        makeFlags(jsonflags.Indent|jsonflags.AllowInvalidUTF8|0, jsonflags.Multiline|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
 		CoderValues:  CoderValues{Indent: "    "},
 		ArshalValues: ArshalValues{Unmarshalers: "something"},
 	}
 	src := &Struct{
-		Flags:        makeFlags(jsonflags.Indent|jsonflags.Deterministic|jsonflags.Marshalers|1, jsonflags.Expand|0),
+		Flags:        makeFlags(jsonflags.Indent|jsonflags.Deterministic|jsonflags.Marshalers|1, jsonflags.Multiline|0),
 		CoderValues:  CoderValues{Indent: "\t"},
 		ArshalValues: ArshalValues{Marshalers: "something"},
 	}
 	want := &Struct{
-		Flags:        makeFlags(jsonflags.AllowInvalidUTF8|jsonflags.Expand|0, jsonflags.Indent|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
+		Flags:        makeFlags(jsonflags.AllowInvalidUTF8|jsonflags.Multiline|0, jsonflags.Indent|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
 		CoderValues:  CoderValues{Indent: "\t"},
 		ArshalValues: ArshalValues{Unmarshalers: "something"},
 	}
@@ -51,21 +51,21 @@ func TestJoin(t *testing.T) {
 		in:   jsonflags.AllowInvalidUTF8 | 1,
 		want: &Struct{Flags: makeFlags(jsonflags.AllowInvalidUTF8 | 1)},
 	}, {
-		in: jsonflags.Expand | 0,
+		in: jsonflags.Multiline | 0,
 		want: &Struct{
-			Flags: makeFlags(jsonflags.AllowInvalidUTF8|1, jsonflags.Expand|0)},
+			Flags: makeFlags(jsonflags.AllowInvalidUTF8|1, jsonflags.Multiline|0)},
 	}, {
-		in: Indent("\t"), // implicitly sets Expand=true
+		in: Indent("\t"), // implicitly sets Multiline=true
 		want: &Struct{
-			Flags:       makeFlags(jsonflags.AllowInvalidUTF8 | jsonflags.Expand | jsonflags.Indent | 1),
+			Flags:       makeFlags(jsonflags.AllowInvalidUTF8 | jsonflags.Multiline | jsonflags.Indent | 1),
 			CoderValues: CoderValues{Indent: "\t"},
 		},
 	}, {
 		in: &Struct{
-			Flags: makeFlags(jsonflags.Expand|jsonflags.EscapeForJS|0, jsonflags.AllowInvalidUTF8|1),
+			Flags: makeFlags(jsonflags.Multiline|jsonflags.EscapeForJS|0, jsonflags.AllowInvalidUTF8|1),
 		},
 		want: &Struct{
-			Flags:       makeFlags(jsonflags.AllowInvalidUTF8|jsonflags.Indent|1, jsonflags.Expand|jsonflags.EscapeForJS|0),
+			Flags:       makeFlags(jsonflags.AllowInvalidUTF8|jsonflags.Indent|1, jsonflags.Multiline|jsonflags.EscapeForJS|0),
 			CoderValues: CoderValues{Indent: "\t"},
 		},
 	}, {
@@ -84,7 +84,7 @@ func TestJoin(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	opts := &Struct{
-		Flags:        makeFlags(jsonflags.Indent|jsonflags.Deterministic|jsonflags.Marshalers|1, jsonflags.Expand|0),
+		Flags:        makeFlags(jsonflags.Indent|jsonflags.Deterministic|jsonflags.Marshalers|1, jsonflags.Multiline|0),
 		CoderValues:  CoderValues{Indent: "\t"},
 		ArshalValues: ArshalValues{Marshalers: new(json.Marshalers)},
 	}
@@ -115,8 +115,8 @@ func TestGet(t *testing.T) {
 	if v, ok := json.GetOption(opts, json.Deterministic); !v || !ok {
 		t.Errorf("GetOption(..., Deterministic) = (%v, %v), want (true, true)", v, ok)
 	}
-	if v, ok := json.GetOption(opts, jsontext.Expand); v || !ok {
-		t.Errorf("GetOption(..., Expand) = (%v, %v), want (false, true)", v, ok)
+	if v, ok := json.GetOption(opts, jsontext.Multiline); v || !ok {
+		t.Errorf("GetOption(..., Multiline) = (%v, %v), want (false, true)", v, ok)
 	}
 	if v, ok := json.GetOption(opts, jsontext.AllowInvalidUTF8); v || ok {
 		t.Errorf("GetOption(..., AllowInvalidUTF8) = (%v, %v), want (false, false)", v, ok)

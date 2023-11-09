@@ -39,15 +39,15 @@ func TestFlags(t *testing.T) {
 		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
 		Join{in: Flags{Presence: 0, Values: 0}},
 		Check{want: Flags{Presence: uint64(AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames | AllowInvalidUTF8)}},
-		Join{in: Flags{Presence: uint64(Expand | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
-		Check{want: Flags{Presence: uint64(Expand | AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
+		Join{in: Flags{Presence: uint64(Multiline | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
+		Check{want: Flags{Presence: uint64(Multiline | AllowDuplicateNames | AllowInvalidUTF8), Values: uint64(AllowDuplicateNames)}},
 		Clear{in: AllowDuplicateNames | AllowInvalidUTF8},
-		Check{want: Flags{Presence: uint64(Expand), Values: uint64(0)}},
+		Check{want: Flags{Presence: uint64(Multiline), Values: uint64(0)}},
 		Set{in: AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | 1},
-		Set{in: Expand | StringifyNumbers | RejectFloatOverflow | 0},
-		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | Expand | StringifyNumbers | RejectFloatOverflow), Values: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors)}},
+		Set{in: Multiline | StringifyNumbers | RejectFloatOverflow | 0},
+		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors | Multiline | StringifyNumbers | RejectFloatOverflow), Values: uint64(AllowInvalidUTF8 | Deterministic | IgnoreStructErrors)}},
 		Clear{in: ^AllCoderFlags},
-		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Expand), Values: uint64(AllowInvalidUTF8)}},
+		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Multiline), Values: uint64(AllowInvalidUTF8)}},
 	}
 	var fs Flags
 	for i, call := range calls {

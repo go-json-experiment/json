@@ -38,7 +38,7 @@ func Example_stringReplace() {
 	in := strings.NewReader(input)
 	dec := jsontext.NewDecoder(in)
 	out := new(bytes.Buffer)
-	enc := jsontext.NewEncoder(out, jsontext.Expand(true)) // expand for readability
+	enc := jsontext.NewEncoder(out, jsontext.Multiline(true)) // expand for readability
 	for {
 		// Read a token from the input.
 		tok, err := dec.ReadToken()
@@ -114,7 +114,7 @@ func ExampleEscapeForHTML() {
 		// JSON will be safe to directly embed inside HTML.
 		jsontext.EscapeForHTML(true),
 		jsontext.EscapeForJS(true),
-		jsontext.Expand(true)) // expand for readability
+		jsontext.Multiline(true)) // expand for readability
 	if err != nil {
 		log.Fatal(err)
 	}

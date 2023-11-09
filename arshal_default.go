@@ -981,7 +981,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 						b = append(b, ',')
 					}
 				}
-				if xe.Flags.Get(jsonflags.Expand) {
+				if xe.Flags.Get(jsonflags.Multiline) {
 					b = xe.AppendIndent(b, xe.Tokens.NeedIndent('"'))
 				}
 
