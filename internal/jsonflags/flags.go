@@ -65,6 +65,9 @@ const (
 		SkipUnaddressableMethods |
 		StringifyWithLegacySemantics |
 		UnmarshalArrayFromAnyLength
+
+	// AnyWhitespace reports whether the encoded output might have any whitespace.
+	AnyWhitespace = Expand | SpaceAfterColon | SpaceAfterComma
 )
 
 // Encoder and decoder flags.

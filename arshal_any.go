@@ -98,9 +98,9 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 		if mo.Flags.Get(jsonflags.FormatNilMapAsNull) && obj == nil {
 			return enc.WriteToken(jsontext.Null)
 		}
-		// Optimize for marshaling an empty map without any preceding multiline whitespace.
-		if !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), "{}"...)
+		// Optimize for marshaling an empty map without any preceding whitespace.
+		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -211,9 +211,9 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && arr == nil {
 			return enc.WriteToken(jsontext.Null)
 		}
-		// Optimize for marshaling an empty slice without any preceding multiline whitespace.
-		if !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '[', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), "[]"...)
+		// Optimize for marshaling an empty slice without any preceding whitespace.
+		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()

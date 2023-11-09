@@ -125,9 +125,9 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 
-		// Optimize for marshaling without preceding multiline whitespace.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), va.Bool())
+		// Optimize for marshaling without preceding whitespace.
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't'), va.Bool())
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -168,11 +168,11 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 
-		// Optimize for marshaling without preceding multiline whitespace or string escaping.
+		// Optimize for marshaling without preceding whitespace or string escaping.
 		s := va.String()
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
 			b := xe.Buf
-			b = xe.Tokens.MayAppendDelim(b, '"', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma))
+			b = xe.Tokens.MayAppendDelim(b, '"')
 			b = append(b, '"')
 			b = append(b, s...)
 			b = append(b, '"')
@@ -372,9 +372,9 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 
-		// Optimize for marshaling without preceding multiline whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), va.Int(), 10)
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Int(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -449,9 +449,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 
-		// Optimize for marshaling without preceding multiline whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), va.Uint(), 10)
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Uint(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -531,9 +531,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			return enc.WriteToken(jsontext.Float(fv))
 		}
 
-		// Optimize for marshaling without preceding multiline whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), fv, bits)
+		// Optimize for marshaling without preceding whitespace or string escaping.
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+			xe.Buf = jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0'), fv, bits)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -650,9 +650,9 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			if emitNull && va.IsNil() {
 				return enc.WriteToken(jsontext.Null)
 			}
-			// Optimize for marshaling an empty map without any preceding multiline whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), "{}"...)
+			// Optimize for marshaling an empty map without any preceding whitespace.
+			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
 					return xe.Flush()
@@ -1255,9 +1255,9 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			if emitNull && va.IsNil() {
 				return enc.WriteToken(jsontext.Null)
 			}
-			// Optimize for marshaling an empty slice without any preceding multiline whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
-				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '[', xe.Flags.Get(jsonflags.SpaceAfterColon), xe.Flags.Get(jsonflags.SpaceAfterComma)), "[]"...)
+			// Optimize for marshaling an empty slice without any preceding whitespace.
+			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
+				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
 					return xe.Flush()

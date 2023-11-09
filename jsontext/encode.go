@@ -337,8 +337,8 @@ func (e *encoderState) WriteToken(t Token) error {
 	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.Tokens.MayAppendDelim(b, k, e.Flags.Get(jsonflags.SpaceAfterColon), e.Flags.Get(jsonflags.SpaceAfterComma))
-	if e.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, k)
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -428,8 +428,8 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.Tokens.MayAppendDelim(b, k, e.Flags.Get(jsonflags.SpaceAfterColon), e.Flags.Get(jsonflags.SpaceAfterComma))
-	if e.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, k)
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -513,8 +513,8 @@ func (e *encoderState) WriteValue(v Value) error {
 	b := e.Buf // use local variable to avoid mutating e in case of error
 
 	// Append any delimiters or optional whitespace.
-	b = e.Tokens.MayAppendDelim(b, k, e.Flags.Get(jsonflags.SpaceAfterColon), e.Flags.Get(jsonflags.SpaceAfterComma))
-	if e.Flags.Get(jsonflags.Expand) {
+	b = e.Tokens.MayAppendDelim(b, k)
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the value
@@ -581,11 +581,19 @@ func (e *encoderState) WriteValue(v Value) error {
 
 // appendWhitespace appends whitespace that immediately precedes the next token.
 func (e *encoderState) appendWhitespace(b []byte, next Kind) []byte {
-	if e.Tokens.needDelim(next) == ':' {
-		return append(b, ' ')
+	if delim := e.Tokens.needDelim(next); delim == ':' {
+		if e.Flags.Get(jsonflags.Expand | jsonflags.SpaceAfterColon) {
+			return append(b, ' ')
+		}
 	} else {
-		return e.AppendIndent(b, e.Tokens.NeedIndent(next))
+		if e.Flags.Get(jsonflags.Expand) {
+			return e.AppendIndent(b, e.Tokens.NeedIndent(next))
+		}
+		if delim == ',' && e.Flags.Get(jsonflags.SpaceAfterComma) {
+			return append(b, ' ')
+		}
 	}
+	return b
 }
 
 // AppendIndent appends the appropriate number of indentation characters
