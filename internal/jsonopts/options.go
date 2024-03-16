@@ -131,10 +131,10 @@ func (dst *Struct) Join(srcs ...Options) {
 			continue
 		case jsonflags.Bools:
 			switch src {
-			case jsonflags.Multiline:
+			case jsonflags.Multiline | 1:
 				dst.Flags.Clear(jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon)
-			case jsonflags.SpaceAfterComma | jsonflags.SpaceAfterColon:
-				if dst.Flags.Has(jsonflags.Multiline) {
+			case jsonflags.SpaceAfterComma | 1, jsonflags.SpaceAfterColon | 1:
+				if dst.Flags.Get(jsonflags.Multiline) {
 					continue
 				}
 			}
