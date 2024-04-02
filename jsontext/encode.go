@@ -647,13 +647,13 @@ func (e *encoderState) reformatValue(dst []byte, src Value, depth int) ([]byte, 
 		return append(dst, "true"...), len("true"), nil
 	case '"':
 		if n := jsonwire.ConsumeSimpleString(src); n > 0 {
-			dst, src = append(dst, src[:n]...), src[n:] // copy simple strings verbatim
+			dst = append(dst, src[:n]...) // copy simple strings verbatim
 			return dst, n, nil
 		}
 		return jsonwire.ReformatString(dst, src, &e.Flags)
 	case '0':
 		if n := jsonwire.ConsumeSimpleNumber(src); n > 0 && !e.Flags.Get(jsonflags.CanonicalizeNumbers) {
-			dst, src = append(dst, src[:n]...), src[n:] // copy simple numbers verbatim
+			dst = append(dst, src[:n]...) // copy simple numbers verbatim
 			return dst, n, nil
 		}
 		return jsonwire.ReformatNumber(dst, src, e.Flags.Get(jsonflags.CanonicalizeNumbers))

@@ -286,12 +286,12 @@ func (m stateMachine) needDelim(next Kind) (delim byte) {
 // checkDelim reports whether the specified delimiter should be there given
 // the kind of the next token that appears immediately afterwards.
 func (m stateMachine) checkDelim(delim byte, next Kind) error {
-	switch needDelim := m.needDelim(next); {
-	case needDelim == delim:
+	switch m.needDelim(next) {
+	case delim:
 		return nil
-	case needDelim == ':':
+	case ':':
 		return errMissingColon
-	case needDelim == ',':
+	case ',':
 		return errMissingComma
 	default:
 		return newInvalidCharacterError([]byte{delim}, "before next token")

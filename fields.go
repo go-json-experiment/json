@@ -20,8 +20,6 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
-var errIgnoredField = errors.New("ignored field")
-
 type isZeroer interface {
 	IsZero() bool
 }
