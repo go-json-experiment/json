@@ -126,7 +126,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't'), va.Bool())
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -170,7 +170,7 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		s := va.String()
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
 			b := xe.Buf
 			b = xe.Tokens.MayAppendDelim(b, '"')
 			b = append(b, '"')
@@ -373,7 +373,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Int(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -450,7 +450,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Uint(), 10)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -532,7 +532,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
-		if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
+		if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !mo.Flags.Get(jsonflags.StringifyNumbers) && !xe.Tokens.Last.NeedObjectName() {
 			xe.Buf = jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0'), fv, bits)
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
@@ -651,7 +651,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty map without any preceding whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
+			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
@@ -975,9 +975,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				// Append any delimiters or optional whitespace.
 				b := xe.Buf
 				if xe.Tokens.Last.Length() > 0 {
-					b = append(b, ',')
+					if xe.Flags.Get(jsonflags.SpaceAfterComma) {
+						b = append(b, ',', ' ')
+					} else {
+						b = append(b, ',')
+					}
 				}
-				if xe.Flags.Get(jsonflags.Expand) {
+				if xe.Flags.Get(jsonflags.Multiline) {
 					b = xe.AppendIndent(b, xe.Tokens.NeedIndent('"'))
 				}
 
@@ -1252,7 +1256,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty slice without any preceding whitespace.
-			if optimizeCommon && !xe.Flags.Get(jsonflags.Expand) && !xe.Tokens.Last.NeedObjectName() {
+			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
 				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {

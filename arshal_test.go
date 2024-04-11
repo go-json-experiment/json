@@ -1087,7 +1087,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"Aaa":"Aaa","AA_A":"AA_A","AaA":"AaA","AAa":"AAa","AAA":"AAA"}`,
 	}, {
 		name: jsontest.Name("Structs/Normal"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structAll{
 			Bool:   true,
 			String: "hello",
@@ -1232,8 +1232,93 @@ func TestMarshal(t *testing.T) {
 	"Interface": null
 }`,
 	}, {
+		name: jsontest.Name("Structs/SpaceAfterColonAndComma"),
+		opts: []Options{
+			jsontext.SpaceAfterColon(true),
+			jsontext.SpaceAfterComma(true),
+		},
+		in: structAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Pointer:   new(structAll),
+			Interface: (*structAll)(nil),
+		},
+		want: `{"Bool": true, "String": "hello", "Bytes": "AQID", "Int": -64, "Uint": 64, "Float": 3.14159, "Map": {"key": "value"}, "StructScalars": {"Bool": true, "String": "hello", "Bytes": "AQID", "Int": -64, "Uint": 64, "Float": 3.14159}, "StructMaps": {"MapBool": {"": true}, "MapString": {"": "hello"}, "MapBytes": {"": "AQID"}, "MapInt": {"": -64}, "MapUint": {"": 64}, "MapFloat": {"": 3.14159}}, "StructSlices": {"SliceBool": [true], "SliceString": ["hello"], "SliceBytes": ["AQID"], "SliceInt": [-64], "SliceUint": [64], "SliceFloat": [3.14159]}, "Slice": ["fizz", "buzz"], "Array": ["goodbye"], "Pointer": {"Bool": false, "String": "", "Bytes": "", "Int": 0, "Uint": 0, "Float": 0, "Map": {}, "StructScalars": {"Bool": false, "String": "", "Bytes": "", "Int": 0, "Uint": 0, "Float": 0}, "StructMaps": {"MapBool": {}, "MapString": {}, "MapBytes": {}, "MapInt": {}, "MapUint": {}, "MapFloat": {}}, "StructSlices": {"SliceBool": [], "SliceString": [], "SliceBytes": [], "SliceInt": [], "SliceUint": [], "SliceFloat": []}, "Slice": [], "Array": [""], "Pointer": null, "Interface": null}, "Interface": null}`,
+	}, {
+		name: jsontest.Name("Structs/SpaceAfterComma"),
+		opts: []Options{jsontext.SpaceAfterComma(true)},
+		in: structAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Pointer:   new(structAll),
+			Interface: (*structAll)(nil),
+		},
+		want: `{"Bool":true, "String":"hello", "Bytes":"AQID", "Int":-64, "Uint":64, "Float":3.14159, "Map":{"key":"value"}, "StructScalars":{"Bool":true, "String":"hello", "Bytes":"AQID", "Int":-64, "Uint":64, "Float":3.14159}, "StructMaps":{"MapBool":{"":true}, "MapString":{"":"hello"}, "MapBytes":{"":"AQID"}, "MapInt":{"":-64}, "MapUint":{"":64}, "MapFloat":{"":3.14159}}, "StructSlices":{"SliceBool":[true], "SliceString":["hello"], "SliceBytes":["AQID"], "SliceInt":[-64], "SliceUint":[64], "SliceFloat":[3.14159]}, "Slice":["fizz", "buzz"], "Array":["goodbye"], "Pointer":{"Bool":false, "String":"", "Bytes":"", "Int":0, "Uint":0, "Float":0, "Map":{}, "StructScalars":{"Bool":false, "String":"", "Bytes":"", "Int":0, "Uint":0, "Float":0}, "StructMaps":{"MapBool":{}, "MapString":{}, "MapBytes":{}, "MapInt":{}, "MapUint":{}, "MapFloat":{}}, "StructSlices":{"SliceBool":[], "SliceString":[], "SliceBytes":[], "SliceInt":[], "SliceUint":[], "SliceFloat":[]}, "Slice":[], "Array":[""], "Pointer":null, "Interface":null}, "Interface":null}`,
+	}, {
 		name: jsontest.Name("Structs/Stringified"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structStringifiedAll{
 			Bool:   true,
 			String: "hello",
@@ -1383,7 +1468,7 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/OmitZero/NonZero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitZeroAll{
 			Bool:          true,                                   // not omitted since true is non-zero
 			String:        " ",                                    // not omitted since non-empty string is non-zero
@@ -1445,7 +1530,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"ValueNeverZero":"","PointerNeverZero":""}`,
 	}, {
 		name: jsontest.Name("Structs/OmitZeroMethod/NonZero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitZeroMethodAll{
 			ValueAlwaysZero:                 valueAlwaysZero("nonzero"),
 			ValueNeverZero:                  valueNeverZero("nonzero"),
@@ -1472,12 +1557,12 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitZeroMethod/Interface/Zero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in:   structOmitZeroMethodInterfaceAll{},
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/OmitZeroMethod/Interface/PartialZero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitZeroMethodInterfaceAll{
 			ValueAlwaysZero:          valueAlwaysZero(""),
 			ValueNeverZero:           valueNeverZero(""),
@@ -1491,7 +1576,7 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitZeroMethod/Interface/NonZero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitZeroMethodInterfaceAll{
 			ValueAlwaysZero:          valueAlwaysZero("nonzero"),
 			ValueNeverZero:           valueNeverZero("nonzero"),
@@ -1507,7 +1592,7 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitEmpty/Zero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in:   structOmitEmptyAll{},
 		want: `{
 	"Bool": false,
@@ -1525,7 +1610,7 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitEmpty/EmptyNonZero"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitEmptyAll{
 			String:                string(""),
 			StringEmpty:           stringMarshalEmpty(""),
@@ -1580,7 +1665,7 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Structs/OmitEmpty/NonEmpty"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitEmptyAll{
 			Bool:                  true,
 			PointerBool:           addr(true),
@@ -1668,7 +1753,7 @@ func TestMarshal(t *testing.T) {
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/OmitEmpty/Legacy/NonEmpty"),
-		opts: []Options{jsontext.Expand(true), jsonflags.OmitEmptyWithLegacyDefinition | 1},
+		opts: []Options{jsontext.Multiline(true), jsonflags.OmitEmptyWithLegacyDefinition | 1},
 		in: structOmitEmptyAll{
 			Bool:                  true,
 			PointerBool:           addr(true),
@@ -1835,7 +1920,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"Bytes":"dmFsdWU=","Map":{"":""},"Slice":[""],"Pointer":{"Bool":true},"Interface":[""]}`,
 	}, {
 		name: jsontest.Name("Structs/Format/Bytes"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structFormatBytes{
 			Base16:    []byte("\x01\x23\x45\x67\x89\xab\xcd\xef"),
 			Base32:    []byte("\x00D2\x14\xc7BT\xb65τe:V\xd7\xc6u\xbew\xdf"),
@@ -1858,7 +1943,7 @@ func TestMarshal(t *testing.T) {
 	]
 }`}, {
 		name: jsontest.Name("Structs/Format/ArrayBytes"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structFormatArrayBytes{
 			Base16:    [4]byte{1, 2, 3, 4},
 			Base32:    [4]byte{1, 2, 3, 4},
@@ -1883,7 +1968,7 @@ func TestMarshal(t *testing.T) {
 	"Default": "AQIDBA=="
 }`}, {
 		name: jsontest.Name("Structs/Format/ArrayBytes/Legacy"),
-		opts: []Options{jsontext.Expand(true), jsonflags.FormatByteArrayAsArray | 1},
+		opts: []Options{jsontext.Multiline(true), jsonflags.FormatByteArrayAsArray | 1},
 		in: structFormatArrayBytes{
 			Base16:    [4]byte{1, 2, 3, 4},
 			Base32:    [4]byte{1, 2, 3, 4},
@@ -1930,7 +2015,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"Array":[false,true,false,true,false,true]}`,
 	}, {
 		name: jsontest.Name("Structs/Format/Floats"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: []structFormatFloats{
 			{NonFinite: math.Pi, PointerNonFinite: addr(math.Pi)},
 			{NonFinite: math.NaN(), PointerNonFinite: addr(math.NaN())},
@@ -1957,7 +2042,7 @@ func TestMarshal(t *testing.T) {
 ]`,
 	}, {
 		name: jsontest.Name("Structs/Format/Maps"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: []structFormatMaps{{
 			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
 			EmitEmpty: map[string]string(nil), PointerEmitEmpty: addr(map[string]string(nil)),
@@ -2013,7 +2098,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Structs/Format/Maps/FormatNilMapAsNull"),
 		opts: []Options{
 			FormatNilMapAsNull(true),
-			jsontext.Expand(true),
+			jsontext.Multiline(true),
 		},
 		in: []structFormatMaps{{
 			EmitNull: map[string]string(nil), PointerEmitNull: addr(map[string]string(nil)),
@@ -2068,7 +2153,7 @@ func TestMarshal(t *testing.T) {
 ]`,
 	}, {
 		name: jsontest.Name("Structs/Format/Slices"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: []structFormatSlices{{
 			EmitNull: []string(nil), PointerEmitNull: addr([]string(nil)),
 			EmitEmpty: []string(nil), PointerEmitEmpty: addr([]string(nil)),
@@ -2851,7 +2936,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"X":{}}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/Empty/Multiline"),
-		opts: []Options{jsontext.Expand(true), jsontext.WithIndent("")},
+		opts: []Options{jsontext.Multiline(true), jsontext.WithIndent("")},
 		in:   struct{ X any }{map[string]any{}},
 		want: "{\n\"X\": {}\n}",
 	}, {
@@ -2914,7 +2999,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"X":[]}`,
 	}, {
 		name: jsontest.Name("Interfaces/Any/Slices/Empty/Multiline"),
-		opts: []Options{jsontext.Expand(true), jsontext.WithIndent("")},
+		opts: []Options{jsontext.Multiline(true), jsontext.WithIndent("")},
 		in:   struct{ X any }{[]any{}},
 		want: "{\n\"X\": []\n}",
 	}, {
@@ -3979,7 +4064,7 @@ func TestMarshal(t *testing.T) {
 		want: `"0s"`,
 	}, {
 		name: jsontest.Name("Duration/Format"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structDurationFormat{
 			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
@@ -4034,7 +4119,7 @@ func TestMarshal(t *testing.T) {
 		want: `{"T1":"0001-01-01T00:00:00Z","T2":"01 Jan 01 00:00 UTC","T3":"0001-01-01","T5":"0001-01-01T00:00:00Z"}`,
 	}, {
 		name: jsontest.Name("Time/Format"),
-		opts: []Options{jsontext.Expand(true)},
+		opts: []Options{jsontext.Multiline(true)},
 		in: structTimeFormat{
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),
 			time.Date(1234, 1, 2, 3, 4, 5, 6, time.UTC),

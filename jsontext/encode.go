@@ -116,7 +116,7 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	}
 	e.Struct = jsonopts.Struct{}
 	e.Struct.Join(opts...)
-	if e.Flags.Get(jsonflags.Expand) && !e.Flags.Has(jsonflags.Indent) {
+	if e.Flags.Get(jsonflags.Multiline) && !e.Flags.Has(jsonflags.Indent) {
 		e.Indent = "\t"
 	}
 }
@@ -274,6 +274,7 @@ func (e *encoderState) UnwriteEmptyObjectMember(prevName *string) bool {
 	b = b[:len(b)-n]
 	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixByte(b, ':')
+	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixString(b)
 	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixByte(b, ',')
@@ -337,7 +338,7 @@ func (e *encoderState) WriteToken(t Token) error {
 
 	// Append any delimiters or optional whitespace.
 	b = e.Tokens.MayAppendDelim(b, k)
-	if e.Flags.Get(jsonflags.Expand) {
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -428,7 +429,7 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 
 	// Append any delimiters or optional whitespace.
 	b = e.Tokens.MayAppendDelim(b, k)
-	if e.Flags.Get(jsonflags.Expand) {
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the token
@@ -513,7 +514,7 @@ func (e *encoderState) WriteValue(v Value) error {
 
 	// Append any delimiters or optional whitespace.
 	b = e.Tokens.MayAppendDelim(b, k)
-	if e.Flags.Get(jsonflags.Expand) {
+	if e.Flags.Get(jsonflags.AnyWhitespace) {
 		b = e.appendWhitespace(b, k)
 	}
 	pos := len(b) // offset before the value
@@ -580,11 +581,19 @@ func (e *encoderState) WriteValue(v Value) error {
 
 // appendWhitespace appends whitespace that immediately precedes the next token.
 func (e *encoderState) appendWhitespace(b []byte, next Kind) []byte {
-	if e.Tokens.needDelim(next) == ':' {
-		return append(b, ' ')
+	if delim := e.Tokens.needDelim(next); delim == ':' {
+		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
+			return append(b, ' ')
+		}
 	} else {
-		return e.AppendIndent(b, e.Tokens.NeedIndent(next))
+		if e.Flags.Get(jsonflags.Multiline) {
+			return e.AppendIndent(b, e.Tokens.NeedIndent(next))
+		}
+		if delim == ',' && e.Flags.Get(jsonflags.SpaceAfterComma) {
+			return append(b, ' ')
+		}
 	}
+	return b
 }
 
 // AppendIndent appends the appropriate number of indentation characters
@@ -683,7 +692,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			dst = e.AppendIndent(dst, depth)
 		}
 
@@ -717,7 +726,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		}
 		dst = append(dst, ':')
 		n += len(":")
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
 			dst = append(dst, ' ')
 		}
 
@@ -739,11 +748,15 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		}
 		switch src[n] {
 		case ',':
-			dst = append(dst, ',')
+			if e.Flags.Get(jsonflags.SpaceAfterComma) {
+				dst = append(dst, ',', ' ')
+			} else {
+				dst = append(dst, ',')
+			}
 			n += len(",")
 			continue
 		case '}':
-			if e.Flags.Get(jsonflags.Expand) {
+			if e.Flags.Get(jsonflags.Multiline) {
 				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, '}')
@@ -783,7 +796,7 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 	depth++
 	for {
 		// Append optional newline and indentation.
-		if e.Flags.Get(jsonflags.Expand) {
+		if e.Flags.Get(jsonflags.Multiline) {
 			dst = e.AppendIndent(dst, depth)
 		}
 
@@ -806,11 +819,15 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 		}
 		switch src[n] {
 		case ',':
-			dst = append(dst, ',')
+			if e.Flags.Get(jsonflags.SpaceAfterComma) {
+				dst = append(dst, ',', ' ')
+			} else {
+				dst = append(dst, ',')
+			}
 			n += len(",")
 			continue
 		case ']':
-			if e.Flags.Get(jsonflags.Expand) {
+			if e.Flags.Get(jsonflags.Multiline) {
 				dst = e.AppendIndent(dst, depth-1)
 			}
 			dst = append(dst, ']')

@@ -573,7 +573,7 @@ func ExampleWithMarshalers_errors() {
 				return []byte(`"internal server error"`), nil
 			}),
 		)),
-		jsontext.Expand(true)) // expand for readability
+		jsontext.Multiline(true)) // expand for readability
 	if err != nil {
 		log.Fatal(err)
 	}

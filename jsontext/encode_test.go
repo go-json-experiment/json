@@ -37,7 +37,7 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 	want = td.outCompacted
 	switch formatName {
 	case "Indented":
-		opts = append(opts, Expand(true))
+		opts = append(opts, Multiline(true))
 		opts = append(opts, WithIndentPrefix("\t"))
 		opts = append(opts, WithIndent("    "))
 		if td.outIndented != "" {
