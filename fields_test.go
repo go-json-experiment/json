@@ -197,7 +197,7 @@ func TestMakeStructFields(t *testing.T) {
 			X map[string]jsontext.Value `json:",unknown"`
 		}{},
 		want: structFields{
-			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeOf(map[string]jsontext.Value(nil)), fieldOptions: fieldOptions{name: "X", quotedName: `"X"`, unknown: true}},
+			inlinedFallback: &structField{id: 0, index: []int{2}, typ: reflect.TypeFor[map[string]jsontext.Value](), fieldOptions: fieldOptions{name: "X", quotedName: `"X"`, unknown: true}},
 		},
 	}, {
 		name: jsontest.Name("InvalidUTF8"),

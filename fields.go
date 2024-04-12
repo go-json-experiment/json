@@ -24,7 +24,7 @@ type isZeroer interface {
 	IsZero() bool
 }
 
-var isZeroerType = reflect.TypeOf((*isZeroer)(nil)).Elem()
+var isZeroerType = reflect.TypeFor[isZeroer]()
 
 type structFields struct {
 	flattened       []structField // listed in depth-first ordering

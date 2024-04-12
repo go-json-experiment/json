@@ -30,15 +30,15 @@ const optimizeCommon = true
 
 var (
 	// Most natural Go type that correspond with each JSON type.
-	anyType          = reflect.TypeOf((*any)(nil)).Elem()            // JSON value
-	boolType         = reflect.TypeOf((*bool)(nil)).Elem()           // JSON bool
-	stringType       = reflect.TypeOf((*string)(nil)).Elem()         // JSON string
-	float64Type      = reflect.TypeOf((*float64)(nil)).Elem()        // JSON number
-	mapStringAnyType = reflect.TypeOf((*map[string]any)(nil)).Elem() // JSON object
-	sliceAnyType     = reflect.TypeOf((*[]any)(nil)).Elem()          // JSON array
+	anyType          = reflect.TypeFor[any]()            // JSON value
+	boolType         = reflect.TypeFor[bool]()           // JSON bool
+	stringType       = reflect.TypeFor[string]()         // JSON string
+	float64Type      = reflect.TypeFor[float64]()        // JSON number
+	mapStringAnyType = reflect.TypeFor[map[string]any]() // JSON object
+	sliceAnyType     = reflect.TypeFor[[]any]()          // JSON array
 
-	bytesType       = reflect.TypeOf((*[]byte)(nil)).Elem()
-	emptyStructType = reflect.TypeOf((*struct{})(nil)).Elem()
+	bytesType       = reflect.TypeFor[[]byte]()
+	emptyStructType = reflect.TypeFor[struct{}]()
 )
 
 const startDetectingCyclesAfter = 1000

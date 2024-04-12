@@ -120,7 +120,7 @@ func runUnmarshalUnknown(tb testing.TB) {
 		for i := 0; i < n; i++ {
 			fields = append(fields, reflect.StructField{
 				Name: fmt.Sprintf("Name%d", i),
-				Type: reflect.TypeOf(0),
+				Type: reflect.TypeFor[int](),
 				Tag:  `json:",nocase"`,
 			})
 		}

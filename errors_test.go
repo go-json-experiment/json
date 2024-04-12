@@ -34,31 +34,31 @@ func TestSemanticError(t *testing.T) {
 		err:  &SemanticError{action: "marshal", JSONKind: '"'},
 		want: "json: cannot marshal JSON string",
 	}, {
-		err:  &SemanticError{GoType: reflect.TypeOf(bool(false))},
+		err:  &SemanticError{GoType: reflect.TypeFor[bool]()},
 		want: "json: cannot handle Go value of type bool",
 	}, {
-		err:  &SemanticError{action: "marshal", GoType: reflect.TypeOf(int(0))},
+		err:  &SemanticError{action: "marshal", GoType: reflect.TypeFor[int]()},
 		want: "json: cannot marshal Go value of type int",
 	}, {
-		err:  &SemanticError{action: "unmarshal", GoType: reflect.TypeOf(uint(0))},
+		err:  &SemanticError{action: "unmarshal", GoType: reflect.TypeFor[uint]()},
 		want: "json: cannot unmarshal Go value of type uint",
 	}, {
-		err:  &SemanticError{JSONKind: '0', GoType: reflect.TypeOf(tar.Header{})},
+		err:  &SemanticError{JSONKind: '0', GoType: reflect.TypeFor[tar.Header]()},
 		want: "json: cannot handle JSON number with Go value of type tar.Header",
 	}, {
-		err:  &SemanticError{action: "marshal", JSONKind: '{', GoType: reflect.TypeOf(bytes.Buffer{})},
+		err:  &SemanticError{action: "marshal", JSONKind: '{', GoType: reflect.TypeFor[bytes.Buffer]()},
 		want: "json: cannot marshal JSON object from Go value of type bytes.Buffer",
 	}, {
-		err:  &SemanticError{action: "unmarshal", JSONKind: ']', GoType: reflect.TypeOf(strings.Reader{})},
+		err:  &SemanticError{action: "unmarshal", JSONKind: ']', GoType: reflect.TypeFor[strings.Reader]()},
 		want: "json: cannot unmarshal JSON array into Go value of type strings.Reader",
 	}, {
-		err:  &SemanticError{action: "unmarshal", JSONKind: '{', GoType: reflect.TypeOf(float64(0)), ByteOffset: 123},
+		err:  &SemanticError{action: "unmarshal", JSONKind: '{', GoType: reflect.TypeFor[float64](), ByteOffset: 123},
 		want: "json: cannot unmarshal JSON object into Go value of type float64 after byte offset 123",
 	}, {
-		err:  &SemanticError{action: "marshal", JSONKind: 'f', GoType: reflect.TypeOf(complex128(0)), ByteOffset: 123, JSONPointer: "/foo/2/bar/3"},
+		err:  &SemanticError{action: "marshal", JSONKind: 'f', GoType: reflect.TypeFor[complex128](), ByteOffset: 123, JSONPointer: "/foo/2/bar/3"},
 		want: "json: cannot marshal JSON boolean from Go value of type complex128 within JSON value at \"/foo/2/bar/3\"",
 	}, {
-		err:  &SemanticError{action: "unmarshal", JSONKind: '}', GoType: reflect.TypeOf((*io.Reader)(nil)).Elem(), ByteOffset: 123, JSONPointer: "/foo/2/bar/3", Err: errors.New("some underlying error")},
+		err:  &SemanticError{action: "unmarshal", JSONKind: '}', GoType: reflect.TypeFor[io.Reader](), ByteOffset: 123, JSONPointer: "/foo/2/bar/3", Err: errors.New("some underlying error")},
 		want: "json: cannot unmarshal JSON object into Go value of type io.Reader within JSON value at \"/foo/2/bar/3\": some underlying error",
 	}, {
 		err:  &SemanticError{Err: errors.New("some underlying error")},
