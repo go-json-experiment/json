@@ -20,7 +20,7 @@ func TestStateMachine(t *testing.T) {
 	type operation any
 	type (
 		// stackLengths checks the results of stateEntry.length accessors.
-		stackLengths []int
+		stackLengths []int64
 
 		// appendTokens is sequence of token kinds to append where
 		// none of them are expected to fail.
@@ -156,12 +156,12 @@ func TestStateMachine(t *testing.T) {
 			for _, op := range ops {
 				switch op := op.(type) {
 				case stackLengths:
-					var got []int
+					var got []int64
 					for i := 0; i < state.Depth(); i++ {
 						e := state.index(i)
 						got = append(got, e.Length())
 					}
-					want := []int(op)
+					want := []int64(op)
 					if !reflect.DeepEqual(got, want) {
 						t.Fatalf("%s: stack lengths mismatch:\ngot  %v\nwant %v", sequence, got, want)
 					}
