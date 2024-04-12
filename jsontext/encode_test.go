@@ -394,6 +394,36 @@ var encoderErrorTestdata = []struct {
 		{ArrayEnd, nil, ""},
 	},
 	wantOut: "[]\n",
+}, {
+	name:    jsontest.Name("Format/Object/SpaceAfterColon"),
+	opts:    []Options{SpaceAfterColon(true)},
+	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
+	wantOut: "{\"fizz\": \"buzz\",\"wizz\": \"wuzz\"}\n",
+}, {
+	name:    jsontest.Name("Format/Object/SpaceAfterComma"),
+	opts:    []Options{SpaceAfterComma(true)},
+	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
+	wantOut: "{\"fizz\":\"buzz\", \"wizz\":\"wuzz\"}\n",
+}, {
+	name:    jsontest.Name("Format/Object/SpaceAfterColonAndComma"),
+	opts:    []Options{SpaceAfterColon(true), SpaceAfterComma(true)},
+	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
+	wantOut: "{\"fizz\": \"buzz\", \"wizz\": \"wuzz\"}\n",
+}, {
+	name:    jsontest.Name("Format/Object/NoSpaceAfterColon+SpaceAfterComma+Multiline"),
+	opts:    []Options{SpaceAfterColon(false), SpaceAfterComma(true), Multiline(true)},
+	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
+	wantOut: "{\n\t\"fizz\":\"buzz\", \n\t\"wizz\":\"wuzz\"\n}\n",
+}, {
+	name:    jsontest.Name("Format/Array/SpaceAfterComma"),
+	opts:    []Options{SpaceAfterComma(true)},
+	calls:   []encoderMethodCall{{Value(`["fizz","buzz"]`), nil, ""}},
+	wantOut: "[\"fizz\", \"buzz\"]\n",
+}, {
+	name:    jsontest.Name("Format/Array/NoSpaceAfterComma+Multiline"),
+	opts:    []Options{SpaceAfterComma(false), Multiline(true)},
+	calls:   []encoderMethodCall{{Value(`["fizz","buzz"]`), nil, ""}},
+	wantOut: "[\n\t\"fizz\",\n\t\"buzz\"\n]\n",
 }}
 
 // TestEncoderErrors test that Encoder errors occur when we expect and
