@@ -7,6 +7,7 @@ package jsontext
 import (
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -46,6 +47,24 @@ func (s *state) reset() {
 	s.Tokens.reset()
 	s.Names.reset()
 	s.Namespaces.reset()
+}
+
+// Pointer is a JSON Pointer (RFC 6901) that references a particular JSON value
+// relative to the root of the top-level JSON value.
+type Pointer string
+
+// nextToken returns the next token in the pointer, reducing the length of p.
+func (p *Pointer) nextToken() (token string) {
+	*p = Pointer(strings.TrimPrefix(string(*p), "/"))
+	i := min(uint(strings.IndexByte(string(*p), '/')), uint(len(*p)))
+	token = string(*p)[:i]
+	*p = (*p)[i:]
+	if strings.Contains(token, "~") {
+		// Per RFC 6901, section 3, unescape '~' and '/' characters.
+		token = strings.ReplaceAll(token, "~1", "/")
+		token = strings.ReplaceAll(token, "~0", "~")
+	}
+	return token
 }
 
 // appendStackPointer appends a JSON Pointer (RFC 6901) to the current value.

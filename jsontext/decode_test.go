@@ -48,7 +48,7 @@ func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coder
 	switch typeName {
 	case "Token":
 		var tokens []Token
-		var pointers []string
+		var pointers []Pointer
 		for {
 			tok, err := dec.ReadToken()
 			if err != nil {
@@ -176,7 +176,7 @@ type decoderMethodCall struct {
 	wantKind    Kind
 	wantOut     tokOrVal
 	wantErr     error
-	wantPointer string
+	wantPointer Pointer
 }
 
 var decoderErrorTestdata = []struct {
