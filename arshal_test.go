@@ -3666,7 +3666,10 @@ func TestMarshal(t *testing.T) {
 		want: `[null,{},null,{},null,null,{},{},null,{},null,null,{},"LAST"]`,
 		opts: []Options{
 			WithMarshalers(func() *Marshalers {
-				type P [2]int
+				type P struct {
+					D int
+					N int64
+				}
 				type PV struct {
 					P P
 					V any
@@ -7714,7 +7717,10 @@ func TestUnmarshal(t *testing.T) {
 		}),
 		opts: []Options{
 			WithUnmarshalers(func() *Unmarshalers {
-				type P [2]int
+				type P struct {
+					D int
+					N int64
+				}
 				type PV struct {
 					P P
 					V any

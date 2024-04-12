@@ -133,7 +133,7 @@ func (m *stateMachine) index(i int) *stateEntry {
 
 // DepthLength reports the current nested depth and
 // the length of the last JSON object or array.
-func (m stateMachine) DepthLength() (int, int) {
+func (m stateMachine) DepthLength() (int, int64) {
 	return m.Depth(), m.Last.Length()
 }
 
@@ -342,8 +342,8 @@ const (
 
 // Length reports the number of elements in the JSON object or array.
 // Each name and value in an object entry is treated as a separate element.
-func (e stateEntry) Length() int {
-	return int(e & stateCountMask)
+func (e stateEntry) Length() int64 {
+	return int64(e & stateCountMask)
 }
 
 // isObject reports whether this is a JSON object.

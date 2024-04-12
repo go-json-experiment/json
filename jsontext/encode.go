@@ -902,7 +902,7 @@ func (e *Encoder) StackDepth() int {
 // Each name and value in a JSON object is counted separately,
 // so the effective number of members would be half the length.
 // A complete JSON object must have an even length.
-func (e *Encoder) StackIndex(i int) (Kind, int) {
+func (e *Encoder) StackIndex(i int) (Kind, int64) {
 	// NOTE: Keep in sync with Decoder.StackIndex.
 	switch s := e.s.Tokens.index(i); {
 	case i > 0 && s.isObject():
