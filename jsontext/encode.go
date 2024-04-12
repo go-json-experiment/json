@@ -116,8 +116,17 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	}
 	e.Struct = jsonopts.Struct{}
 	e.Struct.Join(opts...)
-	if e.Flags.Get(jsonflags.Multiline) && !e.Flags.Has(jsonflags.Indent) {
-		e.Indent = "\t"
+	if e.Flags.Get(jsonflags.Multiline) {
+		if !e.Flags.Has(jsonflags.SpaceAfterColon) {
+			e.Flags.Set(jsonflags.SpaceAfterColon | 1)
+		}
+		if !e.Flags.Has(jsonflags.SpaceAfterComma) {
+			e.Flags.Set(jsonflags.SpaceAfterComma | 0)
+		}
+		if !e.Flags.Has(jsonflags.Indent) {
+			e.Flags.Set(jsonflags.Indent | 1)
+			e.Indent = "\t"
+		}
 	}
 }
 
@@ -274,7 +283,6 @@ func (e *encoderState) UnwriteEmptyObjectMember(prevName *string) bool {
 	b = b[:len(b)-n]
 	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixByte(b, ':')
-	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixString(b)
 	b = jsonwire.TrimSuffixWhitespace(b)
 	b = jsonwire.TrimSuffixByte(b, ',')
@@ -582,15 +590,15 @@ func (e *encoderState) WriteValue(v Value) error {
 // appendWhitespace appends whitespace that immediately precedes the next token.
 func (e *encoderState) appendWhitespace(b []byte, next Kind) []byte {
 	if delim := e.Tokens.needDelim(next); delim == ':' {
-		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
-			return append(b, ' ')
+		if e.Flags.Get(jsonflags.SpaceAfterColon) {
+			b = append(b, ' ')
 		}
 	} else {
-		if e.Flags.Get(jsonflags.Multiline) {
-			return e.AppendIndent(b, e.Tokens.NeedIndent(next))
-		}
 		if delim == ',' && e.Flags.Get(jsonflags.SpaceAfterComma) {
-			return append(b, ' ')
+			b = append(b, ' ')
+		}
+		if e.Flags.Get(jsonflags.Multiline) {
+			b = e.AppendIndent(b, e.Tokens.NeedIndent(next))
 		}
 	}
 	return b
@@ -726,7 +734,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		}
 		dst = append(dst, ':')
 		n += len(":")
-		if e.Flags.Get(jsonflags.Multiline | jsonflags.SpaceAfterColon) {
+		if e.Flags.Get(jsonflags.SpaceAfterColon) {
 			dst = append(dst, ' ')
 		}
 
@@ -748,10 +756,9 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		}
 		switch src[n] {
 		case ',':
+			dst = append(dst, ',')
 			if e.Flags.Get(jsonflags.SpaceAfterComma) {
-				dst = append(dst, ',', ' ')
-			} else {
-				dst = append(dst, ',')
+				dst = append(dst, ' ')
 			}
 			n += len(",")
 			continue
@@ -819,10 +826,9 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 		}
 		switch src[n] {
 		case ',':
+			dst = append(dst, ',')
 			if e.Flags.Get(jsonflags.SpaceAfterComma) {
-				dst = append(dst, ',', ' ')
-			} else {
-				dst = append(dst, ',')
+				dst = append(dst, ' ')
 			}
 			n += len(",")
 			continue

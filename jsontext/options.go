@@ -78,31 +78,9 @@ func EscapeForJS(v bool) Options {
 	}
 }
 
-// Multiline specifies that the JSON output should expand to multiple lines,
-// where every JSON object member or JSON array element
-// appears on a new, indented line according to the nesting depth.
-// If an indent is not already specified, then it defaults to using "\t".
-//
-// Multiline will override SpaceAfterColon and SpaceAfterComma.
-//
-// If set to false, then the output is compact,
-// where no whitespace is emitted between JSON values.
-//
-// This only affects encoding and is ignored when decoding.
-func Multiline(v bool) Options {
-	if v {
-		return jsonflags.Multiline | 1
-	} else {
-		return jsonflags.Multiline | 0
-	}
-}
-
-// SpaceAfterColon specifies that the JSON output should emit single-line output
-// where each key has a space after the colon.
-//
-// If set to false, then the output is compact with no white space after the key and colon.
-//
-// This option is overriden by Multiline, WithIndent, and WithIndentPrefix.
+// SpaceAfterColon specifies that the JSON output should emit a space character
+// after each colon separator following a JSON object name.
+// If false, then no space character appears after the colon separator.
 //
 // This only affects encoding and is ignored when decoding.
 func SpaceAfterColon(v bool) Options {
@@ -113,12 +91,9 @@ func SpaceAfterColon(v bool) Options {
 	}
 }
 
-// SpaceAfterComma specifies that the JSON output should emit single-line output
-// where each non-final element has a space after the comma.
-//
-// If set to false, then the output is compact with no white space after the element and comma.
-//
-// This option is overriden by Multiline, WithIndent, and WithIndentPrefix.
+// SpaceAfterComma specifies that the JSON output should emit a space character
+// after each comma separator following a JSON object value or array element.
+// If false, then no space character appears after the comma separator.
 //
 // This only affects encoding and is ignored when decoding.
 func SpaceAfterComma(v bool) Options {
@@ -129,13 +104,32 @@ func SpaceAfterComma(v bool) Options {
 	}
 }
 
+// Multiline specifies that the JSON output should expand to multiple lines,
+// where every JSON object member or JSON array element appears on
+// a new, indented line according to the nesting depth.
+//
+// If [SpaceAfterColon] is not specified, then the default is true.
+// If [SpaceAfterComma] is not specified, then the default is false.
+// If [WithIndent] is not specified, then the default is "\t".
+//
+// If set to false, then the output is a single-line,
+// where the only whitespace emitted is determined by the current
+// values of [SpaceAfterColon] and [SpaceAfterComma].
+//
+// This only affects encoding and is ignored when decoding.
+func Multiline(v bool) Options {
+	if v {
+		return jsonflags.Multiline | 1
+	} else {
+		return jsonflags.Multiline | 0
+	}
+}
+
 // WithIndent specifies that the encoder should emit multiline output
 // where each element in a JSON object or array begins on a new, indented line
 // beginning with the indent prefix (see [WithIndentPrefix])
 // followed by one or more copies of indent according to the nesting depth.
 // The indent must only be composed of space or tab characters.
-//
-// WithIndent will override SpaceAfterColon and SpaceAfterComma.
 //
 // If the intent to emit indented output without a preference for
 // the particular indent string, then use [Multiline] instead.
@@ -172,8 +166,6 @@ func WithIndent(indent string) Options {
 // beginning with the indent prefix followed by one or more copies of indent
 // (see [WithIndent]) according to the nesting depth.
 // The prefix must only be composed of space or tab characters.
-//
-// WithIndentPrefix will override SpaceAfterColon and SpaceAfterComma.
 //
 // This only affects encoding and is ignored when decoding.
 // Use of this option implies [Multiline] being set to true.

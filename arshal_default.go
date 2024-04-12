@@ -975,10 +975,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				// Append any delimiters or optional whitespace.
 				b := xe.Buf
 				if xe.Tokens.Last.Length() > 0 {
+					b = append(b, ',')
 					if xe.Flags.Get(jsonflags.SpaceAfterComma) {
-						b = append(b, ',', ' ')
-					} else {
-						b = append(b, ',')
+						b = append(b, ' ')
 					}
 				}
 				if xe.Flags.Get(jsonflags.Multiline) {

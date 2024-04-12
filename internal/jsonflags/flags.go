@@ -68,6 +68,11 @@ const (
 
 	// AnyWhitespace reports whether the encoded output might have any whitespace.
 	AnyWhitespace = Multiline | SpaceAfterColon | SpaceAfterComma
+
+	// WhitespaceFlags is the set of flags related to whitespace formatting.
+	// In contrast to AnyWhitespace, this includes Indent and IndentPrefix
+	// as those settings take no effect if Multiline is false.
+	WhitespaceFlags = AnyWhitespace | Indent | IndentPrefix
 )
 
 // Encoder and decoder flags.

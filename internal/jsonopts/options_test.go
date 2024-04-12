@@ -69,10 +69,22 @@ func TestJoin(t *testing.T) {
 			CoderValues: CoderValues{Indent: "\t"},
 		},
 	}, {
-		in: &DefaultOptionsV1, want: &DefaultOptionsV1, // v1 fully replaces before
+		in: &DefaultOptionsV1, want: func() *Struct {
+			v1 := DefaultOptionsV1
+			v1.Flags.Set(jsonflags.Indent | 1)
+			v1.Flags.Set(jsonflags.Multiline | 0)
+			v1.Indent = "\t"
+			return &v1
+		}(), // v1 fully replaces before (except for whitespace related flags)
 	}, {
-		in: &DefaultOptionsV2, want: &DefaultOptionsV2}, // v2 fully replaces before
-	}
+		in: &DefaultOptionsV2, want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.Multiline | 0)
+			v2.Indent = "\t"
+			return &v2
+		}(), // v2 fully replaces before (except for whitespace related flags)
+	}}
 	got := new(Struct)
 	for i, tt := range tests {
 		got.Join(tt.in)
