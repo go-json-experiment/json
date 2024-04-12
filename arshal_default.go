@@ -267,7 +267,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		}
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && va.Kind() == reflect.Slice && va.IsNil() {
 			// TODO: Provide a "emitempty" format override?
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		val := enc.UnusedBuffer()
 		b := va.Bytes()
@@ -648,7 +648,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		n := va.Len()
 		if n == 0 {
 			if emitNull && va.IsNil() {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			}
 			// Optimize for marshaling an empty map without any preceding whitespace.
 			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -662,7 +662,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -767,7 +767,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -918,7 +918,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			err.action = "marshal"
 			return &err
 		}
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 			return err
 		}
 		var seenIdxs uintSet
@@ -1064,7 +1064,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1253,7 +1253,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		n := va.Len()
 		if n == 0 {
 			if emitNull && va.IsNil() {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			}
 			// Optimize for marshaling an empty slice without any preceding whitespace.
 			if optimizeCommon && !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -1267,7 +1267,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayStart()); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1280,7 +1280,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1366,7 +1366,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayStart()); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1379,7 +1379,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1464,7 +1464,7 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 
 		// NOTE: Struct.Format is forwarded to underlying marshal.
 		if va.IsNil() {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		once.Do(init)
 		marshal := valFncs.marshal
@@ -1509,7 +1509,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError("marshal", t, mo.Format)
 		}
 		if va.IsNil() {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		v := newAddressableValue(va.Elem().Type())
 		v.Set(va.Elem())

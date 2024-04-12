@@ -22,7 +22,7 @@ import (
 func marshalValueAny(enc *jsontext.Encoder, val any, mo *jsonopts.Struct) error {
 	switch val := val.(type) {
 	case nil:
-		return enc.WriteToken(jsontext.Null)
+		return enc.WriteToken(jsontext.Null())
 	case bool:
 		return enc.WriteToken(jsontext.Bool(val))
 	case string:
@@ -96,7 +96,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 	// Handle empty maps.
 	if len(obj) == 0 {
 		if mo.Flags.Get(jsonflags.FormatNilMapAsNull) && obj == nil {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		// Optimize for marshaling an empty map without any preceding whitespace.
 		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -109,7 +109,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 		}
 	}
 
-	if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+	if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 		return err
 	}
 	// A Go map guarantees that each entry has a unique key
@@ -144,7 +144,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 		}
 		putStrings(names)
 	}
-	if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+	if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 		return err
 	}
 	return nil
@@ -209,7 +209,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 	// Handle empty slices.
 	if len(arr) == 0 {
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && arr == nil {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		// Optimize for marshaling an empty slice without any preceding whitespace.
 		if !xe.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -222,7 +222,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 		}
 	}
 
-	if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+	if err := enc.WriteToken(jsontext.ArrayStart()); err != nil {
 		return err
 	}
 	for _, val := range arr {
@@ -230,7 +230,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 			return err
 		}
 	}
-	if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+	if err := enc.WriteToken(jsontext.ArrayEnd()); err != nil {
 		return err
 	}
 	return nil

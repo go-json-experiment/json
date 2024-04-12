@@ -86,14 +86,14 @@ type Token struct {
 // TODO: Does representing 1-byte delimiters as *decodeBuffer cause performance issues?
 
 var (
-	Null  Token = rawToken("null")
-	False Token = rawToken("false")
-	True  Token = rawToken("true")
+	nullToken  Token = rawToken("null")
+	falseToken Token = rawToken("false")
+	trueToken  Token = rawToken("true")
 
-	ObjectStart Token = rawToken("{")
-	ObjectEnd   Token = rawToken("}")
-	ArrayStart  Token = rawToken("[")
-	ArrayEnd    Token = rawToken("]")
+	objectStartToken Token = rawToken("{")
+	objectEndToken   Token = rawToken("}")
+	arrayStartToken  Token = rawToken("[")
+	arrayEndToken    Token = rawToken("]")
 
 	zeroString Token = rawToken(`""`)
 	zeroNumber Token = rawToken(`0`)
@@ -107,12 +107,15 @@ func rawToken(s string) Token {
 	return Token{raw: &decodeBuffer{buf: []byte(s), prevStart: 0, prevEnd: len(s)}}
 }
 
+// Null returns a Token representing a JSON null.
+func Null() Token { return nullToken }
+
 // Bool constructs a Token representing a JSON boolean.
 func Bool(b bool) Token {
 	if b {
-		return True
+		return trueToken
 	}
-	return False
+	return falseToken
 }
 
 // String constructs a Token representing a JSON string.
@@ -124,6 +127,18 @@ func String(s string) Token {
 	}
 	return Token{str: s}
 }
+
+// ObjectStart returns a Token representing the start of a JSON object.
+func ObjectStart() Token { return objectStartToken }
+
+// ObjectEnd returns a Token representing the end of a JSON object.
+func ObjectEnd() Token { return objectEndToken }
+
+// ArrayStart returns a Token representing the start of a JSON array.
+func ArrayStart() Token { return arrayStartToken }
+
+// ArrayEnd returns a Token representing the end of a JSON array.
+func ArrayEnd() Token { return arrayEndToken }
 
 // Float constructs a Token representing a JSON number.
 // The values NaN, +Inf, and -Inf will be represented
@@ -166,20 +181,20 @@ func (t Token) Clone() Token {
 		// Avoid copying globals.
 		if t.raw.prevStart == 0 {
 			switch t.raw {
-			case Null.raw:
-				return Null
-			case False.raw:
-				return False
-			case True.raw:
-				return True
-			case ObjectStart.raw:
-				return ObjectStart
-			case ObjectEnd.raw:
-				return ObjectEnd
-			case ArrayStart.raw:
-				return ArrayStart
-			case ArrayEnd.raw:
-				return ArrayEnd
+			case nullToken.raw:
+				return nullToken
+			case falseToken.raw:
+				return falseToken
+			case trueToken.raw:
+				return trueToken
+			case objectStartToken.raw:
+				return objectStartToken
+			case objectEndToken.raw:
+				return objectEndToken
+			case arrayStartToken.raw:
+				return arrayStartToken
+			case arrayEndToken.raw:
+				return arrayEndToken
 			}
 		}
 
@@ -197,9 +212,9 @@ func (t Token) Clone() Token {
 // It panics if the token kind is not a JSON boolean.
 func (t Token) Bool() bool {
 	switch t.raw {
-	case True.raw:
+	case trueToken.raw:
 		return true
-	case False.raw:
+	case falseToken.raw:
 		return false
 	default:
 		panic("invalid JSON token kind: " + t.Kind().String())
