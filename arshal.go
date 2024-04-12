@@ -230,7 +230,7 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(in)
 	if !v.IsValid() || (v.Kind() == reflect.Pointer && v.IsNil()) {
-		return out.WriteToken(jsontext.Null)
+		return out.WriteToken(jsontext.Null())
 	}
 	// Shallow copy non-pointer values to obtain an addressable value.
 	// It is beneficial to performance to always pass pointers to avoid this.

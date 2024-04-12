@@ -331,7 +331,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		}
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && va.Kind() == reflect.Slice && va.IsNil() {
 			// TODO: Provide a "emitempty" format override?
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		return xe.AppendRaw('"', true, func(b []byte) ([]byte, error) {
 			return appendEncode(b, va.Bytes()), nil
@@ -739,7 +739,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		n := va.Len()
 		if n == 0 {
 			if emitNull && va.IsNil() {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			}
 			// Optimize for marshaling an empty map without any preceding whitespace.
 			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -753,7 +753,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -864,7 +864,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1037,7 +1037,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		if errInit != nil && !mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 			return newMarshalErrorBefore(enc, errInit.GoType, errInit.Err)
 		}
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 			return err
 		}
 		var seenIdxs uintSet
@@ -1185,7 +1185,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1416,7 +1416,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		n := va.Len()
 		if n == 0 {
 			if emitNull && va.IsNil() {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			}
 			// Optimize for marshaling an empty slice without any preceding whitespace.
 			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
@@ -1430,7 +1430,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayStart()); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1443,7 +1443,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1536,7 +1536,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError(enc, t, mo)
 		}
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayStart()); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1549,7 +1549,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.ArrayEnd()); err != nil {
 			return err
 		}
 		return nil
@@ -1636,7 +1636,7 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 
 		// NOTE: Struct.Format is forwarded to underlying marshal.
 		if va.IsNil() {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		}
 		once.Do(init)
 		marshal := valFncs.marshal
@@ -1705,7 +1705,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError(enc, t, mo)
 		}
 		if va.IsNil() {
-			return enc.WriteToken(jsontext.Null)
+			return enc.WriteToken(jsontext.Null())
 		} else if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) && whichMarshaler != nil {
 			// The marshaler for a pointer never calls the method on a nil receiver.
 			// Wrap the nil pointer within a struct type so that marshal

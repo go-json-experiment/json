@@ -30,7 +30,7 @@ type ObjectMember[V any] struct {
 
 // MarshalJSONTo encodes obj as a JSON object into enc.
 func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Options) error {
-	if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+	if err := enc.WriteToken(jsontext.ObjectStart()); err != nil {
 		return err
 	}
 	for i := range *obj {
@@ -42,7 +42,7 @@ func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Opti
 			return err
 		}
 	}
-	if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+	if err := enc.WriteToken(jsontext.ObjectEnd()); err != nil {
 		return err
 	}
 	return nil

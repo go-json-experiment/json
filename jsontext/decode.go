@@ -507,7 +507,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 			return Token{}, wrapSyntacticError(d, err, pos-len("null"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return Null, nil
+		return Null(), nil
 
 	case 'f':
 		if jsonwire.ConsumeFalse(d.buf[pos:]) == 0 {
@@ -522,7 +522,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 			return Token{}, wrapSyntacticError(d, err, pos-len("false"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return False, nil
+		return Bool(false), nil
 
 	case 't':
 		if jsonwire.ConsumeTrue(d.buf[pos:]) == 0 {
@@ -537,7 +537,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 			return Token{}, wrapSyntacticError(d, err, pos-len("true"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return True, nil
+		return Bool(true), nil
 
 	case '"':
 		var flags jsonwire.ValueFlags // TODO: Preserve this in Token?
@@ -600,7 +600,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectStart, nil
+		return ObjectStart(), nil
 
 	case '}':
 		if err = d.Tokens.popObject(); err != nil {
@@ -612,7 +612,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectEnd, nil
+		return ObjectEnd(), nil
 
 	case '[':
 		if err = d.Tokens.pushArray(); err != nil {
@@ -620,7 +620,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayStart, nil
+		return ArrayStart(), nil
 
 	case ']':
 		if err = d.Tokens.popArray(); err != nil {
@@ -628,7 +628,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayEnd, nil
+		return ArrayEnd(), nil
 
 	default:
 		err = jsonwire.NewInvalidCharacterError(d.buf[pos:], "at start of value")

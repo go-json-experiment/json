@@ -3411,8 +3411,8 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooMany"),
 		in: marshalJSONv2Func(func(enc *jsontext.Encoder, opts Options) error {
-			enc.WriteToken(jsontext.Null)
-			enc.WriteToken(jsontext.Null)
+			enc.WriteToken(jsontext.Null())
+			enc.WriteToken(jsontext.Null())
 			return nil
 		}),
 		want:    `nullnull`,
@@ -3491,7 +3491,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Methods/Invalid/MapKey/JSONv2/Syntax"),
 		in: map[any]string{
 			addr(marshalJSONv2Func(func(enc *jsontext.Encoder, opts Options) error {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			})): "invalid",
 		},
 		want:    `{`,
@@ -3777,7 +3777,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidToken"),
 		opts: []Options{
 			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString, opts Options) error {
-				return enc.WriteToken(jsontext.Null)
+				return enc.WriteToken(jsontext.Null())
 			})),
 		},
 		in:      map[nocaseString]string{"hello": "world"},
@@ -9100,7 +9100,7 @@ func TestMarshalInvalidNamespace(t *testing.T) {
 				t.Fatalf("%s: MarshalEncode error is nil, want non-nil", tt.name.Where)
 			}
 			for _, tok := range []jsontext.Token{
-				jsontext.Null, jsontext.String(""), jsontext.Int(0), jsontext.ObjectStart, jsontext.ObjectEnd, jsontext.ArrayStart, jsontext.ArrayEnd,
+				jsontext.Null(), jsontext.String(""), jsontext.Int(0), jsontext.ObjectStart(), jsontext.ObjectEnd(), jsontext.ArrayStart(), jsontext.ArrayEnd(),
 			} {
 				if err := enc.WriteToken(tok); err == nil {
 					t.Fatalf("%s: WriteToken error is nil, want non-nil", tt.name.Where)
