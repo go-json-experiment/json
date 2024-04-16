@@ -132,7 +132,7 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	case d == nil:
 		panic("jsontext: invalid nil Decoder")
 	case r == nil:
-		panic("jsontext: invalid nil io.Writer")
+		panic("jsontext: invalid nil io.Reader")
 	case d.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerV2")
 	}
