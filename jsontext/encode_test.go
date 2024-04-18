@@ -48,7 +48,7 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 
 	switch typeName {
 	case "Token":
-		var pointers []string
+		var pointers []Pointer
 		for _, tok := range td.tokens {
 			if err := enc.WriteToken(tok); err != nil {
 				t.Fatalf("%s: Encoder.WriteToken error: %v", where, err)
@@ -136,7 +136,7 @@ func testFaultyEncoder(t *testing.T, where jsontest.CasePos, typeName string, td
 type encoderMethodCall struct {
 	in          tokOrVal
 	wantErr     error
-	wantPointer string
+	wantPointer Pointer
 }
 
 var encoderErrorTestdata = []struct {

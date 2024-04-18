@@ -38,7 +38,7 @@ type coderTestdataEntry struct {
 	outIndented      string // outCompacted if empty; uses "  " for indent prefix and "\t" for indent
 	outCanonicalized string // outCompacted if empty
 	tokens           []Token
-	pointers         []string
+	pointers         []Pointer
 }
 
 var coderTestdata = []coderTestdataEntry{{
@@ -46,7 +46,7 @@ var coderTestdata = []coderTestdataEntry{{
 	in:           ` null `,
 	outCompacted: `null`,
 	tokens:       []Token{Null},
-	pointers:     []string{""},
+	pointers:     []Pointer{""},
 }, {
 	name:         jsontest.Name("False"),
 	in:           ` false `,
@@ -157,7 +157,7 @@ var coderTestdata = []coderTestdataEntry{{
 		Int(minInt64), Int(maxInt64), Uint(minUint64), Uint(maxUint64),
 		ArrayEnd,
 	},
-	pointers: []string{
+	pointers: []Pointer{
 		"", "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10", "/11", "/12", "/13", "/14", "/15", "/16", "/17", "",
 	},
 }, {
@@ -165,7 +165,7 @@ var coderTestdata = []coderTestdataEntry{{
 	in:           ` { } `,
 	outCompacted: `{}`,
 	tokens:       []Token{ObjectStart, ObjectEnd},
-	pointers:     []string{"", ""},
+	pointers:     []Pointer{"", ""},
 }, {
 	name:         jsontest.Name("ObjectN1"),
 	in:           ` { "0" : 0 } `,
@@ -175,7 +175,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    "0": 0
 	}`,
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
-	pointers: []string{"", "/0", "/0", ""},
+	pointers: []Pointer{"", "/0", "/0", ""},
 }, {
 	name:         jsontest.Name("ObjectN2"),
 	in:           ` { "0" : 0 , "1" : 1 } `,
@@ -186,7 +186,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    "1": 1
 	}`,
 	tokens:   []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
-	pointers: []string{"", "/0", "/0", "/1", "/1", ""},
+	pointers: []Pointer{"", "/0", "/0", "/1", "/1", ""},
 }, {
 	name:         jsontest.Name("ObjectNested"),
 	in:           ` { "0" : { "1" : { "2" : { "3" : { "4" : {  } } } } } } `,
@@ -204,7 +204,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    }
 	}`,
 	tokens: []Token{ObjectStart, String("0"), ObjectStart, String("1"), ObjectStart, String("2"), ObjectStart, String("3"), ObjectStart, String("4"), ObjectStart, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd},
-	pointers: []string{
+	pointers: []Pointer{
 		"",
 		"/0", "/0",
 		"/0/1", "/0/1",
@@ -268,7 +268,7 @@ var coderTestdata = []coderTestdataEntry{{
 		ObjectEnd,
 		ObjectEnd,
 	},
-	pointers: []string{
+	pointers: []Pointer{
 		"",
 		"/", "/",
 		"//44444", "//44444",
@@ -289,7 +289,7 @@ var coderTestdata = []coderTestdataEntry{{
 	in:           ` [ ] `,
 	outCompacted: `[]`,
 	tokens:       []Token{ArrayStart, ArrayEnd},
-	pointers:     []string{"", ""},
+	pointers:     []Pointer{"", ""},
 }, {
 	name:         jsontest.Name("ArrayN1"),
 	in:           ` [ 0 ] `,
@@ -298,7 +298,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    0
 	]`,
 	tokens:   []Token{ArrayStart, Uint(0), ArrayEnd},
-	pointers: []string{"", "/0", ""},
+	pointers: []Pointer{"", "/0", ""},
 }, {
 	name:         jsontest.Name("ArrayN2"),
 	in:           ` [ 0 , 1 ] `,
@@ -322,7 +322,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    ]
 	]`,
 	tokens: []Token{ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd},
-	pointers: []string{
+	pointers: []Pointer{
 		"",
 		"/0",
 		"/0/0",
@@ -388,7 +388,7 @@ var coderTestdata = []coderTestdataEntry{{
 		String("objectN2"), ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd,
 		ObjectEnd,
 	},
-	pointers: []string{
+	pointers: []Pointer{
 		"",
 		"/literals", "/literals",
 		"/literals/0",
@@ -494,8 +494,8 @@ func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string,
 func TestCoderStackPointer(t *testing.T) {
 	tests := []struct {
 		token                        Token
-		wantWithRejectDuplicateNames string
-		wantWithAllowDuplicateNames  string
+		wantWithRejectDuplicateNames Pointer
+		wantWithAllowDuplicateNames  Pointer
 	}{
 		{Null, "", ""},
 
@@ -549,14 +549,14 @@ func TestCoderStackPointer(t *testing.T) {
 
 	for _, allowDupes := range []bool{false, true} {
 		var name string
-		var want func(i int) string
+		var want func(i int) Pointer
 		switch allowDupes {
 		case false:
 			name = "RejectDuplicateNames"
-			want = func(i int) string { return tests[i].wantWithRejectDuplicateNames }
+			want = func(i int) Pointer { return tests[i].wantWithRejectDuplicateNames }
 		case true:
 			name = "AllowDuplicateNames"
-			want = func(i int) string { return tests[i].wantWithAllowDuplicateNames }
+			want = func(i int) Pointer { return tests[i].wantWithAllowDuplicateNames }
 		}
 
 		t.Run(name, func(t *testing.T) {

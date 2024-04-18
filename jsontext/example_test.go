@@ -34,7 +34,7 @@ func Example_stringReplace() {
 	// Using a Decoder and Encoder, we can parse through every token,
 	// check and modify the token if necessary, and
 	// write the token to the output.
-	var replacements []string
+	var replacements []jsontext.Pointer
 	in := strings.NewReader(input)
 	dec := jsontext.NewDecoder(in)
 	out := new(bytes.Buffer)
