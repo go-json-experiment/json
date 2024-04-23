@@ -618,10 +618,10 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("ArraysValid/AllTokens", func(t *testing.T) {
 			dec.s.reset(trimArray(maxArrays), nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, '[', nil)
 			}
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, ']', nil)
 			}
 		})
@@ -637,7 +637,7 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("ArraysInvalid/AllTokens", func(t *testing.T) {
 			dec.s.reset(maxArrays, nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, '[', nil)
 			}
 			checkReadToken(t, 0, errMaxDepth.withOffset(maxNestingDepth))
@@ -656,12 +656,12 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("ObjectsValid/AllTokens", func(t *testing.T) {
 			dec.s.reset(trimObject(maxObjects), nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
 			}
 			checkReadToken(t, '"', nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, '}', nil)
 			}
 		})
@@ -678,7 +678,7 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("ObjectsInvalid/AllTokens", func(t *testing.T) {
 			dec.s.reset(maxObjects, nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
 			}
@@ -715,11 +715,11 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("Arrays/AllTokens", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkWriteToken(t, ArrayStart, nil)
 			}
 			checkWriteToken(t, ArrayStart, errMaxDepth.withOffset(maxNestingDepth))
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkWriteToken(t, ArrayEnd, nil)
 			}
 		})
@@ -739,7 +739,7 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("Objects/AllTokens", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			for i := 0; i < maxNestingDepth-1; i++ {
+			for range maxNestingDepth - 1 {
 				checkWriteToken(t, ObjectStart, nil)
 				checkWriteToken(t, String(""), nil)
 			}
@@ -747,7 +747,7 @@ func TestCoderMaxDepth(t *testing.T) {
 			checkWriteToken(t, String(""), nil)
 			checkWriteToken(t, ObjectStart, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
 			checkWriteToken(t, String(""), nil)
-			for i := 0; i < maxNestingDepth; i++ {
+			for range maxNestingDepth {
 				checkWriteToken(t, ObjectEnd, nil)
 			}
 		})

@@ -157,7 +157,7 @@ func TestStateMachine(t *testing.T) {
 				switch op := op.(type) {
 				case stackLengths:
 					var got []int64
-					for i := 0; i < state.Depth(); i++ {
+					for i := range state.Depth() {
 						e := state.index(i)
 						got = append(got, e.Length())
 					}
@@ -311,7 +311,7 @@ func TestObjectNamespace(t *testing.T) {
 
 			// Check that the namespace is consistent.
 			gotNames := []string{}
-			for i := 0; i < ns.length(); i++ {
+			for i := range ns.length() {
 				gotNames = append(gotNames, string(ns.getUnquoted(i)))
 			}
 			if !reflect.DeepEqual(gotNames, wantNames) {
@@ -325,7 +325,7 @@ func TestObjectNamespace(t *testing.T) {
 		}
 
 		// Insert a large number of names.
-		for i := 0; i < 64; i++ {
+		for i := range 64 {
 			ns.InsertUnquoted([]byte(fmt.Sprintf(`name%d`, i)))
 		}
 

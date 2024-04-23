@@ -325,7 +325,7 @@ func (m stateMachine) checkDelim(delim byte, next Kind) error {
 // Mark the namespaces as invalid so that future method calls on
 // Encoder or Decoder will return an error.
 func (m *stateMachine) InvalidateDisabledNamespaces() {
-	for i := 0; i < m.Depth(); i++ {
+	for i := range m.Depth() {
 		e := m.index(i)
 		if !e.isActiveNamespace() {
 			e.invalidateNamespace()
