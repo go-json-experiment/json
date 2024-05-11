@@ -104,6 +104,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				}
 				switch f.fieldOptions {
 				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true}:
+				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true, omitempty: true}:
 				case fieldOptions{name: f.name, quotedName: f.quotedName, unknown: true}:
 				default:
 					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
