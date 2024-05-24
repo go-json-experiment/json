@@ -472,7 +472,7 @@ func (ns *objectNameStack) length() int {
 	return len(ns.offsets)
 }
 
-// getUnquoted retrieves the ith unquoted name in the namespace.
+// getUnquoted retrieves the ith unquoted name in the stack.
 // It returns an empty string if the last object is empty.
 //
 // Invariant: Must call copyQuotedBuffer beforehand.
