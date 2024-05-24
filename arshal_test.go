@@ -1810,7 +1810,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Structs/OmitEmpty/PathologicalBreadth"),
 		in: func() any {
 			var fields []reflect.StructField
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				fields = append(fields, reflect.StructField{
 					Name: fmt.Sprintf("X%d", i),
 					Type: reflect.TypeFor[stringMarshalEmpty](),
@@ -7897,7 +7897,7 @@ func TestUnmarshal(t *testing.T) {
 						if _, err := dec.ReadToken(); err != nil {
 							return err
 						}
-						for i := 0; i < len(*v); i++ {
+						for i := range len(*v) {
 							if err := UnmarshalDecode(dec, &(*v)[i], opts); err != nil {
 								return err
 							}

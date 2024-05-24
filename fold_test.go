@@ -76,7 +76,7 @@ func TestFoldRune(t *testing.T) {
 	}
 
 	var foldSet []rune
-	for r := rune(0); r <= unicode.MaxRune; r++ {
+	for r := range rune(unicode.MaxRune + 1) {
 		// Derive all runes that are all part of the same fold set.
 		foldSet = foldSet[:0]
 		for r0 := r; r != r0 || len(foldSet) == 0; r = unicode.SimpleFold(r) {
@@ -117,7 +117,7 @@ func runUnmarshalUnknown(tb testing.TB) {
 		}
 
 		var fields []reflect.StructField
-		for i := 0; i < n; i++ {
+		for i := range n {
 			fields = append(fields, reflect.StructField{
 				Name: fmt.Sprintf("Name%d", i),
 				Type: reflect.TypeFor[int](),

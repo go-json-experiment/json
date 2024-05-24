@@ -63,7 +63,7 @@ var arshalTestdata = []struct {
 	name: "Map/ManyEmpty",
 	raw:  []byte(`[{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}]`),
 	val: addr(func() (out []map[string]string) {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			out = append(out, map[string]string{})
 		}
 		return out
@@ -109,7 +109,7 @@ var arshalTestdata = []struct {
 	name: "Slice/ManyEmpty",
 	raw:  []byte(`[[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]`),
 	val: addr(func() (out [][]string) {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			out = append(out, []string{})
 		}
 		return out
@@ -622,7 +622,7 @@ func runTestOrBench(tb testing.TB, name string, numBytes int64, run func(tb test
 			b.ResetTimer()
 			b.ReportAllocs()
 			b.SetBytes(numBytes)
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				run(b)
 			}
 		})
