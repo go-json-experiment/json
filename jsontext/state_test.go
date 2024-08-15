@@ -7,9 +7,31 @@ package jsontext
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestPointerTokens(t *testing.T) {
+	tests := []struct {
+		in   Pointer
+		want []string
+	}{
+		{in: "", want: nil},
+		{in: "a", want: []string{"a"}},
+		{in: "~", want: []string{"~"}},
+		{in: "/a", want: []string{"a"}},
+		{in: "/foo/bar", want: []string{"foo", "bar"}},
+		{in: "///", want: []string{"", "", ""}},
+		{in: "/~0~1", want: []string{"~/"}},
+	}
+	for _, tt := range tests {
+		got := slices.Collect(tt.in.Tokens())
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("Pointer(%q).Tokens = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
 
 func TestStateMachine(t *testing.T) {
 	// To test a state machine, we pass an ordered sequence of operations and
