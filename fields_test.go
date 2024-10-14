@@ -304,11 +304,17 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type map[int]interface {} must be a Go struct, Go map of string key, or jsontext.Value`),
 	}, {
-		name: jsontest.Name("InlineUnsupported/MapNamedStringKey"),
+		name: jsontest.Name("InlineUnsupported/MapTextMarshalerStringKey"),
 		in: struct {
-			A map[namedString]any `json:",inline"`
+			A map[nocaseString]any `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type map[json.namedString]interface {} must be a Go struct, Go map of string key, or jsontext.Value`),
+		wantErr: errors.New(`inlined map field A of type map[json.nocaseString]interface {} must have a string key that does not implement marshal or unmarshal methods`),
+	}, {
+		name: jsontest.Name("InlineUnsupported/MapMarshalerV1StringKey"),
+		in: struct {
+			A map[stringMarshalEmpty]any `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined map field A of type map[json.stringMarshalEmpty]interface {} must have a string key that does not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("InlineUnsupported/DoublePointer"),
 		in: struct {
