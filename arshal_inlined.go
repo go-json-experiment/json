@@ -102,12 +102,12 @@ func marshalInlinedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *j
 		}
 		return nil
 	} else {
-		m := v // must be a map[string]V
+		m := v // must be a map[~string]V
 		n := m.Len()
 		if n == 0 {
 			return nil
 		}
-		mk := newAddressableValue(stringType)
+		mk := newAddressableValue(m.Type().Key())
 		mv := newAddressableValue(m.Type().Elem())
 		marshalKey := func(mk addressableValue) error {
 			xe := export.Encoder(enc)
@@ -202,12 +202,15 @@ func unmarshalInlinedFallbackNext(dec *jsontext.Decoder, va addressableValue, uo
 	} else {
 		name := string(unquotedName) // TODO: Intern this?
 
-		m := v // must be a map[string]V
+		m := v // must be a map[~string]V
 		if m.IsNil() {
 			m.Set(reflect.MakeMap(m.Type()))
 		}
 		mk := reflect.ValueOf(name)
-		mv := newAddressableValue(v.Type().Elem()) // TODO: Cache across calls?
+		if mkt := m.Type().Key(); mkt != stringType {
+			mk = mk.Convert(mkt)
+		}
+		mv := newAddressableValue(m.Type().Elem()) // TODO: Cache across calls?
 		if v2 := m.MapIndex(mk); v2.IsValid() {
 			mv.Set(v2)
 		}
