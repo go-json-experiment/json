@@ -694,6 +694,11 @@ func TestMarshal(t *testing.T) {
 		in:   []bool{false, true},
 		want: `[false,true]`,
 	}, {
+		name: jsontest.Name("Bools/StringifiedBool"),
+		opts: []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		in:   []bool{false, true},
+		want: `["false","true"]`,
+	}, {
 		name: jsontest.Name("Bools/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
 		in:   true,
@@ -706,6 +711,11 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Strings/Named"),
 		in:   []namedString{"", "hello", "世界"},
 		want: `["","hello","世界"]`,
+	}, {
+		name: jsontest.Name("Strings/StringifiedBool"),
+		opts: []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		in:   []string{"", "hello", "世界"},
+		want: `["\"\"","\"hello\"","\"世界\""]`,
 	}, {
 		name: jsontest.Name("Strings/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -1366,6 +1376,152 @@ func TestMarshal(t *testing.T) {
 			"Int": "0",
 			"Uint": "0",
 			"Float": "0"
+		},
+		"StructMaps": {
+			"MapBool": {},
+			"MapString": {},
+			"MapBytes": {},
+			"MapInt": {},
+			"MapUint": {},
+			"MapFloat": {}
+		},
+		"StructSlices": {
+			"SliceBool": [],
+			"SliceString": [],
+			"SliceBytes": [],
+			"SliceInt": [],
+			"SliceUint": [],
+			"SliceFloat": []
+		},
+		"Slice": [],
+		"Array": [
+			""
+		],
+		"Pointer": null,
+		"Interface": null
+	},
+	"Interface": null
+}`,
+	}, {
+		name: jsontest.Name("Structs/LegacyStringified"),
+		opts: []Options{jsontext.Multiline(true), jsonflags.StringifyWithLegacySemantics | 1},
+		in: structStringifiedAll{
+			Bool:   true,    // should be stringified
+			String: "hello", // should be stringified
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,     // should be stringified
+			Uint:   +64,     // should be stringified
+			Float:  3.14159, // should be stringified
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice:     []string{"fizz", "buzz"},
+			Array:     [1]string{"goodbye"},
+			Pointer:   new(structStringifiedAll), // should be stringified
+			Interface: (*structStringifiedAll)(nil),
+		},
+		want: `{
+	"Bool": "true",
+	"String": "\"hello\"",
+	"Bytes": "AQID",
+	"Int": "-64",
+	"Uint": "64",
+	"Float": "3.14159",
+	"Map": {
+		"key": "value"
+	},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64,
+		"Uint": 64,
+		"Float": 3.14159
+	},
+	"StructMaps": {
+		"MapBool": {
+			"": true
+		},
+		"MapString": {
+			"": "hello"
+		},
+		"MapBytes": {
+			"": "AQID"
+		},
+		"MapInt": {
+			"": -64
+		},
+		"MapUint": {
+			"": 64
+		},
+		"MapFloat": {
+			"": 3.14159
+		}
+	},
+	"StructSlices": {
+		"SliceBool": [
+			true
+		],
+		"SliceString": [
+			"hello"
+		],
+		"SliceBytes": [
+			"AQID"
+		],
+		"SliceInt": [
+			-64
+		],
+		"SliceUint": [
+			64
+		],
+		"SliceFloat": [
+			3.14159
+		]
+	},
+	"Slice": [
+		"fizz",
+		"buzz"
+	],
+	"Array": [
+		"goodbye"
+	],
+	"Pointer": {
+		"Bool": "false",
+		"String": "\"\"",
+		"Bytes": "",
+		"Int": "0",
+		"Uint": "0",
+		"Float": "0",
+		"Map": {},
+		"StructScalars": {
+			"Bool": false,
+			"String": "",
+			"Bytes": "",
+			"Int": 0,
+			"Uint": 0,
+			"Float": 0
 		},
 		"StructMaps": {
 			"MapBool": {},
@@ -4298,6 +4454,32 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(true),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType},
 	}, {
+		name:  jsontest.Name("Bools/StringifiedBool/True"),
+		opts:  []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf: `"true"`,
+		inVal: addr(false),
+		want:  addr(true),
+	}, {
+		name:  jsontest.Name("Bools/StringifiedBool/False"),
+		opts:  []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf: `"false"`,
+		inVal: addr(true),
+		want:  addr(false),
+	}, {
+		name:    jsontest.Name("Bools/StringifiedBool/InvalidWhitespace"),
+		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf:   `"false "`,
+		inVal:   addr(true),
+		want:    addr(true),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: boolType, Err: errors.New("cannot parse \"false \" as bool")},
+	}, {
+		name:    jsontest.Name("Bools/StringifiedBool/InvalidBool"),
+		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf:   `false`,
+		inVal:   addr(true),
+		want:    addr(true),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 'f', GoType: boolType},
+	}, {
 		name:    jsontest.Name("Bools/Invalid/Number"),
 		inBuf:   `0`,
 		inVal:   addr(true),
@@ -4377,6 +4559,26 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"hello"`,
 		inVal: addr("goodbye"),
 		want:  addr("hello"),
+	}, {
+		name:  jsontest.Name("Strings/StringifiedString"),
+		opts:  []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf: `"\"foo\""`,
+		inVal: new(string),
+		want:  addr("foo"),
+	}, {
+		name:    jsontest.Name("Strings/StringifiedString/InvalidWhitespace"),
+		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf:   `"\"foo\" "`,
+		inVal:   new(string),
+		want:    new(string),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: export.NewInvalidCharacterError(" ", "after string value", 0)},
+	}, {
+		name:    jsontest.Name("Strings/StringifiedString/InvalidString"),
+		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
+		inBuf:   `""`,
+		inVal:   new(string),
+		want:    new(string),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: io.ErrUnexpectedEOF},
 	}, {
 		name:  jsontest.Name("Bytes/Null"),
 		inBuf: `null`,
@@ -5705,6 +5907,92 @@ func TestUnmarshal(t *testing.T) {
 		inVal:   new(structStringifiedAll),
 		want:    new(structStringifiedAll),
 		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: int64Type, Err: fmt.Errorf(`cannot parse "" as signed integer: %w`, strconv.ErrSyntax)},
+	}, {
+		name: jsontest.Name("Structs/LegacyStringified"),
+		opts: []Options{jsonflags.StringifyWithLegacySemantics | 1},
+		inBuf: `{
+	"Bool": "true",
+	"String": "\"hello\"",
+	"Bytes": "AQID",
+	"Int": "-64",
+	"Uint": "64",
+	"Float": "3.14159",
+	"Map": {"key": "value"},
+	"StructScalars": {
+		"Bool": true,
+		"String": "hello",
+		"Bytes": "AQID",
+		"Int": -64,
+		"Uint": 64,
+		"Float": 3.14159
+	},
+	"StructMaps": {
+		"MapBool": {"": true},
+		"MapString": {"": "hello"},
+		"MapBytes": {"": "AQID"},
+		"MapInt": {"": -64},
+		"MapUint": {"": 64},
+		"MapFloat": {"": 3.14159}
+	},
+	"StructSlices": {
+		"SliceBool": [true],
+		"SliceString": ["hello"],
+		"SliceBytes": ["AQID"],
+		"SliceInt": [-64],
+		"SliceUint": [64],
+		"SliceFloat": [3.14159]
+	},
+	"Slice": ["fizz", "buzz"],
+	"Array": ["goodbye"]
+}`,
+		inVal: new(structStringifiedAll),
+		want: addr(structStringifiedAll{
+			Bool:   true,
+			String: "hello",
+			Bytes:  []byte{1, 2, 3},
+			Int:    -64,
+			Uint:   +64,
+			Float:  3.14159,
+			Map:    map[string]string{"key": "value"},
+			StructScalars: structScalars{
+				Bool:   true,
+				String: "hello",
+				Bytes:  []byte{1, 2, 3},
+				Int:    -64,
+				Uint:   +64,
+				Float:  3.14159,
+			},
+			StructMaps: structMaps{
+				MapBool:   map[string]bool{"": true},
+				MapString: map[string]string{"": "hello"},
+				MapBytes:  map[string][]byte{"": {1, 2, 3}},
+				MapInt:    map[string]int64{"": -64},
+				MapUint:   map[string]uint64{"": +64},
+				MapFloat:  map[string]float64{"": 3.14159},
+			},
+			StructSlices: structSlices{
+				SliceBool:   []bool{true},
+				SliceString: []string{"hello"},
+				SliceBytes:  [][]byte{{1, 2, 3}},
+				SliceInt:    []int64{-64},
+				SliceUint:   []uint64{+64},
+				SliceFloat:  []float64{3.14159},
+			},
+			Slice: []string{"fizz", "buzz"},
+			Array: [1]string{"goodbye"},
+		}),
+	}, {
+		name:    jsontest.Name("Structs/LegacyStringified/InvalidBool"),
+		opts:    []Options{jsonflags.StringifyWithLegacySemantics | 1},
+		inBuf:   `{"Bool": true}`,
+		inVal:   new(structStringifiedAll),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: 't', GoType: boolType},
+	}, {
+		name:    jsontest.Name("Structs/LegacyStringified/InvalidString"),
+		opts:    []Options{jsonflags.StringifyWithLegacySemantics | 1},
+		inBuf:   `{"String": "string"}`,
+		inVal:   new(structStringifiedAll),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: export.NewInvalidCharacterError("s", "at start of string (expecting '\"')", 0)},
 	}, {
 		name: jsontest.Name("Structs/Format/Bytes"),
 		inBuf: `{
