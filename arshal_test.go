@@ -1397,6 +1397,11 @@ func TestMarshal(t *testing.T) {
 		in:   structOmitZeroAll{},
 		want: `{}`,
 	}, {
+		name: jsontest.Name("Structs/OmitZeroOption/Zero"),
+		opts: []Options{OmitZeroStructFields(true)},
+		in:   structAll{},
+		want: `{}`,
+	}, {
 		name: jsontest.Name("Structs/OmitZero/NonZero"),
 		opts: []Options{jsontext.Multiline(true)},
 		in: structOmitZeroAll{
@@ -1447,6 +1452,45 @@ func TestMarshal(t *testing.T) {
 		"SliceUint": [],
 		"SliceFloat": []
 	},
+	"Slice": [],
+	"Array": [
+		" "
+	],
+	"Pointer": {},
+	"Interface": null
+}`,
+	}, {
+		name: jsontest.Name("Structs/OmitZeroOption/NonZero"),
+		opts: []Options{OmitZeroStructFields(true), jsontext.Multiline(true)},
+		in: structAll{
+			Bool:          true,
+			String:        " ",
+			Bytes:         []byte{},
+			Int:           1,
+			Uint:          1,
+			Float:         math.SmallestNonzeroFloat64,
+			Map:           map[string]string{},
+			StructScalars: structScalars{unexported: true},
+			StructSlices:  structSlices{Ignored: true},
+			StructMaps:    structMaps{MapBool: map[string]bool{}},
+			Slice:         []string{},
+			Array:         [1]string{" "},
+			Pointer:       new(structAll),
+			Interface:     (*structAll)(nil),
+		},
+		want: `{
+	"Bool": true,
+	"String": " ",
+	"Bytes": "",
+	"Int": 1,
+	"Uint": 1,
+	"Float": 5e-324,
+	"Map": {},
+	"StructScalars": {},
+	"StructMaps": {
+		"MapBool": {}
+	},
+	"StructSlices": {},
 	"Slice": [],
 	"Array": [
 		" "
