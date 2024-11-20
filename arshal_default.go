@@ -409,7 +409,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if uo.Flags.Get(jsonflags.StringifyNumbers) {
 				break
 			}
 			var negOffset int
@@ -489,7 +489,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if uo.Flags.Get(jsonflags.StringifyNumbers) {
 				break
 			}
 			n, ok := jsonwire.ParseUint(val)
@@ -596,7 +596,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if uo.Flags.Get(jsonflags.StringifyNumbers) {
 				break
 			}
 			fv, ok := jsonwire.ParseFloat(val, bits)
