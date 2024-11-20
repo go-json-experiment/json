@@ -106,6 +106,7 @@ const (
 	Deterministic             // marshal only
 	FormatNilMapAsNull        // marshal only
 	FormatNilSliceAsNull      // marshal only
+	OmitZeroStructFields      // marshal only
 	MatchCaseInsensitiveNames // marshal or unmarshal
 	DiscardUnknownMembers     // marshal only
 	RejectUnknownMembers      // unmarshal only
