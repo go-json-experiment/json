@@ -4686,6 +4686,13 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(int),
 		want:  addr(int(-6464)),
 	}, {
+		name:    jsontest.Name("Ints/Stringified/Invalid"),
+		opts:    []Options{StringifyNumbers(true)},
+		inBuf:   `-6464`,
+		inVal:   new(int),
+		want:    new(int),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: intType},
+	}, {
 		name:    jsontest.Name("Ints/Stringified/LeadingZero"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"00"`,
@@ -4870,6 +4877,13 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(uint),
 		want:  addr(uint(6464)),
 	}, {
+		name:    jsontest.Name("Uints/Stringified/Invalid"),
+		opts:    []Options{StringifyNumbers(true)},
+		inBuf:   `6464`,
+		inVal:   new(uint),
+		want:    new(uint),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: uintType},
+	}, {
 		name:    jsontest.Name("Uints/Stringified/LeadingZero"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"00"`,
@@ -5042,6 +5056,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"64.64"`,
 		inVal: new(float64),
 		want:  addr(float64(64.64)),
+	}, {
+		name:    jsontest.Name("Floats/Stringified/Invalid"),
+		opts:    []Options{StringifyNumbers(true)},
+		inBuf:   `64.64`,
+		inVal:   new(float64),
+		want:    new(float64),
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '0', GoType: float64Type},
 	}, {
 		name:  jsontest.Name("Floats/Escaped"),
 		opts:  []Options{StringifyNumbers(true)},
@@ -5488,33 +5509,33 @@ func TestUnmarshal(t *testing.T) {
 	"Bool": true,
 	"String": "hello",
 	"Bytes": "AQID",
-	"Int": -64,
-	"Uint": 64,
-	"Float": 3.14159,
+	"Int": "-64",
+	"Uint": "64",
+	"Float": "3.14159",
 	"Map": {"key": "value"},
 	"StructScalars": {
 		"Bool": true,
 		"String": "hello",
 		"Bytes": "AQID",
-		"Int": -64,
-		"Uint": 64,
-		"Float": 3.14159
+		"Int": "-64",
+		"Uint": "64",
+		"Float": "3.14159"
 	},
 	"StructMaps": {
 		"MapBool": {"": true},
 		"MapString": {"": "hello"},
 		"MapBytes": {"": "AQID"},
-		"MapInt": {"": -64},
-		"MapUint": {"": 64},
-		"MapFloat": {"": 3.14159}
+		"MapInt": {"": "-64"},
+		"MapUint": {"": "64"},
+		"MapFloat": {"": "3.14159"}
 	},
 	"StructSlices": {
 		"SliceBool": [true],
 		"SliceString": ["hello"],
 		"SliceBytes": ["AQID"],
-		"SliceInt": [-64],
-		"SliceUint": [64],
-		"SliceFloat": [3.14159]
+		"SliceInt": ["-64"],
+		"SliceUint": ["64"],
+		"SliceFloat": ["3.14159"]
 	},
 	"Slice": ["fizz","buzz"],
 	"Array": ["goodbye"],
@@ -6318,7 +6339,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringInt/StringifiedNumbers"),
 		opts:  []Options{StringifyNumbers(true)},
-		inBuf: `{"zero": 0, "one": "1", "two": 2}`,
+		inBuf: `{"zero": "0", "one": "1", "two": "2"}`,
 		inVal: new(structInlineMapStringInt),
 		want: addr(structInlineMapStringInt{
 			X: map[string]int{"zero": 0, "one": 1, "two": 2},

@@ -409,6 +409,9 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			fallthrough
 		case '0':
+			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+				break
+			}
 			var negOffset int
 			neg := len(val) > 0 && val[0] == '-'
 			if neg {
@@ -486,6 +489,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			fallthrough
 		case '0':
+			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+				break
+			}
 			n, ok := jsonwire.ParseUint(val)
 			maxUint := uint64(1) << bits
 			overflow := n > maxUint-1
@@ -590,6 +596,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
+			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+				break
+			}
 			fv, ok := jsonwire.ParseFloat(val, bits)
 			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
 				return &SemanticError{action: "unmarshal", JSONKind: k, GoType: t, Err: strconv.ErrRange}
