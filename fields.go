@@ -145,7 +145,14 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				switch {
 				case tf == jsontextValueType:
 					f.fncs = nil // specially handled in arshal_inlined.go
-				case tf.Kind() == reflect.Map && tf.Key() == stringType:
+				case tf.Kind() == reflect.Map && tf.Key().Kind() == reflect.String:
+					if which := implementsWhich(tf.Key(),
+						jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType,
+						jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
+					); which != nil {
+						err := fmt.Errorf("inlined map field %s of type %s must have a string key that does not implement JSON marshal or unmarshal methods", sf.Name, tf)
+						return structFields{}, &SemanticError{GoType: t, Err: err}
+					}
 					f.fncs = lookupArshaler(tf.Elem())
 				default:
 					err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or jsontext.Value", sf.Name, tf)
