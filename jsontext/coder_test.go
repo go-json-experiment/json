@@ -493,70 +493,66 @@ func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string,
 
 func TestCoderStackPointer(t *testing.T) {
 	tests := []struct {
-		token                        Token
-		wantWithRejectDuplicateNames Pointer
-		wantWithAllowDuplicateNames  Pointer
+		token Token
+		want  Pointer
 	}{
-		{Null, "", ""},
+		{Null, ""},
 
-		{ArrayStart, "", ""},
-		{ArrayEnd, "", ""},
+		{ArrayStart, ""},
+		{ArrayEnd, ""},
 
-		{ArrayStart, "", ""},
-		{Bool(true), "/0", "/0"},
-		{ArrayEnd, "", ""},
+		{ArrayStart, ""},
+		{Bool(true), "/0"},
+		{ArrayEnd, ""},
 
-		{ArrayStart, "", ""},
-		{String("hello"), "/0", "/0"},
-		{String("goodbye"), "/1", "/1"},
-		{ArrayEnd, "", ""},
+		{ArrayStart, ""},
+		{String("hello"), "/0"},
+		{String("goodbye"), "/1"},
+		{ArrayEnd, ""},
 
-		{ObjectStart, "", ""},
-		{ObjectEnd, "", ""},
+		{ObjectStart, ""},
+		{ObjectEnd, ""},
 
-		{ObjectStart, "", ""},
-		{String("hello"), "/hello", "/0"},
-		{String("goodbye"), "/hello", "/0"},
-		{ObjectEnd, "", ""},
+		{ObjectStart, ""},
+		{String("hello"), "/hello"},
+		{String("goodbye"), "/hello"},
+		{ObjectEnd, ""},
 
-		{ObjectStart, "", ""},
-		{String(""), "/", "/0"},
-		{Null, "/", "/0"},
-		{String("0"), "/0", "/1"},
-		{Null, "/0", "/1"},
-		{String("~"), "/~0", "/2"},
-		{Null, "/~0", "/2"},
-		{String("/"), "/~1", "/3"},
-		{Null, "/~1", "/3"},
-		{String("a//b~/c/~d~~e"), "/a~1~1b~0~1c~1~0d~0~0e", "/4"},
-		{Null, "/a~1~1b~0~1c~1~0d~0~0e", "/4"},
-		{String(" \r\n\t"), "/ \r\n\t", "/5"},
-		{Null, "/ \r\n\t", "/5"},
-		{ObjectEnd, "", ""},
+		{ObjectStart, ""},
+		{String(""), "/"},
+		{Null, "/"},
+		{String("0"), "/0"},
+		{Null, "/0"},
+		{String("~"), "/~0"},
+		{Null, "/~0"},
+		{String("/"), "/~1"},
+		{Null, "/~1"},
+		{String("a//b~/c/~d~~e"), "/a~1~1b~0~1c~1~0d~0~0e"},
+		{Null, "/a~1~1b~0~1c~1~0d~0~0e"},
+		{String(" \r\n\t"), "/ \r\n\t"},
+		{Null, "/ \r\n\t"},
+		{ObjectEnd, ""},
 
-		{ArrayStart, "", ""},
-		{ObjectStart, "/0", "/0"},
-		{String(""), "/0/", "/0/0"},
-		{ArrayStart, "/0/", "/0/0"},
-		{ObjectStart, "/0//0", "/0/0/0"},
-		{String("#"), "/0//0/#", "/0/0/0/0"},
-		{Null, "/0//0/#", "/0/0/0/0"},
-		{ObjectEnd, "/0//0", "/0/0/0"},
-		{ArrayEnd, "/0/", "/0/0"},
-		{ObjectEnd, "/0", "/0"},
-		{ArrayEnd, "", ""},
+		{ArrayStart, ""},
+		{ObjectStart, "/0"},
+		{String(""), "/0/"},
+		{ArrayStart, "/0/"},
+		{ObjectStart, "/0//0"},
+		{String("#"), "/0//0/#"},
+		{Null, "/0//0/#"},
+		{ObjectEnd, "/0//0"},
+		{ArrayEnd, "/0/"},
+		{ObjectEnd, "/0"},
+		{ArrayEnd, ""},
 	}
 
 	for _, allowDupes := range []bool{false, true} {
 		var name string
-		var want func(i int) Pointer
 		switch allowDupes {
 		case false:
 			name = "RejectDuplicateNames"
-			want = func(i int) Pointer { return tests[i].wantWithRejectDuplicateNames }
 		case true:
 			name = "AllowDuplicateNames"
-			want = func(i int) Pointer { return tests[i].wantWithAllowDuplicateNames }
 		}
 
 		t.Run(name, func(t *testing.T) {
@@ -567,8 +563,8 @@ func TestCoderStackPointer(t *testing.T) {
 				if err := enc.WriteToken(tt.token); err != nil {
 					t.Fatalf("%d: Encoder.WriteToken error: %v", i, err)
 				}
-				if got := enc.StackPointer(); got != want(i) {
-					t.Fatalf("%d: Encoder.StackPointer = %v, want %v", i, got, want(i))
+				if got := enc.StackPointer(); got != tests[i].want {
+					t.Fatalf("%d: Encoder.StackPointer = %v, want %v", i, got, tests[i].want)
 				}
 			}
 
@@ -577,8 +573,8 @@ func TestCoderStackPointer(t *testing.T) {
 				if _, err := dec.ReadToken(); err != nil {
 					t.Fatalf("%d: Decoder.ReadToken error: %v", i, err)
 				}
-				if got := dec.StackPointer(); got != want(i) {
-					t.Fatalf("%d: Decoder.StackPointer = %v, want %v", i, got, want(i))
+				if got := dec.StackPointer(); got != tests[i].want {
+					t.Fatalf("%d: Decoder.StackPointer = %v, want %v", i, got, tests[i].want)
 				}
 			}
 		})
