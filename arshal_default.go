@@ -1037,9 +1037,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					b, _ = jsonwire.AppendQuote(b, f.name, &xe.Flags)
 				}
 				xe.Buf = b
-				if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {
-					xe.Names.ReplaceLastQuotedOffset(n0)
-				}
+				xe.Names.ReplaceLastQuotedOffset(n0)
 				xe.Tokens.Last.Increment()
 			} else {
 				if err := enc.WriteToken(jsontext.String(f.name)); err != nil {

@@ -295,11 +295,11 @@ func (e *encoderState) UnwriteEmptyObjectMember(prevName *string) bool {
 		if e.Tokens.Last.isActiveNamespace() {
 			e.Namespaces.Last().removeLast()
 		}
-		e.Names.clearLast()
-		if prevName != nil {
-			e.Names.copyQuotedBuffer(e.Buf) // required by objectNameStack.replaceLastUnquotedName
-			e.Names.replaceLastUnquotedName(*prevName)
-		}
+	}
+	e.Names.clearLast()
+	if prevName != nil {
+		e.Names.copyQuotedBuffer(e.Buf) // required by objectNameStack.replaceLastUnquotedName
+		e.Names.replaceLastUnquotedName(*prevName)
 	}
 	return true
 }
@@ -323,8 +323,8 @@ func (e *encoderState) UnwriteOnlyObjectMemberName() string {
 		if e.Tokens.Last.isActiveNamespace() {
 			e.Namespaces.Last().removeLast()
 		}
-		e.Names.clearLast()
 	}
+	e.Names.clearLast()
 	return name
 }
 
@@ -367,14 +367,16 @@ func (e *encoderState) WriteToken(t Token) error {
 		if b, err = t.appendString(b, &e.Flags); err != nil {
 			break
 		}
-		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
-			if !e.Tokens.Last.isValidNamespace() {
-				err = errInvalidNamespace
-				break
-			}
-			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
-				err = newDuplicateNameError(b[pos:])
-				break
+		if e.Tokens.Last.NeedObjectName() {
+			if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+				if !e.Tokens.Last.isValidNamespace() {
+					err = errInvalidNamespace
+					break
+				}
+				if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
+					err = newDuplicateNameError(b[pos:])
+					break
+				}
 			}
 			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
@@ -389,8 +391,8 @@ func (e *encoderState) WriteToken(t Token) error {
 		if err = e.Tokens.pushObject(); err != nil {
 			break
 		}
+		e.Names.push()
 		if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
-			e.Names.push()
 			e.Namespaces.push()
 		}
 	case '}':
@@ -398,8 +400,8 @@ func (e *encoderState) WriteToken(t Token) error {
 		if err = e.Tokens.popObject(); err != nil {
 			break
 		}
+		e.Names.pop()
 		if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
-			e.Names.pop()
 			e.Namespaces.pop()
 		}
 	case '[':
@@ -467,13 +469,15 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 		}
 
 		// Update the state machine.
-		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
-			if !e.Tokens.Last.isValidNamespace() {
-				return errInvalidNamespace
-			}
-			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], isVerbatim) {
-				err := newDuplicateNameError(b[pos:])
-				return e.injectSyntacticErrorWithPosition(err, pos)
+		if e.Tokens.Last.NeedObjectName() {
+			if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+				if !e.Tokens.Last.isValidNamespace() {
+					return errInvalidNamespace
+				}
+				if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], isVerbatim) {
+					err := newDuplicateNameError(b[pos:])
+					return e.injectSyntacticErrorWithPosition(err, pos)
+				}
 			}
 			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
@@ -546,14 +550,16 @@ func (e *encoderState) WriteValue(v Value) error {
 	case 'n', 'f', 't':
 		err = e.Tokens.appendLiteral()
 	case '"':
-		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && e.Tokens.Last.NeedObjectName() {
-			if !e.Tokens.Last.isValidNamespace() {
-				err = errInvalidNamespace
-				break
-			}
-			if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
-				err = newDuplicateNameError(b[pos:])
-				break
+		if e.Tokens.Last.NeedObjectName() {
+			if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
+				if !e.Tokens.Last.isValidNamespace() {
+					err = errInvalidNamespace
+					break
+				}
+				if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], false) {
+					err = newDuplicateNameError(b[pos:])
+					break
+				}
 			}
 			e.Names.ReplaceLastQuotedOffset(pos) // only replace if insertQuoted succeeds
 		}
