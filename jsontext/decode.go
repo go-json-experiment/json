@@ -491,13 +491,15 @@ func (d *decoderState) ReadToken() (Token, error) {
 		} else {
 			pos += n
 		}
-		if !d.Flags.Get(jsonflags.AllowDuplicateNames) && d.Tokens.Last.NeedObjectName() {
-			if !d.Tokens.Last.isValidNamespace() {
-				return Token{}, errInvalidNamespace
-			}
-			if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
-				err = newDuplicateNameError(d.buf[pos-n : pos])
-				return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
+		if d.Tokens.Last.NeedObjectName() {
+			if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+				if !d.Tokens.Last.isValidNamespace() {
+					return Token{}, errInvalidNamespace
+				}
+				if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
+					err = newDuplicateNameError(d.buf[pos-n : pos])
+					return Token{}, d.injectSyntacticErrorWithPosition(err, pos-n) // report position at start of string
+				}
 			}
 			d.Names.ReplaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
@@ -531,8 +533,8 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if err = d.Tokens.pushObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
+		d.Names.push()
 		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
-			d.Names.push()
 			d.Namespaces.push()
 		}
 		pos += 1
@@ -543,8 +545,8 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if err = d.Tokens.popObject(); err != nil {
 			return Token{}, d.injectSyntacticErrorWithPosition(err, pos)
 		}
+		d.Names.pop()
 		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
-			d.Names.pop()
 			d.Namespaces.pop()
 		}
 		pos += 1
@@ -646,14 +648,16 @@ func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (Value, error) {
 	case 'n', 't', 'f':
 		err = d.Tokens.appendLiteral()
 	case '"':
-		if !d.Flags.Get(jsonflags.AllowDuplicateNames) && d.Tokens.Last.NeedObjectName() {
-			if !d.Tokens.Last.isValidNamespace() {
-				err = errInvalidNamespace
-				break
-			}
-			if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
-				err = newDuplicateNameError(d.buf[pos-n : pos])
-				break
+		if d.Tokens.Last.NeedObjectName() {
+			if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+				if !d.Tokens.Last.isValidNamespace() {
+					err = errInvalidNamespace
+					break
+				}
+				if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
+					err = newDuplicateNameError(d.buf[pos-n : pos])
+					break
+				}
 			}
 			d.Names.ReplaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}

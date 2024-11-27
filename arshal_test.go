@@ -1011,7 +1011,7 @@ func TestMarshal(t *testing.T) {
 		opts: []Options{
 			Deterministic(true),
 			WithMarshalers(MarshalFuncV2(func(enc *jsontext.Encoder, v string, opts Options) error {
-				if p := enc.StackPointer(); p != "/0" {
+				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /0", p)
 				}
 				switch v {
