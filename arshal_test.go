@@ -25,8 +25,21 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 	"github.com/go-json-experiment/json/jsontext"
 )
+
+func newNonStringNameError(offset int64, pointer jsontext.Pointer) error {
+	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsontext.ErrNonStringName}
+}
+
+func newInvalidCharacterError(prefix, where string, offset int64, pointer jsontext.Pointer) error {
+	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsonwire.NewInvalidCharacterError(prefix, where)}
+}
+
+func newInvalidUTF8Error(offset int64, pointer jsontext.Pointer) error {
+	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsonwire.ErrInvalidUTF8}
+}
 
 type (
 	jsonObject = map[string]any
@@ -837,17 +850,17 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Maps/InvalidKey/Bool"),
 		in:      map[bool]string{false: "value"},
 		want:    `{`,
-		wantErr: export.NewMissingNameError(len64(`{`)),
+		wantErr: newNonStringNameError(len64(`{`), ""),
 	}, {
 		name:    jsontest.Name("Maps/InvalidKey/NamedBool"),
 		in:      map[namedBool]string{false: "value"},
 		want:    `{`,
-		wantErr: export.NewMissingNameError(len64(`{`)),
+		wantErr: newNonStringNameError(len64(`{`), ""),
 	}, {
 		name:    jsontest.Name("Maps/InvalidKey/Array"),
 		in:      map[[1]string]string{{"key"}: "value"},
 		want:    `{`,
-		wantErr: export.NewMissingNameError(len64(`{`)),
+		wantErr: newNonStringNameError(len64(`{`), ""),
 	}, {
 		name:    jsontest.Name("Maps/InvalidKey/Channel"),
 		in:      map[chan string]string{make(chan string): "value"},
@@ -868,7 +881,7 @@ func TestMarshal(t *testing.T) {
 		in:           map[*int64]string{addr(int64(0)): "0", addr(int64(0)): "0"},
 		canonicalize: true,
 		want:         `{"0":"0"`,
-		wantErr:      export.NewDuplicateNameError([]byte(`"0"`), len64(`{"0":"0",`)),
+		wantErr:      newDuplicateNameError("", []byte(`"0"`), len64(`{"0":"0",`)),
 	}, {
 		name:         jsontest.Name("Maps/ValidKey/NamedInt"),
 		in:           map[namedInt64]string{math.MinInt64: "MinInt64", 0: "Zero", math.MaxInt64: "MaxInt64"},
@@ -913,7 +926,7 @@ func TestMarshal(t *testing.T) {
 		opts:    []Options{jsontext.AllowInvalidUTF8(true)},
 		in:      map[string]string{"\x80": "", "\x81": ""},
 		want:    `{"�":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"�"`), len64(`{"�":"",`)),
+		wantErr: newDuplicateNameError("", []byte(`"�"`), len64(`{"�":"",`)),
 	}, {
 		name: jsontest.Name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowDuplicateNames(true)},
@@ -923,7 +936,7 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Maps/DuplicateName/NoCaseString"),
 		in:      map[nocaseString]string{"hello": "", "HELLO": ""},
 		want:    `{"hello":""`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeFor[nocaseString](), Err: export.NewDuplicateNameError([]byte(`"hello"`), len64(`{"hello":"",`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: reflect.TypeFor[nocaseString](), Err: newDuplicateNameError("", []byte(`"hello"`), len64(`{"hello":"",`))},
 	}, {
 		name: jsontest.Name("Maps/DuplicateName/NaNs/Deterministic+AllowDuplicateNames"),
 		opts: []Options{
@@ -956,7 +969,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[string]int{"\xff": 0, "\xfe": 1},
 		want:    `{"�":1`,
-		wantErr: export.NewDuplicateNameError([]byte(`"�"`), len64(`{"�":1,`)),
+		wantErr: newDuplicateNameError("", []byte(`"�"`), len64(`{"�":1,`)),
 	}, {
 		name: jsontest.Name("Maps/String/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
 		opts: []Options{
@@ -1005,7 +1018,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[namedString]map[string]int{"X": {"a": 1, "b": 1}},
 		want:    `{"X":{"x":1`,
-		wantErr: export.NewDuplicateNameError([]byte(`"x"`), len64(`{"X":{"x":1,`)),
+		wantErr: newDuplicateNameError("/X/x", nil, len64(`{"X":{"x":1,`)),
 	}, {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs+AllowDuplicateNames"),
 		opts: []Options{
@@ -2451,7 +2464,7 @@ func TestMarshal(t *testing.T) {
 		opts:    []Options{jsontext.AllowDuplicateNames(false)},
 		in:      structInlineTextValue{X: jsontext.Value(` { "fizz" : "buzz" , "fizz" : "buzz" } `)},
 		want:    `{"fizz":"buzz"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"fizz"`), 0),
+		wantErr: newDuplicateNameError("/fizz", nil, len64(`{"fizz":"buzz"`)),
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/TextValue/AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowDuplicateNames(true)},
@@ -2462,7 +2475,7 @@ func TestMarshal(t *testing.T) {
 		opts:    []Options{jsontext.AllowInvalidUTF8(false)},
 		in:      structInlineTextValue{X: jsontext.Value(`{"` + "\xde\xad\xbe\xef" + `":"value"}`)},
 		want:    `{`,
-		wantErr: export.NewInvalidUTF8Error(len64(`{"` + "\xde\xad")),
+		wantErr: newInvalidUTF8Error(len64(`{"`+"\xde\xad"), ""),
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/TextValue/AllowInvalidUTF8"),
 		opts: []Options{jsontext.AllowInvalidUTF8(true)},
@@ -2482,17 +2495,17 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidObjectName"),
 		in:      structInlineTextValue{X: jsontext.Value(` { true : false } `)},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: export.NewMissingNameError(len64(" { "))},
+		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: newNonStringNameError(len64(" { "), "")},
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidObjectEnd"),
 		in:      structInlineTextValue{X: jsontext.Value(` { "name" : false , } `)},
 		want:    `{"name":false`,
-		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: export.NewInvalidCharacterError(",", "before next token", len64(` { "name" : false `))},
+		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: newInvalidCharacterError(",", "before next token", len64(` { "name" : false `), "")},
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidDualObject"),
 		in:      structInlineTextValue{X: jsontext.Value(`{}{}`)},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: export.NewInvalidCharacterError("{", "after top-level value", len64(`{}`))},
+		wantErr: &SemanticError{action: "marshal", GoType: jsontextValueType, Err: newInvalidCharacterError("{", "after top-level value", len64(`{}`), "")},
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/TextValue/Nested/Nil"),
 		in:   structInlinePointerInlineTextValue{},
@@ -2540,7 +2553,7 @@ func TestMarshal(t *testing.T) {
 		opts:    []Options{jsontext.AllowInvalidUTF8(false)},
 		in:      structInlineMapStringAny{X: jsonObject{"\xde\xad\xbe\xef": nil}},
 		want:    `{`,
-		wantErr: export.NewInvalidUTF8Error(0),
+		wantErr: jsonwire.ErrInvalidUTF8,
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringAny/AllowInvalidUTF8"),
 		opts: []Options{jsontext.AllowInvalidUTF8(true)},
@@ -2598,7 +2611,7 @@ func TestMarshal(t *testing.T) {
 			X: map[string]int{"\xff": 0, "\xfe": 1},
 		},
 		want:    `{"�":1`,
-		wantErr: export.NewDuplicateNameError([]byte(`"�"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"�"`), len64(`{"�":1`)),
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
 		opts: []Options{Deterministic(true), jsontext.AllowInvalidUTF8(true), jsontext.AllowDuplicateNames(true)},
@@ -2665,7 +2678,7 @@ func TestMarshal(t *testing.T) {
 			X: jsontext.Value(`{"dupe":"","dupe":""}`),
 		},
 		want:    `{"dupe":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"dupe"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"dupe"`), len64(`{"dupe":""`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineTextValue/Other/AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowDuplicateNames(true)},
@@ -2685,7 +2698,7 @@ func TestMarshal(t *testing.T) {
 			X: jsontext.Value(`{"Aaa": "", "Aaa": ""}`),
 		},
 		want:    `{"Aaa":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"Aaa"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"Aaa"`), len64(`{"Aaa":""`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineTextValue/ExactConflict/AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowDuplicateNames(true)},
@@ -2699,7 +2712,7 @@ func TestMarshal(t *testing.T) {
 			X: jsontext.Value(`{"Aaa": "", "AaA": "", "aaa": ""}`),
 		},
 		want:    `{"Aaa":"","AaA":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"aaa"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"aaa"`), len64(`{"Aaa":"","AaA":""`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineTextValue/NoCaseConflict/AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowDuplicateNames(true)},
@@ -2723,7 +2736,7 @@ func TestMarshal(t *testing.T) {
 			X:   jsontext.Value(`{"AAA": ""}`),
 		},
 		want:    `{"AAA":"x","AaA":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"AAA"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"AAA"`), len64(`{"AAA":"x","AaA":"x"`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineTextValue/NoCaseConflictWithField"),
 		in: structNoCaseInlineTextValue{
@@ -2732,7 +2745,7 @@ func TestMarshal(t *testing.T) {
 			X:   jsontext.Value(`{"aaa": ""}`),
 		},
 		want:    `{"AAA":"x","AaA":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"aaa"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"aaa"`), len64(`{"AAA":"x","AaA":"x"`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/MatchCaseInsensitiveDelimiter"),
 		in: structNoCaseInlineTextValue{
@@ -2740,7 +2753,7 @@ func TestMarshal(t *testing.T) {
 			X:   jsontext.Value(`{"aa_a": ""}`),
 		},
 		want:    `{"AaA":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"aa_a"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"aa_a"`), len64(`{"AaA":"x"`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/MatchCaseSensitiveDelimiter"),
 		opts: []Options{jsonflags.MatchCaseSensitiveDelimiter | 1},
@@ -2765,7 +2778,7 @@ func TestMarshal(t *testing.T) {
 			X:    jsontext.Value(`{"aa_b": ""}`),
 		},
 		want:    `{"AA_b":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"aa_b"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"aa_b"`), len64(`{"AA_b":"x"`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineMapStringAny/ExactDifferent"),
 		in: structNoCaseInlineMapStringAny{
@@ -2789,7 +2802,7 @@ func TestMarshal(t *testing.T) {
 			X:   jsonObject{"AAA": ""},
 		},
 		want:    `{"AAA":"x","AaA":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"AAA"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"AAA"`), len64(`{"AAA":"x","AaA":"x"`)),
 	}, {
 		name: jsontest.Name("Structs/DuplicateName/NoCaseInlineMapStringAny/NoCaseConflictWithField"),
 		in: structNoCaseInlineMapStringAny{
@@ -2798,7 +2811,7 @@ func TestMarshal(t *testing.T) {
 			X:   jsonObject{"aaa": ""},
 		},
 		want:    `{"AAA":"x","AaA":"x"`,
-		wantErr: export.NewDuplicateNameError([]byte(`"aaa"`), 0),
+		wantErr: newDuplicateNameError("", []byte(`"aaa"`), len64(`{"AAA":"x","AaA":"x"`)),
 	}, {
 		name:    jsontest.Name("Structs/Invalid/Conflicting"),
 		in:      structConflicting{},
@@ -3083,7 +3096,7 @@ func TestMarshal(t *testing.T) {
 		opts:    []Options{Deterministic(true), jsontext.AllowInvalidUTF8(true), jsontext.AllowDuplicateNames(false)},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"�"`), len64(`{"X":{"�":"",`)),
+		wantErr: newDuplicateNameError("/X", []byte(`"�"`), len64(`{"X":{"�":"",`)),
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/Deterministic+AllowInvalidUTF8+AllowDuplicateNames"),
 		opts: []Options{Deterministic(true), jsontext.AllowInvalidUTF8(true), jsontext.AllowDuplicateNames(true)},
@@ -3093,13 +3106,13 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Interfaces/Any/Maps/RejectInvalidUTF8"),
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{`,
-		wantErr: export.NewInvalidUTF8Error(len64(`{"X":{`)),
+		wantErr: newInvalidUTF8Error(len64(`{"X":{`), "/X"),
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/AllowInvalidUTF8+RejectDuplicateNames"),
 		opts:    []Options{jsontext.AllowInvalidUTF8(true)},
 		in:      struct{ X any }{map[string]any{"\xff": "", "\xfe": ""}},
 		want:    `{"X":{"�":""`,
-		wantErr: export.NewDuplicateNameError([]byte(`"�"`), len64(`{"X":{"�":"",`)),
+		wantErr: newDuplicateNameError("/X", []byte(`"�"`), len64(`{"X":{"�":"",`)),
 	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/AllowInvalidUTF8+AllowDuplicateNames"),
 		opts: []Options{jsontext.AllowInvalidUTF8(true), jsontext.AllowDuplicateNames(true)},
@@ -3271,7 +3284,7 @@ func TestMarshal(t *testing.T) {
 		in: marshalJSONv1Func(func() ([]byte, error) {
 			return []byte("invalid"), nil
 		}),
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: export.NewInvalidCharacterError("i", "at start of value", 0)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: marshalJSONv1FuncType, Err: newInvalidCharacterError("i", "at start of value", 0, "")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv1/SkipFunc"),
 		in: marshalJSONv1Func(func() ([]byte, error) {
@@ -3293,7 +3306,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name:    jsontest.Name("Methods/AppendText/RejectInvalidUTF8"),
 		in:      appendTextFunc(func(b []byte) ([]byte, error) { return append(b, "\xde\xad\xbe\xef"...), nil }),
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: appendTextFuncType, Err: export.NewInvalidUTF8Error(0)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: appendTextFuncType, Err: newInvalidUTF8Error(0, "")},
 	}, {
 		name: jsontest.Name("Methods/AppendText/AllowInvalidUTF8"),
 		opts: []Options{jsontext.AllowInvalidUTF8(true)},
@@ -3310,7 +3323,7 @@ func TestMarshal(t *testing.T) {
 		in: marshalTextFunc(func() ([]byte, error) {
 			return []byte("\xde\xad\xbe\xef"), nil
 		}),
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: export.NewInvalidUTF8Error(0)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: marshalTextFuncType, Err: newInvalidUTF8Error(0, "")},
 	}, {
 		name: jsontest.Name("Methods/Text/AllowInvalidUTF8"),
 		opts: []Options{jsontext.AllowInvalidUTF8(true)},
@@ -3332,7 +3345,7 @@ func TestMarshal(t *testing.T) {
 			})): "invalid",
 		},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", GoType: marshalJSONv2FuncType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Methods/Invalid/MapKey/JSONv1/Syntax"),
 		in: map[any]string{
@@ -3341,7 +3354,7 @@ func TestMarshal(t *testing.T) {
 			})): "invalid",
 		},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: marshalJSONv1FuncType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V1"),
 		opts: []Options{
@@ -3461,7 +3474,7 @@ func TestMarshal(t *testing.T) {
 			})),
 		},
 		in:      true,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: export.NewInvalidCharacterError("i", "at start of value", 0)},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'i', GoType: boolType, Err: newInvalidCharacterError("i", "at start of value", 0, "")},
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/DirectError"),
 		opts: []Options{
@@ -3559,7 +3572,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidKind"),
 		opts: []Options{
@@ -3569,7 +3582,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: 'n', GoType: nocaseStringType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/String/V1/DuplicateName"),
 		opts: []Options{
@@ -3579,7 +3592,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[string]string{"name1": "value", "name2": "value"},
 		want:    `{"name":"name"`,
-		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: export.NewDuplicateNameError([]byte(`"name"`), len64(`{"name":"name",`))},
+		wantErr: &SemanticError{action: "marshal", JSONKind: '"', GoType: stringType, Err: newDuplicateNameError("", []byte(`"name"`), len64(`{"name":"name",`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2"),
 		opts: []Options{
@@ -3618,7 +3631,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidValue"),
 		opts: []Options{
@@ -3628,7 +3641,7 @@ func TestMarshal(t *testing.T) {
 		},
 		in:      map[nocaseString]string{"hello": "world"},
 		want:    `{`,
-		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: export.NewMissingNameError(len64(`{`))},
+		wantErr: &SemanticError{action: "marshal", GoType: nocaseStringType, Err: newNonStringNameError(len64(`{`), "")},
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V1"),
 		opts: []Options{
@@ -4423,7 +4436,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `falsetrue`,
 		inVal:   addr(true),
 		want:    addr(false),
-		wantErr: export.NewInvalidCharacterError("t", "after top-level value", len64(`false`)),
+		wantErr: newInvalidCharacterError("t", "after top-level value", len64(`false`), ""),
 	}, {
 		name:  jsontest.Name("Bools/Null"),
 		inBuf: `null`,
@@ -4571,14 +4584,14 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"\"foo\" "`,
 		inVal:   new(string),
 		want:    new(string),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: export.NewInvalidCharacterError(" ", "after string value", 0)},
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: newInvalidCharacterError(" ", "after string value", 0, "")},
 	}, {
 		name:    jsontest.Name("Strings/StringifiedString/InvalidString"),
 		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
 		inBuf:   `""`,
 		inVal:   new(string),
 		want:    new(string),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: io.ErrUnexpectedEOF},
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: &jsontext.SyntacticError{Err: io.ErrUnexpectedEOF}},
 	}, {
 		name:  jsontest.Name("Bytes/Null"),
 		inBuf: `null`,
@@ -5432,7 +5445,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"0":1,"-0":-1}`,
 		inVal:   new(map[int]int),
 		want:    addr(map[int]int{0: 1}),
-		wantErr: export.NewDuplicateNameError([]byte(`"-0"`), len64(`{"0":1,`)),
+		wantErr: newDuplicateNameError("", []byte(`"-0"`), len64(`{"0":1,`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/Int/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
@@ -5449,7 +5462,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"1.0":"1.0","1":"1","1e0":"1e0"}`,
 		inVal:   new(map[float64]string),
 		want:    addr(map[float64]string{1: "1.0"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"1"`), len64(`{"1.0":"1.0",`)),
+		wantErr: newDuplicateNameError("", []byte(`"1"`), len64(`{"1.0":"1.0",`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/Float/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
@@ -5466,7 +5479,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"hello":"hello","HELLO":"HELLO"}`,
 		inVal:   new(map[nocaseString]string),
 		want:    addr(map[nocaseString]string{"hello": "hello"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"HELLO"`), len64(`{"hello":"hello",`)),
+		wantErr: newDuplicateNameError("", []byte(`"HELLO"`), len64(`{"hello":"hello",`)),
 	}, {
 		name:  jsontest.Name("Maps/DuplicateName/NoCaseString/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
@@ -5992,7 +6005,7 @@ func TestUnmarshal(t *testing.T) {
 		opts:    []Options{jsonflags.StringifyWithLegacySemantics | 1},
 		inBuf:   `{"String": "string"}`,
 		inVal:   new(structStringifiedAll),
-		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: export.NewInvalidCharacterError("s", "at start of string (expecting '\"')", 0)},
+		wantErr: &SemanticError{action: "unmarshal", JSONKind: '"', GoType: stringType, Err: newInvalidCharacterError("s", "at start of string (expecting '\"')", 0, "")},
 	}, {
 		name: jsontest.Name("Structs/Format/Bytes"),
 		inBuf: `{
@@ -6445,7 +6458,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineTextValue),
 		want:    addr(structInlineTextValue{A: 1, X: jsontext.Value(`{"fizz":`)}),
-		wantErr: export.NewInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`)),
+		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/TextValue/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -6457,7 +6470,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineTextValue),
 		want:    addr(structInlineTextValue{A: 1, X: jsontext.Value(`{"fizz":"buzz"}`), B: 2}),
-		wantErr: export.NewDuplicateNameError([]byte(`"fizz"`), len64(`{"A":1,"fizz":"buzz","B":2,`)),
+		wantErr: newDuplicateNameError("", []byte(`"fizz"`), len64(`{"A":1,"fizz":"buzz","B":2,`)),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/TextValue/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
@@ -6555,13 +6568,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": nil}}),
-		wantErr: export.NewInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`)),
+		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
-		wantErr: export.NewInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`)),
+		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringAny/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -6573,7 +6586,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":"buzz","B":2,"fizz":"buzz"}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": "buzz"}, B: 2}),
-		wantErr: export.NewDuplicateNameError([]byte(`"fizz"`), len64(`{"A":1,"fizz":"buzz","B":2,`)),
+		wantErr: newDuplicateNameError("", []byte(`"fizz"`), len64(`{"A":1,"fizz":"buzz","B":2,`)),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringAny/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
@@ -6782,7 +6795,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"AaA":"AaA","aaa":"aaa"}`,
 		inVal:   new(structNoCase),
 		want:    addr(structNoCase{AaA: "AaA"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"aaa"`), len64(`{"AaA":"AaA",`)),
+		wantErr: newDuplicateNameError("", []byte(`"aaa"`), len64(`{"AaA":"AaA",`)),
 	}, {
 		name:  jsontest.Name("Structs/CaseSensitive"),
 		inBuf: `{"BOOL": true, "STRING": "hello", "BYTES": "AQID", "INT": -64, "UINT": 64, "FLOAT": 3.14159}`,
@@ -6798,7 +6811,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"AAA":"AAA","AAA":"AAA"}`,
 		inVal:   addr(structNoCaseInlineTextValue{}),
 		want:    addr(structNoCaseInlineTextValue{AAA: "AAA"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"AAA"`), len64(`{"AAA":"AAA",`)),
+		wantErr: newDuplicateNameError("", []byte(`"AAA"`), len64(`{"AAA":"AAA",`)),
 	}, {
 		name:  jsontest.Name("Structs/DuplicateName/NoCase/OverwriteExact"),
 		inBuf: `{"AAA":"after"}`,
@@ -6809,13 +6822,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
 		inVal:   addr(structNoCaseInlineTextValue{}),
 		want:    addr(structNoCaseInlineTextValue{AaA: "aaa"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"aaA"`), len64(`{"aaa":"aaa",`)),
+		wantErr: newDuplicateNameError("", []byte(`"aaA"`), len64(`{"aaa":"aaa",`)),
 	}, {
 		name:    jsontest.Name("Structs/DuplicateName/NoCase/OverwriteNoCase"),
 		inBuf:   `{"aaa":"aaa","aaA":"aaA"}`,
 		inVal:   addr(structNoCaseInlineTextValue{}),
 		want:    addr(structNoCaseInlineTextValue{AaA: "aaa"}),
-		wantErr: export.NewDuplicateNameError([]byte(`"aaA"`), len64(`{"aaa":"aaa",`)),
+		wantErr: newDuplicateNameError("", []byte(`"aaA"`), len64(`{"aaa":"aaa",`)),
 	}, {
 		name:  jsontest.Name("Structs/DuplicateName/Inline/Unknown"),
 		inBuf: `{"unknown":""}`,
@@ -6836,7 +6849,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"b":"","b":""}`,
 		inVal:   addr(structNoCaseInlineTextValue{}),
 		want:    addr(structNoCaseInlineTextValue{X: jsontext.Value(`{"b":""}`)}),
-		wantErr: export.NewDuplicateNameError([]byte(`"b"`), len64(`{"b":"",`)),
+		wantErr: newDuplicateNameError("", []byte(`"b"`), len64(`{"b":"",`)),
 	}, {
 		name:    jsontest.Name("Structs/Invalid/ErrUnexpectedEOF"),
 		inBuf:   ``,
@@ -6848,7 +6861,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"Pointer":`,
 		inVal:   addr(structAll{}),
 		want:    addr(structAll{Pointer: new(structAll)}),
-		wantErr: io.ErrUnexpectedEOF,
+		wantErr: &jsontext.SyntacticError{ByteOffset: len64(`{"Pointer":`), JSONPointer: "/Pointer", Err: io.ErrUnexpectedEOF},
 	}, {
 		name:    jsontest.Name("Structs/Invalid/Conflicting"),
 		inBuf:   `{}`,
@@ -7219,7 +7232,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `]`,
 		inVal:   new(any),
 		want:    new(any),
-		wantErr: export.NewInvalidCharacterError("]", "at start of value", 0),
+		wantErr: newInvalidCharacterError("]", "at start of value", 0, ""),
 	}, {
 		// NOTE: The semantics differs from v1,
 		// where existing map entries were not merged into.
@@ -7358,7 +7371,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"X":{"fizz":"buzz","fizz":true}}`,
 		inVal:   new(struct{ X any }),
 		want:    addr(struct{ X any }{map[string]any{"fizz": "buzz"}}),
-		wantErr: export.NewDuplicateNameError([]byte(`"fizz"`), len64(`{"X":{"fizz":"buzz",`)),
+		wantErr: newDuplicateNameError("/X", []byte(`"fizz"`), len64(`{"X":{"fizz":"buzz",`)),
 	}, {
 		name:    jsontest.Name("Interfaces/Any/Maps/AllowDuplicateNames"),
 		opts:    []Options{jsontext.AllowDuplicateNames(true)},
@@ -7815,7 +7828,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"name":"value","name":"value"}`,
 		inVal:   addr(map[string]string{}),
 		want:    addr(map[string]string{"1-1": "1-2"}),
-		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: export.NewDuplicateNameError([]byte(`"name"`), len64(`{"name":"value",`))},
+		wantErr: &SemanticError{action: "unmarshal", GoType: reflect.PointerTo(stringType), Err: newDuplicateNameError("", []byte(`"name"`), len64(`{"name":"value",`))},
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V1"),
 		opts: []Options{
@@ -8495,7 +8508,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(struct {
 			D time.Duration
 		}{1}),
-		wantErr: export.NewInvalidCharacterError("x", "at start of value", len64(`{"D":`)),
+		wantErr: newInvalidCharacterError("x", "at start of value", len64(`{"D":`), "/D"),
 	}, {
 		name:  jsontest.Name("Duration/Format/Invalid"),
 		inBuf: `{"D":"0s"}`,
@@ -8720,7 +8733,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct {
 			T time.Time
 		}),
-		wantErr: export.NewInvalidCharacterError("x", "at start of value", len64(`{"D":`)),
+		wantErr: newInvalidCharacterError("x", "at start of value", len64(`{"T":`), "/T"),
 	}, {
 		name:  jsontest.Name("Time/IgnoreInvalidFormat"),
 		opts:  []Options{invalidFormatOption},

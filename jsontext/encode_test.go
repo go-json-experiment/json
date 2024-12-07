@@ -148,7 +148,7 @@ var encoderErrorTestdata = []struct {
 }{{
 	name: jsontest.Name("InvalidToken"),
 	calls: []encoderMethodCall{
-		{zeroToken, &SyntacticError{str: "invalid json.Token"}, ""},
+		{zeroToken, E(errInvalidToken), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidValue"),
@@ -158,52 +158,52 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidValue/DoubleZero"),
 	calls: []encoderMethodCall{
-		{Value(`00`), newInvalidCharacterError("0", "after top-level value").withOffset(len64(`0`)), ""},
+		{Value(`00`), newInvalidCharacterError("0", "after top-level value").withPos(`0`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedValue"),
 	calls: []encoderMethodCall{
-		{zeroValue, io.ErrUnexpectedEOF, ""},
+		{zeroValue, E(io.ErrUnexpectedEOF).withPos("", ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedNull"),
 	calls: []encoderMethodCall{
-		{Value(`nul`), io.ErrUnexpectedEOF, ""},
+		{Value(`nul`), E(io.ErrUnexpectedEOF).withPos("nul", ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidNull"),
 	calls: []encoderMethodCall{
-		{Value(`nulL`), newInvalidCharacterError("L", "within literal null (expecting 'l')").withOffset(len64(`nul`)), ""},
+		{Value(`nulL`), newInvalidCharacterError("L", "within literal null (expecting 'l')").withPos(`nul`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedFalse"),
 	calls: []encoderMethodCall{
-		{Value(`fals`), io.ErrUnexpectedEOF, ""},
+		{Value(`fals`), E(io.ErrUnexpectedEOF).withPos("fals", ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidFalse"),
 	calls: []encoderMethodCall{
-		{Value(`falsE`), newInvalidCharacterError("E", "within literal false (expecting 'e')").withOffset(len64(`fals`)), ""},
+		{Value(`falsE`), newInvalidCharacterError("E", "within literal false (expecting 'e')").withPos(`fals`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedTrue"),
 	calls: []encoderMethodCall{
-		{Value(`tru`), io.ErrUnexpectedEOF, ""},
+		{Value(`tru`), E(io.ErrUnexpectedEOF).withPos(`tru`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidTrue"),
 	calls: []encoderMethodCall{
-		{Value(`truE`), newInvalidCharacterError("E", "within literal true (expecting 'e')").withOffset(len64(`tru`)), ""},
+		{Value(`truE`), newInvalidCharacterError("E", "within literal true (expecting 'e')").withPos(`tru`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedString"),
 	calls: []encoderMethodCall{
-		{Value(`"star`), io.ErrUnexpectedEOF, ""},
+		{Value(`"star`), E(io.ErrUnexpectedEOF).withPos(`"star`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidString"),
 	calls: []encoderMethodCall{
-		{Value(`"ok` + "\x00"), newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withOffset(len64(`"ok`)), ""},
+		{Value(`"ok` + "\x00"), newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withPos(`"ok`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
@@ -223,100 +223,106 @@ var encoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
 	opts: []Options{AllowInvalidUTF8(false)},
 	calls: []encoderMethodCall{
-		{String("living\xde\xad\xbe\xef"), errInvalidUTF8, ""},
-		{Value("\"living\xde\xad\xbe\xef\""), errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
+		{String("living\xde\xad\xbe\xef"), E(jsonwire.ErrInvalidUTF8), ""},
+		{Value("\"living\xde\xad\xbe\xef\""), E(jsonwire.ErrInvalidUTF8).withPos("\"living\xde\xad", ""), ""},
+		{ObjectStart, nil, ""},
+		{String("name"), nil, ""},
+		{ArrayStart, nil, ""},
+		{String("living\xde\xad\xbe\xef"), E(jsonwire.ErrInvalidUTF8).withPos(`{"name":[`, "/name/0"), ""},
+		{Value("\"living\xde\xad\xbe\xef\""), E(jsonwire.ErrInvalidUTF8).withPos("{\"name\":[\"living\xde\xad", "/name/0"), ""},
 	},
+	wantOut: `{"name":[`,
 }, {
 	name: jsontest.Name("TruncatedNumber"),
 	calls: []encoderMethodCall{
-		{Value(`0.`), io.ErrUnexpectedEOF, ""},
+		{Value(`0.`), E(io.ErrUnexpectedEOF).withPos("0", ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidNumber"),
 	calls: []encoderMethodCall{
-		{Value(`0.e`), newInvalidCharacterError("e", "within number (expecting digit)").withOffset(len64(`0.`)), ""},
+		{Value(`0.e`), newInvalidCharacterError("e", "within number (expecting digit)").withPos(`0.`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterStart"),
 	calls: []encoderMethodCall{
-		{Value(`{`), io.ErrUnexpectedEOF, ""},
+		{Value(`{`), E(io.ErrUnexpectedEOF).withPos("{", ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterName"),
 	calls: []encoderMethodCall{
-		{Value(`{"0"`), io.ErrUnexpectedEOF, ""},
+		{Value(`{"X"`), E(io.ErrUnexpectedEOF).withPos(`{"X"`, "/X"), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterColon"),
 	calls: []encoderMethodCall{
-		{Value(`{"0":`), io.ErrUnexpectedEOF, ""},
+		{Value(`{"X":`), E(io.ErrUnexpectedEOF).withPos(`{"X":`, "/X"), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterValue"),
 	calls: []encoderMethodCall{
-		{Value(`{"0":0`), io.ErrUnexpectedEOF, ""},
+		{Value(`{"0":0`), E(io.ErrUnexpectedEOF).withPos(`{"0":0`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterComma"),
 	calls: []encoderMethodCall{
-		{Value(`{"0":0,`), io.ErrUnexpectedEOF, ""},
+		{Value(`{"0":0,`), E(io.ErrUnexpectedEOF).withPos(`{"0":0,`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/MissingColon"),
 	calls: []encoderMethodCall{
-		{Value(` { "fizz" "buzz" } `), newInvalidCharacterError("\"", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
-		{Value(` { "fizz" , "buzz" } `), newInvalidCharacterError(",", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
+		{Value(` { "fizz" "buzz" } `), newInvalidCharacterError("\"", "after object name (expecting ':')").withPos(` { "fizz" `, "/fizz"), ""},
+		{Value(` { "fizz" , "buzz" } `), newInvalidCharacterError(",", "after object name (expecting ':')").withPos(` { "fizz" `, "/fizz"), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/MissingComma"),
 	calls: []encoderMethodCall{
-		{Value(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError("\"", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
-		{Value(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError(":", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{Value(` { "fizz" : "buzz" "gazz" } `), newInvalidCharacterError("\"", "after object value (expecting ',' or '}')").withPos(` { "fizz" : "buzz" `, ""), ""},
+		{Value(` { "fizz" : "buzz" : "gazz" } `), newInvalidCharacterError(":", "after object value (expecting ',' or '}')").withPos(` { "fizz" : "buzz" `, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/ExtraComma"),
 	calls: []encoderMethodCall{
-		{Value(` { , } `), newInvalidCharacterError(",", `at start of string (expecting '"')`).withOffset(len64(` { `)), ""},
-		{Value(` { "fizz" : "buzz" , } `), newInvalidCharacterError("}", `at start of string (expecting '"')`).withOffset(len64(` { "fizz" : "buzz" , `)), ""},
+		{Value(` { , } `), newInvalidCharacterError(",", `at start of string (expecting '"')`).withPos(` { `, ""), ""},
+		{Value(` { "fizz" : "buzz" , } `), newInvalidCharacterError("}", `at start of string (expecting '"')`).withPos(` { "fizz" : "buzz" , `, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName"),
 	calls: []encoderMethodCall{
-		{Value(`{ null }`), newInvalidCharacterError("n", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
-		{Value(`{ false }`), newInvalidCharacterError("f", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
-		{Value(`{ true }`), newInvalidCharacterError("t", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
-		{Value(`{ 0 }`), newInvalidCharacterError("0", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
-		{Value(`{ {} }`), newInvalidCharacterError("{", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
-		{Value(`{ [] }`), newInvalidCharacterError("[", `at start of string (expecting '"')`).withOffset(len64(`{ `)), ""},
+		{Value(`{ null }`), newInvalidCharacterError("n", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
+		{Value(`{ false }`), newInvalidCharacterError("f", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
+		{Value(`{ true }`), newInvalidCharacterError("t", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
+		{Value(`{ 0 }`), newInvalidCharacterError("0", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
+		{Value(`{ {} }`), newInvalidCharacterError("{", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
+		{Value(`{ [] }`), newInvalidCharacterError("[", `at start of string (expecting '"')`).withPos(`{ `, ""), ""},
 		{ObjectStart, nil, ""},
-		{Null, errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`null`), errMissingName.withOffset(len64(`{`)), ""},
-		{False, errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`false`), errMissingName.withOffset(len64(`{`)), ""},
-		{True, errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`true`), errMissingName.withOffset(len64(`{`)), ""},
-		{Uint(0), errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`0`), errMissingName.withOffset(len64(`{`)), ""},
-		{ObjectStart, errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`{}`), errMissingName.withOffset(len64(`{`)), ""},
-		{ArrayStart, errMissingName.withOffset(len64(`{`)), ""},
-		{Value(`[]`), errMissingName.withOffset(len64(`{`)), ""},
+		{Null, E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`null`), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{False, E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`false`), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{True, E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`true`), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Uint(0), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`0`), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{ObjectStart, E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`{}`), E(ErrNonStringName).withPos(`{`, ""), ""},
+		{ArrayStart, E(ErrNonStringName).withPos(`{`, ""), ""},
+		{Value(`[]`), E(ErrNonStringName).withPos(`{`, ""), ""},
 		{ObjectEnd, nil, ""},
 	},
 	wantOut: "{}\n",
 }, {
 	name: jsontest.Name("InvalidObject/InvalidValue"),
 	calls: []encoderMethodCall{
-		{Value(`{ "0": x }`), newInvalidCharacterError("x", `at start of value`).withOffset(len64(`{ "0": `)), ""},
+		{Value(`{ "0": x }`), newInvalidCharacterError("x", `at start of value`).withPos(`{ "0": `, "/0"), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/MismatchingDelim"),
 	calls: []encoderMethodCall{
-		{Value(` { ] `), newInvalidCharacterError("]", `at start of string (expecting '"')`).withOffset(len64(` { `)), ""},
-		{Value(` { "0":0 ] `), newInvalidCharacterError("]", `after object value (expecting ',' or '}')`).withOffset(len64(` { "0":0 `)), ""},
+		{Value(` { ] `), newInvalidCharacterError("]", `at start of string (expecting '"')`).withPos(` { `, ""), ""},
+		{Value(` { "0":0 ] `), newInvalidCharacterError("]", `after object value (expecting ',' or '}')`).withPos(` { "0":0 `, ""), ""},
 		{ObjectStart, nil, ""},
-		{ArrayEnd, errMismatchDelim.withOffset(len64(`{`)), ""},
-		{Value(`]`), newInvalidCharacterError("]", "at start of value").withOffset(len64(`{`)), ""},
+		{ArrayEnd, E(errMismatchDelim).withPos(`{`, ""), ""},
+		{Value(`]`), newInvalidCharacterError("]", "at start of value").withPos(`{`, ""), ""},
 		{ObjectEnd, nil, ""},
 	},
 	wantOut: "{}\n",
@@ -349,49 +355,49 @@ var encoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidObject/DuplicateNames"),
 	calls: []encoderMethodCall{
 		{ObjectStart, nil, ""},
-		{String("0"), nil, ""},
+		{String("X"), nil, ""},
 		{ObjectStart, nil, ""},
 		{ObjectEnd, nil, ""},
-		{String("0"), newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},`)), "/0"},
-		{Value(`"0"`), newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},`)), "/0"},
-		{String("1"), nil, ""},
+		{String("X"), E(ErrDuplicateName).withPos(`{"X":{},`, "/X"), "/X"},
+		{Value(`"X"`), E(ErrDuplicateName).withPos(`{"X":{},`, "/X"), "/X"},
+		{String("Y"), nil, ""},
 		{ObjectStart, nil, ""},
 		{ObjectEnd, nil, ""},
-		{String("0"), newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
-		{Value(`"0"`), newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
-		{String("1"), newDuplicateNameError(`"1"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
-		{Value(`"1"`), newDuplicateNameError(`"1"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
+		{String("X"), E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/X"), "/Y"},
+		{Value(`"X"`), E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/X"), "/Y"},
+		{String("Y"), E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/Y"), "/Y"},
+		{Value(`"Y"`), E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/Y"), "/Y"},
 		{ObjectEnd, nil, ""},
-		{Value(` { "0" : 0 , "1" : 1 , "0" : 0 } `), newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{}}` + "\n" + ` { "0" : 0 , "1" : 1 , `)), ""},
+		{Value(` { "X" : 0 , "Y" : 1 , "X" : 0 } `), E(ErrDuplicateName).withPos(`{"X":{},"Y":{}}`+"\n"+` { "X" : 0 , "Y" : 1 , `, "/X"), ""},
 	},
-	wantOut: `{"0":{},"1":{}}` + "\n",
+	wantOut: `{"X":{},"Y":{}}` + "\n",
 }, {
 	name: jsontest.Name("TruncatedArray/AfterStart"),
 	calls: []encoderMethodCall{
-		{Value(`[`), io.ErrUnexpectedEOF, ""},
+		{Value(`[`), E(io.ErrUnexpectedEOF).withPos(`[`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedArray/AfterValue"),
 	calls: []encoderMethodCall{
-		{Value(`[0`), io.ErrUnexpectedEOF, ""},
+		{Value(`[0`), E(io.ErrUnexpectedEOF).withPos(`[0`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedArray/AfterComma"),
 	calls: []encoderMethodCall{
-		{Value(`[0,`), io.ErrUnexpectedEOF, ""},
+		{Value(`[0,`), E(io.ErrUnexpectedEOF).withPos(`[0,`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedArray/MissingComma"),
 	calls: []encoderMethodCall{
-		{Value(` [ "fizz" "buzz" ] `), newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withOffset(len64(` [ "fizz" `)), ""},
+		{Value(` [ "fizz" "buzz" ] `), newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withPos(` [ "fizz" `, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidArray/MismatchingDelim"),
 	calls: []encoderMethodCall{
-		{Value(` [ } `), newInvalidCharacterError("}", `at start of value`).withOffset(len64(` [ `)), ""},
+		{Value(` [ } `), newInvalidCharacterError("}", `at start of value`).withPos(` [ `, "/0"), ""},
 		{ArrayStart, nil, ""},
-		{ObjectEnd, errMismatchDelim.withOffset(len64(`[`)), ""},
-		{Value(`}`), newInvalidCharacterError("}", "at start of value").withOffset(len64(`[`)), ""},
+		{ObjectEnd, E(errMismatchDelim).withPos(`[`, "/0"), ""},
+		{Value(`}`), newInvalidCharacterError("}", "at start of value").withPos(`[`, "/0"), ""},
 		{ArrayEnd, nil, ""},
 	},
 	wantOut: "[]\n",
