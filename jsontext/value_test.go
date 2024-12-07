@@ -6,11 +6,11 @@ package jsontext
 
 import (
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 type valueTestdataEntry struct {
@@ -107,13 +107,13 @@ var valueTestdata = append(func() (out []valueTestdataEntry) {
 	in:                  `  "living` + "\xde\xad\xbe\xef" + `\ufffd�"  `,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"living` + "\xde\xad\xbe\xef" + `\ufffd�"`,
-	wantCanonicalizeErr: errInvalidUTF8.withOffset(len64(`  "living` + "\xde\xad")),
+	wantCanonicalizeErr: E(jsonwire.ErrInvalidUTF8).withPos(`  "living`+"\xde\xad", ""),
 }, {
 	name:                jsontest.Name("InvalidUTF8/SurrogateHalf"),
 	in:                  `"\ud800"`,
 	wantValid:           false, // uses RFC 7493 as the definition; which validates UTF-8
 	wantCompacted:       `"\ud800"`,
-	wantCanonicalizeErr: &SyntacticError{str: "invalid surrogate pair `\\ud800\"` within string", ByteOffset: len64(`"`)},
+	wantCanonicalizeErr: newInvalidEscapeSequenceError(`\ud800"`).withPos(`"`, ""),
 }, {
 	name:              jsontest.Name("UppercaseEscaped"),
 	in:                `"\u000B"`,
@@ -130,15 +130,15 @@ var valueTestdata = append(func() (out []valueTestdataEntry) {
 	    "1": 1,
 	    "0": 0
 	}`,
-	wantCanonicalizeErr: newDuplicateNameError(`"0"`).withOffset(len64(` { "0" : 0 , "1" : 1 , `)),
+	wantCanonicalizeErr: E(ErrDuplicateName).withPos(` { "0" : 0 , "1" : 1 , `, "/0"),
 }, {
 	name:                jsontest.Name("Whitespace"),
 	in:                  " \n\r\t",
 	wantValid:           false,
 	wantCompacted:       " \n\r\t",
-	wantCompactErr:      io.ErrUnexpectedEOF,
-	wantIndentErr:       io.ErrUnexpectedEOF,
-	wantCanonicalizeErr: io.ErrUnexpectedEOF,
+	wantCompactErr:      E(io.ErrUnexpectedEOF).withPos(" \n\r\t", ""),
+	wantIndentErr:       E(io.ErrUnexpectedEOF).withPos(" \n\r\t", ""),
+	wantCanonicalizeErr: E(io.ErrUnexpectedEOF).withPos(" \n\r\t", ""),
 }}...)
 
 func TestValueMethods(t *testing.T) {
@@ -171,7 +171,7 @@ func TestValueMethods(t *testing.T) {
 			if string(gotCompacted) != td.wantCompacted {
 				t.Errorf("%s: Value.Compact = %s, want %s", td.name.Where, gotCompacted, td.wantCompacted)
 			}
-			if !reflect.DeepEqual(gotCompactErr, td.wantCompactErr) {
+			if !equalError(gotCompactErr, td.wantCompactErr) {
 				t.Errorf("%s: Value.Compact error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCompactErr, td.wantCompactErr)
 			}
 
@@ -180,7 +180,7 @@ func TestValueMethods(t *testing.T) {
 			if string(gotIndented) != td.wantIndented {
 				t.Errorf("%s: Value.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
 			}
-			if !reflect.DeepEqual(gotIndentErr, td.wantIndentErr) {
+			if !equalError(gotIndentErr, td.wantIndentErr) {
 				t.Errorf("%s: Value.Indent error mismatch:\ngot  %v\nwant %v", td.name.Where, gotIndentErr, td.wantIndentErr)
 			}
 
@@ -189,7 +189,7 @@ func TestValueMethods(t *testing.T) {
 			if string(gotCanonicalized) != td.wantCanonicalized {
 				t.Errorf("%s: Value.Canonicalize = %s, want %s", td.name.Where, gotCanonicalized, td.wantCanonicalized)
 			}
-			if !reflect.DeepEqual(gotCanonicalizeErr, td.wantCanonicalizeErr) {
+			if !equalError(gotCanonicalizeErr, td.wantCanonicalizeErr) {
 				t.Errorf("%s: Value.Canonicalize error mismatch:\ngot  %v\nwant %v", td.name.Where, gotCanonicalizeErr, td.wantCanonicalizeErr)
 			}
 		})
