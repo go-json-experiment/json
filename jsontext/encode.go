@@ -716,7 +716,8 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 			return dst, n, io.ErrUnexpectedEOF
 		}
 		m := jsonwire.ConsumeSimpleString(src[n:])
-		if m > 0 {
+		isVerbatim := m > 0
+		if isVerbatim {
 			dst = append(dst, src[n:n+m]...)
 		} else {
 			dst, m, err = jsonwire.ReformatString(dst, src[n:], &e.Flags)
@@ -724,9 +725,9 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 				return dst, n + m, err
 			}
 		}
-		// TODO: Specify whether the name is verbatim or not.
-		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(src[n:n+m], false) {
-			return dst, n, newDuplicateNameError(src[n : n+m])
+		quotedName := src[n : n+m]
+		if !e.Flags.Get(jsonflags.AllowDuplicateNames) && !names.insertQuoted(quotedName, isVerbatim) {
+			return dst, n, newDuplicateNameError(quotedName)
 		}
 		n += m
 
