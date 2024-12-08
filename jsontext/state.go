@@ -86,8 +86,6 @@ func (p Pointer) Tokens() iter.Seq[string] {
 }
 
 // appendStackPointer appends a JSON Pointer (RFC 6901) to the current value.
-// The returned pointer is only accurate if s.names is populated,
-// otherwise it uses the numeric index as the object member name.
 //
 // Invariant: Must call s.names.copyQuotedBuffer beforehand.
 func (s state) appendStackPointer(b []byte) []byte {
@@ -100,23 +98,16 @@ func (s state) appendStackPointer(b []byte) []byte {
 		b = append(b, '/')
 		switch {
 		case e.isObject():
-			if objectDepth < s.Names.length() {
-				for _, c := range s.Names.getUnquoted(objectDepth) {
-					// Per RFC 6901, section 3, escape '~' and '/' characters.
-					switch c {
-					case '~':
-						b = append(b, "~0"...)
-					case '/':
-						b = append(b, "~1"...)
-					default:
-						b = append(b, c)
-					}
+			for _, c := range s.Names.getUnquoted(objectDepth) {
+				// Per RFC 6901, section 3, escape '~' and '/' characters.
+				switch c {
+				case '~':
+					b = append(b, "~0"...)
+				case '/':
+					b = append(b, "~1"...)
+				default:
+					b = append(b, c)
 				}
-			} else {
-				// Since the names stack is unpopulated, the name is unknown.
-				// As a best-effort replacement, use the numeric member index.
-				// While inaccurate, it produces a syntactically valid pointer.
-				b = strconv.AppendUint(b, uint64((e.Length()-1)/2), 10)
 			}
 			objectDepth++
 		case e.isArray():
