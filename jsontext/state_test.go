@@ -184,7 +184,7 @@ func TestStateMachine(t *testing.T) {
 						got = append(got, e.Length())
 					}
 					want := []int64(op)
-					if !reflect.DeepEqual(got, want) {
+					if !slices.Equal(got, want) {
 						t.Fatalf("%s: stack lengths mismatch:\ngot  %v\nwant %v", sequence, got, want)
 					}
 				case appendToken:
@@ -336,7 +336,7 @@ func TestObjectNamespace(t *testing.T) {
 			for i := range ns.length() {
 				gotNames = append(gotNames, string(ns.getUnquoted(i)))
 			}
-			if !reflect.DeepEqual(gotNames, wantNames) {
+			if !slices.Equal(gotNames, wantNames) {
 				t.Fatalf("%d: objectNamespace = {%v}, want {%v}", i, strings.Join(gotNames, " "), strings.Join(wantNames, " "))
 			}
 		}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"path"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
@@ -57,7 +58,7 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 				pointers = append(pointers, enc.StackPointer())
 			}
 		}
-		if !reflect.DeepEqual(pointers, td.pointers) {
+		if !slices.Equal(pointers, td.pointers) {
 			t.Fatalf("%s: pointers mismatch:\ngot  %q\nwant %q", where, pointers, td.pointers)
 		}
 	case "Value":
