@@ -12,6 +12,7 @@ import (
 	"net"
 	"path"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -65,7 +66,7 @@ func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coder
 		if !equalTokens(tokens, td.tokens) {
 			t.Fatalf("%s: tokens mismatch:\ngot  %v\nwant %v", where, tokens, td.tokens)
 		}
-		if !reflect.DeepEqual(pointers, td.pointers) {
+		if !slices.Equal(pointers, td.pointers) {
 			t.Fatalf("%s: pointers mismatch:\ngot  %q\nwant %q", where, pointers, td.pointers)
 		}
 	case "Value":
