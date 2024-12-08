@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
 // equalTokens reports whether to sequences of tokens formats the same way.
@@ -190,8 +191,8 @@ var decoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidStart"),
 	in:   ` #`,
 	calls: []decoderMethodCall{
-		{'#', zeroToken, newInvalidCharacterError("#", "at start of token").withOffset(len64(" ")), ""},
-		{'#', zeroValue, newInvalidCharacterError("#", "at start of value").withOffset(len64(" ")), ""},
+		{'#', zeroToken, newInvalidCharacterError("#", "at start of token").withPos(" ", ""), ""},
+		{'#', zeroValue, newInvalidCharacterError("#", "at start of value").withPos(" ", ""), ""},
 	},
 }, {
 	name: jsontest.Name("StreamN0"),
@@ -224,65 +225,65 @@ var decoderErrorTestdata = []struct {
 	in:   ` null , null `,
 	calls: []decoderMethodCall{
 		{'n', Null, nil, ""},
-		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withOffset(len64(` null `)), ""},
-		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withOffset(len64(` null `)), ""},
+		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withPos(` null `, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withPos(` null `, ""), ""},
 	},
 	wantOffset: len(` null`),
 }, {
 	name: jsontest.Name("TruncatedNull"),
 	in:   `nul`,
 	calls: []decoderMethodCall{
-		{'n', zeroToken, io.ErrUnexpectedEOF, ""},
-		{'n', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'n', zeroToken, E(io.ErrUnexpectedEOF).withPos(`nul`, ""), ""},
+		{'n', zeroValue, E(io.ErrUnexpectedEOF).withPos(`nul`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidNull"),
 	in:   `nulL`,
 	calls: []decoderMethodCall{
-		{'n', zeroToken, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withOffset(len64(`nul`)), ""},
-		{'n', zeroValue, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withOffset(len64(`nul`)), ""},
+		{'n', zeroToken, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withPos(`nul`, ""), ""},
+		{'n', zeroValue, newInvalidCharacterError("L", `within literal null (expecting 'l')`).withPos(`nul`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedFalse"),
 	in:   `fals`,
 	calls: []decoderMethodCall{
-		{'f', zeroToken, io.ErrUnexpectedEOF, ""},
-		{'f', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'f', zeroToken, E(io.ErrUnexpectedEOF).withPos(`fals`, ""), ""},
+		{'f', zeroValue, E(io.ErrUnexpectedEOF).withPos(`fals`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidFalse"),
 	in:   `falsE`,
 	calls: []decoderMethodCall{
-		{'f', zeroToken, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withOffset(len64(`fals`)), ""},
-		{'f', zeroValue, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withOffset(len64(`fals`)), ""},
+		{'f', zeroToken, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withPos(`fals`, ""), ""},
+		{'f', zeroValue, newInvalidCharacterError("E", `within literal false (expecting 'e')`).withPos(`fals`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedTrue"),
 	in:   `tru`,
 	calls: []decoderMethodCall{
-		{'t', zeroToken, io.ErrUnexpectedEOF, ""},
-		{'t', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'t', zeroToken, E(io.ErrUnexpectedEOF).withPos(`tru`, ""), ""},
+		{'t', zeroValue, E(io.ErrUnexpectedEOF).withPos(`tru`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidTrue"),
 	in:   `truE`,
 	calls: []decoderMethodCall{
-		{'t', zeroToken, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withOffset(len64(`tru`)), ""},
-		{'t', zeroValue, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withOffset(len64(`tru`)), ""},
+		{'t', zeroToken, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withPos(`tru`, ""), ""},
+		{'t', zeroValue, newInvalidCharacterError("E", `within literal true (expecting 'e')`).withPos(`tru`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedString"),
 	in:   `"start`,
 	calls: []decoderMethodCall{
-		{'"', zeroToken, io.ErrUnexpectedEOF, ""},
-		{'"', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'"', zeroToken, E(io.ErrUnexpectedEOF).withPos(`"start`, ""), ""},
+		{'"', zeroValue, E(io.ErrUnexpectedEOF).withPos(`"start`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidString"),
 	in:   `"ok` + "\x00",
 	calls: []decoderMethodCall{
-		{'"', zeroToken, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withOffset(len64(`"ok`)), ""},
-		{'"', zeroValue, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withOffset(len64(`"ok`)), ""},
+		{'"', zeroToken, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withPos(`"ok`, ""), ""},
+		{'"', zeroValue, newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withPos(`"ok`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
@@ -305,238 +306,238 @@ var decoderErrorTestdata = []struct {
 	opts: []Options{AllowInvalidUTF8(false)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
-		{'"', zeroToken, errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
-		{'"', zeroValue, errInvalidUTF8.withOffset(len64("\"living\xde\xad")), ""},
+		{'"', zeroToken, E(jsonwire.ErrInvalidUTF8).withPos("\"living\xde\xad", ""), ""},
+		{'"', zeroValue, E(jsonwire.ErrInvalidUTF8).withPos("\"living\xde\xad", ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedNumber"),
 	in:   `0.`,
 	calls: []decoderMethodCall{
-		{'0', zeroToken, io.ErrUnexpectedEOF, ""},
-		{'0', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'0', zeroToken, E(io.ErrUnexpectedEOF), ""},
+		{'0', zeroValue, E(io.ErrUnexpectedEOF), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidNumber"),
 	in:   `0.e`,
 	calls: []decoderMethodCall{
-		{'0', zeroToken, newInvalidCharacterError("e", "within number (expecting digit)").withOffset(len64(`0.`)), ""},
-		{'0', zeroValue, newInvalidCharacterError("e", "within number (expecting digit)").withOffset(len64(`0.`)), ""},
+		{'0', zeroToken, newInvalidCharacterError("e", "within number (expecting digit)").withPos(`0.`, ""), ""},
+		{'0', zeroValue, newInvalidCharacterError("e", "within number (expecting digit)").withPos(`0.`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterStart"),
 	in:   `{`,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'{', zeroValue, E(io.ErrUnexpectedEOF).withPos("{", ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos("{", ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos("{", ""), ""},
 	},
 	wantOffset: len(`{`),
 }, {
 	name: jsontest.Name("TruncatedObject/AfterName"),
 	in:   `{"0"`,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'{', zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0"`, "/0"), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("0"), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"0"`, "/0"), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0"`, "/0"), ""},
 	},
 	wantOffset: len(`{"0"`),
 }, {
 	name: jsontest.Name("TruncatedObject/AfterColon"),
 	in:   `{"0":`,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'{', zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":`, "/0"), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("0"), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"0":`, "/0"), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":`, "/0"), ""},
 	},
 	wantOffset: len(`{"0"`),
 }, {
 	name: jsontest.Name("TruncatedObject/AfterValue"),
 	in:   `{"0":0`,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'{', zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":0`, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("0"), nil, ""},
 		{'0', Uint(0), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"0":0`, ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":0`, ""), ""},
 	},
 	wantOffset: len(`{"0":0`),
 }, {
 	name: jsontest.Name("TruncatedObject/AfterComma"),
 	in:   `{"0":0,`,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'{', zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":0,`, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("0"), nil, ""},
 		{'0', Uint(0), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"0":0,`, ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"0":0,`, ""), ""},
 	},
 	wantOffset: len(`{"0":0`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingColon"),
 	in:   ` { "fizz" "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("\"", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("\"", "after object name (expecting ':')").withPos(` { "fizz" `, "/fizz"), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{0, zeroToken, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
-		{0, zeroValue, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
+		{0, zeroToken, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
+		{0, zeroValue, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingColon/GotComma"),
 	in:   ` { "fizz" , "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(",", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError(",", "after object name (expecting ':')").withPos(` { "fizz" `, "/fizz"), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{0, zeroToken, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
-		{0, zeroValue, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
+		{0, zeroToken, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
+		{0, zeroValue, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingColon/GotHash"),
 	in:   ` { "fizz" # "buzz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("#", "after object name (expecting ':')").withOffset(len64(` { "fizz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("#", "after object name (expecting ':')").withPos(` { "fizz" `, "/fizz"), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{0, zeroToken, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
-		{0, zeroValue, errMissingColon.withOffset(len64(` { "fizz" `)), ""},
+		{0, zeroToken, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
+		{0, zeroValue, E(errMissingColon).withPos(` { "fizz" `, "/fizz"), ""},
 	},
 	wantOffset: len(` { "fizz"`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingComma"),
 	in:   ` { "fizz" : "buzz" "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("\"", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("\"", "after object value (expecting ',' or '}')").withPos(` { "fizz" : "buzz" `, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingComma/GotColon"),
 	in:   ` { "fizz" : "buzz" : "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(":", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError(":", "after object value (expecting ',' or '}')").withPos(` { "fizz" : "buzz" `, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
 	name: jsontest.Name("InvalidObject/MissingComma/GotHash"),
 	in:   ` { "fizz" : "buzz" # "gazz" } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("#", "after object value (expecting ',' or '}')").withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("#", "after object value (expecting ',' or '}')").withPos(` { "fizz" : "buzz" `, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(` { "fizz" : "buzz" `, ""), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
 	name: jsontest.Name("InvalidObject/ExtraComma/AfterStart"),
 	in:   ` { , } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError(",", `at start of string (expecting '"')`).withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError(",", `at start of string (expecting '"')`).withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withOffset(len64(` { `)), ""},
-		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withOffset(len64(` { `)), ""},
+		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withPos(` { `, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/ExtraComma/AfterValue"),
 	in:   ` { "fizz" : "buzz" , } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("}", `at start of string (expecting '"')`).withOffset(len64(` { "fizz" : "buzz" , `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("}", `at start of string (expecting '"')`).withPos(` { "fizz" : "buzz" , `, ""), ""},
 		{'{', ObjectStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withOffset(len64(` { "fizz" : "buzz" `)), ""},
-		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withOffset(len64(` { "fizz" : "buzz" `)), ""},
+		{0, zeroToken, newInvalidCharacterError(",", `before next token`).withPos(` { "fizz" : "buzz" `, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(",", `before next token`).withPos(` { "fizz" : "buzz" `, ""), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotNull"),
 	in:   ` { null : null } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("n", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("n", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'n', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'n', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'n', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'n', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotFalse"),
 	in:   ` { false : false } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("f", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("f", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'f', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'f', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'f', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'f', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotTrue"),
 	in:   ` { true : true } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("t", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("t", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'t', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'t', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'t', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'t', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotNumber"),
 	in:   ` { 0 : 0 } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("0", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("0", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'0', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'0', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'0', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'0', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotObject"),
 	in:   ` { {} : {} } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("{", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("{", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'{', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'{', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'{', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'{', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName/GotArray"),
 	in:   ` { [] : [] } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("[", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("[", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{'[', zeroToken, errMissingName.withOffset(len64(` { `)), ""},
-		{'[', zeroValue, errMissingName.withOffset(len64(` { `)), ""},
+		{'[', zeroToken, E(ErrNonStringName).withPos(` { `, ""), ""},
+		{'[', zeroValue, E(ErrNonStringName).withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/MismatchingDelim"),
 	in:   ` { ] `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("]", "at start of string (expecting '\"')").withOffset(len64(` { `)), ""},
+		{'{', zeroValue, newInvalidCharacterError("]", "at start of string (expecting '\"')").withPos(` { `, ""), ""},
 		{'{', ObjectStart, nil, ""},
-		{']', zeroToken, errMismatchDelim.withOffset(len64(` { `)), ""},
-		{']', zeroValue, newInvalidCharacterError("]", "at start of value").withOffset(len64(` { `)), ""},
+		{']', zeroToken, E(errMismatchDelim).withPos(` { `, ""), ""},
+		{']', zeroValue, newInvalidCharacterError("]", "at start of value").withPos(` { `, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
@@ -544,7 +545,7 @@ var decoderErrorTestdata = []struct {
 	in:   ` { } `,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
-		{'}', zeroValue, newInvalidCharacterError("}", "at start of value").withOffset(len64(" { ")), ""},
+		{'}', zeroValue, newInvalidCharacterError("}", "at start of value").withPos(" { ", ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
@@ -574,71 +575,71 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len(`{"0":0,"0":0}`),
 }, {
 	name: jsontest.Name("InvalidObject/DuplicateNames"),
-	in:   `{"0":{},"1":{},"0":{}} `,
+	in:   `{"X":{},"Y":{},"X":{}} `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), ""},
+		{'{', zeroValue, E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/X"), ""},
 		{'{', ObjectStart, nil, ""},
-		{'"', String("0"), nil, ""},
-		{'{', ObjectStart, nil, ""},
-		{'}', ObjectEnd, nil, ""},
-		{'"', String("1"), nil, ""},
+		{'"', String("X"), nil, ""},
 		{'{', ObjectStart, nil, ""},
 		{'}', ObjectEnd, nil, ""},
-		{'"', zeroToken, newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
-		{'"', zeroValue, newDuplicateNameError(`"0"`).withOffset(len64(`{"0":{},"1":{},`)), "/1"},
+		{'"', String("Y"), nil, ""},
+		{'{', ObjectStart, nil, ""},
+		{'}', ObjectEnd, nil, ""},
+		{'"', zeroToken, E(ErrDuplicateName).withPos(`{"X":{},"Y":{},`, "/X"), "/Y"},
+		{'"', zeroValue, E(ErrDuplicateName).withPos(`{"0":{},"Y":{},`, "/X"), "/Y"},
 	},
 	wantOffset: len(`{"0":{},"1":{}`),
 }, {
 	name: jsontest.Name("TruncatedArray/AfterStart"),
 	in:   `[`,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'[', zeroValue, E(io.ErrUnexpectedEOF).withPos("[", ""), ""},
 		{'[', ArrayStart, nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos("[", ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos("[", ""), ""},
 	},
 	wantOffset: len(`[`),
 }, {
 	name: jsontest.Name("TruncatedArray/AfterValue"),
 	in:   `[0`,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'[', zeroValue, E(io.ErrUnexpectedEOF).withPos("[0", ""), ""},
 		{'[', ArrayStart, nil, ""},
 		{'0', Uint(0), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos("[0", ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos("[0", ""), ""},
 	},
 	wantOffset: len(`[0`),
 }, {
 	name: jsontest.Name("TruncatedArray/AfterComma"),
 	in:   `[0,`,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, io.ErrUnexpectedEOF, ""},
+		{'[', zeroValue, E(io.ErrUnexpectedEOF).withPos("[0,", ""), ""},
 		{'[', ArrayStart, nil, ""},
 		{'0', Uint(0), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos("[0,", ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos("[0,", ""), ""},
 	},
 	wantOffset: len(`[0`),
 }, {
 	name: jsontest.Name("InvalidArray/MissingComma"),
 	in:   ` [ "fizz" "buzz" ] `,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withOffset(len64(` [ "fizz" `)), ""},
+		{'[', zeroValue, newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withPos(` [ "fizz" `, ""), ""},
 		{'[', ArrayStart, nil, ""},
 		{'"', String("fizz"), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(` [ "fizz" `)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(` [ "fizz" `)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(` [ "fizz" `, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(` [ "fizz" `, ""), ""},
 	},
 	wantOffset: len(` [ "fizz"`),
 }, {
 	name: jsontest.Name("InvalidArray/MismatchingDelim"),
 	in:   ` [ } `,
 	calls: []decoderMethodCall{
-		{'[', zeroValue, newInvalidCharacterError("}", "at start of value").withOffset(len64(` [ `)), ""},
+		{'[', zeroValue, newInvalidCharacterError("}", "at start of value").withPos(` [ `, "/0"), ""},
 		{'[', ArrayStart, nil, ""},
-		{'}', zeroToken, errMismatchDelim.withOffset(len64(` { `)), ""},
-		{'}', zeroValue, newInvalidCharacterError("}", "at start of value").withOffset(len64(` [ `)), ""},
+		{'}', zeroToken, E(errMismatchDelim).withPos(` [ `, "/0"), ""},
+		{'}', zeroValue, newInvalidCharacterError("}", "at start of value").withPos(` [ `, "/0"), ""},
 	},
 	wantOffset: len(` [`),
 }, {
@@ -646,7 +647,7 @@ var decoderErrorTestdata = []struct {
 	in:   ` [ ] `,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
-		{']', zeroValue, newInvalidCharacterError("]", "at start of value").withOffset(len64(" [ ")), ""},
+		{']', zeroValue, newInvalidCharacterError("]", "at start of value").withPos(" [ ", "/0"), ""},
 	},
 	wantOffset: len(` [`),
 }, {
@@ -654,8 +655,8 @@ var decoderErrorTestdata = []struct {
 	in:   `"",`,
 	calls: []decoderMethodCall{
 		{'"', String(""), nil, ""},
-		{0, zeroToken, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`""`)), ""},
-		{0, zeroValue, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`""`)), ""},
+		{0, zeroToken, newInvalidCharacterError(",", "before next token").withPos(`""`, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(",", "before next token").withPos(`""`, ""), ""},
 	},
 	wantOffset: len(`""`),
 }, {
@@ -663,8 +664,8 @@ var decoderErrorTestdata = []struct {
 	in:   `{:`,
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
-		{0, zeroToken, newInvalidCharacterError([]byte(":"), "before next token").withOffset(len64(`{`)), ""},
-		{0, zeroValue, newInvalidCharacterError([]byte(":"), "before next token").withOffset(len64(`{`)), ""},
+		{0, zeroToken, newInvalidCharacterError(":", "before next token").withPos(`{`, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(":", "before next token").withPos(`{`, ""), ""},
 	},
 	wantOffset: len(`{`),
 }, {
@@ -673,8 +674,8 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, errMissingColon.withOffset(len64(`{""`)), ""},
-		{0, zeroValue, errMissingColon.withOffset(len64(`{""`)), ""},
+		{0, zeroToken, E(errMissingColon).withPos(`{""`, "/"), ""},
+		{0, zeroValue, E(errMissingColon).withPos(`{""`, "/"), ""},
 	},
 	wantOffset: len(`{""`),
 }, {
@@ -683,8 +684,8 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'{', ObjectStart, nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"":`, "/"), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"":`, "/"), ""},
 	},
 	wantOffset: len(`{""`),
 }, {
@@ -694,8 +695,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String(""), nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(`{"":""`)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(`{"":""`)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(`{"":""`, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(`{"":""`, ""), ""},
 	},
 	wantOffset: len(`{"":""`),
 }, {
@@ -705,8 +706,8 @@ var decoderErrorTestdata = []struct {
 		{'{', ObjectStart, nil, ""},
 		{'"', String(""), nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`{"":"",`, ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`{"":"",`, ""), ""},
 	},
 	wantOffset: len(`{"":""`),
 }, {
@@ -714,8 +715,8 @@ var decoderErrorTestdata = []struct {
 	in:   `[,`,
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
-		{0, zeroToken, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`[`)), ""},
-		{0, zeroValue, newInvalidCharacterError([]byte(","), "before next token").withOffset(len64(`[`)), ""},
+		{0, zeroToken, newInvalidCharacterError(",", "before next token").withPos(`[`, ""), ""},
+		{0, zeroValue, newInvalidCharacterError(",", "before next token").withPos(`[`, ""), ""},
 	},
 	wantOffset: len(`[`),
 }, {
@@ -724,8 +725,8 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, errMissingComma.withOffset(len64(`[""`)), ""},
-		{0, zeroValue, errMissingComma.withOffset(len64(`[""`)), ""},
+		{0, zeroToken, E(errMissingComma).withPos(`[""`, ""), ""},
+		{0, zeroValue, E(errMissingComma).withPos(`[""`, ""), ""},
 	},
 	wantOffset: len(`[""`),
 }, {
@@ -734,8 +735,8 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'[', ArrayStart, nil, ""},
 		{'"', String(""), nil, ""},
-		{0, zeroToken, io.ErrUnexpectedEOF, ""},
-		{0, zeroValue, io.ErrUnexpectedEOF, ""},
+		{0, zeroToken, E(io.ErrUnexpectedEOF).withPos(`["",`, ""), ""},
+		{0, zeroValue, E(io.ErrUnexpectedEOF).withPos(`["",`, ""), ""},
 	},
 	wantOffset: len(`[""`),
 }}
@@ -950,8 +951,8 @@ func TestPeekableDecoder(t *testing.T) {
 
 		PeekKind{0},
 		WriteString{"] "},
-		ReadValue{0, io.ErrUnexpectedEOF}, // previous error from PeekKind is cached once
-		ReadValue{0, newInvalidCharacterError("]", "at start of value").withOffset(2)},
+		ReadValue{0, E(io.ErrUnexpectedEOF).withPos("[ ", "")}, // previous error from PeekKind is cached once
+		ReadValue{0, newInvalidCharacterError("]", "at start of value").withPos("[ ", "/0")},
 		ReadToken{']', nil},
 
 		WriteString{"[ "},
@@ -966,7 +967,7 @@ func TestPeekableDecoder(t *testing.T) {
 		PeekKind{0},
 		WriteString{"fal"},
 		PeekKind{'f'},
-		ReadValue{0, io.ErrUnexpectedEOF},
+		ReadValue{0, E(io.ErrUnexpectedEOF).withPos("[ ] [  null , fal", "/1")},
 		WriteString{"se "},
 		ReadValue{'f', nil},
 
@@ -974,7 +975,7 @@ func TestPeekableDecoder(t *testing.T) {
 		WriteString{" , "},
 		PeekKind{0},
 		WriteString{` "" `},
-		ReadValue{0, io.ErrUnexpectedEOF}, // previous error from PeekKind is cached once
+		ReadValue{0, E(io.ErrUnexpectedEOF).withPos("[ ] [  null , false  , ", "")}, // previous error from PeekKind is cached once
 		ReadValue{'"', nil},
 
 		WriteString{" , 0"},
