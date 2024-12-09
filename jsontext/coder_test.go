@@ -16,10 +16,29 @@ import (
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsontest"
+	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
-func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
-	return int64(len(in))
+func E(err error) *SyntacticError {
+	return &SyntacticError{Err: err}
+}
+
+func newInvalidCharacterError(prefix, where string) *SyntacticError {
+	return E(jsonwire.NewInvalidCharacterError(prefix, where))
+}
+
+func newInvalidEscapeSequenceError(what string) *SyntacticError {
+	return E(jsonwire.NewInvalidEscapeSequenceError(what))
+}
+
+func (e *SyntacticError) withPos(prefix string, pointer Pointer) *SyntacticError {
+	e.ByteOffset = int64(len(prefix))
+	e.JSONPointer = pointer
+	return e
+}
+
+func equalError(x, y error) bool {
+	return reflect.DeepEqual(x, y)
 }
 
 var (
@@ -591,13 +610,13 @@ func TestCoderMaxDepth(t *testing.T) {
 		var dec Decoder
 		checkReadToken := func(t *testing.T, wantKind Kind, wantErr error) {
 			t.Helper()
-			if tok, err := dec.ReadToken(); tok.Kind() != wantKind || !reflect.DeepEqual(err, wantErr) {
+			if tok, err := dec.ReadToken(); tok.Kind() != wantKind || !equalError(err, wantErr) {
 				t.Fatalf("Decoder.ReadToken = (%q, %v), want (%q, %v)", byte(tok.Kind()), err, byte(wantKind), wantErr)
 			}
 		}
 		checkReadValue := func(t *testing.T, wantLen int, wantErr error) {
 			t.Helper()
-			if val, err := dec.ReadValue(); len(val) != wantLen || !reflect.DeepEqual(err, wantErr) {
+			if val, err := dec.ReadValue(); len(val) != wantLen || !equalError(err, wantErr) {
 				t.Fatalf("Decoder.ReadValue = (%d, %v), want (%d, %v)", len(val), err, wantLen, wantErr)
 			}
 		}
@@ -622,21 +641,26 @@ func TestCoderMaxDepth(t *testing.T) {
 			}
 		})
 
+		wantErr := &SyntacticError{
+			ByteOffset:  maxNestingDepth,
+			JSONPointer: Pointer(strings.Repeat("/0", maxNestingDepth)),
+			Err:         errMaxDepth,
+		}
 		t.Run("ArraysInvalid/SingleValue", func(t *testing.T) {
 			dec.s.reset(maxArrays, nil)
-			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+			checkReadValue(t, 0, wantErr)
 		})
 		t.Run("ArraysInvalid/TokenThenValue", func(t *testing.T) {
 			dec.s.reset(maxArrays, nil)
 			checkReadToken(t, '[', nil)
-			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+			checkReadValue(t, 0, wantErr)
 		})
 		t.Run("ArraysInvalid/AllTokens", func(t *testing.T) {
 			dec.s.reset(maxArrays, nil)
 			for range maxNestingDepth {
 				checkReadToken(t, '[', nil)
 			}
-			checkReadToken(t, 0, errMaxDepth.withOffset(maxNestingDepth))
+			checkReadValue(t, 0, wantErr)
 		})
 
 		t.Run("ObjectsValid/SingleValue", func(t *testing.T) {
@@ -662,15 +686,20 @@ func TestCoderMaxDepth(t *testing.T) {
 			}
 		})
 
+		wantErr = &SyntacticError{
+			ByteOffset:  maxNestingDepth * int64(len(`{"":`)),
+			JSONPointer: Pointer(strings.Repeat("/", maxNestingDepth)),
+			Err:         errMaxDepth,
+		}
 		t.Run("ObjectsInvalid/SingleValue", func(t *testing.T) {
 			dec.s.reset(maxObjects, nil)
-			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkReadValue(t, 0, wantErr)
 		})
 		t.Run("ObjectsInvalid/TokenThenValue", func(t *testing.T) {
 			dec.s.reset(maxObjects, nil)
 			checkReadToken(t, '{', nil)
 			checkReadToken(t, '"', nil)
-			checkReadValue(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkReadValue(t, 0, wantErr)
 		})
 		t.Run("ObjectsInvalid/AllTokens", func(t *testing.T) {
 			dec.s.reset(maxObjects, nil)
@@ -678,7 +707,7 @@ func TestCoderMaxDepth(t *testing.T) {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
 			}
-			checkReadToken(t, 0, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkReadToken(t, 0, wantErr)
 		})
 	})
 
@@ -686,26 +715,31 @@ func TestCoderMaxDepth(t *testing.T) {
 		var enc Encoder
 		checkWriteToken := func(t *testing.T, tok Token, wantErr error) {
 			t.Helper()
-			if err := enc.WriteToken(tok); !reflect.DeepEqual(err, wantErr) {
+			if err := enc.WriteToken(tok); !equalError(err, wantErr) {
 				t.Fatalf("Encoder.WriteToken = %v, want %v", err, wantErr)
 			}
 		}
 		checkWriteValue := func(t *testing.T, val Value, wantErr error) {
 			t.Helper()
-			if err := enc.WriteValue(val); !reflect.DeepEqual(err, wantErr) {
+			if err := enc.WriteValue(val); !equalError(err, wantErr) {
 				t.Fatalf("Encoder.WriteValue = %v, want %v", err, wantErr)
 			}
 		}
 
+		wantErr := &SyntacticError{
+			ByteOffset:  maxNestingDepth,
+			JSONPointer: Pointer(strings.Repeat("/0", maxNestingDepth)),
+			Err:         errMaxDepth,
+		}
 		t.Run("Arrays/SingleValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			checkWriteValue(t, maxArrays, errMaxDepth.withOffset(maxNestingDepth))
+			checkWriteValue(t, maxArrays, wantErr)
 			checkWriteValue(t, trimArray(maxArrays), nil)
 		})
 		t.Run("Arrays/TokenThenValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteToken(t, ArrayStart, nil)
-			checkWriteValue(t, trimArray(maxArrays), errMaxDepth.withOffset(maxNestingDepth))
+			checkWriteValue(t, trimArray(maxArrays), wantErr)
 			checkWriteValue(t, trimArray(trimArray(maxArrays)), nil)
 			checkWriteToken(t, ArrayEnd, nil)
 		})
@@ -714,22 +748,27 @@ func TestCoderMaxDepth(t *testing.T) {
 			for range maxNestingDepth {
 				checkWriteToken(t, ArrayStart, nil)
 			}
-			checkWriteToken(t, ArrayStart, errMaxDepth.withOffset(maxNestingDepth))
+			checkWriteToken(t, ArrayStart, wantErr)
 			for range maxNestingDepth {
 				checkWriteToken(t, ArrayEnd, nil)
 			}
 		})
 
+		wantErr = &SyntacticError{
+			ByteOffset:  maxNestingDepth * int64(len(`{"":`)),
+			JSONPointer: Pointer(strings.Repeat("/", maxNestingDepth)),
+			Err:         errMaxDepth,
+		}
 		t.Run("Objects/SingleValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			checkWriteValue(t, maxObjects, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteValue(t, maxObjects, wantErr)
 			checkWriteValue(t, trimObject(maxObjects), nil)
 		})
 		t.Run("Objects/TokenThenValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
 			checkWriteToken(t, ObjectStart, nil)
 			checkWriteToken(t, String(""), nil)
-			checkWriteValue(t, trimObject(maxObjects), errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteValue(t, trimObject(maxObjects), wantErr)
 			checkWriteValue(t, trimObject(trimObject(maxObjects)), nil)
 			checkWriteToken(t, ObjectEnd, nil)
 		})
@@ -741,7 +780,7 @@ func TestCoderMaxDepth(t *testing.T) {
 			}
 			checkWriteToken(t, ObjectStart, nil)
 			checkWriteToken(t, String(""), nil)
-			checkWriteToken(t, ObjectStart, errMaxDepth.withOffset(maxNestingDepth*len64(`{"":`)))
+			checkWriteToken(t, ObjectStart, wantErr)
 			checkWriteToken(t, String(""), nil)
 			for range maxNestingDepth {
 				checkWriteToken(t, ObjectEnd, nil)

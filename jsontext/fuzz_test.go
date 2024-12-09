@@ -9,7 +9,7 @@ import (
 	"errors"
 	"io"
 	"math/rand"
-	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsontest"
@@ -118,7 +118,7 @@ func FuzzResumableDecoder(f *testing.F) {
 			decWant := NewDecoder(bytes.NewReader(b))
 			gotTok, gotErr := decGot.ReadToken()
 			wantTok, wantErr := decWant.ReadToken()
-			if gotTok.String() != wantTok.String() || !reflect.DeepEqual(gotErr, wantErr) {
+			if gotTok.String() != wantTok.String() || !equalError(gotErr, wantErr) {
 				t.Errorf("Decoder.ReadToken = (%v, %v), want (%v, %v)", gotTok, gotErr, wantTok, wantErr)
 			}
 		})
@@ -127,7 +127,7 @@ func FuzzResumableDecoder(f *testing.F) {
 			decWant := NewDecoder(bytes.NewReader(b))
 			gotVal, gotErr := decGot.ReadValue()
 			wantVal, wantErr := decWant.ReadValue()
-			if !reflect.DeepEqual(gotVal, wantVal) || !reflect.DeepEqual(gotErr, wantErr) {
+			if !slices.Equal(gotVal, wantVal) || !equalError(gotErr, wantErr) {
 				t.Errorf("Decoder.ReadValue = (%s, %v), want (%s, %v)", gotVal, gotErr, wantVal, wantErr)
 			}
 		})
