@@ -91,8 +91,7 @@ func (e *SyntacticError) Error() string {
 		b = append(b, "syntactic error"...)
 	}
 	if pointer != "" {
-		// TODO: Truncate excessively long pointers.
-		b = strconv.AppendQuote(append(b, " within "...), string(pointer))
+		b = strconv.AppendQuote(append(b, " within "...), jsonwire.TruncatePointer(string(pointer), 100))
 	}
 	if offset > 0 {
 		b = strconv.AppendInt(append(b, " after offset "...), offset, 10)

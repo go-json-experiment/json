@@ -99,7 +99,7 @@ func (e *SemanticError) Error() string {
 	switch {
 	case e.JSONPointer != "":
 		sb.WriteString(" within JSON value at ")
-		sb.WriteString(strconv.Quote(string(e.JSONPointer)))
+		sb.WriteString(strconv.Quote(jsonwire.TruncatePointer(string(e.JSONPointer), 100)))
 	case e.ByteOffset > 0:
 		sb.WriteString(" after byte offset ")
 		sb.WriteString(strconv.FormatInt(e.ByteOffset, 10))

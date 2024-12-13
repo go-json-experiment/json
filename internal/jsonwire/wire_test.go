@@ -73,3 +73,27 @@ func FuzzCompareUTF16(f *testing.F) {
 		}
 	})
 }
+
+func TestTruncatePointer(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"hello", "hello"},
+		{"/a/b/c", "/a/b/c"},
+		{"/a/b/c/d/e/f/g", "/a/b/…/f/g"},
+		{"supercalifragilisticexpialidocious", "super…cious"},
+		{"/supercalifragilisticexpialidocious/supercalifragilisticexpialidocious", "/supe…/…cious"},
+		{"/supercalifragilisticexpialidocious/supercalifragilisticexpialidocious/supercalifragilisticexpialidocious", "/supe…/…/…cious"},
+		{"/a/supercalifragilisticexpialidocious/supercalifragilisticexpialidocious", "/a/…/…cious"},
+		{"/supercalifragilisticexpialidocious/supercalifragilisticexpialidocious/b", "/supe…/…/b"},
+		{"/fizz/buzz/bazz", "/fizz/…/bazz"},
+		{"/fizz/buzz/bazz/razz", "/fizz/…/razz"},
+		{"/////////////////////////////", "/////…/////"},
+		{"/🎄❤️✨/🎁✅😊/🎅🔥⭐", "/🎄…/…/…⭐"},
+	}
+	for _, tt := range tests {
+		got := TruncatePointer(tt.in, 10)
+		if got != tt.want {
+			t.Errorf("TruncatePointer(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+
+}
