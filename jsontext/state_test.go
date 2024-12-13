@@ -37,6 +37,19 @@ func TestPointer(t *testing.T) {
 			if got := tt.in.Parent().AppendToken(tt.in.LastToken()); got != tt.in {
 				t.Errorf("Pointer(%q).Parent().AppendToken(LastToken()) = %q, want %q", tt.in, got, tt.in)
 			}
+			in := tt.in
+			for {
+				if (in + "x").Contains(tt.in) {
+					t.Errorf("Pointer(%q).Contains(%q) = true, want false", in+"x", tt.in)
+				}
+				if !in.Contains(tt.in) {
+					t.Errorf("Pointer(%q).Contains(%q) = false, want true", in, tt.in)
+				}
+				if in == in.Parent() {
+					break
+				}
+				in = in.Parent()
+			}
 		}
 		if got := slices.Collect(tt.in.Tokens()); !slices.Equal(got, tt.wantTokens) {
 			t.Errorf("Pointer(%q).Tokens = %q, want %q", tt.in, got, tt.wantTokens)
