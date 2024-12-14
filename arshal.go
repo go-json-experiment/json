@@ -428,6 +428,8 @@ func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error)
 	return unmarshalDecode(in, out, uo)
 }
 
+var errNonNilReference = errors.New("value must be passed as a non-nil pointer reference")
+
 func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err error) {
 	v := reflect.ValueOf(out)
 	if !v.IsValid() || v.Kind() != reflect.Pointer || v.IsNil() {
@@ -438,8 +440,7 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err er
 				t = t.Elem()
 			}
 		}
-		err := errors.New("value must be passed as a non-nil pointer reference")
-		return &SemanticError{action: "unmarshal", GoType: t, Err: err}
+		return &SemanticError{action: "unmarshal", GoType: t, Err: errNonNilReference}
 	}
 	va := addressableValue{v.Elem()} // dereferenced pointer is always addressable
 	t := va.Type()

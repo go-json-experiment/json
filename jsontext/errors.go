@@ -52,22 +52,16 @@ type SyntacticError struct {
 // an absolute offset using state.offsetAt.
 //
 // It takes a where that specify how the JSON pointer is derived.
-// If where is 0 and the next token is an object value,
-// then it the pointer implicitly upgraded to point at the next token.
 // If the underlying error is a [pointerSuffixError],
 // then the suffix is appended to the derived pointer.
 func wrapSyntacticError(state interface {
 	offsetAt(pos int) int64
-	needObjectValue() bool
 	AppendStackPointer(b []byte, where int) []byte
 }, err error, pos, where int) error {
 	if _, ok := err.(*ioError); err == io.EOF || ok {
 		return err
 	}
 	offset := state.offsetAt(pos)
-	if where == 0 && state.needObjectValue() {
-		where = +1
-	}
 	ptr := state.AppendStackPointer(nil, where)
 	if serr, ok := err.(*pointerSuffixError); ok {
 		ptr = serr.appendPointer(ptr)

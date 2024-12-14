@@ -371,8 +371,9 @@ func Example_unknownMembers() {
 	// Specifying RejectUnknownMembers causes Unmarshal
 	// to reject the presence of any unknown members.
 	err = json.Unmarshal([]byte(input), new(Color), json.RejectUnknownMembers(true))
-	if err != nil {
-		fmt.Println("Unmarshal error:", errors.Unwrap(err))
+	var serr *json.SemanticError
+	if errors.As(err, &serr) && serr.Err == json.ErrUnknownName {
+		fmt.Println("Unmarshal error:", serr.Err, strconv.Quote(serr.JSONPointer.LastToken()))
 	}
 
 	// By default, Marshal preserves unknown members stored in
@@ -393,7 +394,7 @@ func Example_unknownMembers() {
 
 	// Output:
 	// Unknown members: {"WebSafe":false}
-	// Unmarshal error: unknown name "WebSafe"
+	// Unmarshal error: unknown object member name "WebSafe"
 	// Output with unknown members:    {"Name":"Teal","Value":"#008080","WebSafe":false}
 	// Output without unknown members: {"Name":"Teal","Value":"#008080"}
 }
