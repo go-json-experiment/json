@@ -181,3 +181,13 @@ func UnmarshalArrayFromAnyLength(v bool) Options {
 		return jsonflags.UnmarshalArrayFromAnyLength | 0
 	}
 }
+
+// unmarshalAnyWithRawNumber specifies that unmarshaling a JSON number into
+// an empty Go interface should use the Number type instead of a float64.
+func unmarshalAnyWithRawNumber(v bool) Options {
+	if v {
+		return jsonflags.UnmarshalAnyWithRawNumber | 1
+	} else {
+		return jsonflags.UnmarshalAnyWithRawNumber | 0
+	}
+}

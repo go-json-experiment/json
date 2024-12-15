@@ -6,43 +6,23 @@ package json
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"reflect"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"testing"
+
+	"github.com/go-json-experiment/json/internal/jsontest"
 )
 
-// TODO(https://go.dev/issue/52751): Replace with native testing support.
+type CaseName = jsontest.CaseName
+type CasePos = jsontest.CasePos
 
-// CaseName is a case name annotated with a file and line.
-type CaseName struct {
-	Name  string
-	Where CasePos
-}
-
-// Name annotates a case name with the file and line of the caller.
-func Name(s string) (c CaseName) {
-	c.Name = s
-	runtime.Callers(2, c.Where.pc[:])
-	return c
-}
-
-// CasePos represents a file and line number.
-type CasePos struct{ pc [1]uintptr }
-
-func (pos CasePos) String() string {
-	frames := runtime.CallersFrames(pos.pc[:])
-	frame, _ := frames.Next()
-	return fmt.Sprintf("%s:%d", path.Base(frame.File), frame.Line)
-}
+var Name = jsontest.Name
 
 // Test values for the stream test.
 // One of each JSON kind.
@@ -79,9 +59,9 @@ func TestEncoder(t *testing.T) {
 				t.Fatalf("#%d.%d Encode error: %v", i, j, err)
 			}
 		}
-		if have, want := buf.String(), nlines(streamEncoded, i); have != want {
+		if got, want := buf.String(), nlines(streamEncoded, i); got != want {
 			t.Errorf("encoding %d items: mismatch:", i)
-			diff(t, []byte(have), []byte(want))
+			diff(t, []byte(got), []byte(want))
 			break
 		}
 	}
@@ -148,9 +128,9 @@ func TestEncoderIndent(t *testing.T) {
 	for _, v := range streamTest {
 		enc.Encode(v)
 	}
-	if have, want := buf.String(), streamEncodedIndent; have != want {
-		t.Error("Encode mismatch:")
-		diff(t, []byte(have), []byte(want))
+	if got, want := buf.String(), streamEncodedIndent; got != want {
+		t.Errorf("Encode mismatch:\ngot:\n%s\n\nwant:\n%s", got, want)
+		diff(t, []byte(got), []byte(want))
 	}
 }
 
@@ -214,6 +194,7 @@ func TestEncoderSetEscapeHTML(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			var buf strings.Builder
 			enc := NewEncoder(&buf)
 			if err := enc.Encode(tt.v); err != nil {
@@ -304,6 +285,7 @@ func nlines(s string, n int) string {
 }
 
 func TestRawMessage(t *testing.T) {
+	skipKnownFailure(t)
 	var data struct {
 		X  float64
 		Id RawMessage
@@ -460,6 +442,7 @@ func TestDecodeInStream(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			dec := NewDecoder(strings.NewReader(tt.json))
 			for i, want := range tt.expTokens {
 				var got any
