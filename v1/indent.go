@@ -4,7 +4,12 @@
 
 package json
 
-import "bytes"
+import (
+	"bytes"
+	"strings"
+
+	"github.com/go-json-experiment/json/jsontext"
+)
 
 // HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
 // characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
@@ -17,6 +22,7 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 }
 
 func appendHTMLEscape(dst, src []byte) []byte {
+	const hex = "0123456789abcdef"
 	// The characters can only appear in string literals,
 	// so just scan the string one byte at a time.
 	start := 0
@@ -41,59 +47,12 @@ func appendHTMLEscape(dst, src []byte) []byte {
 func Compact(dst *bytes.Buffer, src []byte) error {
 	dst.Grow(len(src))
 	b := dst.AvailableBuffer()
-	b, err := appendCompact(b, src, false)
+	b = append(b, src...)
+	if err := (*jsontext.Value)(&b).Compact(); err != nil {
+		return transformSyntacticError(err)
+	}
 	dst.Write(b)
-	return err
-}
-
-func appendCompact(dst, src []byte, escape bool) ([]byte, error) {
-	origLen := len(dst)
-	scan := newScanner()
-	defer freeScanner(scan)
-	start := 0
-	for i, c := range src {
-		if escape && (c == '<' || c == '>' || c == '&') {
-			if start < i {
-				dst = append(dst, src[start:i]...)
-			}
-			dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&0xF])
-			start = i + 1
-		}
-		// Convert U+2028 and U+2029 (E2 80 A8 and E2 80 A9).
-		if escape && c == 0xE2 && i+2 < len(src) && src[i+1] == 0x80 && src[i+2]&^1 == 0xA8 {
-			if start < i {
-				dst = append(dst, src[start:i]...)
-			}
-			dst = append(dst, '\\', 'u', '2', '0', '2', hex[src[i+2]&0xF])
-			start = i + 3
-		}
-		v := scan.step(scan, c)
-		if v >= scanSkipSpace {
-			if v == scanError {
-				break
-			}
-			if start < i {
-				dst = append(dst, src[start:i]...)
-			}
-			start = i + 1
-		}
-	}
-	if scan.eof() == scanError {
-		return dst[:origLen], scan.err
-	}
-	if start < len(src) {
-		dst = append(dst, src[start:]...)
-	}
-	return dst, nil
-}
-
-func appendNewline(dst []byte, prefix, indent string, depth int) []byte {
-	dst = append(dst, '\n')
-	dst = append(dst, prefix...)
-	for i := 0; i < depth; i++ {
-		dst = append(dst, indent...)
-	}
-	return dst
+	return nil
 }
 
 // indentGrowthFactor specifies the growth factor of indenting JSON input.
@@ -124,59 +83,40 @@ func Indent(dst *bytes.Buffer, src []byte, prefix, indent string) error {
 }
 
 func appendIndent(dst, src []byte, prefix, indent string) ([]byte, error) {
-	origLen := len(dst)
-	scan := newScanner()
-	defer freeScanner(scan)
-	needIndent := false
-	depth := 0
-	for _, c := range src {
-		scan.bytes++
-		v := scan.step(scan, c)
-		if v == scanSkipSpace {
-			continue
-		}
-		if v == scanError {
-			break
-		}
-		if needIndent && v != scanEndObject && v != scanEndArray {
-			needIndent = false
-			depth++
-			dst = appendNewline(dst, prefix, indent, depth)
-		}
-
-		// Emit semantically uninteresting bytes
-		// (in particular, punctuation in strings) unmodified.
-		if v == scanContinue {
-			dst = append(dst, c)
-			continue
-		}
-
-		// Add spacing around real punctuation.
-		switch c {
-		case '{', '[':
-			// delay indent so that empty object and array are formatted as {} and [].
-			needIndent = true
-			dst = append(dst, c)
-		case ',':
-			dst = append(dst, c)
-			dst = appendNewline(dst, prefix, indent, depth)
-		case ':':
-			dst = append(dst, c, ' ')
-		case '}', ']':
-			if needIndent {
-				// suppress indent in empty object/array
-				needIndent = false
-			} else {
-				depth--
-				dst = appendNewline(dst, prefix, indent, depth)
+	// In v2, trailing whitespace is discarded, while v1 preserved it.
+	dstLen := len(dst)
+	if n := len(src) - len(bytes.TrimRight(src, " \n\r\t")); n > 0 {
+		// Append the trailing whitespace afterwards.
+		defer func() {
+			if len(dst) > dstLen {
+				dst = append(dst, src[len(src)-n:]...)
 			}
-			dst = append(dst, c)
-		default:
-			dst = append(dst, c)
-		}
+		}()
 	}
-	if scan.eof() == scanError {
-		return dst[:origLen], scan.err
+	// In v2, only spaces and tabs are allowed, while v1 allowed any character.
+	if len(strings.Trim(prefix, " \t"))+len(strings.Trim(indent, " \t")) > 0 {
+		// Use placeholder spaces of correct length, and replace afterwards.
+		invalidPrefix, invalidIndent := prefix, indent
+		prefix = strings.Repeat(" ", len(prefix))
+		indent = strings.Repeat(" ", len(indent))
+		defer func() {
+			b := dst[dstLen:]
+			for i := bytes.IndexByte(b, '\n'); i >= 0; i = bytes.IndexByte(b, '\n') {
+				b = b[i+len("\n"):]
+				n := len(b) - len(bytes.TrimLeft(b, " ")) // len(prefix)+n*len(indent)
+				spaces := b[:n]
+				spaces = spaces[copy(spaces, invalidPrefix):]
+				for len(spaces) > 0 {
+					spaces = spaces[copy(spaces, invalidIndent):]
+				}
+				b = b[n:]
+			}
+		}()
+	}
+
+	dst = append(dst, src...)
+	if err := (*jsontext.Value)(&dst).Indent(prefix, indent); err != nil {
+		return dst[:dstLen], transformSyntacticError(err)
 	}
 	return dst, nil
 }

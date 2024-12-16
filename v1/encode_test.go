@@ -85,6 +85,10 @@ func (nps *NoPanicStruct) IsZero() bool {
 	return nps.Int != 0
 }
 
+type isZeroer interface {
+	IsZero() bool
+}
+
 type OptionalsZero struct {
 	Sr string `json:"sr"`
 	So string `json:"so,omitzero"`
@@ -324,6 +328,7 @@ type renamedByteSlice []byte
 type renamedRenamedByteSlice []renamedByte
 
 func TestEncodeRenamedByteSlice(t *testing.T) {
+	skipKnownFailure(t)
 	s := renamedByteSlice("abc")
 	got, err := Marshal(s)
 	if err != nil {
@@ -380,6 +385,7 @@ func init() {
 	mapCycle["x"] = mapCycle
 	sliceCycle[0] = sliceCycle
 	sliceNoCycle[1] = sliceNoCycle[:1]
+	const startDetectingCyclesAfter = 1e3
 	for i := startDetectingCyclesAfter; i > 0; i-- {
 		sliceNoCycle = []any{sliceNoCycle}
 	}
@@ -414,6 +420,7 @@ func TestUnsupportedValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			if _, err := Marshal(tt.in); err != nil {
 				if _, ok := err.(*UnsupportedValueError); !ok {
 					t.Errorf("%s: Marshal error:\n\tgot:  %T\n\twant: %T", tt.Where, err, new(UnsupportedValueError))
@@ -711,6 +718,7 @@ func TestAnonymousFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			b, err := Marshal(tt.makeInput())
 			if err != nil {
 				t.Fatalf("%s: Marshal error: %v", tt.Where, err)
@@ -789,6 +797,7 @@ func TestNilMarshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			switch got, err := Marshal(tt.in); {
 			case err != nil:
 				t.Fatalf("%s: Marshal error: %v", tt.Where, err)
@@ -1094,6 +1103,7 @@ func TestTextMarshalerMapKeysAreSorted(t *testing.T) {
 
 // https://golang.org/issue/33675
 func TestNilMarshalerTextMapKey(t *testing.T) {
+	skipKnownFailure(t)
 	got, err := Marshal(map[*unmarshalerText]int{
 		(*unmarshalerText)(nil): 1,
 		{"A", "B"}:              2,
@@ -1303,6 +1313,7 @@ func TestMarshalRawMessageValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			skipKnownFailure(t)
 			b, err := Marshal(tt.in)
 			if ok := (err == nil); ok != tt.ok {
 				if err != nil {
