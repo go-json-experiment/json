@@ -38,11 +38,13 @@ type Options = jsonopts.Options
 //   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [RejectFloatOverflow]
+//   - [ReportLegacyErrorValues]
 //   - [StringifyWithLegacySemantics]
 //   - [UnmarshalArrayFromAnyLength]
 //   - [jsonv2.Deterministic]
-//   - [jsonv2.FormatNilSliceAsNull]
 //   - [jsonv2.FormatNilMapAsNull]
+//   - [jsonv2.FormatNilSliceAsNull]
+//   - [jsonv2.MatchCaseInsensitiveNames]
 //   - [jsontext.AllowDuplicateNames]
 //   - [jsontext.AllowInvalidUTF8]
 //   - [jsontext.EscapeForHTML]
@@ -145,6 +147,21 @@ func RejectFloatOverflow(v bool) Options {
 		return jsonflags.RejectFloatOverflow | 1
 	} else {
 		return jsonflags.RejectFloatOverflow | 0
+	}
+}
+
+// ReportLegacyErrorValues specifies that Marshal and Unmarshal should
+// return legacy error values such as [SyntaxError], [MarshalerError],
+// [UnsupportedTypeError], [UnsupportedValueError],
+// [InvalidUnmarshalError], or [UnmarshalTypeError] instead of the
+// [jsonv2.SemanticError] or [jsontext.SyntacticError].
+//
+// The v1 default is true.
+func ReportLegacyErrorValues(v bool) Options {
+	if v {
+		return jsonflags.ReportLegacyErrorValues | 1
+	} else {
+		return jsonflags.ReportLegacyErrorValues | 0
 	}
 }
 

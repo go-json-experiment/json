@@ -6,6 +6,7 @@ package json
 
 import (
 	"errors"
+	"io"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
@@ -43,10 +44,15 @@ type SyntaxError struct {
 
 func (e *SyntaxError) Error() string { return e.msg }
 
+var errUnexpectedEnd = errors.New("unexpected end of JSON input")
+
 func transformSyntacticError(err error) error {
 	switch serr, ok := err.(*jsontext.SyntacticError); {
 	case serr != nil:
-		return &SyntaxError{Offset: serr.ByteOffset, msg: serr.Error()}
+		if serr.Err == io.ErrUnexpectedEOF {
+			serr.Err = errUnexpectedEnd
+		}
+		return &SyntaxError{Offset: serr.ByteOffset, msg: serr.Err.Error()}
 	case ok:
 		return (*SyntaxError)(nil)
 	case export.IsIOError(err):
