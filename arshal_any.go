@@ -77,7 +77,7 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 			}
 			fv, ok := jsonwire.ParseFloat(val, 64)
 			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
-				return nil, newUnmarshalErrorAfter(dec, float64Type, strconv.ErrRange)
+				return nil, newUnmarshalErrorAfterWithValue(dec, float64Type, strconv.ErrRange)
 			}
 			return fv, nil
 		default:

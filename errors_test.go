@@ -54,6 +54,9 @@ func TestSemanticError(t *testing.T) {
 		err:  &SemanticError{JSONKind: '0', GoType: T[tar.Header]()},
 		want: `json: cannot handle JSON number with Go tar.Header`,
 	}, {
+		err:  &SemanticError{action: "unmarshal", JSONKind: '0', JSONValue: jsontext.Value(`1e1000`), GoType: T[int]()},
+		want: `json: cannot unmarshal JSON number 1e1000 into Go int`,
+	}, {
 		err:  &SemanticError{action: "marshal", JSONKind: '{', GoType: T[bytes.Buffer]()},
 		want: `json: cannot marshal JSON object from Go bytes.Buffer`,
 	}, {

@@ -22,6 +22,10 @@ import (
 	"time"
 )
 
+func len64(s string) int64 {
+	return int64(len(s))
+}
+
 type T struct {
 	X string
 	Y int
@@ -437,13 +441,13 @@ var unmarshalTests = []struct {
 	{CaseName: Name(""), in: `"g-clef: \uD834\uDD1E"`, ptr: new(string), out: "g-clef: \U0001D11E"},
 	{CaseName: Name(""), in: `"invalid: \uD834x\uDD1E"`, ptr: new(string), out: "invalid: \uFFFDx\uFFFD"},
 	{CaseName: Name(""), in: "null", ptr: new(any), out: nil},
-	{CaseName: Name(""), in: `{"X": [1,2,3], "Y": 4}`, ptr: new(T), out: T{Y: 4}, err: &UnmarshalTypeError{"array", reflect.TypeFor[string](), 7, "T", "X"}},
-	{CaseName: Name(""), in: `{"X": 23}`, ptr: new(T), out: T{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "T", "X"}},
+	{CaseName: Name(""), in: `{"X": [1,2,3], "Y": 4}`, ptr: new(T), out: T{Y: 4}, err: &UnmarshalTypeError{"array", reflect.TypeFor[string](), len64(`{"X": `), "T", "X", nil}},
+	{CaseName: Name(""), in: `{"X": 23}`, ptr: new(T), out: T{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), len64(`{"X": `), "T", "X", nil}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), out: tx{}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), out: tx{}},
 	{CaseName: Name(""), in: `{"x": 1}`, ptr: new(tx), err: fmt.Errorf("json: unknown field \"x\""), disallowUnknownFields: true},
-	{CaseName: Name(""), in: `{"S": 23}`, ptr: new(W), out: W{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[SS](), 0, "W", "S"}},
-	{CaseName: Name(""), in: `{"T": {"X": 23}}`, ptr: new(TOuter), out: TOuter{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), 8, "TOuter", "T.X"}},
+	{CaseName: Name(""), in: `{"S": 23}`, ptr: new(W), out: W{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[SS](), 0, "", "", nil}},
+	{CaseName: Name(""), in: `{"T": {"X": 23}}`, ptr: new(TOuter), out: TOuter{}, err: &UnmarshalTypeError{"number", reflect.TypeFor[string](), len64(`{"X": `), "T", "X", nil}},
 	{CaseName: Name(""), in: `{"F1":1,"F2":2,"F3":3}`, ptr: new(V), out: V{F1: float64(1), F2: int32(2), F3: Number("3")}},
 	{CaseName: Name(""), in: `{"F1":1,"F2":2,"F3":3}`, ptr: new(V), out: V{F1: Number("1"), F2: int32(2), F3: Number("3")}, useNumber: true},
 	{CaseName: Name(""), in: `{"k1":1,"k2":"s","k3":[1,2.0,3e-3],"k4":{"kk1":"s","kk2":2}}`, ptr: new(any), out: ifaceNumAsFloat64},
@@ -467,21 +471,21 @@ var unmarshalTests = []struct {
 	{CaseName: Name(""), in: `{"alphabet": "xyz"}`, ptr: new(U), err: fmt.Errorf("json: unknown field \"alphabet\""), disallowUnknownFields: true},
 
 	// syntax errors
-	{CaseName: Name(""), in: `{"X": "foo", "Y"}`, err: &SyntaxError{"invalid character '}' after object key", 17}},
-	{CaseName: Name(""), in: `[1, 2, 3+]`, err: &SyntaxError{"invalid character '+' after array element", 9}},
-	{CaseName: Name(""), in: `{"X":12x}`, err: &SyntaxError{"invalid character 'x' after object key:value pair", 8}, useNumber: true},
-	{CaseName: Name(""), in: `[2, 3`, err: &SyntaxError{msg: "unexpected end of JSON input", Offset: 5}},
-	{CaseName: Name(""), in: `{"F3": -}`, ptr: new(V), out: V{F3: Number("-")}, err: &SyntaxError{msg: "invalid character '}' in numeric literal", Offset: 9}},
+	{CaseName: Name(""), in: `{"X": "foo", "Y"}`, err: &SyntaxError{"invalid character '}' after object name (expecting ':')", len64(`{"X": "foo", "Y"`)}},
+	{CaseName: Name(""), in: `[1, 2, 3+]`, err: &SyntaxError{"invalid character '+' after array value (expecting ',' or ']')", len64(`[1, 2, 3`)}},
+	{CaseName: Name(""), in: `{"X":12x}`, err: &SyntaxError{"invalid character 'x' after object value (expecting ',' or '}')", len64(`{"X":12`)}, useNumber: true},
+	{CaseName: Name(""), in: `[2, 3`, err: &SyntaxError{msg: "unexpected end of JSON input", Offset: len64(`[2, 3`)}},
+	{CaseName: Name(""), in: `{"F3": -}`, ptr: new(V), out: V{F3: Number("-")}, err: &SyntaxError{msg: "invalid character '}' within number (expecting digit)", Offset: len64(`{"F3": -`)}},
 
 	// raw value errors
-	{CaseName: Name(""), in: "\x01 42", err: &SyntaxError{"invalid character '\\x01' looking for beginning of value", 1}},
-	{CaseName: Name(""), in: " 42 \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", 5}},
-	{CaseName: Name(""), in: "\x01 true", err: &SyntaxError{"invalid character '\\x01' looking for beginning of value", 1}},
-	{CaseName: Name(""), in: " false \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", 8}},
-	{CaseName: Name(""), in: "\x01 1.2", err: &SyntaxError{"invalid character '\\x01' looking for beginning of value", 1}},
-	{CaseName: Name(""), in: " 3.4 \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", 6}},
-	{CaseName: Name(""), in: "\x01 \"string\"", err: &SyntaxError{"invalid character '\\x01' looking for beginning of value", 1}},
-	{CaseName: Name(""), in: " \"string\" \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", 11}},
+	{CaseName: Name(""), in: "\x01 42", err: &SyntaxError{"invalid character '\\x01' at start of value", len64(``)}},
+	{CaseName: Name(""), in: " 42 \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", len64(` 42 `)}},
+	{CaseName: Name(""), in: "\x01 true", err: &SyntaxError{"invalid character '\\x01' at start of value", len64(``)}},
+	{CaseName: Name(""), in: " false \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", len64(` false `)}},
+	{CaseName: Name(""), in: "\x01 1.2", err: &SyntaxError{"invalid character '\\x01' at start of value", len64(``)}},
+	{CaseName: Name(""), in: " 3.4 \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", len64(` 3.4 `)}},
+	{CaseName: Name(""), in: "\x01 \"string\"", err: &SyntaxError{"invalid character '\\x01' at start of value", len64(``)}},
+	{CaseName: Name(""), in: " \"string\" \x01", err: &SyntaxError{"invalid character '\\x01' after top-level value", len64(` "string" `)}},
 
 	// array tests
 	{CaseName: Name(""), in: `[1, 2, 3]`, ptr: new([3]int), out: [3]int{1, 2, 3}},
@@ -571,37 +575,37 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"abc":"abc"}`,
 		ptr:      new(map[int]string),
-		err:      &UnmarshalTypeError{Value: "number abc", Type: reflect.TypeFor[int](), Offset: 2},
+		err:      &UnmarshalTypeError{Value: `string "abc"`, Type: reflect.TypeFor[int](), Field: "abc", Offset: len64(`{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"256":"abc"}`,
 		ptr:      new(map[uint8]string),
-		err:      &UnmarshalTypeError{Value: "number 256", Type: reflect.TypeFor[uint8](), Offset: 2},
+		err:      &UnmarshalTypeError{Value: `string "256"`, Type: reflect.TypeFor[uint8](), Field: "256", Offset: len64(`{`), Err: strconv.ErrRange},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"128":"abc"}`,
 		ptr:      new(map[int8]string),
-		err:      &UnmarshalTypeError{Value: "number 128", Type: reflect.TypeFor[int8](), Offset: 2},
+		err:      &UnmarshalTypeError{Value: `string "128"`, Type: reflect.TypeFor[int8](), Field: "128", Offset: len64(`{`), Err: strconv.ErrRange},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"-1":"abc"}`,
 		ptr:      new(map[uint8]string),
-		err:      &UnmarshalTypeError{Value: "number -1", Type: reflect.TypeFor[uint8](), Offset: 2},
+		err:      &UnmarshalTypeError{Value: `string "-1"`, Type: reflect.TypeFor[uint8](), Field: "-1", Offset: len64(`{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"F":{"a":2,"3":4}}`,
 		ptr:      new(map[string]map[int]int),
-		err:      &UnmarshalTypeError{Value: "number a", Type: reflect.TypeFor[int](), Offset: 7},
+		err:      &UnmarshalTypeError{Value: `string "a"`, Type: reflect.TypeFor[int](), Field: "F.a", Offset: len64(`{"F":{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"F":{"a":2,"3":4}}`,
 		ptr:      new(map[string]map[uint]int),
-		err:      &UnmarshalTypeError{Value: "number a", Type: reflect.TypeFor[uint](), Offset: 7},
+		err:      &UnmarshalTypeError{Value: `string "a"`, Type: reflect.TypeFor[uint](), Field: "F.a", Offset: len64(`{"F":{`), Err: strconv.ErrSyntax},
 	},
 
 	// Map keys can be encoding.TextUnmarshalers.
@@ -762,13 +766,13 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"2009-11-10T23:00:00Z": "hello world"}`,
 		ptr:      new(map[Point]string),
-		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[map[Point]string](), Offset: 1},
+		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Point](), Field: `2009-11-10T23:00:00Z`, Offset: len64(`{`)},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"asdf": "hello world"}`,
 		ptr:      new(map[unmarshaler]string),
-		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[map[unmarshaler]string](), Offset: 1},
+		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[map[unmarshaler]string](), Offset: len64(`{`)},
 	},
 
 	// related to issue 13783.
@@ -879,10 +883,10 @@ var unmarshalTests = []struct {
 		ptr:      new(VOuter),
 		err: &UnmarshalTypeError{
 			Value:  "string",
-			Struct: "V",
+			Struct: "VOuter",
 			Field:  "V.F2",
 			Type:   reflect.TypeFor[int32](),
-			Offset: 20,
+			Offset: len64(`{"V": {"F2": `),
 		},
 	},
 	{
@@ -891,10 +895,10 @@ var unmarshalTests = []struct {
 		ptr:      new(VOuter),
 		err: &UnmarshalTypeError{
 			Value:  "string",
-			Struct: "V",
+			Struct: "VOuter",
 			Field:  "V.F2",
 			Type:   reflect.TypeFor[int32](),
-			Offset: 30,
+			Offset: len64(`{"V": {"F4": {}, "F2": `),
 		},
 	},
 
@@ -907,7 +911,7 @@ var unmarshalTests = []struct {
 			Struct: "Top",
 			Field:  "Embed0a.Level1a",
 			Type:   reflect.TypeFor[int](),
-			Offset: 19,
+			Offset: len64(`{"Level1a": `),
 		},
 	},
 
@@ -915,12 +919,12 @@ var unmarshalTests = []struct {
 	// invalid inputs in wrongStringTests below.
 	{CaseName: Name(""), in: `{"B":"true"}`, ptr: new(B), out: B{true}, golden: true},
 	{CaseName: Name(""), in: `{"B":"false"}`, ptr: new(B), out: B{false}, golden: true},
-	{CaseName: Name(""), in: `{"B": "maybe"}`, ptr: new(B), err: errors.New(`json: invalid use of ,string struct tag, trying to unmarshal "maybe" into bool`)},
-	{CaseName: Name(""), in: `{"B": "tru"}`, ptr: new(B), err: errors.New(`json: invalid use of ,string struct tag, trying to unmarshal "tru" into bool`)},
-	{CaseName: Name(""), in: `{"B": "False"}`, ptr: new(B), err: errors.New(`json: invalid use of ,string struct tag, trying to unmarshal "False" into bool`)},
+	{CaseName: Name(""), in: `{"B": "maybe"}`, ptr: new(B), err: &UnmarshalTypeError{Value: `string "maybe"`, Type: reflect.TypeFor[bool](), Struct: "B", Field: "B", Offset: len64(`{"B": `), Err: strconv.ErrSyntax}},
+	{CaseName: Name(""), in: `{"B": "tru"}`, ptr: new(B), err: &UnmarshalTypeError{Value: `string "tru"`, Type: reflect.TypeFor[bool](), Struct: "B", Field: "B", Offset: len64(`{"B": `), Err: strconv.ErrSyntax}},
+	{CaseName: Name(""), in: `{"B": "False"}`, ptr: new(B), err: &UnmarshalTypeError{Value: `string "False"`, Type: reflect.TypeFor[bool](), Struct: "B", Field: "B", Offset: len64(`{"B": `), Err: strconv.ErrSyntax}},
 	{CaseName: Name(""), in: `{"B": "null"}`, ptr: new(B), out: B{false}},
-	{CaseName: Name(""), in: `{"B": "nul"}`, ptr: new(B), err: errors.New(`json: invalid use of ,string struct tag, trying to unmarshal "nul" into bool`)},
-	{CaseName: Name(""), in: `{"B": [2, 3]}`, ptr: new(B), err: errors.New(`json: invalid use of ,string struct tag, trying to unmarshal unquoted value into bool`)},
+	{CaseName: Name(""), in: `{"B": "nul"}`, ptr: new(B), err: &UnmarshalTypeError{Value: `string "nul"`, Type: reflect.TypeFor[bool](), Struct: "B", Field: "B", Offset: len64(`{"B": `), Err: strconv.ErrSyntax}},
+	{CaseName: Name(""), in: `{"B": [2, 3]}`, ptr: new(B), err: &UnmarshalTypeError{Value: "array", Type: reflect.TypeFor[bool](), Struct: "B", Field: "B", Offset: len64(`{"B": `)}},
 
 	// additional tests for disallowUnknownFields
 	{
@@ -985,13 +989,13 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"data":{"test1": "bob", "test2": 123}}`,
 		ptr:      new(mapStringToStringData),
-		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: 37, Struct: "mapStringToStringData", Field: "data"},
+		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: len64(`{"data":{"test1": "bob", "test2": `), Struct: "mapStringToStringData", Field: "data.test2"},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"data":{"test1": 123, "test2": "bob"}}`,
 		ptr:      new(mapStringToStringData),
-		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: 21, Struct: "mapStringToStringData", Field: "data"},
+		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: len64(`{"data":{"test1": `), Struct: "mapStringToStringData", Field: "data.test1"},
 	},
 
 	// trying to decode JSON arrays or objects via TextUnmarshaler
@@ -999,13 +1003,13 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `[1, 2, 3]`,
 		ptr:      new(MustNotUnmarshalText),
-		err:      &UnmarshalTypeError{Value: "array", Type: reflect.TypeFor[*MustNotUnmarshalText](), Offset: 1},
+		err:      &UnmarshalTypeError{Value: "array", Type: reflect.TypeFor[MustNotUnmarshalText](), Err: errors.New("JSON value must be string type")},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"foo": "bar"}`,
 		ptr:      new(MustNotUnmarshalText),
-		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[*MustNotUnmarshalText](), Offset: 1},
+		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[MustNotUnmarshalText](), Err: errors.New("JSON value must be string type")},
 	},
 	// #22369
 	{
@@ -1014,10 +1018,10 @@ var unmarshalTests = []struct {
 		ptr:      new(P),
 		err: &UnmarshalTypeError{
 			Value:  "string",
-			Struct: "T",
+			Struct: "P",
 			Field:  "PP.T.Y",
 			Type:   reflect.TypeFor[int](),
-			Offset: 29,
+			Offset: len64(`{"PP": {"T": {"Y": `),
 		},
 	},
 	{
@@ -1026,10 +1030,10 @@ var unmarshalTests = []struct {
 		ptr:      new(PP),
 		err: &UnmarshalTypeError{
 			Value:  "string",
-			Struct: "T",
-			Field:  "Ts.Y",
+			Struct: "PP",
+			Field:  "Ts.2.Y",
 			Type:   reflect.TypeFor[int](),
-			Offset: 44,
+			Offset: len64(`{"Ts": [{"Y": 1}, {"Y": 2}, {"Y": `),
 		},
 	},
 	// #14702
@@ -1038,21 +1042,21 @@ var unmarshalTests = []struct {
 		in:       `invalid`,
 		ptr:      new(Number),
 		err: &SyntaxError{
-			msg:    "invalid character 'i' looking for beginning of value",
-			Offset: 1,
+			msg:    "invalid character 'i' at start of value",
+			Offset: len64(``),
 		},
 	},
 	{
 		CaseName: Name(""),
 		in:       `"invalid"`,
 		ptr:      new(Number),
-		err:      fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", `"invalid"`),
+		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"A":"invalid"}`,
 		ptr:      new(struct{ A Number }),
-		err:      fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", `"invalid"`),
+		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
 	},
 	{
 		CaseName: Name(""),
@@ -1060,13 +1064,13 @@ var unmarshalTests = []struct {
 		ptr: new(struct {
 			A Number `json:",string"`
 		}),
-		err: fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into json.Number", `invalid`),
+		err: &UnmarshalTypeError{Value: `string "invalid"`, Type: reflect.TypeFor[Number](), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"A":"invalid"}`,
 		ptr:      new(map[string]Number),
-		err:      fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", `"invalid"`),
+		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
 	},
 }
 
@@ -1204,7 +1208,7 @@ func TestUnmarshal(t *testing.T) {
 			in := []byte(tt.in)
 			if err := checkValid(in); err != nil {
 				if !equalError(err, tt.err) {
-					t.Fatalf("%s: checkValid error: %#v", tt.Where, err)
+					t.Fatalf("%s: checkValid error:\n\tgot  %#v\n\twant %#v", tt.Where, err, tt.err)
 				}
 			}
 			if tt.ptr == nil {
@@ -1238,7 +1242,7 @@ func TestUnmarshal(t *testing.T) {
 				dec.DisallowUnknownFields()
 			}
 			if err := dec.Decode(v.Interface()); !equalError(err, tt.err) {
-				t.Fatalf("%s: Decode error:\n\tgot:  %#v\n\twant: %#v", tt.Where, err, tt.err)
+				t.Fatalf("%s: Decode error:\n\tgot:  %v\n\twant: %v\n\n\tgot:  %#v\n\twant: %#v", tt.Where, err, tt.err, err, tt.err)
 			} else if err != nil {
 				return
 			}
@@ -1394,12 +1398,12 @@ func TestErrorMessageFromMisusedString(t *testing.T) {
 		CaseName
 		in, err string
 	}{
-		{Name(""), `{"result":"x"}`, `json: invalid use of ,string struct tag, trying to unmarshal "x" into string`},
-		{Name(""), `{"result":"foo"}`, `json: invalid use of ,string struct tag, trying to unmarshal "foo" into string`},
-		{Name(""), `{"result":"123"}`, `json: invalid use of ,string struct tag, trying to unmarshal "123" into string`},
-		{Name(""), `{"result":123}`, `json: invalid use of ,string struct tag, trying to unmarshal unquoted value into string`},
-		{Name(""), `{"result":"\""}`, `json: invalid use of ,string struct tag, trying to unmarshal "\"" into string`},
-		{Name(""), `{"result":"\"foo"}`, `json: invalid use of ,string struct tag, trying to unmarshal "\"foo" into string`},
+		{Name(""), `{"result":"x"}`, `json: cannot unmarshal JSON string into WrongString.result of Go type string: jsontext: invalid character 'x' at start of string (expecting '"')`},
+		{Name(""), `{"result":"foo"}`, `json: cannot unmarshal JSON string into WrongString.result of Go type string: jsontext: invalid character 'f' at start of string (expecting '"')`},
+		{Name(""), `{"result":"123"}`, `json: cannot unmarshal JSON string into WrongString.result of Go type string: jsontext: invalid character '1' at start of string (expecting '"')`},
+		{Name(""), `{"result":123}`, `json: cannot unmarshal JSON number into WrongString.result of Go type string`},
+		{Name(""), `{"result":"\""}`, `json: cannot unmarshal JSON string into WrongString.result of Go type string: jsontext: unexpected EOF`},
+		{Name(""), `{"result":"\"foo"}`, `json: cannot unmarshal JSON string into WrongString.result of Go type string: jsontext: unexpected EOF`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -2104,7 +2108,6 @@ func TestUnmarshalTypeError(t *testing.T) {
 }
 
 func TestUnmarshalSyntax(t *testing.T) {
-	var x any
 	tests := []struct {
 		CaseName
 		in string
@@ -2121,6 +2124,7 @@ func TestUnmarshalSyntax(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			skipKnownFailure(t)
+			var x any
 			err := Unmarshal([]byte(tt.in), &x)
 			if _, ok := err.(*SyntaxError); !ok {
 				t.Errorf("%s: Unmarshal(%#q, any):\n\tgot:  %T\n\twant: %T",
@@ -2263,7 +2267,7 @@ func TestInvalidUnmarshal(t *testing.T) {
 		{Name(""), `123`, nil, &InvalidUnmarshalError{}},
 		{Name(""), `123`, struct{}{}, &InvalidUnmarshalError{reflect.TypeFor[struct{}]()}},
 		{Name(""), `123`, (*int)(nil), &InvalidUnmarshalError{reflect.TypeFor[*int]()}},
-		{Name(""), `123`, new(net.IP), &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[*net.IP](), Offset: 3}},
+		{Name(""), `123`, new(net.IP), &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[net.IP](), Offset: len64(``), Err: errors.New("JSON value must be string type")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -2453,23 +2457,23 @@ func TestUnmarshalErrorAfterMultipleJSON(t *testing.T) {
 	}{{
 		CaseName: Name(""),
 		in:       `1 false null :`,
-		err:      &SyntaxError{"invalid character ':' looking for beginning of value", 14},
+		err:      &SyntaxError{"invalid character ':' before next token", len64(`1 false null `)},
 	}, {
 		CaseName: Name(""),
 		in:       `1 [] [,]`,
-		err:      &SyntaxError{"invalid character ',' looking for beginning of value", 7},
+		err:      &SyntaxError{"invalid character ',' at start of value", len64(`1 [] [`)},
 	}, {
 		CaseName: Name(""),
 		in:       `1 [] [true:]`,
-		err:      &SyntaxError{"invalid character ':' after array element", 11},
+		err:      &SyntaxError{"invalid character ':' after array value (expecting ',' or ']')", len64(`1 [] [true`)},
 	}, {
 		CaseName: Name(""),
 		in:       `1  {}    {"x"=}`,
-		err:      &SyntaxError{"invalid character '=' after object key", 14},
+		err:      &SyntaxError{"invalid character '=' after object name (expecting ':')", len64(`1  {}    {"x"`)},
 	}, {
 		CaseName: Name(""),
 		in:       `falsetruenul#`,
-		err:      &SyntaxError{"invalid character '#' in literal null (expecting 'l')", 13},
+		err:      &SyntaxError{"invalid character '#' within literal null (expecting 'l')", len64(`falsetruenul`)},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {

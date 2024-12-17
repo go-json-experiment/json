@@ -64,6 +64,9 @@ type SemanticError struct {
 
 	// JSONKind is the JSON kind that could not be handled.
 	JSONKind jsontext.Kind // may be zero if unknown
+	// JSONValue is the JSON number or string that could not be unmarshaled.
+	// It is not populated during marshaling.
+	JSONValue jsontext.Value // may be nil if irrelevant or unknown
 	// GoType is the Go type that could not be handled.
 	GoType reflect.Type // may be nil if unknown
 
@@ -112,6 +115,17 @@ func newUnmarshalErrorAfter(d *jsontext.Decoder, t reflect.Type, err error) erro
 		ByteOffset:  d.InputOffset() - int64(len(tokOrVal)),
 		JSONPointer: jsontext.Pointer(export.Decoder(d).AppendStackPointer(nil, -1)),
 		JSONKind:    jsontext.Value(tokOrVal).Kind()}
+}
+
+// newUnmarshalErrorAfter wraps err in a SemanticError assuming that d
+// is positioned right after the previous token or value, which caused an error.
+// It also stores a copy of the last JSON value if it is a string or number.
+func newUnmarshalErrorAfterWithValue(d *jsontext.Decoder, t reflect.Type, err error) error {
+	serr := newUnmarshalErrorAfter(d, t, err).(*SemanticError)
+	if serr.JSONKind == '"' || serr.JSONKind == '0' {
+		serr.JSONValue = jsontext.Value(export.Decoder(d).PreviousTokenOrValue()).Clone()
+	}
+	return serr
 }
 
 // newSemanticErrorWithPosition wraps err in a SemanticError assuming that
@@ -273,6 +287,10 @@ func (e *SemanticError) Error() string {
 		if e.action == "" {
 			preposition = ""
 		}
+	}
+	if len(e.JSONValue) > 0 && len(e.JSONValue) < 100 {
+		sb.WriteByte(' ')
+		sb.Write(e.JSONValue)
 	}
 
 	// Format Go type.
