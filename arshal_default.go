@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -1629,7 +1630,11 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			case '"':
 				v = newAddressableValue(stringType)
 			case '0':
-				v = newAddressableValue(float64Type)
+				if uo.Flags.Get(jsonflags.UnmarshalAnyWithRawNumber) {
+					v = addressableValue{reflect.ValueOf(internal.NewRawNumber()).Elem()}
+				} else {
+					v = newAddressableValue(float64Type)
+				}
 			case '{':
 				v = newAddressableValue(mapStringAnyType)
 			case '[':

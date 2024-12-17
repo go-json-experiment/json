@@ -6,7 +6,6 @@ TestMarshalInvalidUTF8/#04
 TestMarshalInvalidUTF8/#05
 TestMarshalEmbeds
 TestUnmarshal
-TestUnmarshal/#07
 TestUnmarshal/#13
 TestUnmarshal/#14
 TestUnmarshal/#15
@@ -14,8 +13,6 @@ TestUnmarshal/#16
 TestUnmarshal/#17
 TestUnmarshal/#18
 TestUnmarshal/#19
-TestUnmarshal/#21
-TestUnmarshal/#23
 TestUnmarshal/#30
 TestUnmarshal/#32
 TestUnmarshal/#35
