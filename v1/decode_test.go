@@ -909,7 +909,7 @@ var unmarshalTests = []struct {
 		err: &UnmarshalTypeError{
 			Value:  "string",
 			Struct: "Top",
-			Field:  "Embed0a.Level1a",
+			Field:  "Level1a",
 			Type:   reflect.TypeFor[int](),
 			Offset: len64(`{"Level1a": `),
 		},
@@ -2372,7 +2372,13 @@ func TestUnmarshalEmbeddedUnexported(t *testing.T) {
 		in:       `{"R":2,"Q":1}`,
 		ptr:      new(S1),
 		out:      &S1{R: 2},
-		err:      fmt.Errorf("json: cannot set embedded pointer to unexported struct: json.embed1"),
+		err: &UnmarshalTypeError{
+			Type:   reflect.TypeFor[S1](),
+			Offset: len64(`{"R":2,"Q":`),
+			Struct: "S1",
+			Field:  "Q",
+			Err:    errors.New("cannot set embedded pointer to unexported struct type"),
+		},
 	}, {
 		// The top level Q field takes precedence.
 		CaseName: Name(""),
@@ -2398,7 +2404,13 @@ func TestUnmarshalEmbeddedUnexported(t *testing.T) {
 		in:       `{"R":2,"Q":1}`,
 		ptr:      new(S5),
 		out:      &S5{R: 2},
-		err:      fmt.Errorf("json: cannot set embedded pointer to unexported struct: json.embed3"),
+		err: &UnmarshalTypeError{
+			Type:   reflect.TypeFor[S5](),
+			Offset: len64(`{"R":2,"Q":`),
+			Struct: "S5",
+			Field:  "Q",
+			Err:    errors.New("cannot set embedded pointer to unexported struct type"),
+		},
 	}, {
 		// Issue 24152, ensure decodeState.indirect does not panic.
 		CaseName: Name(""),

@@ -411,8 +411,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			unexported
 		}{},
-		wantIgnored: true,
-		wantErr:     errors.New("embedded Go struct field unexported of an unexported type must be explicitly ignored with a `json:\"-\"` tag"),
+		wantOpts: fieldOptions{name: "unexported", quotedName: `"unexported"`},
 	}, {
 		name: jsontest.Name("Ignored"),
 		in: struct {
@@ -572,7 +571,7 @@ func TestParseTagOptions(t *testing.T) {
 			FieldName int `json:",nocase,strictcase"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: nocase | strictcase},
-		wantErr:  errors.New("Go struct field FieldName cannot have both `nocase` and `structcase` tag options"),
+		wantErr:  errors.New("Go struct field FieldName cannot have both `nocase` and `strictcase` tag options"),
 	}, {
 		name: jsontest.Name("InlineOption"),
 		in: struct {
@@ -723,7 +722,7 @@ func TestParseTagOptions(t *testing.T) {
 			fs := reflect.TypeOf(tt.in).Field(0)
 			gotOpts, gotIgnored, gotErr := parseFieldOptions(fs)
 			if !reflect.DeepEqual(gotOpts, tt.wantOpts) || gotIgnored != tt.wantIgnored || !reflect.DeepEqual(gotErr, tt.wantErr) {
-				t.Errorf("%s: parseFieldOptions(%T) = (%v, %v, %v), want (%v, %v, %v)", tt.name.Where, tt.in, gotOpts, gotIgnored, gotErr, tt.wantOpts, tt.wantIgnored, tt.wantErr)
+				t.Errorf("%s: parseFieldOptions(%T) = (\n\t%v,\n\t%v,\n\t%v\n), want (\n\t%v,\n\t%v,\n\t%v\n)", tt.name.Where, tt.in, gotOpts, gotIgnored, gotErr, tt.wantOpts, tt.wantIgnored, tt.wantErr)
 			}
 		})
 	}

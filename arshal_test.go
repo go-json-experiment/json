@@ -116,6 +116,19 @@ type (
 	structUnexportedEmbedded struct {
 		namedString
 	}
+	structUnexportedEmbeddedStruct struct {
+		structOmitZeroAll
+		FizzBuzz int
+		structNestedAddr
+	}
+	structUnexportedEmbeddedStructPointer struct {
+		*structOmitZeroAll
+		FizzBuzz int
+		*structNestedAddr
+	}
+	structNestedAddr struct {
+		Addr netip.Addr
+	}
 	structIgnoredUnexportedEmbedded struct {
 		namedString `json:"-"`
 	}
@@ -2823,7 +2836,27 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/Invalid/UnexportedEmbedded"),
 		in:      structUnexportedEmbedded{},
 		want:    ``,
-		wantErr: EM(errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")).withType(0, T[structUnexportedEmbedded]()),
+		wantErr: EM(errors.New("inlined Go struct field namedString is not exported")).withType(0, T[structUnexportedEmbedded]()),
+	}, {
+		name: jsontest.Name("Structs/UnexportedEmbeddedStruct/Zero"),
+		in:   structUnexportedEmbeddedStruct{},
+		want: `{"FizzBuzz":0,"Addr":""}`,
+	}, {
+		name: jsontest.Name("Structs/UnexportedEmbeddedStruct/NonZero"),
+		in:   structUnexportedEmbeddedStruct{structOmitZeroAll{Bool: true}, 5, structNestedAddr{netip.AddrFrom4([4]byte{192, 168, 0, 1})}},
+		want: `{"Bool":true,"FizzBuzz":5,"Addr":"192.168.0.1"}`,
+	}, {
+		name: jsontest.Name("Structs/UnexportedEmbeddedStructPointer/Nil"),
+		in:   structUnexportedEmbeddedStructPointer{},
+		want: `{"FizzBuzz":0}`,
+	}, {
+		name: jsontest.Name("Structs/UnexportedEmbeddedStructPointer/Zero"),
+		in:   structUnexportedEmbeddedStructPointer{&structOmitZeroAll{}, 0, &structNestedAddr{}},
+		want: `{"FizzBuzz":0,"Addr":""}`,
+	}, {
+		name: jsontest.Name("Structs/UnexportedEmbeddedStructPointer/NonZero"),
+		in:   structUnexportedEmbeddedStructPointer{&structOmitZeroAll{Bool: true}, 5, &structNestedAddr{netip.AddrFrom4([4]byte{192, 168, 0, 1})}},
+		want: `{"Bool":true,"FizzBuzz":5,"Addr":"192.168.0.1"}`,
 	}, {
 		name: jsontest.Name("Structs/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -6880,7 +6913,27 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedEmbedded{}),
 		want:    addr(structUnexportedEmbedded{}),
-		wantErr: EU(errors.New("embedded Go struct field namedString of an unexported type must be explicitly ignored with a `json:\"-\"` tag")).withType('{', T[structUnexportedEmbedded]()),
+		wantErr: EU(errors.New("inlined Go struct field namedString is not exported")).withType('{', T[structUnexportedEmbedded]()),
+	}, {
+		name:  jsontest.Name("Structs/UnexportedEmbeddedStruct"),
+		inBuf: `{"Bool":true,"FizzBuzz":5,"Addr":"192.168.0.1"}`,
+		inVal: addr(structUnexportedEmbeddedStruct{}),
+		want:  addr(structUnexportedEmbeddedStruct{structOmitZeroAll{Bool: true}, 5, structNestedAddr{netip.AddrFrom4([4]byte{192, 168, 0, 1})}}),
+	}, {
+		name:    jsontest.Name("Structs/UnexportedEmbeddedStructPointer/Nil"),
+		inBuf:   `{"Bool":true,"FizzBuzz":5}`,
+		inVal:   addr(structUnexportedEmbeddedStructPointer{}),
+		wantErr: EU(errNilField).withPos(`{"Bool":`, "/Bool").withType(0, T[structUnexportedEmbeddedStructPointer]()),
+	}, {
+		name:    jsontest.Name("Structs/UnexportedEmbeddedStructPointer/Nil"),
+		inBuf:   `{"FizzBuzz":5,"Addr":"192.168.0.1"}`,
+		inVal:   addr(structUnexportedEmbeddedStructPointer{}),
+		wantErr: EU(errNilField).withPos(`{"FizzBuzz":5,"Addr":`, "/Addr").withType(0, T[structUnexportedEmbeddedStructPointer]()),
+	}, {
+		name:  jsontest.Name("Structs/UnexportedEmbeddedStructPointer/Nil"),
+		inBuf: `{"Bool":true,"FizzBuzz":10,"Addr":"192.168.0.1"}`,
+		inVal: addr(structUnexportedEmbeddedStructPointer{&structOmitZeroAll{Int: 5}, 5, &structNestedAddr{netip.AddrFrom4([4]byte{127, 0, 0, 1})}}),
+		want:  addr(structUnexportedEmbeddedStructPointer{&structOmitZeroAll{Bool: true, Int: 5}, 10, &structNestedAddr{netip.AddrFrom4([4]byte{192, 168, 0, 1})}}),
 	}, {
 		name: jsontest.Name("Structs/Unknown"),
 		inBuf: `{

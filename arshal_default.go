@@ -933,6 +933,8 @@ func mapKeyWithUniqueRepresentation(k reflect.Kind, allowInvalidUTF8 bool) bool 
 	}
 }
 
+var errNilField = errors.New("cannot set embedded pointer to unexported struct type")
+
 func makeStructArshaler(t reflect.Type) *arshaler {
 	// NOTE: The logic below disables namespaces for tracking duplicate names
 	// and does the tracking locally with an efficient bit-set based on which
@@ -1194,6 +1196,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				v := addressableValue{va.Field(f.index[0])} // addressable if struct value is addressable
 				if len(f.index) > 1 {
 					v = v.fieldByIndex(f.index[1:], true)
+					if !v.IsValid() {
+						return newUnmarshalErrorBefore(dec, t, errNilField)
+					}
 				}
 				err = unmarshal(dec, v, uo)
 				uo.Flags = flagsOriginal
@@ -1226,7 +1231,7 @@ func (va addressableValue) fieldByIndex(index []int, mayAlloc bool) addressableV
 func (va addressableValue) indirect(mayAlloc bool) addressableValue {
 	if va.Kind() == reflect.Pointer {
 		if va.IsNil() {
-			if !mayAlloc {
+			if !mayAlloc || !va.CanSet() {
 				return addressableValue{}
 			}
 			va.Set(reflect.New(va.Type().Elem()))

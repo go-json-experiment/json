@@ -100,13 +100,12 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// Handle an inlined field that serializes to/from
 				// zero or more JSON object members.
 
-				if f.inline && f.unknown {
-					err := fmt.Errorf("Go struct field %s cannot have both `inline` and `unknown` specified", sf.Name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
-				}
 				switch f.fieldOptions {
 				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true}:
 				case fieldOptions{name: f.name, quotedName: f.quotedName, unknown: true}:
+				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true, unknown: true}:
+					err := fmt.Errorf("Go struct field %s cannot have both `inline` and `unknown` specified", sf.Name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
 				default:
 					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
 					return structFields{}, &SemanticError{GoType: t, Err: err}
@@ -140,6 +139,9 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 					}
 					seen[tf] = true
 					continue
+				} else if !sf.IsExported() {
+					err := fmt.Errorf("inlined Go struct field %s is not exported", sf.Name)
+					return structFields{}, &SemanticError{GoType: t, Err: err}
 				}
 
 				// Handle an inlined field that serializes to/from any number of
@@ -348,16 +350,16 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		return fieldOptions{}, true, nil
 	}
 
-	// Check whether this field is unexported.
-	if !sf.IsExported() {
-		// In contrast to v1, v2 no longer forwards exported fields from
-		// embedded fields of unexported types since Go reflection does not
-		// allow the same set of operations that are available in normal cases
-		// of purely exported fields.
-		// See https://go.dev/issue/21357 and https://go.dev/issue/24153.
-		if sf.Anonymous {
-			err = cmp.Or(err, fmt.Errorf("embedded Go struct field %s of an unexported type must be explicitly ignored with a `json:\"-\"` tag", sf.Type.Name()))
-		}
+	// Check whether this field is unexported and not embedded,
+	// which Go reflection cannot mutate for the sake of serialization.
+	//
+	// An embedded field of an unexported type is still capable of
+	// forwarding exported fields, which may be JSON serialized.
+	// This technically operates on the edge of what is permissible by
+	// the Go language, but the most recent decision is to permit this.
+	//
+	// See https://go.dev/issue/24153 and https://go.dev/issue/32772.
+	if !sf.IsExported() && !sf.Anonymous {
 		// Tag options specified on an unexported field suggests user error.
 		if hasTag {
 			err = cmp.Or(err, fmt.Errorf("unexported Go struct field %s cannot have non-ignored `json:%q` tag", sf.Name, tag))
@@ -465,7 +467,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		// Reject duplicates.
 		switch {
 		case out.casing == nocase|strictcase:
-			err = cmp.Or(err, fmt.Errorf("Go struct field %s cannot have both `nocase` and `structcase` tag options", sf.Name))
+			err = cmp.Or(err, fmt.Errorf("Go struct field %s cannot have both `nocase` and `strictcase` tag options", sf.Name))
 		case seenOpts[opt]:
 			err = cmp.Or(err, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt))
 		}
