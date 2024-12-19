@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
@@ -51,6 +52,11 @@ func EM(err error) *SemanticError {
 
 func EU(err error) *SemanticError {
 	return &SemanticError{action: "unmarshal", Err: err}
+}
+
+func (e *SemanticError) withVal(val string) *SemanticError {
+	e.JSONValue = jsontext.Value(val)
+	return e
 }
 
 func (e *SemanticError) withPos(prefix string, pointer jsontext.Pointer) *SemanticError {
@@ -813,15 +819,15 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Floats/Invalid/NaN"),
 		opts:    []Options{StringifyNumbers(true)},
 		in:      math.NaN(),
-		wantErr: EM(fmt.Errorf("invalid value: %v", math.NaN())).withType(0, float64Type),
+		wantErr: EM(fmt.Errorf("unsupported value: %v", math.NaN())).withType(0, float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/PositiveInfinity"),
 		in:      math.Inf(+1),
-		wantErr: EM(fmt.Errorf("invalid value: %v", math.Inf(+1))).withType(0, float64Type),
+		wantErr: EM(fmt.Errorf("unsupported value: %v", math.Inf(+1))).withType(0, float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/NegativeInfinity"),
 		in:      math.Inf(-1),
-		wantErr: EM(fmt.Errorf("invalid value: %v", math.Inf(-1))).withType(0, float64Type),
+		wantErr: EM(fmt.Errorf("unsupported value: %v", math.Inf(-1))).withType(0, float64Type),
 	}, {
 		name: jsontest.Name("Floats/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -886,7 +892,7 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Maps/InvalidKey/Float/NaN"),
 		in:      map[float64]string{math.NaN(): "NaN", math.NaN(): "NaN"},
 		want:    `{`,
-		wantErr: EM(errors.New("invalid value: NaN")).withPos(`{`, "").withType(0, float64Type),
+		wantErr: EM(errors.New("unsupported value: NaN")).withPos(`{`, "").withType(0, float64Type),
 	}, {
 		name: jsontest.Name("Maps/ValidKey/Interface"),
 		in: map[any]any{
@@ -1040,7 +1046,7 @@ func TestMarshal(t *testing.T) {
 			return m
 		}(),
 		want:    strings.Repeat(`{"k":`, startDetectingCyclesAfter) + `{"k"`,
-		wantErr: EM(errCycle).withPos(strings.Repeat(`{"k":`, startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/k", startDetectingCyclesAfter+1))).withType(0, T[recursiveMap]()),
+		wantErr: EM(internal.ErrCycle).withPos(strings.Repeat(`{"k":`, startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/k", startDetectingCyclesAfter+1))).withType(0, T[recursiveMap]()),
 	}, {
 		name: jsontest.Name("Maps/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -2855,7 +2861,7 @@ func TestMarshal(t *testing.T) {
 			return s
 		}(),
 		want:    strings.Repeat(`[`, startDetectingCyclesAfter) + `[`,
-		wantErr: EM(errCycle).withPos(strings.Repeat("[", startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/0", startDetectingCyclesAfter+1))).withType(0, T[recursiveSlice]()),
+		wantErr: EM(internal.ErrCycle).withPos(strings.Repeat("[", startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/0", startDetectingCyclesAfter+1))).withType(0, T[recursiveSlice]()),
 	}, {
 		name: jsontest.Name("Slices/NonCyclicSlice"),
 		in: func() []any {
@@ -2950,7 +2956,7 @@ func TestMarshal(t *testing.T) {
 			return p
 		}(),
 		want:    strings.Repeat(`{"P":`, startDetectingCyclesAfter) + `{"P"`,
-		wantErr: EM(errCycle).withPos(strings.Repeat(`{"P":`, startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/P", startDetectingCyclesAfter+1))).withType(0, T[*recursivePointer]()),
+		wantErr: EM(internal.ErrCycle).withPos(strings.Repeat(`{"P":`, startDetectingCyclesAfter+1), jsontext.Pointer(strings.Repeat("/P", startDetectingCyclesAfter+1))).withType(0, T[*recursivePointer]()),
 	}, {
 		name: jsontest.Name("Pointers/IgnoreInvalidFormat"),
 		opts: []Options{invalidFormatOption},
@@ -3107,7 +3113,7 @@ func TestMarshal(t *testing.T) {
 			return struct{ X any }{m}
 		}(),
 		want:    `{"X"` + strings.Repeat(`:{""`, startDetectingCyclesAfter),
-		wantErr: EM(errCycle).withPos(`{"X":`+strings.Repeat(`{"":`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/", startDetectingCyclesAfter))).withType(0, T[any]()),
+		wantErr: EM(internal.ErrCycle).withPos(`{"X":`+strings.Repeat(`{"":`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/", startDetectingCyclesAfter))).withType(0, T[any]()),
 	}, {
 		name: jsontest.Name("Interfaces/Any/Slices/Nil"),
 		in:   struct{ X any }{[]any(nil)},
@@ -3138,7 +3144,7 @@ func TestMarshal(t *testing.T) {
 			return struct{ X any }{s}
 		}(),
 		want:    `{"X":` + strings.Repeat(`[`, startDetectingCyclesAfter),
-		wantErr: EM(errCycle).withPos(`{"X":`+strings.Repeat(`[`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/0", startDetectingCyclesAfter))).withType(0, T[[]any]()),
+		wantErr: EM(internal.ErrCycle).withPos(`{"X":`+strings.Repeat(`[`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/0", startDetectingCyclesAfter))).withType(0, T[[]any]()),
 	}, {
 		name: jsontest.Name("Methods/NilPointer"),
 		in:   struct{ X *allMethods }{X: (*allMethods)(nil)}, // method should not be called
@@ -4400,19 +4406,19 @@ func TestUnmarshal(t *testing.T) {
 	}{{
 		name:    jsontest.Name("Nil"),
 		inBuf:   `null`,
-		wantErr: EU(errNonNilReference),
+		wantErr: EU(internal.ErrNonNilReference),
 	}, {
 		name:    jsontest.Name("NilPointer"),
 		inBuf:   `null`,
 		inVal:   (*string)(nil),
 		want:    (*string)(nil),
-		wantErr: EU(errNonNilReference).withType(0, stringType),
+		wantErr: EU(internal.ErrNonNilReference).withType(0, T[*string]()),
 	}, {
 		name:    jsontest.Name("NonPointer"),
 		inBuf:   `null`,
 		inVal:   "unchanged",
 		want:    "unchanged",
-		wantErr: EU(errNonNilReference).withType(0, stringType),
+		wantErr: EU(internal.ErrNonNilReference).withType(0, T[string]()),
 	}, {
 		name:    jsontest.Name("Bools/TrailingJunk"),
 		inBuf:   `falsetrue`,
@@ -4466,7 +4472,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"false "`,
 		inVal:   addr(true),
 		want:    addr(true),
-		wantErr: EU(errors.New("cannot parse \"false \" as bool")).withType('"', boolType),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"false "`).withType('"', boolType),
 	}, {
 		name:    jsontest.Name("Bools/StringifiedBool/InvalidBool"),
 		opts:    []Options{jsonflags.StringifyBoolsAndStrings | 1},
@@ -4643,7 +4649,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"AA=="`,
 		inVal:   new([0]byte),
 		want:    addr([0]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 1 mismatches array length of 0")).withType('"', T[[0]byte]()),
+		wantErr: EU(errors.New("decoded length of 1 mismatches array length of 0")).withType('"', T[[0]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray1/Valid"),
 		inBuf: `"AQ=="`,
@@ -4663,13 +4669,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `""`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 0 mismatches array length of 1")).withType('"', T[[1]byte]()),
+		wantErr: EU(errors.New("decoded length of 0 mismatches array length of 1")).withType('"', T[[1]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray1/Overflow"),
 		inBuf:   `"AQI="`,
 		inVal:   new([1]byte),
 		want:    addr([1]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 2 mismatches array length of 1")).withType('"', T[[1]byte]()),
+		wantErr: EU(errors.New("decoded length of 2 mismatches array length of 1")).withType('"', T[[1]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray2/Valid"),
 		inBuf: `"AQI="`,
@@ -4689,13 +4695,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"AQ=="`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 1 mismatches array length of 2")).withType('"', T[[2]byte]()),
+		wantErr: EU(errors.New("decoded length of 1 mismatches array length of 2")).withType('"', T[[2]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray2/Overflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 3 mismatches array length of 2")).withType('"', T[[2]byte]()),
+		wantErr: EU(errors.New("decoded length of 3 mismatches array length of 2")).withType('"', T[[2]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray3/Valid"),
 		inBuf: `"AQID"`,
@@ -4715,13 +4721,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"AQI="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 2 mismatches array length of 3")).withType('"', T[[3]byte]()),
+		wantErr: EU(errors.New("decoded length of 2 mismatches array length of 3")).withType('"', T[[3]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray3/Overflow"),
 		inBuf:   `"AQIDAQ=="`,
 		inVal:   new([3]byte),
 		want:    addr([3]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 4 mismatches array length of 3")).withType('"', T[[3]byte]()),
+		wantErr: EU(errors.New("decoded length of 4 mismatches array length of 3")).withType('"', T[[3]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray4/Valid"),
 		inBuf: `"AQIDBA=="`,
@@ -4741,13 +4747,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"AQID"`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 3 mismatches array length of 4")).withType('"', T[[4]byte]()),
+		wantErr: EU(errors.New("decoded length of 3 mismatches array length of 4")).withType('"', T[[4]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray4/Overflow"),
 		inBuf:   `"AQIDBAU="`,
 		inVal:   new([4]byte),
 		want:    addr([4]byte{}),
-		wantErr: EU(errors.New("decoded base64 length of 5 mismatches array length of 4")).withType('"', T[[4]byte]()),
+		wantErr: EU(errors.New("decoded length of 5 mismatches array length of 4")).withType('"', T[[4]byte]()),
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,
 		// so the following should be treated as a array of uints.
@@ -4832,7 +4838,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `-129`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-129" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int8]()),
+		wantErr: EU(strconv.ErrRange).withVal(`-129`).withType('0', T[int8]()),
 	}, {
 		name:  jsontest.Name("Ints/Int8/Min"),
 		inBuf: `-128`,
@@ -4848,13 +4854,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `128`,
 		inVal:   addr(int8(-1)),
 		want:    addr(int8(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "128" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int8]()),
+		wantErr: EU(strconv.ErrRange).withVal(`128`).withType('0', T[int8]()),
 	}, {
 		name:    jsontest.Name("Ints/Int16/MinOverflow"),
 		inBuf:   `-32769`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-32769" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int16]()),
+		wantErr: EU(strconv.ErrRange).withVal(`-32769`).withType('0', T[int16]()),
 	}, {
 		name:  jsontest.Name("Ints/Int16/Min"),
 		inBuf: `-32768`,
@@ -4870,13 +4876,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `32768`,
 		inVal:   addr(int16(-1)),
 		want:    addr(int16(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "32768" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int16]()),
+		wantErr: EU(strconv.ErrRange).withVal(`32768`).withType('0', T[int16]()),
 	}, {
 		name:    jsontest.Name("Ints/Int32/MinOverflow"),
 		inBuf:   `-2147483649`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-2147483649" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int32]()),
+		wantErr: EU(strconv.ErrRange).withVal(`-2147483649`).withType('0', T[int32]()),
 	}, {
 		name:  jsontest.Name("Ints/Int32/Min"),
 		inBuf: `-2147483648`,
@@ -4892,13 +4898,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `2147483648`,
 		inVal:   addr(int32(-1)),
 		want:    addr(int32(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "2147483648" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int32]()),
+		wantErr: EU(strconv.ErrRange).withVal(`2147483648`).withType('0', T[int32]()),
 	}, {
 		name:    jsontest.Name("Ints/Int64/MinOverflow"),
 		inBuf:   `-9223372036854775809`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-9223372036854775809" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int64]()),
+		wantErr: EU(strconv.ErrRange).withVal(`-9223372036854775809`).withType('0', T[int64]()),
 	}, {
 		name:  jsontest.Name("Ints/Int64/Min"),
 		inBuf: `-9223372036854775808`,
@@ -4914,7 +4920,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `9223372036854775808`,
 		inVal:   addr(int64(-1)),
 		want:    addr(int64(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "9223372036854775808" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int64]()),
+		wantErr: EU(strconv.ErrRange).withVal(`9223372036854775808`).withType('0', T[int64]()),
 	}, {
 		name:  jsontest.Name("Ints/Named"),
 		inBuf: `-6464`,
@@ -4939,7 +4945,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"00"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "00" as signed integer: %w`, strconv.ErrSyntax)).withType('"', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"00"`).withType('"', T[int]()),
 	}, {
 		name:  jsontest.Name("Ints/Escaped"),
 		opts:  []Options{StringifyNumbers(true)},
@@ -4956,47 +4962,47 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `1.0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)).withType('0', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`1.0`).withType('0', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/Exponent"),
 		inBuf:   `1e0`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)).withType('0', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`1e0`).withType('0', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/StringifiedFraction"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1.0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1.0" as signed integer: %w`, strconv.ErrSyntax)).withType('"', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1.0"`).withType('"', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/StringifiedExponent"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1e0"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1e0" as signed integer: %w`, strconv.ErrSyntax)).withType('"', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1e0"`).withType('"', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/Overflow"),
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "100000000000000000000000000000" as signed integer: %w`, strconv.ErrRange)).withType('0', T[int]()),
+		wantErr: EU(strconv.ErrRange).withVal(`100000000000000000000000000000`).withType('0', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/OverflowSyntax"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "100000000000000000000000000000x" as signed integer: %w`, strconv.ErrSyntax)).withType('"', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"100000000000000000000000000000x"`).withType('"', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/Whitespace"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"0 "`,
 		inVal:   addr(int(-1)),
 		want:    addr(int(-1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "0 " as signed integer: %w`, strconv.ErrSyntax)).withType('"', T[int]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"0 "`).withType('"', T[int]()),
 	}, {
 		name:    jsontest.Name("Ints/Invalid/Bool"),
 		inBuf:   `true`,
@@ -5052,7 +5058,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `256`,
 		inVal:   addr(uint8(1)),
 		want:    addr(uint8(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "256" as unsigned integer: %w`, strconv.ErrRange)).withType('0', T[uint8]()),
+		wantErr: EU(strconv.ErrRange).withVal(`256`).withType('0', T[uint8]()),
 	}, {
 		name:  jsontest.Name("Uints/Uint16/Min"),
 		inBuf: `0`,
@@ -5068,7 +5074,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `65536`,
 		inVal:   addr(uint16(1)),
 		want:    addr(uint16(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "65536" as unsigned integer: %w`, strconv.ErrRange)).withType('0', T[uint16]()),
+		wantErr: EU(strconv.ErrRange).withVal(`65536`).withType('0', T[uint16]()),
 	}, {
 		name:  jsontest.Name("Uints/Uint32/Min"),
 		inBuf: `0`,
@@ -5084,7 +5090,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `4294967296`,
 		inVal:   addr(uint32(1)),
 		want:    addr(uint32(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "4294967296" as unsigned integer: %w`, strconv.ErrRange)).withType('0', T[uint32]()),
+		wantErr: EU(strconv.ErrRange).withVal(`4294967296`).withType('0', T[uint32]()),
 	}, {
 		name:  jsontest.Name("Uints/Uint64/Min"),
 		inBuf: `0`,
@@ -5100,7 +5106,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `18446744073709551616`,
 		inVal:   addr(uint64(1)),
 		want:    addr(uint64(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "18446744073709551616" as unsigned integer: %w`, strconv.ErrRange)).withType('0', T[uint64]()),
+		wantErr: EU(strconv.ErrRange).withVal(`18446744073709551616`).withType('0', T[uint64]()),
 	}, {
 		name:  jsontest.Name("Uints/Uintptr"),
 		inBuf: `1`,
@@ -5130,7 +5136,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"00"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "00" as unsigned integer: %w`, strconv.ErrSyntax)).withType('"', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"00"`).withType('"', T[uint]()),
 	}, {
 		name:  jsontest.Name("Uints/Escaped"),
 		opts:  []Options{StringifyNumbers(true)},
@@ -5142,59 +5148,59 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `-1`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-1" as unsigned integer: %w`, strconv.ErrSyntax)).withType('0', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`-1`).withType('0', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/NegativeZero"),
 		inBuf:   `-0`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "-0" as unsigned integer: %w`, strconv.ErrSyntax)).withType('0', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`-0`).withType('0', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Fraction"),
 		inBuf:   `1.0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)).withType('0', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`1.0`).withType('0', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Exponent"),
 		inBuf:   `1e0`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)).withType('0', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`1e0`).withType('0', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/StringifiedFraction"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1.0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1.0" as unsigned integer: %w`, strconv.ErrSyntax)).withType('"', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1.0"`).withType('"', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/StringifiedExponent"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1e0"`,
 		inVal:   addr(uint(10)),
 		want:    addr(uint(10)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1e0" as unsigned integer: %w`, strconv.ErrSyntax)).withType('"', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1e0"`).withType('"', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Overflow"),
 		inBuf:   `100000000000000000000000000000`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "100000000000000000000000000000" as unsigned integer: %w`, strconv.ErrRange)).withType('0', T[uint]()),
+		wantErr: EU(strconv.ErrRange).withVal(`100000000000000000000000000000`).withType('0', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/OverflowSyntax"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"100000000000000000000000000000x"`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "100000000000000000000000000000x" as unsigned integer: %w`, strconv.ErrSyntax)).withType('"', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"100000000000000000000000000000x"`).withType('"', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Whitespace"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"0 "`,
 		inVal:   addr(uint(1)),
 		want:    addr(uint(1)),
-		wantErr: EU(fmt.Errorf(`cannot parse "0 " as unsigned integer: %w`, strconv.ErrSyntax)).withType('"', T[uint]()),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"0 "`).withType('"', T[uint]()),
 	}, {
 		name:    jsontest.Name("Uints/Invalid/Bool"),
 		inBuf:   `true`,
@@ -5251,7 +5257,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `1e1000`,
 		inVal:   addr(float32(32.32)),
 		want:    addr(float32(32.32)),
-		wantErr: EU(strconv.ErrRange).withType('0', T[float32]()),
+		wantErr: EU(strconv.ErrRange).withVal(`1e1000`).withType('0', T[float32]()),
 	}, {
 		name:  jsontest.Name("Floats/Float64/Pi"),
 		inBuf: `3.14159265358979323846264338327950288419716939937510582097494459`,
@@ -5273,7 +5279,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `1e1000`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: EU(strconv.ErrRange).withType('0', T[float64]()),
+		wantErr: EU(strconv.ErrRange).withVal(`1e1000`).withType('0', T[float64]()),
 	}, {
 		name:  jsontest.Name("Floats/Any/Overflow"),
 		inBuf: `1e1000`,
@@ -5285,7 +5291,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `1e1000`,
 		inVal:   new(any),
 		want:    new(any),
-		wantErr: EU(strconv.ErrRange).withType('0', T[float64]()),
+		wantErr: EU(strconv.ErrRange).withVal(`1e1000`).withType('0', T[float64]()),
 	}, {
 		name:  jsontest.Name("Floats/Named"),
 		inBuf: `64.64`,
@@ -5316,28 +5322,28 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"NaN"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: EU(fmt.Errorf(`cannot parse "NaN" as JSON number: %w`, strconv.ErrSyntax)).withType('"', float64Type),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"NaN"`).withType('"', float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/Infinity"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"Infinity"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: EU(fmt.Errorf(`cannot parse "Infinity" as JSON number: %w`, strconv.ErrSyntax)).withType('"', float64Type),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"Infinity"`).withType('"', float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/Whitespace"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1 "`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1 " as JSON number: %w`, strconv.ErrSyntax)).withType('"', float64Type),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1 "`).withType('"', float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/GoSyntax"),
 		opts:    []Options{StringifyNumbers(true)},
 		inBuf:   `"1p-2"`,
 		inVal:   addr(float64(64.64)),
 		want:    addr(float64(64.64)),
-		wantErr: EU(fmt.Errorf(`cannot parse "1p-2" as JSON number: %w`, strconv.ErrSyntax)).withType('"', float64Type),
+		wantErr: EU(strconv.ErrSyntax).withVal(`"1p-2"`).withType('"', float64Type),
 	}, {
 		name:    jsontest.Name("Floats/Invalid/Bool"),
 		inBuf:   `true`,
@@ -5897,12 +5903,11 @@ func TestUnmarshal(t *testing.T) {
 			Pointer: new(structStringifiedAll), // may be stringified
 		}),
 	}, {
-		name:  jsontest.Name("Structs/Stringified/InvalidEmpty"),
-		inBuf: `{"Int":""}`,
-		inVal: new(structStringifiedAll),
-		want:  new(structStringifiedAll),
-		wantErr: EU(fmt.Errorf(`cannot parse "" as signed integer: %w`, strconv.ErrSyntax)).
-			withPos(`{"Int":`, "/Int").withType('"', T[int64]()),
+		name:    jsontest.Name("Structs/Stringified/InvalidEmpty"),
+		inBuf:   `{"Int":""}`,
+		inVal:   new(structStringifiedAll),
+		want:    new(structStringifiedAll),
+		wantErr: EU(strconv.ErrSyntax).withVal(`""`).withPos(`{"Int":`, "/Int").withType('"', T[int64]()),
 	}, {
 		name: jsontest.Name("Structs/LegacyStringified"),
 		opts: []Options{jsonflags.StringifyWithLegacySemantics | 1},
@@ -6177,12 +6182,12 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/LineFeed"),
 		inBuf:   `{"Base32": "AAAA\nAAAA"}`,
 		inVal:   new(structFormatBytes),
-		wantErr: EU(errors.New("illegal data at input byte 4")).withPos(`{"Base32": `, "/Base32").withType('"', T[[]byte]()),
+		wantErr: EU(errors.New("illegal character '\\n' at offset 4")).withPos(`{"Base32": `, "/Base32").withType('"', T[[]byte]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/CarriageReturn"),
 		inBuf:   `{"Base32": "AAAA\rAAAA"}`,
 		inVal:   new(structFormatBytes),
-		wantErr: EU(errors.New("illegal data at input byte 4")).withPos(`{"Base32": `, "/Base32").withType('"', T[[]byte]()),
+		wantErr: EU(errors.New("illegal character '\\r' at offset 4")).withPos(`{"Base32": `, "/Base32").withType('"', T[[]byte]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base32/NonAlphabet/Space"),
 		inBuf:   `{"Base32": "AAAA AAAA"}`,
@@ -6208,12 +6213,12 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/LineFeed"),
 		inBuf:   `{"Base64": "aa=\n="}`,
 		inVal:   new(structFormatBytes),
-		wantErr: EU(errors.New("illegal data at input byte 3")).withPos(`{"Base64": `, "/Base64").withType('"', T[[]byte]()),
+		wantErr: EU(errors.New("illegal character '\\n' at offset 3")).withPos(`{"Base64": `, "/Base64").withType('"', T[[]byte]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/CarriageReturn"),
 		inBuf:   `{"Base64": "aa=\r="}`,
 		inVal:   new(structFormatBytes),
-		wantErr: EU(errors.New("illegal data at input byte 3")).withPos(`{"Base64": `, "/Base64").withType('"', T[[]byte]()),
+		wantErr: EU(errors.New("illegal character '\\r' at offset 3")).withPos(`{"Base64": `, "/Base64").withType('"', T[[]byte]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/Space"),
 		inBuf:   `{"Base64": "aa= ="}`,

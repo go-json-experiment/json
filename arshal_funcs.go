@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/jsontext"
@@ -177,6 +178,9 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 			val, err := fn(va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "marshal function of type func(T) ([]byte, error)")
+				if export.Encoder(enc).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV1") // unlike unmarshal, always wrapped
+				}
 				err = newMarshalErrorBefore(enc, t, err)
 				return collapseSemanticErrors(err)
 			}
@@ -226,6 +230,9 @@ func MarshalFuncV2[T any](fn func(*jsontext.Encoder, T, Options) error) *Marshal
 					}
 					err = errSkipMutation
 				}
+				if xe.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV2") // unlike unmarshal, always wrapped
+				}
 				if !export.IsIOError(err) {
 					err = newSemanticErrorWithPosition(enc, t, prevDepth, prevLength, err)
 				}
@@ -260,6 +267,9 @@ func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 			err = fn(val, va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "unmarshal function of type func([]byte, T) error")
+				if export.Decoder(dec).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return err // unlike marshal, never wrapped
+				}
 				err = newUnmarshalErrorAfter(dec, t, err)
 				return collapseSemanticErrors(err)
 			}
@@ -301,6 +311,9 @@ func UnmarshalFuncV2[T any](fn func(*jsontext.Decoder, T, Options) error) *Unmar
 						return SkipFunc
 					}
 					err = errSkipMutation
+				}
+				if export.Decoder(dec).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return err // unlike marshal, never wrapped
 				}
 				if !isSyntacticError(err) && !export.IsIOError(err) {
 					err = newSemanticErrorWithPosition(dec, t, prevDepth, prevLength, err)

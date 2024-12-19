@@ -52,14 +52,12 @@ type typedPointer struct {
 	len int // remember slice length to avoid false positives
 }
 
-var errCycle = errors.New("encountered a cycle")
-
 // visitPointer visits pointer p of type t, reporting an error if seen before.
 // If successfully visited, then the caller must eventually call leave.
 func visitPointer(m *seenPointers, v reflect.Value) error {
 	p := typedPointer{v.Type(), v.UnsafePointer(), sliceLen(v)}
 	if _, ok := (*m)[p]; ok {
-		return errCycle
+		return internal.ErrCycle
 	}
 	if *m == nil {
 		*m = make(seenPointers)
@@ -174,7 +172,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 				case "false":
 					va.SetBool(false)
 				default:
-					return newUnmarshalErrorAfter(dec, t, fmt.Errorf("cannot parse %q as bool", tok.String()))
+					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
 				}
 				return nil
 			}
@@ -370,7 +368,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			b := va.Bytes()
 			if va.Kind() == reflect.Array {
 				if n != len(b) {
-					err := fmt.Errorf("decoded base64 length of %d mismatches array length of %d", n, len(b))
+					err := fmt.Errorf("decoded length of %d mismatches array length of %d", n, len(b))
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
 			} else {
@@ -386,7 +384,8 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				// specifies that non-alphabet characters must be rejected.
 				// Unfortunately, the "base32" and "base64" packages allow
 				// '\r' and '\n' characters by default.
-				err = errors.New("illegal data at input byte " + strconv.Itoa(bytes.IndexAny(val, "\r\n")))
+				i := bytes.IndexAny(val, "\r\n")
+				err = fmt.Errorf("illegal character %s at offset %d", jsonwire.QuoteRune(val[i:]), i)
 			}
 			if err != nil {
 				return newUnmarshalErrorAfter(dec, t, err)
@@ -396,7 +395,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			}
 			return nil
 		}
-		return newUnmarshalErrorAfter(dec, t, err)
+		return newUnmarshalErrorAfter(dec, t, nil)
 	}
 	return fncs
 }
@@ -460,14 +459,12 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			overflow := (neg && n > maxInt) || (!neg && n > maxInt-1)
 			if !ok {
 				if n != math.MaxUint64 {
-					err := fmt.Errorf("cannot parse %q as signed integer: %w", val, strconv.ErrSyntax)
-					return newUnmarshalErrorAfter(dec, t, err)
+					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
 				}
 				overflow = true
 			}
 			if overflow {
-				err := fmt.Errorf("cannot parse %q as signed integer: %w", val, strconv.ErrRange)
-				return newUnmarshalErrorAfter(dec, t, err)
+				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
 			}
 			if neg {
 				va.SetInt(int64(-n))
@@ -535,14 +532,12 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			overflow := n > maxUint-1
 			if !ok {
 				if n != math.MaxUint64 {
-					err := fmt.Errorf("cannot parse %q as unsigned integer: %w", val, strconv.ErrSyntax)
-					return newUnmarshalErrorAfter(dec, t, err)
+					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
 				}
 				overflow = true
 			}
 			if overflow {
-				err := fmt.Errorf("cannot parse %q as unsigned integer: %w", val, strconv.ErrRange)
-				return newUnmarshalErrorAfter(dec, t, err)
+				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
 			}
 			va.SetUint(n)
 			return nil
@@ -569,7 +564,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		fv := va.Float()
 		if math.IsNaN(fv) || math.IsInf(fv, 0) {
 			if !allowNonFinite {
-				err := fmt.Errorf("invalid value: %v", fv)
+				err := fmt.Errorf("unsupported value: %v", fv)
 				return newMarshalErrorBefore(enc, t, err)
 			}
 			return enc.WriteToken(jsontext.Float(fv))
@@ -629,8 +624,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				break
 			}
 			if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
-				err := fmt.Errorf("cannot parse %q as JSON number: %w", val, strconv.ErrSyntax)
-				return newUnmarshalErrorAfter(dec, t, err)
+				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
 			}
 			fallthrough
 		case '0':
@@ -639,7 +633,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			fv, ok := jsonwire.ParseFloat(val, bits)
 			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
-				return newUnmarshalErrorAfter(dec, t, strconv.ErrRange)
+				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
 			}
 			va.SetFloat(fv)
 			return nil
