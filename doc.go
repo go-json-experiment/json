@@ -107,9 +107,9 @@
 //     A Go embedded field is implicitly inlined unless an explicit JSON name
 //     is specified. The inlined field must be a Go struct
 //     (that does not implement any JSON methods), [jsontext.Value],
-//     map[string]T, or an unnamed pointer to such types. When marshaling,
+//     map[~string]T, or an unnamed pointer to such types. When marshaling,
 //     inlined fields from a pointer type are omitted if it is nil.
-//     Inlined fields of type [jsontext.Value] and map[string]T are called
+//     Inlined fields of type [jsontext.Value] and map[~string]T are called
 //     “inlined fallbacks” as they can represent all possible
 //     JSON object members not directly handled by the parent struct.
 //     Only one inlined fallback field may be specified in a struct,
