@@ -97,11 +97,12 @@ func newMarshalErrorBefore(e *jsontext.Encoder, t reflect.Type, err error) error
 
 // newUnmarshalErrorBefore wraps err in a SemanticError assuming that d
 // is positioned right before the next token or value, which causes an error.
+// It does not record the next JSON kind as this error is used to indicate
+// the receiving Go value is invalid to unmarshal into (and not a JSON error).
 func newUnmarshalErrorBefore(d *jsontext.Decoder, t reflect.Type, err error) error {
 	return &SemanticError{action: "unmarshal", GoType: t, Err: err,
 		ByteOffset:  d.InputOffset() + int64(export.Decoder(d).CountNextDelimWhitespace()),
-		JSONPointer: jsontext.Pointer(export.Decoder(d).AppendStackPointer(nil, +1)),
-		JSONKind:    d.PeekKind()}
+		JSONPointer: jsontext.Pointer(export.Decoder(d).AppendStackPointer(nil, +1))}
 }
 
 // newUnmarshalErrorAfter wraps err in a SemanticError assuming that d
