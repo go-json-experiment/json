@@ -5396,7 +5396,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"key":"value"}`,
 		inVal:   new(map[chan string]string),
 		want:    addr(make(map[chan string]string)),
-		wantErr: EU(nil).withPos(`{`, "").withType('"', T[chan string]()),
+		wantErr: EU(nil).withPos(`{`, "").withType(0, T[chan string]()),
 	}, {
 		name:  jsontest.Name("Maps/ValidKey/Int"),
 		inBuf: `{"0":0,"-1":1,"2":2,"-3":3}`,
@@ -5493,7 +5493,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(map[string]chan string{
 			"key": nil,
 		}),
-		wantErr: EU(nil).withPos(`{"key":`, "/key").withType('"', T[chan string]()),
+		wantErr: EU(nil).withPos(`{"key":`, "/key").withType(0, T[chan string]()),
 	}, {
 		name:  jsontest.Name("Maps/RecursiveMap"),
 		inBuf: `{"buzz":{},"fizz":{"bar":{},"foo":{}}}`,
@@ -6298,57 +6298,57 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/Format/Invalid/Bool"),
 		inBuf:   `{"Bool":true}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Bool":`, "/Bool").withType('t', T[bool]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Bool":`, "/Bool").withType(0, T[bool]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/String"),
 		inBuf:   `{"String": "string"}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"String": `, "/String").withType('"', T[string]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"String": `, "/String").withType(0, T[string]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Bytes"),
 		inBuf:   `{"Bytes": "bytes"}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Bytes": `, "/Bytes").withType('"', T[[]byte]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Bytes": `, "/Bytes").withType(0, T[[]byte]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Int"),
 		inBuf:   `{"Int":   1}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Int":   `, "/Int").withType('0', T[int64]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Int":   `, "/Int").withType(0, T[int64]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Uint"),
 		inBuf:   `{"Uint": 1}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Uint": `, "/Uint").withType('0', T[uint64]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Uint": `, "/Uint").withType(0, T[uint64]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Float"),
 		inBuf:   `{"Float" : 1}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Float" : `, "/Float").withType('0', T[float64]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Float" : `, "/Float").withType(0, T[float64]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Map"),
 		inBuf:   `{"Map":{}}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Map":`, "/Map").withType('{', T[map[string]string]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Map":`, "/Map").withType(0, T[map[string]string]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Struct"),
 		inBuf:   `{"Struct": {}}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Struct": `, "/Struct").withType('{', T[structAll]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Struct": `, "/Struct").withType(0, T[structAll]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Slice"),
 		inBuf:   `{"Slice": {}}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Slice": `, "/Slice").withType('{', T[[]string]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Slice": `, "/Slice").withType(0, T[[]string]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Array"),
 		inBuf:   `{"Array": []}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Array": `, "/Array").withType('[', T[[1]string]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Array": `, "/Array").withType(0, T[[1]string]()),
 	}, {
 		name:    jsontest.Name("Structs/Format/Invalid/Interface"),
 		inBuf:   `{"Interface": "anything"}`,
 		inVal:   new(structFormatInvalid),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"Interface": `, "/Interface").withType('"', T[any]()),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"Interface": `, "/Interface").withType(0, T[any]()),
 	}, {
 		name:  jsontest.Name("Structs/Inline/Zero"),
 		inBuf: `{"D":""}`,
@@ -6945,7 +6945,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `["hello"]`,
 		inVal:   new([]chan string),
 		want:    addr([]chan string{nil}),
-		wantErr: EU(nil).withPos(`[`, "/0").withType('"', T[chan string]()),
+		wantErr: EU(nil).withPos(`[`, "/0").withType(0, T[chan string]()),
 	}, {
 		name:  jsontest.Name("Slices/RecursiveSlice"),
 		inBuf: `[[],[],[[]],[[],[]]]`,
@@ -7033,7 +7033,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `["hello"]`,
 		inVal:   new([1]chan string),
 		want:    new([1]chan string),
-		wantErr: EU(nil).withPos(`[`, "/0").withType('"', T[chan string]()),
+		wantErr: EU(nil).withPos(`[`, "/0").withType(0, T[chan string]()),
 	}, {
 		name:    jsontest.Name("Arrays/Invalid/Underflow"),
 		inBuf:   `{"F":[   ]}`,
@@ -7154,7 +7154,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `"hello"`,
 		inVal:   new(io.Reader),
 		want:    new(io.Reader),
-		wantErr: EU(errNilInterface).withType('"', T[io.Reader]()),
+		wantErr: EU(errNilInterface).withType(0, T[io.Reader]()),
 	}, {
 		name:  jsontest.Name("Interfaces/Empty/False"),
 		inBuf: `false`,
@@ -7995,7 +7995,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"X":"hello"}`,
 		inVal:   addr(struct{ X fmt.Stringer }{nil}),
 		want:    addr(struct{ X fmt.Stringer }{nil}),
-		wantErr: EU(errNilInterface).withPos(`{"X":`, "/X").withType('"', T[fmt.Stringer]()),
+		wantErr: EU(errNilInterface).withPos(`{"X":`, "/X").withType(0, T[fmt.Stringer]()),
 	}, {
 		name: jsontest.Name("Functions/Interface/NetIP"),
 		opts: []Options{
@@ -8502,7 +8502,7 @@ func TestUnmarshal(t *testing.T) {
 		want: addr(struct {
 			D time.Duration `json:",format:invalid"`
 		}{1}),
-		wantErr: EU(errInvalidFormatFlag).withPos(`{"D":`, "/D").withType('"', timeDurationType),
+		wantErr: EU(errInvalidFormatFlag).withPos(`{"D":`, "/D").withType(0, timeDurationType),
 	}, {
 		name:  jsontest.Name("Duration/Format/Legacy"),
 		inBuf: `{"D1":45296078090012,"D2":"12h34m56.078090012s"}`,
@@ -8690,7 +8690,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct {
 			T time.Time `json:",format:UndefinedConstant"`
 		}),
-		wantErr: EU(errors.New(`invalid format flag "UndefinedConstant"`)).withPos(`{"T":`, "/T").withType('"', timeTimeType),
+		wantErr: EU(errors.New(`invalid format flag "UndefinedConstant"`)).withPos(`{"T":`, "/T").withType(0, timeTimeType),
 	}, {
 		name:    jsontest.Name("Time/Format/SingleDigitHour"),
 		inBuf:   `{"T":"2000-01-01T1:12:34Z"}`,
