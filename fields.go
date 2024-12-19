@@ -235,19 +235,11 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	// or the one that is uniquely tagged with a JSON name.
 	// Otherwise, no dominant field exists for the set.
 	flattened := allFields[:0]
-	slices.SortFunc(allFields, func(x, y structField) int {
-		switch {
-		case x.name != y.name:
-			return strings.Compare(x.name, y.name)
-		case len(x.index) != len(y.index):
-			return cmp.Compare(len(x.index), len(y.index))
-		case x.hasName && !y.hasName:
-			return -1
-		case !x.hasName && y.hasName:
-			return +1
-		default:
-			return 0 // TODO(https://go.dev/issue/61643): Compare bools better.
-		}
+	slices.SortStableFunc(allFields, func(x, y structField) int {
+		return cmp.Or(
+			strings.Compare(x.name, y.name),
+			cmp.Compare(len(x.index), len(y.index)),
+			boolsCompare(!x.hasName, !y.hasName))
 	})
 	for len(allFields) > 0 {
 		n := 1 // number of fields with the same exact name
@@ -543,4 +535,16 @@ func consumeTagOption(in string) (string, int, error) {
 
 func isLetterOrDigit(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsNumber(r)
+}
+
+// boolsCompare compares x and y, ordering false before true.
+func boolsCompare(x, y bool) int {
+	switch {
+	case !x && y:
+		return -1
+	default:
+		return 0
+	case x && !y:
+		return +1
+	}
 }
