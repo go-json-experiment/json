@@ -111,15 +111,34 @@ type UnmarshalTypeError struct {
 	Value  string       // description of JSON value - "bool", "array", "number -5"
 	Type   reflect.Type // type of Go value it could not be assigned to
 	Offset int64        // error occurred after reading Offset bytes
-	Struct string       // name of the struct type containing the field
-	Field  string       // the full path from root node to the field, include embedded struct
+	Struct string       // name of the root type containing the field
+	Field  string       // the full path from root node to the value
+	Err    error        // may be nil
 }
 
 func (e *UnmarshalTypeError) Error() string {
-	if e.Struct != "" || e.Field != "" {
-		return "json: cannot unmarshal " + e.Value + " into Go struct field " + e.Struct + "." + e.Field + " of type " + e.Type.String()
+	s := "json: cannot unmarshal"
+	if e.Value != "" {
+		s += " JSON " + e.Value
 	}
-	return "json: cannot unmarshal " + e.Value + " into Go value of type " + e.Type.String()
+	s += " into"
+	var preposition string
+	if e.Field != "" {
+		s += " " + e.Struct + "." + e.Field
+		preposition = " of"
+	}
+	if e.Type != nil {
+		s += preposition
+		s += " Go type " + e.Type.String()
+	}
+	if e.Err != nil {
+		s += ": " + e.Err.Error()
+	}
+	return s
+}
+
+func (e *UnmarshalTypeError) Unwrap() error {
+	return e.Err
 }
 
 // An UnmarshalFieldError describes a JSON object key that
@@ -200,6 +219,7 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 	if err != nil {
 		return err
 	}
+	val0 := val
 	k := val.Kind()
 	switch k {
 	case 'n':
@@ -212,7 +232,7 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 		verbatim := jsonwire.ConsumeSimpleString(val) == len(val)
 		val = jsonwire.UnquoteMayCopy(val, verbatim)
 		if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
-			return fmt.Errorf("cannot parse %q as JSON number: %w", val, strconv.ErrSyntax)
+			return &jsonv2.SemanticError{JSONKind: val0.Kind(), JSONValue: val0, GoType: numberType, Err: strconv.ErrSyntax}
 		}
 		fallthrough
 	case '0':
