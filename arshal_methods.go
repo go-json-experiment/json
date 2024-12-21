@@ -266,6 +266,12 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			if err != nil {
 				return err // must be a syntactic or I/O error
 			}
+			if val.Kind() == 'n' {
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					va.SetZero()
+				}
+				return nil
+			}
 			if val.Kind() != '"' {
 				return newUnmarshalErrorAfter(dec, t, errNonStringValue)
 			}

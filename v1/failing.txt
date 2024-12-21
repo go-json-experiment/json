@@ -5,17 +5,6 @@ TestUnmarshal/#109
 TestUnmarshal/#111
 TestUnmarshal/#113
 TestUnmarshal/#138
-TestNullString
-TestInterfaceSet
-TestInterfaceSet/#01
-TestInterfaceSet/#02
-TestInterfaceSet/#07
-TestInterfaceSet/#10
-TestInterfaceSet/#11
-TestUnmarshalNulls
-TestPrefilled
-TestPrefilled/#00
-TestPrefilled/#01
 TestEncodeRenamedByteSlice
 TestNilMarshal
 TestNilMarshal/#08
@@ -26,8 +15,3 @@ TestStringOption/Unmarshal/Null/v1
 TestStringOption/Unmarshal/Deep/v1
 TestPointerReceiver
 TestPointerReceiver/Marshal/v1
-TestPointerReceiver/Unmarshal/v1
-TestMergeNull
-TestMergeNull/Unmarshal/v1
-TestMergeComposite
-TestMergeComposite/Unmarshal/v1

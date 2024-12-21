@@ -157,7 +157,9 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.SetBool(false)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetBool(false)
+			}
 			return nil
 		case 't', 'f':
 			if !uo.Flags.Get(jsonflags.StringifyBoolsAndStrings) {
@@ -232,7 +234,9 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetString("")
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetString("")
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -354,7 +358,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetZero()
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) || va.Kind() != reflect.Array {
+				va.SetZero()
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -440,7 +446,9 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetInt(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetInt(0)
+			}
 			return nil
 		case '"':
 			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
@@ -518,7 +526,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetUint(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetUint(0)
+			}
 			return nil
 		case '"':
 			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
@@ -606,7 +616,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 		k := val.Kind()
 		switch k {
 		case 'n':
-			va.SetFloat(0)
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetFloat(0)
+			}
 			return nil
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -886,7 +898,8 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
 
-				if v2 := va.MapIndex(k.Value); v2.IsValid() {
+				v2 := va.MapIndex(k.Value)
+				if v2.IsValid() && !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
 					if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
 						// TODO: Unread the object name.
 						name := xd.PreviousTokenOrValue()
@@ -1126,7 +1139,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.SetZero()
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetZero()
+			}
 			return nil
 		case '{':
 			once.Do(init)
@@ -1394,7 +1409,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				}
 				v := addressableValue{va.Index(i)} // indexed slice element is always addressable
 				i++
-				if mustZero {
+				if mustZero && !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
 					v.SetZero()
 				}
 				if err := unmarshal(dec, v, uo); err != nil {
@@ -1466,7 +1481,9 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		k := tok.Kind()
 		switch k {
 		case 'n':
-			va.SetZero()
+			if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				va.SetZero()
+			}
 			return nil
 		case '[':
 			once.Do(init)
@@ -1484,7 +1501,9 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 					continue
 				}
 				v := addressableValue{va.Index(i)} // indexed array element is addressable if array is addressable
-				v.SetZero()
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					v.SetZero()
+				}
 				if err := unmarshal(dec, v, uo); err != nil {
 					return err
 				}
@@ -1595,6 +1614,25 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		xd := export.Decoder(dec)
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 			return newInvalidFormatError(dec, t, uo.Format)
+		}
+		if uo.Flags.Get(jsonflags.MergeWithLegacySemantics) && !va.IsNil() {
+			// Legacy merge behavior is difficult to explain.
+			// In general, it only merges for non-nil pointer kinds.
+			// As a special case, unmarshaling a JSON null into a pointer
+			// sets a concrete nil pointer of the underlying type
+			// (rather than setting the interface value itself to nil).
+			e := va.Elem()
+			if e.Kind() == reflect.Pointer && !e.IsNil() {
+				if dec.PeekKind() == 'n' && e.Elem().Kind() == reflect.Pointer {
+					if _, err := dec.ReadToken(); err != nil {
+						return err
+					}
+					va.Elem().Elem().SetZero()
+					return nil
+				}
+			} else {
+				va.SetZero()
+			}
 		}
 		if dec.PeekKind() == 'n' {
 			if _, err := dec.ReadToken(); err != nil {

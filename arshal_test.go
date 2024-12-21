@@ -7736,6 +7736,13 @@ func TestUnmarshal(t *testing.T) {
 		inVal: new(struct{ X *onlyMethodText }),
 		want:  addr(struct{ X *onlyMethodText }{X: &onlyMethodText{allMethods: allMethods{method: "UnmarshalText", value: []byte(`hello`)}}}),
 	}, {
+		name:  jsontest.Name("Methods/Text/Null"),
+		inBuf: `{"X":null}`,
+		inVal: addr(struct{ X unmarshalTextFunc }{unmarshalTextFunc(func(b []byte) error {
+			return errMustNotCall
+		})}),
+		want: addr(struct{ X unmarshalTextFunc }{nil}),
+	}, {
 		name:  jsontest.Name("Methods/IP"),
 		inBuf: `"192.168.0.100"`,
 		inVal: new(net.IP),

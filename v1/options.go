@@ -38,6 +38,7 @@ type Options = jsonopts.Options
 //   - [FormatTimeDurationAsNanosecond]
 //   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
+//   - [MergeWithLegacySemantics]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [PreserveRawStrings]
 //   - [RejectFloatOverflow]
@@ -144,6 +145,35 @@ func MatchCaseSensitiveDelimiter(v bool) Options {
 		return jsonflags.MatchCaseSensitiveDelimiter | 1
 	} else {
 		return jsonflags.MatchCaseSensitiveDelimiter | 0
+	}
+}
+
+// MergeWithLegacySemantics specifies that unmarshaling into a non-zero
+// Go value follows legacy semantics.
+//
+// When unmarshaling a JSON null, this preserves the original Go value
+// if the kind is a bool, int, uint, float, string, array, or struct.
+// Otherwise, it zeros the Go value.
+// This differs from the v2 semantic, which consistently and always
+// zeros the Go value when unmarshaling a JSON null into it.
+//
+// When unmarshaling a JSON value other than null, this merges into
+// the original Go value for array elements, slice elements,
+// struct fields (but not map values),
+// pointer values, and interface values (only if a non-nil pointer).
+// This differs from the v2 semantic, which merges into the original
+// Go value for struct fields, map values,
+// pointer values, and interface values.
+// In general, the v2 semantic merges when unmarshaling a JSON object,
+// otherwise it replaces the original value.
+//
+// This only affects unmarshaling and is ignored when marshaling.
+// The v1 default is true.
+func MergeWithLegacySemantics(v bool) Options {
+	if v {
+		return jsonflags.MergeWithLegacySemantics | 1
+	} else {
+		return jsonflags.MergeWithLegacySemantics | 0
 	}
 }
 
