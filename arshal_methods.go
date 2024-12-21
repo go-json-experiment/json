@@ -32,6 +32,11 @@ var (
 	// This exists for now to provide performance benefits to netip types.
 	// There is no semantic difference with this change.
 	appenderToType = reflect.TypeFor[interface{ AppendTo([]byte) []byte }]()
+
+	allMethodTypes = []reflect.Type{
+		jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType,
+		jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
+	}
 )
 
 // TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead

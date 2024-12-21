@@ -51,7 +51,11 @@ type structField struct {
 
 var errNoExportedFields = errors.New("Go struct has no exported fields")
 
-func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
+func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) {
+	orErrorf := func(serr *SemanticError, t reflect.Type, f string, a ...any) *SemanticError {
+		return cmp.Or(serr, &SemanticError{GoType: t, Err: fmt.Errorf(f, a...)})
+	}
+
 	// Setup a queue for a breath-first search.
 	var queueIndex int
 	type queueEntry struct {
@@ -80,8 +84,9 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 			hasAnyJSONTag = hasAnyJSONTag || hasTag
 			options, ignored, err := parseFieldOptions(sf)
 			if err != nil {
-				return structFields{}, &SemanticError{GoType: t, Err: err}
-			} else if ignored {
+				serr = cmp.Or(serr, &SemanticError{GoType: t, Err: err})
+			}
+			if ignored {
 				continue
 			}
 			hasAnyJSONField = true
@@ -94,7 +99,11 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				fieldOptions: options,
 			}
 			if sf.Anonymous && !f.hasName {
-				f.inline = true // implied by use of Go embedding without an explicit name
+				if indirectType(f.typ).Kind() != reflect.Struct {
+					serr = orErrorf(serr, t, "embedded Go struct field %s of non-struct type must be explicitly given a JSON name", sf.Name)
+				} else {
+					f.inline = true // implied by use of Go embedding without an explicit name
+				}
 			}
 			if f.inline || f.unknown {
 				// Handle an inlined field that serializes to/from
@@ -104,35 +113,27 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true}:
 				case fieldOptions{name: f.name, quotedName: f.quotedName, unknown: true}:
 				case fieldOptions{name: f.name, quotedName: f.quotedName, inline: true, unknown: true}:
-					err := fmt.Errorf("Go struct field %s cannot have both `inline` and `unknown` specified", sf.Name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+					serr = orErrorf(serr, t, "Go struct field %s cannot have both `inline` and `unknown` specified", sf.Name)
+					f.inline = false // let `unknown` take precedence
 				default:
-					err := fmt.Errorf("Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+					serr = orErrorf(serr, t, "Go struct field %s cannot have any options other than `inline` or `unknown` specified", sf.Name)
+					continue // invalid inlined field; treat as ignored
 				}
 
-				// Unwrap one level of pointer indirection similar to how Go
-				// only allows embedding either T or *T, but not **T.
-				tf := f.typ
-				if tf.Kind() == reflect.Pointer && tf.Name() == "" {
-					tf = tf.Elem()
-				}
 				// Reject any types with custom serialization otherwise
 				// it becomes impossible to know what sub-fields to inline.
-				if which := implementsWhich(tf,
-					jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType,
-					jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
-				); which != nil && tf != jsontextValueType {
-					err := fmt.Errorf("inlined Go struct field %s of type %s must not implement JSON marshal or unmarshal methods", sf.Name, tf)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+				tf := indirectType(f.typ)
+				if which := implementsWhich(tf, allMethodTypes...); which != nil && tf != jsontextValueType {
+					serr = orErrorf(serr, t, "inlined Go struct field %s of type %s must not implement marshal or unmarshal methods", sf.Name, tf)
+					continue // invalid inlined field; treat as ignored
 				}
 
 				// Handle an inlined field that serializes to/from
 				// a finite number of JSON object members backed by a Go struct.
 				if tf.Kind() == reflect.Struct {
 					if f.unknown {
-						err := fmt.Errorf("inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a jsontext.Value", sf.Name, tf)
-						return structFields{}, &SemanticError{GoType: t, Err: err}
+						serr = orErrorf(serr, t, "inlined Go struct field %s of type %s with `unknown` tag must be a Go map of string key or a jsontext.Value", sf.Name, tf)
+						continue // invalid inlined field; treat as ignored
 					}
 					if qe.visitChildren {
 						queue = append(queue, queueEntry{tf, f.index, !seen[tf]})
@@ -152,14 +153,15 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				case tf.Kind() == reflect.Map && tf.Key() == stringType:
 					f.fncs = lookupArshaler(tf.Elem())
 				default:
-					err := fmt.Errorf("inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or jsontext.Value", sf.Name, tf)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+					serr = orErrorf(serr, t, "inlined Go struct field %s of type %s must be a Go struct, Go map of string key, or jsontext.Value", sf.Name, tf)
+					continue // invalid inlined field; treat as ignored
 				}
 
 				// Reject multiple inlined fallback fields within the same struct.
 				if inlinedFallbackIndex >= 0 {
-					err := fmt.Errorf("inlined Go struct fields %s and %s cannot both be a Go map or jsontext.Value", t.Field(inlinedFallbackIndex).Name, sf.Name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+					serr = orErrorf(serr, t, "inlined Go struct fields %s and %s cannot both be a Go map or jsontext.Value", t.Field(inlinedFallbackIndex).Name, sf.Name)
+					// Still append f to inlinedFallbacks as there is still a
+					// check for a dominant inlined fallback before returning.
 				}
 				inlinedFallbackIndex = i
 
@@ -167,6 +169,24 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 			} else {
 				// Handle normal Go struct field that serializes to/from
 				// a single JSON object member.
+
+				// Unexported fields cannot be serialized except for
+				// embedded fields of a struct type,
+				// which might promote exported fields of their own.
+				if !sf.IsExported() {
+					tf := indirectType(f.typ)
+					if !(sf.Anonymous && tf.Kind() == reflect.Struct) {
+						serr = orErrorf(serr, t, "Go struct field %s is not exported", sf.Name)
+						continue
+					}
+					// Unfortunately, methods on the unexported field
+					// still cannot be called.
+					if implementsWhich(tf, allMethodTypes...) != nil ||
+						(f.omitzero && implementsWhich(tf, isZeroerType) != nil) {
+						serr = orErrorf(serr, t, "Go struct field %s is not exported for method calls", sf.Name)
+						continue
+					}
+				}
 
 				// Provide a function that uses a type's IsZero method.
 				switch {
@@ -196,15 +216,11 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 					f.isEmpty = func(va addressableValue) bool { return va.IsNil() }
 				}
 
-				// Reject user-specified names with invalid UTF-8.
-				if !utf8.ValidString(f.name) {
-					err := fmt.Errorf("Go struct field %s has JSON object name %q with invalid UTF-8", sf.Name, f.name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
-				}
 				// Reject multiple fields with same name within the same struct.
 				if j, ok := namesIndex[f.name]; ok {
-					err := fmt.Errorf("Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, sf.Name, f.name)
-					return structFields{}, &SemanticError{GoType: t, Err: err}
+					serr = orErrorf(serr, t, "Go struct fields %s and %s conflict over JSON object name %q", t.Field(j).Name, sf.Name, f.name)
+					// Still append f to allFields as there is still a
+					// check for a dominant field before returning.
 				}
 				namesIndex[f.name] = i
 
@@ -225,7 +241,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 		// errors returned by errors.New would fail to serialize.
 		isEmptyStruct := t.NumField() == 0
 		if !isEmptyStruct && !hasAnyJSONTag && !hasAnyJSONField {
-			return structFields{}, &SemanticError{GoType: t, Err: errNoExportedFields}
+			serr = cmp.Or(serr, &SemanticError{GoType: t, Err: errNoExportedFields})
 		}
 	}
 
@@ -295,8 +311,17 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 	if n := len(inlinedFallbacks); n == 1 || (n > 1 && len(inlinedFallbacks[0].index) != len(inlinedFallbacks[1].index)) {
 		fs.inlinedFallback = &inlinedFallbacks[0] // dominant inlined fallback field
 	}
+	return fs, serr
+}
 
-	return fs, nil
+// indirectType unwraps one level of pointer indirection
+// similar to how Go only allows embedding either T or *T,
+// but not **T or P (which is a named pointer).
+func indirectType(t reflect.Type) reflect.Type {
+	if t.Kind() == reflect.Pointer && t.Name() == "" {
+		t = t.Elem()
+	}
+	return t
 }
 
 // matchFoldedName matches a case-insensitive name depending on the options.
@@ -377,17 +402,26 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		n := len(tag) - len(strings.TrimLeftFunc(tag, func(r rune) bool {
 			return !strings.ContainsRune(",\\'\"`", r) // reserve comma, backslash, and quotes
 		}))
-		opt := tag[:n]
-		if n == 0 {
-			// Allow a single quoted string for arbitrary names.
-			var err2 error
-			opt, n, err2 = consumeTagOption(tag)
+		name := tag[:n]
+
+		// If the next character is not a comma, then the name is either
+		// malformed (if n > 0) or a single-quoted name.
+		// In either case, call consumeTagOption to handle it further.
+		var err2 error
+		if !strings.HasPrefix(tag[n:], ",") && len(name) != len(tag) {
+			name, n, err2 = consumeTagOption(tag)
 			if err2 != nil {
 				err = cmp.Or(err, fmt.Errorf("Go struct field %s has malformed `json` tag: %v", sf.Name, err2))
 			}
 		}
-		out.hasName = true
-		out.name = opt
+		if !utf8.ValidString(name) {
+			err = cmp.Or(err, fmt.Errorf("Go struct field %s has JSON object name %q with invalid UTF-8", sf.Name, name))
+			name = string([]rune(name)) // replace invalid UTF-8 with utf8.RuneError
+		}
+		if err2 == nil {
+			out.hasName = true
+			out.name = name
+		}
 		tag = tag[n:]
 	}
 	b, _ := jsonwire.AppendQuote(nil, out.name, &jsonflags.Flags{})
@@ -476,6 +510,10 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 	return out, false, err
 }
 
+// consumeTagOption consumes the next option,
+// which is either a Go identifier or a single-quoted string.
+// If the next option is invalid, it returns all of in until the next comma,
+// and reports an error.
 func consumeTagOption(in string) (string, int, error) {
 	// For legacy compatibility with v1, assume options are comma-separated.
 	i := strings.IndexByte(in, ',')

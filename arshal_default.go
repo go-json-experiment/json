@@ -955,7 +955,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError(enc, t, mo.Format)
 		}
 		once.Do(init)
-		if errInit != nil {
+		if errInit != nil && !mo.Flags.Get(jsonflags.IgnoreStructErrors) {
 			return newMarshalErrorBefore(enc, errInit.GoType, errInit.Err)
 		}
 		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
@@ -1127,7 +1127,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '{':
 			once.Do(init)
-			if errInit != nil {
+			if errInit != nil && !uo.Flags.Get(jsonflags.IgnoreStructErrors) {
 				return newUnmarshalErrorAfter(dec, errInit.GoType, errInit.Err)
 			}
 			var seenIdxs uintSet

@@ -86,11 +86,13 @@ type (
 	namedAny     any
 	namedBool    bool
 	namedString  string
+	NamedString  string
 	namedBytes   []byte
 	namedInt64   int64
 	namedUint64  uint64
 	namedFloat64 float64
 	namedByte    byte
+	netipAddr    = netip.Addr
 
 	recursiveMap     map[string]recursiveMap
 	recursiveSlice   []recursiveSlice
@@ -113,8 +115,26 @@ type (
 	structUnexportedTag struct {
 		unexported string `json:"name"`
 	}
+	structExportedEmbedded struct {
+		NamedString
+	}
+	structExportedEmbeddedTag struct {
+		NamedString `json:"name"`
+	}
 	structUnexportedEmbedded struct {
 		namedString
+	}
+	structUnexportedEmbeddedTag struct {
+		namedString `json:"name"`
+	}
+	structUnexportedEmbeddedMethodTag struct {
+		// netipAddr cannot be marshaled since the MarshalText method
+		// cannot be called on an unexported field.
+		netipAddr `json:"name"`
+
+		// structMethodText has a MarshalText method
+		// that cancels out netipAddr.MarshalText.
+		structMethodText
 	}
 	structUnexportedEmbeddedStruct struct {
 		structOmitZeroAll
@@ -2833,10 +2853,43 @@ func TestMarshal(t *testing.T) {
 		want:    ``,
 		wantErr: EM(errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")).withType(0, T[structUnexportedTag]()),
 	}, {
+		name:    jsontest.Name("Structs/Invalid/ExportedEmbedded"),
+		in:      structExportedEmbedded{"hello"},
+		want:    ``,
+		wantErr: EM(errors.New("embedded Go struct field NamedString of non-struct type must be explicitly given a JSON name")).withType(0, T[structExportedEmbedded]()),
+	}, {
+		name: jsontest.Name("Structs/Valid/ExportedEmbedded"),
+		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		in:   structExportedEmbedded{"hello"},
+		want: `{"NamedString":"hello"}`,
+	}, {
+		name: jsontest.Name("Structs/Valid/ExportedEmbeddedTag"),
+		in:   structExportedEmbeddedTag{"hello"},
+		want: `{"name":"hello"}`,
+	}, {
 		name:    jsontest.Name("Structs/Invalid/UnexportedEmbedded"),
 		in:      structUnexportedEmbedded{},
 		want:    ``,
-		wantErr: EM(errors.New("inlined Go struct field namedString is not exported")).withType(0, T[structUnexportedEmbedded]()),
+		wantErr: EM(errors.New("embedded Go struct field namedString of non-struct type must be explicitly given a JSON name")).withType(0, T[structUnexportedEmbedded]()),
+	}, {
+		name: jsontest.Name("Structs/Valid/UnexportedEmbedded"),
+		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		in:   structUnexportedEmbedded{},
+		want: `{}`,
+	}, {
+		name:    jsontest.Name("Structs/Invalid/UnexportedEmbeddedTag"),
+		in:      structUnexportedEmbeddedTag{},
+		wantErr: EM(errors.New("Go struct field namedString is not exported")).withType(0, T[structUnexportedEmbeddedTag]()),
+	}, {
+		name: jsontest.Name("Structs/Valid/UnexportedEmbeddedTag"),
+		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		in:   structUnexportedEmbeddedTag{},
+		want: `{}`,
+	}, {
+		name: jsontest.Name("Structs/Invalid/UnexportedEmbeddedMethodTag"),
+		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		in:   structUnexportedEmbeddedMethodTag{},
+		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/UnexportedEmbeddedStruct/Zero"),
 		in:   structUnexportedEmbeddedStruct{},
@@ -6909,11 +6962,28 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(structUnexportedTag{}),
 		wantErr: EU(errors.New("unexported Go struct field unexported cannot have non-ignored `json:\"name\"` tag")).withType('{', T[structUnexportedTag]()),
 	}, {
+		name:    jsontest.Name("Structs/Invalid/ExportedEmbedded"),
+		inBuf:   `{"NamedString":"hello"}`,
+		inVal:   addr(structExportedEmbedded{}),
+		want:    addr(structExportedEmbedded{}),
+		wantErr: EU(errors.New("embedded Go struct field NamedString of non-struct type must be explicitly given a JSON name")).withType('{', T[structExportedEmbedded]()),
+	}, {
+		name:  jsontest.Name("Structs/Valid/ExportedEmbedded"),
+		opts:  []Options{jsonflags.IgnoreStructErrors | 1},
+		inBuf: `{"NamedString":"hello"}`,
+		inVal: addr(structExportedEmbedded{}),
+		want:  addr(structExportedEmbedded{"hello"}),
+	}, {
+		name:  jsontest.Name("Structs/Valid/ExportedEmbeddedTag"),
+		inBuf: `{"name":"hello"}`,
+		inVal: addr(structExportedEmbeddedTag{}),
+		want:  addr(structExportedEmbeddedTag{"hello"}),
+	}, {
 		name:    jsontest.Name("Structs/Invalid/UnexportedEmbedded"),
 		inBuf:   `{}`,
 		inVal:   addr(structUnexportedEmbedded{}),
 		want:    addr(structUnexportedEmbedded{}),
-		wantErr: EU(errors.New("inlined Go struct field namedString is not exported")).withType('{', T[structUnexportedEmbedded]()),
+		wantErr: EU(errors.New("embedded Go struct field namedString of non-struct type must be explicitly given a JSON name")).withType('{', T[structUnexportedEmbedded]()),
 	}, {
 		name:  jsontest.Name("Structs/UnexportedEmbeddedStruct"),
 		inBuf: `{"Bool":true,"FizzBuzz":5,"Addr":"192.168.0.1"}`,

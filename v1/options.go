@@ -35,6 +35,7 @@ type Options = jsonopts.Options
 //
 //   - [FormatByteArrayAsArray]
 //   - [FormatTimeDurationAsNanosecond]
+//   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [RejectFloatOverflow]
@@ -93,6 +94,21 @@ func FormatTimeDurationAsNanosecond(v bool) Options {
 		return jsonflags.FormatTimeDurationAsNanosecond | 1
 	} else {
 		return jsonflags.FormatTimeDurationAsNanosecond | 0
+	}
+}
+
+// IgnoreStructErrors specifies that a Go struct with structural errors
+// should not result in a runtime error when marshaling or unmarshaling.
+// Such errors usually occur because of a malformed struct field tag
+// as it pertains to JSON serialization.
+//
+// This affects either marshaling or unmarshaling.
+// The v1 default is true.
+func IgnoreStructErrors(v bool) Options {
+	if v {
+		return jsonflags.IgnoreStructErrors | 1
+	} else {
+		return jsonflags.IgnoreStructErrors | 0
 	}
 }
 
