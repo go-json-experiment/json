@@ -1,9 +1,3 @@
-TestMarshalInvalidUTF8
-TestMarshalInvalidUTF8/#00
-TestMarshalInvalidUTF8/#02
-TestMarshalInvalidUTF8/#03
-TestMarshalInvalidUTF8/#04
-TestMarshalInvalidUTF8/#05
 TestUnmarshal
 TestUnmarshal/#106
 TestUnmarshal/#107

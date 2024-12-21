@@ -33,6 +33,7 @@ type Options = jsonopts.Options
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
 // It is equivalent to the following boolean options being set to true:
 //
+//   - [EscapeInvalidUTF8]
 //   - [FormatByteArrayAsArray]
 //   - [FormatTimeDurationAsNanosecond]
 //   - [IgnoreStructErrors]
@@ -62,6 +63,22 @@ type Options = jsonopts.Options
 //	jsonv2.Unmarshal(b, v, jsonv1.DefaultOptionsV1())
 func DefaultOptionsV1() Options {
 	return &jsonopts.DefaultOptionsV1
+}
+
+// EscapeInvalidUTF8 specifies that bytes of invalid UTF-8 within JSON strings
+// should be escaped as a hexadecimal Unicode codepoint (i.e., \ufffd)
+// of the Unicode replacement character as opposed to being encoded
+// as the Unicode replacement character verbatim (without escaping).
+// This option has no effect if [jsontext.AllowInvalidUTF8] is false.
+//
+// This only affects encoding and is ignored when decoding.
+// The v1 default is true.
+func EscapeInvalidUTF8(v bool) Options {
+	if v {
+		return jsonflags.EscapeInvalidUTF8 | 1
+	} else {
+		return jsonflags.EscapeInvalidUTF8 | 0
+	}
 }
 
 // FormatByteArrayAsArray specifies that a [N]byte array is formatted
@@ -172,6 +189,7 @@ func RejectFloatOverflow(v bool) Options {
 // [InvalidUnmarshalError], or [UnmarshalTypeError] instead of the
 // [jsonv2.SemanticError] or [jsontext.SyntacticError].
 //
+// This affects either marshaling or unmarshaling.
 // The v1 default is true.
 func ReportLegacyErrorValues(v bool) Options {
 	if v {

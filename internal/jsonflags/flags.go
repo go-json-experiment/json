@@ -50,6 +50,7 @@ const (
 		AllowInvalidUTF8 |
 		EscapeForHTML |
 		EscapeForJS |
+		EscapeInvalidUTF8 |
 		Deterministic |
 		FormatNilMapAsNull |
 		FormatNilSliceAsNull |
@@ -87,6 +88,7 @@ const (
 	CanonicalizeNumbers // encode only; for internal use by jsontext.Value.Canonicalize
 	EscapeForHTML       // encode only
 	EscapeForJS         // encode only
+	EscapeInvalidUTF8   // encode only; only exposed in v1
 	Multiline           // encode only
 	SpaceAfterColon     // encode only
 	SpaceAfterComma     // encode only
