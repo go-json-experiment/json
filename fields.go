@@ -121,7 +121,7 @@ func makeStructFields(root reflect.Type) (structFields, *SemanticError) {
 				// Reject any types with custom serialization otherwise
 				// it becomes impossible to know what sub-fields to inline.
 				if which := implementsWhich(tf,
-					jsonMarshalerV2Type, jsonMarshalerV1Type, textMarshalerType,
+					jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType,
 					jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
 				); which != nil && tf != jsontextValueType {
 					err := fmt.Errorf("inlined Go struct field %s of type %s must not implement JSON marshal or unmarshal methods", sf.Name, tf)

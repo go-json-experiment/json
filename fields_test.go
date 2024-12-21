@@ -237,6 +237,12 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement JSON marshal or unmarshal methods`),
 	}, {
+		name: jsontest.Name("InlineTextAppender"),
+		in: struct {
+			A struct{ encodingTextAppender } `json:",inline"`
+		}{},
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.encodingTextAppender } must not implement JSON marshal or unmarshal methods`),
+	}, {
 		name: jsontest.Name("UnknownJSONMarshalerV1"),
 		in: struct {
 			A struct{ MarshalerV1 } `json:",unknown"`
