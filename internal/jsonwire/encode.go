@@ -85,7 +85,11 @@ func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes, flags *jsonflag
 		case r == utf8.RuneError && rn == 1:
 			hasInvalidUTF8 = true
 			dst = append(dst, src[i:n]...)
-			dst = append(dst, "\ufffd"...)
+			if flags.Get(jsonflags.EscapeInvalidUTF8) {
+				dst = append(dst, `\ufffd`...)
+			} else {
+				dst = append(dst, "\ufffd"...)
+			}
 			n += rn
 			i = n
 		case (r == '\u2028' || r == '\u2029') && flags.Get(jsonflags.EscapeForJS):
@@ -150,7 +154,7 @@ func ReformatString(dst, src []byte, flags *jsonflags.Flags) ([]byte, int, error
 	if err != nil {
 		return dst, n, err
 	}
-	isCanonical := !flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS)
+	isCanonical := !flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS | jsonflags.EscapeInvalidUTF8)
 	if flags.Get(jsonflags.PreserveRawStrings) || (isCanonical && valFlags.IsCanonical()) {
 		dst = append(dst, src[:n]...) // copy the string verbatim
 		return dst, n, nil
