@@ -24,3 +24,13 @@ TestNilMarshalerTextMapKey
 TestEncoderSetEscapeHTML
 TestEncoderSetEscapeHTML/stringOption
 TestRawMessage
+TestStringOption
+TestStringOption/Unmarshal/Null/v1
+TestStringOption/Unmarshal/Deep/v1
+TestPointerReceiver
+TestPointerReceiver/Marshal/v1
+TestPointerReceiver/Unmarshal/v1
+TestMergeNull
+TestMergeNull/Unmarshal/v1
+TestMergeComposite
+TestMergeComposite/Unmarshal/v1
