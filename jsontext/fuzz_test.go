@@ -51,7 +51,7 @@ func FuzzCoder(f *testing.F) {
 			} else {
 				val, err := dec.ReadValue()
 				if err != nil {
-					expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
+					expectError := dec.s.PeekKind() == '}' || dec.s.PeekKind() == ']'
 					if expectError && errors.As(err, new(*SyntacticError)) {
 						continue
 					}
@@ -83,14 +83,14 @@ func FuzzCoder(f *testing.F) {
 
 		// Encoded output and original input must decode to the same thing.
 		var got, want []Token
-		for dec := NewDecoder(bytes.NewReader(b)); dec.PeekKind() > 0; {
+		for dec := NewDecoder(bytes.NewReader(b)); dec.s.PeekKind() > 0; {
 			tok, err := dec.ReadToken()
 			if err != nil {
 				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
 			got = append(got, tok.Clone())
 		}
-		for dec := NewDecoder(dst); dec.PeekKind() > 0; {
+		for dec := NewDecoder(dst); dec.s.PeekKind() > 0; {
 			tok, err := dec.ReadToken()
 			if err != nil {
 				t.Fatalf("Decoder.ReadToken error: %v", err)

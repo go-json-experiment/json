@@ -69,7 +69,7 @@ func marshalInlinedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *j
 		if tok.Kind() != '{' {
 			return newMarshalErrorBefore(enc, v.Type(), errRawInlinedNotObject)
 		}
-		for dec.PeekKind() != '}' {
+		for dec.More() {
 			// Parse the JSON object name.
 			var flags jsonwire.ValueFlags
 			val, err := xd.ReadValue(&flags)

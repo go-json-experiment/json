@@ -43,7 +43,7 @@ func TestTokenAccessors(t *testing.T) {
 		in   Token
 		want token
 	}{
-		{Token{}, token{String: "<invalid jsontext.Token>"}},
+		{Token{}, token{String: "<invalid jsontext.Token>", Kind: invalidKind}},
 		{Null, token{String: "null", Kind: 'n'}},
 		{False, token{Bool: false, String: "false", Kind: 'f'}},
 		{True, token{Bool: true, String: "true", Kind: 't'}},

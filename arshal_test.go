@@ -7138,7 +7138,7 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/Invalid/NestedErrUnexpectedEOF"),
 		inBuf:   `{"Pointer":`,
 		inVal:   addr(structAll{}),
-		want:    addr(structAll{Pointer: new(structAll)}),
+		want:    addr(structAll{}),
 		wantErr: &jsontext.SyntacticError{ByteOffset: len64(`{"Pointer":`), JSONPointer: "/Pointer", Err: io.ErrUnexpectedEOF},
 	}, {
 		name:    jsontest.Name("Structs/Invalid/Conflicting"),

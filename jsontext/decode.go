@@ -285,10 +285,18 @@ func (d *decodeBuffer) PreviousTokenOrValue() []byte {
 }
 
 // PeekKind retrieves the next token kind, but does not advance the read offset.
-// It returns 0 if there are no more tokens.
-func (d *Decoder) PeekKind() Kind {
-	return d.s.PeekKind()
+func (d *Decoder) PeekKind() (k Kind, err error) {
+	k = d.s.PeekKind()
+	if err = d.s.peekErr; err != nil {
+		d.s.peekPos, d.s.peekErr = 0, nil // clear the cached error
+	}
+	return k, err
 }
+
+// PeekKind is like Decoder.PeekKind, but stores an out-of-band error,
+// which can retrieved by a call to PeekKind, ReadToken, or ReadValue.
+// An error-less return allows for ergonomic iteration with Decoder.More.
+// It returns 0 only for [io.EOF].
 func (d *decoderState) PeekKind() Kind {
 	// Check whether we have a cached peek result.
 	if d.peekPos > 0 {
@@ -307,6 +315,9 @@ func (d *decoderState) PeekKind() Kind {
 				err = io.EOF // EOF possibly if no Tokens present after top-level value
 			}
 			d.peekPos, d.peekErr = -1, wrapSyntacticError(d, err, pos, 0)
+			if err == io.EOF {
+				return 0
+			}
 			return invalidKind
 		}
 	}
@@ -337,6 +348,13 @@ func (d *decoderState) PeekKind() Kind {
 	// recompute the next kind.
 	d.peekPos, d.peekErr = pos, nil
 	return next
+}
+
+// More reports whether there is another element in the
+// current array or object being parsed.
+func (d *Decoder) More() bool {
+	k := d.s.PeekKind()
+	return k > 0 && k != ']' && k != '}'
 }
 
 // checkDelimBeforeIOError checks whether the delim is even valid

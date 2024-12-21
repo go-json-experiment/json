@@ -50,13 +50,13 @@ func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Opti
 
 // UnmarshalJSONFrom decodes a JSON object from dec into obj.
 func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder, opts json.Options) error {
-	if k := dec.PeekKind(); k != '{' {
-		return fmt.Errorf("expected object start, but encountered %v", k)
-	}
-	if _, err := dec.ReadToken(); err != nil {
+	switch tok, err := dec.ReadToken(); {
+	case err != nil:
 		return err
+	case tok.Kind() != '{':
+		return fmt.Errorf("expected object start, but encountered %v", tok.Kind())
 	}
-	for dec.PeekKind() != '}' {
+	for dec.More() {
 		*obj = append(*obj, ObjectMember[V]{})
 		member := &(*obj)[len(*obj)-1]
 		if err := json.UnmarshalDecode(dec, &member.Name, opts); err != nil {

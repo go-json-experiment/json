@@ -458,7 +458,7 @@ func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string,
 	tickTock := modeName == "TokenFirst"
 	for {
 		if modeName == "TokenDelims" {
-			switch dec.PeekKind() {
+			switch dec.s.PeekKind() {
 			case '{', '}', '[', ']':
 				tickTock = true // as token
 			default:
@@ -482,7 +482,7 @@ func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string,
 				// It is a syntactic error to call ReadValue
 				// at the end of an object or array.
 				// Retry as a ReadToken call.
-				expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
+				expectError := dec.s.PeekKind() == '}' || dec.s.PeekKind() == ']'
 				if expectError {
 					if !errors.As(err, new(*SyntacticError)) {
 						t.Fatalf("%s: Decoder.ReadToken error is %T, want %T", where, err, new(SyntacticError))
@@ -707,7 +707,7 @@ func TestCoderMaxDepth(t *testing.T) {
 				checkReadToken(t, '{', nil)
 				checkReadToken(t, '"', nil)
 			}
-			checkReadToken(t, 0, wantErr)
+			checkReadToken(t, invalidKind, wantErr)
 		})
 	})
 

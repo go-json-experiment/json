@@ -45,6 +45,7 @@ func TestInline(t *testing.T) {
 		},
 		"./jsontext": {
 			"encoderState.NeedFlush":                  true,
+			"Decoder.More":                            true,
 			"Decoder.ReadToken":                       true, // thin wrapper over decoderState.ReadToken
 			"Decoder.ReadValue":                       true, // thin wrapper over decoderState.ReadValue
 			"Encoder.WriteToken":                      true, // thin wrapper over encoderState.WriteToken

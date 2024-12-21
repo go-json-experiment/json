@@ -54,7 +54,11 @@ func marshalValueAny(enc *jsontext.Encoder, val any, mo *jsonopts.Struct) error 
 // for any possible nested value.
 // Duplicate names must be rejected since this does not implement merging.
 func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) {
-	switch k := dec.PeekKind(); k {
+	k, err := dec.PeekKind()
+	if err != nil {
+		return nil, err
+	}
+	switch k {
 	case '{':
 		return unmarshalObjectAny(dec, uo)
 	case '[':
@@ -180,7 +184,7 @@ func unmarshalObjectAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (map[string]
 		export.Decoder(dec).Tokens.Last.DisableNamespace()
 	}
 	var errUnmarshal error
-	for dec.PeekKind() != '}' {
+	for dec.More() {
 		tok, err := dec.ReadToken()
 		if err != nil {
 			return obj, err
@@ -264,7 +268,7 @@ func unmarshalArrayAny(dec *jsontext.Decoder, uo *jsonopts.Struct) ([]any, error
 	}
 	arr := []any{}
 	var errUnmarshal error
-	for dec.PeekKind() != ']' {
+	for dec.More() {
 		val, err := unmarshalValueAny(dec, uo)
 		arr = append(arr, val)
 		if err != nil {

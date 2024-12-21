@@ -488,7 +488,7 @@ func (t Token) Kind() Kind {
 // but may be non-zero due to invalid JSON data.
 type Kind byte
 
-const invalidKind Kind = 0
+const invalidKind Kind = 0xff
 
 // String prints the kind in a humanly readable fashion.
 func (k Kind) String() string {
@@ -520,6 +520,9 @@ func (k Kind) String() string {
 func (k Kind) normalize() Kind {
 	if k == '-' || ('0' <= k && k <= '9') {
 		return '0'
+	}
+	if k == 0 {
+		return invalidKind // reserve 0 for indicating proper EOF
 	}
 	return k
 }

@@ -607,7 +607,10 @@ func ExampleWithUnmarshalers_rawNumber() {
 			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any, opts json.Options) error {
 				// If the next value to be decoded is a JSON number,
 				// then provide a concrete Go type to unmarshal into.
-				if dec.PeekKind() == '0' {
+				switch k, err := dec.PeekKind(); {
+				case err != nil:
+					return err
+				case k == '0':
 					*val = jsontext.Value(nil)
 				}
 				// Return SkipFunc to fallback on default unmarshal behavior.

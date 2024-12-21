@@ -363,7 +363,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 				return newInvalidFormatError(dec, t, uo)
 			}
 		} else if uo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) &&
-			(va.Kind() == reflect.Array || dec.PeekKind() == '[') {
+			(va.Kind() == reflect.Array || xd.PeekKind() == '[') {
 			return unmarshalArray(dec, va, uo)
 		}
 		var flags jsonwire.ValueFlags
@@ -926,7 +926,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			}
 
 			var errUnmarshal error
-			for dec.PeekKind() != '}' {
+			for dec.More() {
 				// Unmarshal the map entry key.
 				k.SetZero()
 				err := unmarshalKey(dec, k, uo)
@@ -1214,7 +1214,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			var seenIdxs uintSet
 			xd.Tokens.Last.DisableNamespace()
 			var errUnmarshal error
-			for dec.PeekKind() != '}' {
+			for dec.More() {
 				// Process the object member name.
 				var flags jsonwire.ValueFlags
 				val, err := xd.ReadValue(&flags)
@@ -1482,7 +1482,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			}
 			var i int
 			var errUnmarshal error
-			for dec.PeekKind() != ']' {
+			for dec.More() {
 				if i == cap {
 					va.Value.Grow(1)
 					cap = va.Cap()
@@ -1578,7 +1578,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			}
 			var i int
 			var errUnmarshal error
-			for dec.PeekKind() != ']' {
+			for dec.More() {
 				if i >= n {
 					if err := dec.SkipValue(); err != nil {
 						return err
@@ -1648,7 +1648,10 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 	}
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 		// NOTE: Struct.Format is forwarded to underlying unmarshal.
-		if dec.PeekKind() == 'n' {
+		switch k, err := dec.PeekKind(); {
+		case err != nil:
+			return err
+		case k == 'n':
 			if _, err := dec.ReadToken(); err != nil {
 				return err
 			}
@@ -1744,6 +1747,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 			return newInvalidFormatError(dec, t, uo)
 		}
+		k, err := dec.PeekKind()
+		if err != nil {
+			return err
+		}
 		if uo.Flags.Get(jsonflags.MergeWithLegacySemantics) && !va.IsNil() {
 			// Legacy merge behavior is difficult to explain.
 			// In general, it only merges for non-nil pointer kinds.
@@ -1752,7 +1759,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			// (rather than setting the interface value itself to nil).
 			e := va.Elem()
 			if e.Kind() == reflect.Pointer && !e.IsNil() {
-				if dec.PeekKind() == 'n' && e.Elem().Kind() == reflect.Pointer {
+				if k == 'n' && e.Elem().Kind() == reflect.Pointer {
 					if _, err := dec.ReadToken(); err != nil {
 						return err
 					}
@@ -1763,7 +1770,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				va.SetZero()
 			}
 		}
-		if dec.PeekKind() == 'n' {
+		if k == 'n' {
 			if _, err := dec.ReadToken(); err != nil {
 				return err
 			}
@@ -1789,7 +1796,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 
-			k := dec.PeekKind()
+			k, err := dec.PeekKind()
+			if err != nil {
+				return err
+			}
 			if !isAnyType(t) {
 				return newUnmarshalErrorBeforeWithSkipping(dec, uo, t, errNilInterface)
 			}
@@ -1827,7 +1837,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		if uo.Unmarshalers != nil {
 			unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, v.Type())
 		}
-		err := unmarshal(dec, v, uo)
+		err = unmarshal(dec, v, uo)
 		va.Set(v.Value)
 		return err
 	}

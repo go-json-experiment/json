@@ -217,8 +217,7 @@ func (dec *Decoder) Token() (Token, error) {
 // More reports whether there is another element in the
 // current array or object being parsed.
 func (dec *Decoder) More() bool {
-	k := dec.dec.PeekKind()
-	return k > 0 && k != ']' && k != '}'
+	return dec.dec.More()
 }
 
 // InputOffset returns the input stream byte offset of the current decoder position.

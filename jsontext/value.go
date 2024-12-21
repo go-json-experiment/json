@@ -317,7 +317,7 @@ func mustReorderObjectsFromDecoder(d *Decoder, scratch *[]byte) {
 		isSorted := true
 
 		beforeBody := d.InputOffset() // offset after '{'
-		for d.PeekKind() != '}' {
+		for d.More() {
 			beforeName := d.InputOffset()
 			var flags jsonwire.ValueFlags
 			name, _ := d.s.ReadValue(&flags)
@@ -381,7 +381,7 @@ func mustReorderObjectsFromDecoder(d *Decoder, scratch *[]byte) {
 			*scratch = sorted
 		}
 	case '[':
-		for d.PeekKind() != ']' {
+		for d.More() {
 			mustReorderObjectsFromDecoder(d, scratch)
 		}
 		d.ReadToken()

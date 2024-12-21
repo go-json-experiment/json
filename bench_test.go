@@ -563,7 +563,7 @@ func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 	dec := jsontext.NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
 	switch typeName {
 	case "Token":
-		for dec.PeekKind() > 0 {
+		for dec.More() {
 			if _, err := dec.ReadToken(); err != nil {
 				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
