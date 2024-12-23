@@ -223,7 +223,9 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 	k := val.Kind()
 	switch k {
 	case 'n':
-		*n = "" // TODO: Should we merge with legacy semantics?
+		if legacy, _ := jsonv2.GetOption(opts, MergeWithLegacySemantics); !legacy {
+			*n = ""
+		}
 		return nil
 	case '"':
 		if !stringify {

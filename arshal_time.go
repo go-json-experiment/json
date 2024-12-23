@@ -82,7 +82,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			switch k := val.Kind(); k {
 			case 'n':
-				*td = time.Duration(0)
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					*td = time.Duration(0)
+				}
 				return nil
 			case '"':
 				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
@@ -145,7 +147,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			switch k := val.Kind(); k {
 			case 'n':
-				*tt = time.Time{}
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					*tt = time.Time{}
+				}
 				return nil
 			case '"':
 				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
