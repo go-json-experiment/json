@@ -174,6 +174,12 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 				case "false":
 					va.SetBool(false)
 				default:
+					if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && tok.String() == "null" {
+						if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+							va.SetBool(false)
+						}
+						return nil
+					}
 					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
 				}
 				return nil
@@ -244,6 +250,12 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 				val, err = jsontext.AppendUnquote(nil, val)
 				if err != nil {
 					return newUnmarshalErrorAfter(dec, t, err)
+				}
+				if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
+					if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+						va.SetString("")
+					}
+					return nil
 				}
 			}
 			if xd.StringCache == nil {
@@ -455,6 +467,12 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 				break
 			}
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
+			if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					va.SetInt(0)
+				}
+				return nil
+			}
 			fallthrough
 		case '0':
 			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
@@ -535,6 +553,12 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 				break
 			}
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
+			if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					va.SetUint(0)
+				}
+				return nil
+			}
 			fallthrough
 		case '0':
 			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
@@ -637,6 +661,12 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
 				break
+			}
+			if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
+				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+					va.SetFloat(0)
+				}
+				return nil
 			}
 			if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
 				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
@@ -1575,7 +1605,22 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			va.Set(reflect.New(t.Elem()))
 		}
 		v := addressableValue{va.Elem()} // dereferenced pointer is always addressable
-		return unmarshal(dec, v, uo)
+		if err := unmarshal(dec, v, uo); err != nil {
+			return err
+		}
+		if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) &&
+			(uo.Flags.Get(jsonflags.StringifyNumbers) || uo.Flags.Get(jsonflags.StringifyBoolsAndStrings)) {
+			// A JSON null quoted within a JSON string should take effect
+			// within the pointer value, rather than the indirect value.
+			//
+			// TODO: This does not correctly handle escaped nulls
+			// (e.g., "\u006e\u0075\u006c\u006c"), but is good enough
+			// for such an esoteric use case of the `string` option.
+			if string(export.Decoder(dec).PreviousTokenOrValue()) == `"null"` {
+				va.SetZero()
+			}
+		}
+		return nil
 	}
 	return &fncs
 }
