@@ -162,6 +162,8 @@ func (v *Value) reformat(canonical, multiline bool, prefix, indent string) error
 		eo.Flags.Set(jsonflags.AllowInvalidUTF8 | 1)
 		eo.Flags.Set(jsonflags.AllowDuplicateNames | 1)
 		eo.Flags.Set(jsonflags.PreserveRawStrings | 1)
+		eo.Flags.Set(jsonflags.EscapeForHTML | 0) // ensure strings are preserved
+		eo.Flags.Set(jsonflags.EscapeForJS | 0)   // ensure strings are preserved
 		if multiline {
 			eo.Flags.Set(jsonflags.Multiline | 1)
 			eo.Flags.Set(jsonflags.SpaceAfterColon | 1)

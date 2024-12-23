@@ -39,6 +39,7 @@ type Options = jsonopts.Options
 //   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [OmitEmptyWithLegacyDefinition]
+//   - [PreserveRawStrings]
 //   - [RejectFloatOverflow]
 //   - [ReportLegacyErrorValues]
 //   - [StringifyWithLegacySemantics]
@@ -165,6 +166,22 @@ func OmitEmptyWithLegacyDefinition(v bool) Options {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 1
 	} else {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 0
+	}
+}
+
+// PreserveRawStrings specifies that raw JSON string values passed to
+// [jsontext.Encoder.WriteValue] and [jsontext.Encoder.WriteToken]
+// preserve their original encoding.
+// However, characters that still need escaping according to
+// [jsontext.EscapeForHTML] and [jsontext.EscapeForJS] are escaped.
+//
+// This only affects encoding and is ignored when decoding.
+// The v1 default is true.
+func PreserveRawStrings(v bool) Options {
+	if v {
+		return jsonflags.PreserveRawStrings | 1
+	} else {
+		return jsonflags.PreserveRawStrings | 0
 	}
 }
 

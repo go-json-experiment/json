@@ -21,9 +21,6 @@ TestNilMarshal
 TestNilMarshal/#08
 TestNilMarshal/#11
 TestNilMarshalerTextMapKey
-TestEncoderSetEscapeHTML
-TestEncoderSetEscapeHTML/stringOption
-TestRawMessage
 TestStringOption
 TestStringOption/Unmarshal/Null/v1
 TestStringOption/Unmarshal/Deep/v1
