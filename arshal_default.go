@@ -207,10 +207,13 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		}
 
 		if mo.Flags.Get(jsonflags.StringifyBoolsAndStrings) {
-			b, err := jsontext.AppendQuote(nil, s) // only fails for invalid UTF-8
-			q, _ := jsontext.AppendQuote(nil, b)   // cannot fail since b is valid UTF-8
-			if err != nil && !xe.Flags.Get(jsonflags.AllowInvalidUTF8) {
-				return newMarshalErrorBefore(enc, t, err)
+			b, err := jsonwire.AppendQuote(nil, s, &mo.Flags)
+			if err != nil {
+				return newMarshalErrorBefore(enc, t, &jsontext.SyntacticError{Err: err})
+			}
+			q, err := jsontext.AppendQuote(nil, b)
+			if err != nil {
+				panic("BUG: second AppendQuote should never fail: " + err.Error())
 			}
 			return enc.WriteValue(q)
 		}

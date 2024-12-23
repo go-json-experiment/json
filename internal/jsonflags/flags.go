@@ -51,6 +51,7 @@ const (
 		EscapeForHTML |
 		EscapeForJS |
 		EscapeInvalidUTF8 |
+		PreserveRawStrings |
 		Deterministic |
 		FormatNilMapAsNull |
 		FormatNilSliceAsNull |
@@ -84,7 +85,7 @@ const (
 	AllowInvalidUTF8    // encode or decode
 	WithinArshalCall    // encode or decode; for internal use by json.Marshal and json.Unmarshal
 	OmitTopLevelNewline // encode only; for internal use by json.Marshal and json.MarshalWrite
-	PreserveRawStrings  // encode only; for internal use by jsontext.Value.Canonicalize
+	PreserveRawStrings  // encode only; exposed in v1 and also used by jsontext.Value.Canonicalize
 	CanonicalizeNumbers // encode only; for internal use by jsontext.Value.Canonicalize
 	EscapeForHTML       // encode only
 	EscapeForJS         // encode only
