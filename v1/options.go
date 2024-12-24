@@ -253,11 +253,16 @@ func ReportLegacyErrorValues(v bool) Options {
 // or numeric kinds within a composite data type
 // (e.g., array, slice, struct, map, or interface).
 //
+// When marshaling, such Go values are serialized as their usual
+// JSON representation, but quoted within a JSON string.
+// When unmarshaling, such Go values must be deserialized from
+// a JSON string containing their usual JSON representation.
+// A JSON null quoted in a JSON string is a valid substitute for JSON null
+// while unmarshaling into a Go value that `string` takes effect on.
+//
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
 func StringifyWithLegacySemantics(v bool) Options {
-	// TODO: In v1, we would permit unmarshaling "null" (i.e., a quoted null)
-	// as if it were just null. We do not support this in v2. Should we?
 	if v {
 		return jsonflags.StringifyWithLegacySemantics | 1
 	} else {

@@ -4,14 +4,12 @@ TestUnmarshal/#107
 TestUnmarshal/#109
 TestUnmarshal/#111
 TestUnmarshal/#113
-TestUnmarshal/#138
 TestEncodeRenamedByteSlice
 TestNilMarshal
 TestNilMarshal/#08
 TestNilMarshal/#11
 TestNilMarshalerTextMapKey
 TestStringOption
-TestStringOption/Unmarshal/Null/v1
 TestStringOption/Unmarshal/Deep/v1
 TestPointerReceiver
 TestPointerReceiver/Marshal/v1
