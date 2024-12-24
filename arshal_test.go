@@ -5595,6 +5595,13 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr(map[int]int{0: 1}),
 		wantErr: newDuplicateNameError("", []byte(`"-0"`), len64(`{"0":1,`)),
 	}, {
+		name:    jsontest.Name("Maps/DuplicateName/Int/MergeWithLegacySemantics"),
+		opts:    []Options{jsonflags.MergeWithLegacySemantics | 1},
+		inBuf:   `{"0":1,"-0":-1}`,
+		inVal:   new(map[int]int),
+		want:    addr(map[int]int{0: 1}),
+		wantErr: newDuplicateNameError("", []byte(`"-0"`), len64(`{"0":1,`)),
+	}, {
 		name:  jsontest.Name("Maps/DuplicateName/Int/AllowDuplicateNames"),
 		opts:  []Options{jsontext.AllowDuplicateNames(true)},
 		inBuf: `{"0":1,"-0":-1}`,
