@@ -179,7 +179,7 @@ func ReformatString(dst, src []byte, flags *jsonflags.Flags) ([]byte, int, error
 				}
 				i++
 			} else {
-				r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[i:])))
+				r, rn := utf8.DecodeRune(truncateMaxUTF8(src[i:]))
 				if (r == '\u2028' || r == '\u2029') && flags.Get(jsonflags.EscapeForJS) {
 					dst = append(dst, src[lastAppendIndex:i]...)
 					dst = appendEscapedUnicode(dst, r)
