@@ -928,14 +928,17 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
 
-				v2 := va.MapIndex(k.Value)
-				if v2.IsValid() && !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+				if v2 := va.MapIndex(k.Value); v2.IsValid() {
 					if !xd.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
 						// TODO: Unread the object name.
 						name := xd.PreviousTokenOrValue()
 						return newDuplicateNameError(dec.StackPointer(), nil, dec.InputOffset()-len64(name))
 					}
-					v.Set(v2)
+					if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
+						v.Set(v2)
+					} else {
+						v.SetZero()
+					}
 				} else {
 					v.SetZero()
 				}
