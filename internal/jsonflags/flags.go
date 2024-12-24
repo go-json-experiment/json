@@ -56,7 +56,7 @@ const (
 		FormatNilMapAsNull |
 		FormatNilSliceAsNull |
 		MatchCaseInsensitiveNames |
-		FormatByteArrayAsArray |
+		FormatBytesWithLegacySemantics |
 		FormatTimeDurationAsNanosecond |
 		IgnoreStructErrors |
 		MatchCaseSensitiveDelimiter |
@@ -123,7 +123,7 @@ const (
 const (
 	_ Bools = (maxArshalV2Flag >> 1) << iota
 
-	FormatByteArrayAsArray         // marshal or unmarshal
+	FormatBytesWithLegacySemantics // marshal or unmarshal
 	FormatTimeDurationAsNanosecond // marshal or unmarshal
 	IgnoreStructErrors             // marshal or unmarshal
 	MatchCaseSensitiveDelimiter    // marshal or unmarshal

@@ -33,10 +33,9 @@ var (
 	// There is no semantic difference with this change.
 	appenderToType = reflect.TypeFor[interface{ AppendTo([]byte) []byte }]()
 
-	allMethodTypes = []reflect.Type{
-		jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType,
-		jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType,
-	}
+	allMarshalerTypes   = []reflect.Type{jsonMarshalerV2Type, jsonMarshalerV1Type, textAppenderType, textMarshalerType}
+	allUnmarshalerTypes = []reflect.Type{jsonUnmarshalerV2Type, jsonUnmarshalerV1Type, textUnmarshalerType}
+	allMethodTypes      = append(allMarshalerTypes, allUnmarshalerTypes...)
 )
 
 // TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead

@@ -2139,7 +2139,7 @@ func TestMarshal(t *testing.T) {
 	"Default": "AQIDBA=="
 }`}, {
 		name: jsontest.Name("Structs/Format/ArrayBytes/Legacy"),
-		opts: []Options{jsontext.Multiline(true), jsonflags.FormatByteArrayAsArray | 1},
+		opts: []Options{jsontext.Multiline(true), jsonflags.FormatBytesWithLegacySemantics | 1},
 		in: structFormatArrayBytes{
 			Base16:    [4]byte{1, 2, 3, 4},
 			Base32:    [4]byte{1, 2, 3, 4},
@@ -6204,7 +6204,7 @@ func TestUnmarshal(t *testing.T) {
 		}),
 	}, {
 		name: jsontest.Name("Structs/Format/ArrayBytes/Legacy"),
-		opts: []Options{jsonflags.FormatByteArrayAsArray | 1},
+		opts: []Options{jsonflags.FormatBytesWithLegacySemantics | 1},
 		inBuf: `{
 	"Base16": "01020304",
 	"Base32": "AEBAGBA=",

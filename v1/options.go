@@ -34,7 +34,7 @@ type Options = jsonopts.Options
 // It is equivalent to the following boolean options being set to true:
 //
 //   - [EscapeInvalidUTF8]
-//   - [FormatByteArrayAsArray]
+//   - [FormatBytesWithLegacySemantics]
 //   - [FormatTimeDurationAsNanosecond]
 //   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
@@ -83,19 +83,34 @@ func EscapeInvalidUTF8(v bool) Options {
 	}
 }
 
-// FormatByteArrayAsArray specifies that a [N]byte array is formatted
-// by default as a JSON array of byte values in contrast to v2 default
-// of using a JSON string with the base64 encoding of the value.
-// If a [N]byte field has a `format` tag option,
-// then the specified formatting takes precedence.
+// FormatBytesWithLegacySemantics specifies that handling of
+// []~byte and [N]~byte types follow legacy semantics:
+//
+//   - A Go [N]~byte is always treated as as a normal Go array
+//     in contrast to the v2 default of treating [N]byte as
+//     using some form of binary data encoding (RFC 4648).
+//
+//   - A Go []~byte is to be treated as using some form of
+//     binary data encoding (RFC 4648) in contrast to the v2 default
+//     of only treating []byte as such. In particular, v2 does not
+//     treat slices of named byte types as representing binary data.
+//
+//   - When marshaling, if a named byte implements a marshal method,
+//     then the slice is serialized as a JSON array of elements,
+//     each of which call the marshal method.
+//
+//   - When unmarshaling, if the input is a JSON array,
+//     then unmarshal into the []~byte as if it were a normal Go slice.
+//     In contrast, the v2 default is to report an error unmarshaling
+//     a JSON array when expecting some form of binary data encoding.
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func FormatByteArrayAsArray(v bool) Options {
+func FormatBytesWithLegacySemantics(v bool) Options {
 	if v {
-		return jsonflags.FormatByteArrayAsArray | 1
+		return jsonflags.FormatBytesWithLegacySemantics | 1
 	} else {
-		return jsonflags.FormatByteArrayAsArray | 0
+		return jsonflags.FormatBytesWithLegacySemantics | 0
 	}
 }
 

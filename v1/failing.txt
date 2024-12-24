@@ -1,10 +1,5 @@
 TestUnmarshal
 TestUnmarshal/#106
-TestUnmarshal/#107
-TestUnmarshal/#109
-TestUnmarshal/#111
-TestUnmarshal/#113
-TestEncodeRenamedByteSlice
 TestNilMarshal
 TestNilMarshal/#08
 TestNilMarshal/#11
