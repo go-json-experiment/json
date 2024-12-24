@@ -99,13 +99,13 @@ func makeDefaultArshaler(t reflect.Type) *arshaler {
 		return makeStructArshaler(t)
 	case reflect.Slice:
 		fncs := makeSliceArshaler(t)
-		if t.AssignableTo(bytesType) {
+		if t.Elem().Kind() == reflect.Uint8 {
 			return makeBytesArshaler(t, fncs)
 		}
 		return fncs
 	case reflect.Array:
 		fncs := makeArrayArshaler(t)
-		if reflect.SliceOf(t.Elem()).AssignableTo(bytesType) {
+		if t.Elem().Kind() == reflect.Uint8 {
 			return makeBytesArshaler(t, fncs)
 		}
 		return fncs
@@ -294,9 +294,19 @@ var (
 )
 
 func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
-	// NOTE: This handles both []byte and [N]byte.
+	// NOTE: This handles both []~byte and [N]~byte.
+	// The v2 default is to treat a []namedByte as equivalent to []T
+	// since being able to convert []namedByte to []byte relies on
+	// dubious Go reflection behavior (see https://go.dev/issue/24746).
+	// For v1 emulation, we use jsonflags.FormatBytesWithLegacySemantics
+	// to forcibly treat []namedByte as a []byte.
 	marshalArray := fncs.marshal
+	isNamedByte := t.Elem().PkgPath() != ""
+	hasMarshaler := implementsWhich(t.Elem(), allMarshalerTypes...) != nil
 	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+		if !mo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && isNamedByte {
+			return marshalArray(enc, va, mo) // treat as []T or [N]T
+		}
 		xe := export.Encoder(enc)
 		encode, encodedLen := encodeBase64, encodedLenBase64
 		if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
@@ -317,7 +327,8 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			default:
 				return newInvalidFormatError(enc, t, mo.Format)
 			}
-		} else if mo.Flags.Get(jsonflags.FormatByteArrayAsArray) && va.Kind() == reflect.Array {
+		} else if mo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) &&
+			(va.Kind() == reflect.Array || hasMarshaler) {
 			return marshalArray(enc, va, mo)
 		}
 		if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && va.Kind() == reflect.Slice && va.IsNil() {
@@ -339,6 +350,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	}
 	unmarshalArray := fncs.unmarshal
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+		if !uo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && isNamedByte {
+			return unmarshalArray(dec, va, uo) // treat as []T or [N]T
+		}
 		xd := export.Decoder(dec)
 		decode, decodedLen, encodedLen := decodeBase64, decodedLenBase64, encodedLenBase64
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
@@ -359,7 +373,8 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			default:
 				return newInvalidFormatError(dec, t, uo.Format)
 			}
-		} else if uo.Flags.Get(jsonflags.FormatByteArrayAsArray) && va.Kind() == reflect.Array {
+		} else if uo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) &&
+			(va.Kind() == reflect.Array || dec.PeekKind() == '[') {
 			return unmarshalArray(dec, va, uo)
 		}
 		var flags jsonwire.ValueFlags
