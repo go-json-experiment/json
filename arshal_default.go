@@ -302,7 +302,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 	// to forcibly treat []namedByte as a []byte.
 	marshalArray := fncs.marshal
 	isNamedByte := t.Elem().PkgPath() != ""
-	hasMarshaler := implementsWhich(t.Elem(), allMarshalerTypes...) != nil
+	hasMarshaler := implementsAny(t.Elem(), allMarshalerTypes...)
 	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 		if !mo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && isNamedByte {
 			return marshalArray(enc, va, mo) // treat as []T or [N]T
