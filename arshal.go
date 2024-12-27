@@ -211,12 +211,13 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 	}
 	// Shallow copy non-pointer values to obtain an addressable value.
 	// It is beneficial to performance to always pass pointers to avoid this.
-	if v.Kind() != reflect.Pointer {
+	forceAddr := v.Kind() != reflect.Pointer
+	if forceAddr {
 		v2 := reflect.New(v.Type())
 		v2.Elem().Set(v)
 		v = v2
 	}
-	va := addressableValue{v.Elem()} // dereferenced pointer is always addressable
+	va := addressableValue{v.Elem(), forceAddr} // dereferenced pointer is always addressable
 	t := va.Type()
 
 	// Lookup and call the marshal function for this type.
@@ -452,7 +453,7 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err er
 	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return &SemanticError{action: "unmarshal", GoType: reflect.TypeOf(out), Err: internal.ErrNonNilReference}
 	}
-	va := addressableValue{v.Elem()} // dereferenced pointer is always addressable
+	va := addressableValue{v.Elem(), false} // dereferenced pointer is always addressable
 	t := va.Type()
 
 	// Lookup and call the unmarshal function for this type.
@@ -476,11 +477,18 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err er
 // There is no compile magic that enforces this property,
 // but rather the need to construct this type makes it easier to examine each
 // construction site to ensure that this property is upheld.
-type addressableValue struct{ reflect.Value }
+type addressableValue struct {
+	reflect.Value
+
+	// forcedAddr reports whether this value is addressable
+	// only through the use of [newAddressableValue].
+	// This is only used for [jsonflags.CallMethodsWithLegacySemantics].
+	forcedAddr bool
+}
 
 // newAddressableValue constructs a new addressable value of type t.
 func newAddressableValue(t reflect.Type) addressableValue {
-	return addressableValue{reflect.New(t).Elem()}
+	return addressableValue{reflect.New(t).Elem(), true}
 }
 
 // All marshal and unmarshal behavior is implemented using these signatures.

@@ -1,10 +1,2 @@
-TestUnmarshal
-TestUnmarshal/#106
-TestNilMarshal
-TestNilMarshal/#08
-TestNilMarshal/#11
-TestNilMarshalerTextMapKey
 TestStringOption
 TestStringOption/Unmarshal/Deep/v1
-TestPointerReceiver
-TestPointerReceiver/Marshal/v1

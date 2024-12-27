@@ -10,6 +10,8 @@
 package json
 
 import (
+	"encoding"
+
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
@@ -21,6 +23,7 @@ import (
 var (
 	_ = jsonv2.Deterministic
 	_ = jsontext.AllowDuplicateNames
+	_ = encoding.TextMarshaler(nil)
 )
 
 // Options are a set of options to configure the v2 "json" package
@@ -33,6 +36,7 @@ type Options = jsonopts.Options
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
 // It is equivalent to the following boolean options being set to true:
 //
+//   - [CallMethodsWithLegacySemantics]
 //   - [EscapeInvalidUTF8]
 //   - [FormatBytesWithLegacySemantics]
 //   - [FormatTimeDurationAsNanosecond]
@@ -65,6 +69,49 @@ type Options = jsonopts.Options
 //	jsonv2.Unmarshal(b, v, jsonv1.DefaultOptionsV1())
 func DefaultOptionsV1() Options {
 	return &jsonopts.DefaultOptionsV1
+}
+
+// CallMethodsWithLegacySemantics specifies that calling of type-provided
+// marshal and unmarshal methods follow legacy semantics:
+//
+//   - When marshaling, a marshal method declared on a pointer receiver
+//     is only called if the Go value is addressable.
+//     Values obtained from an interface or map element are not addressable.
+//     Values obtained from a pointer or slice element are addressable.
+//     Values obtained from an array element or struct field inherit
+//     the addressability of the parent. In contrast, the v2 semantic
+//     is to always call marshal methods regardless of addressability.
+//
+//   - When marshaling or unmarshaling, the [Marshaler] or [Unmarshaler]
+//     methods are ignored for map keys. However, [encoding.TextMarshaler]
+//     or [encoding.TextUnmarshaler] are still callable.
+//     In contrast, the v2 semantic is to serialize map keys
+//     like any other value (with regard to calling methods),
+//     which may include calling [Marshaler] or [Unmarshaler] methods,
+//     where it is the implementation's responsibility to represent the
+//     Go value as a JSON string (as required for JSON object names).
+//
+//   - When marshaling, if a map key value implements a marshal method
+//     and is a nil pointer, then it is serialized as an empty JSON string.
+//     In contrast, the v2 semantic is to report an error.
+//
+//   - When marshaling, if an interface type implements a marshal method
+//     and the interface value is a nil pointer to a concrete type,
+//     then the marshal method is always called.
+//     In contrast, the v2 semantic is to never directly call methods
+//     on interface values and to instead defer evaluation based upon
+//     the underlying concrete value. Similar to non-interface values,
+//     marshal methods are not called on nil pointers and
+//     are instead serialized as a JSON null.
+//
+// This affects either marshaling or unmarshaling.
+// The v1 default is true.
+func CallMethodsWithLegacySemantics(v bool) Options {
+	if v {
+		return jsonflags.CallMethodsWithLegacySemantics | 1
+	} else {
+		return jsonflags.CallMethodsWithLegacySemantics | 0
+	}
 }
 
 // EscapeInvalidUTF8 specifies that bytes of invalid UTF-8 within JSON strings

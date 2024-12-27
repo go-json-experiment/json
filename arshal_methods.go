@@ -113,9 +113,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		return fncs
 	}
 
-	if implements(t, textMarshalerType) {
+	if needAddr, ok := implements(t, textMarshalerType); ok {
 		fncs.nonDefault = true
+		prevMarshal := fncs.marshal
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+			if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				(needAddr && va.forcedAddr) {
+				return prevMarshal(enc, va, mo)
+			}
 			marshaler := va.Addr().Interface().(encoding.TextMarshaler)
 			if err := export.Encoder(enc).AppendRaw('"', false, func(b []byte) ([]byte, error) {
 				b2, err := marshaler.MarshalText()
@@ -133,7 +138,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			return nil
 		}
 		// TODO(https://go.dev/issue/62384): Rely on encoding.TextAppender instead.
-		if implements(t, appenderToType) && t.PkgPath() == "net/netip" {
+		if implementsAny(t, appenderToType) && t.PkgPath() == "net/netip" {
 			fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
 				appender := va.Addr().Interface().(interface{ AppendTo([]byte) []byte })
 				if err := export.Encoder(enc).AppendRaw('"', false, func(b []byte) ([]byte, error) {
@@ -149,9 +154,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, textAppenderType) {
+	if needAddr, ok := implements(t, textAppenderType); ok {
 		fncs.nonDefault = true
+		prevMarshal := fncs.marshal
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) (err error) {
+			if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				(needAddr && va.forcedAddr) {
+				return prevMarshal(enc, va, mo)
+			}
 			appender := va.Addr().Interface().(encodingTextAppender)
 			if err := export.Encoder(enc).AppendRaw('"', false, appender.AppendText); err != nil {
 				err = wrapSkipFunc(err, "append method")
@@ -167,9 +177,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, jsonMarshalerV1Type) {
+	if needAddr, ok := implements(t, jsonMarshalerV1Type); ok {
 		fncs.nonDefault = true
+		prevMarshal := fncs.marshal
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+			if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				((needAddr && va.forcedAddr) || export.Encoder(enc).Tokens.Last.NeedObjectName()) {
+				return prevMarshal(enc, va, mo)
+			}
 			marshaler := va.Addr().Interface().(MarshalerV1)
 			val, err := marshaler.MarshalJSON()
 			if err != nil {
@@ -190,9 +205,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, jsonMarshalerV2Type) {
+	if needAddr, ok := implements(t, jsonMarshalerV2Type); ok {
 		fncs.nonDefault = true
+		prevMarshal := fncs.marshal
 		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+			if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				((needAddr && va.forcedAddr) || export.Encoder(enc).Tokens.Last.NeedObjectName()) {
+				return prevMarshal(enc, va, mo)
+			}
 			xe := export.Encoder(enc)
 			prevDepth, prevLength := xe.Tokens.DepthLength()
 			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
@@ -216,7 +236,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, textUnmarshalerType) {
+	if _, ok := implements(t, textUnmarshalerType); ok {
 		fncs.nonDefault = true
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
 			xd := export.Decoder(dec)
@@ -250,9 +270,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, jsonUnmarshalerV1Type) {
+	if _, ok := implements(t, jsonUnmarshalerV1Type); ok {
 		fncs.nonDefault = true
+		prevUnmarshal := fncs.unmarshal
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+			if uo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				export.Decoder(dec).Tokens.Last.NeedObjectName() {
+				return prevUnmarshal(dec, va, uo)
+			}
 			val, err := dec.ReadValue()
 			if err != nil {
 				return err // must be a syntactic or I/O error
@@ -270,9 +295,14 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if implements(t, jsonUnmarshalerV2Type) {
+	if _, ok := implements(t, jsonUnmarshalerV2Type); ok {
 		fncs.nonDefault = true
+		prevUnmarshal := fncs.unmarshal
 		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+			if uo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
+				export.Decoder(dec).Tokens.Last.NeedObjectName() {
+				return prevUnmarshal(dec, va, uo)
+			}
 			xd := export.Decoder(dec)
 			prevDepth, prevLength := xd.Tokens.DepthLength()
 			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
@@ -303,7 +333,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 // but checks whether either t or reflect.PointerTo(t) implements the interface.
 func implementsAny(t reflect.Type, ifaceTypes ...reflect.Type) bool {
 	for _, ifaceType := range ifaceTypes {
-		if implements(t, ifaceType) {
+		if _, ok := implements(t, ifaceType); ok {
 			return true
 		}
 	}
@@ -312,6 +342,15 @@ func implementsAny(t reflect.Type, ifaceTypes ...reflect.Type) bool {
 
 // implements is like t.Implements(ifaceType) but checks whether
 // either t or reflect.PointerTo(t) implements the interface.
-func implements(t, ifaceType reflect.Type) bool {
-	return t.Implements(ifaceType) || reflect.PointerTo(t).Implements(ifaceType)
+// It also reports whether the value needs to be addressed
+// in order to satisfy the interface.
+func implements(t, ifaceType reflect.Type) (needAddr, ok bool) {
+	switch {
+	case t.Implements(ifaceType):
+		return false, true
+	case reflect.PointerTo(t).Implements(ifaceType):
+		return true, true
+	default:
+		return false, false
+	}
 }

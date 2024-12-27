@@ -772,7 +772,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"asdf": "hello world"}`,
 		ptr:      new(map[unmarshaler]string),
-		err:      &UnmarshalTypeError{Value: "object", Type: reflect.TypeFor[map[unmarshaler]string](), Offset: len64(`{`)},
+		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[unmarshaler](), Field: "asdf", Offset: len64(`{`)},
 	},
 
 	// related to issue 13783.
