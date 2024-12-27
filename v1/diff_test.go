@@ -14,6 +14,7 @@ import (
 	"time"
 
 	jsonv2 "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // NOTE: This file serves as a list of semantic differences between v1 and v2.
@@ -248,12 +249,11 @@ func addr[T any](v T) *T {
 	return &v
 }
 
-// In v1, the "string" option specifies that Go bools and numeric values are
-// encoded within a JSON string when marshaling and are unmarshaled from
-// either the native JSON representation (i.e., a JSON bool or number) or
-// its native representation escaped within a JSON string.
-// The "string" option is not applied recursively, and
-// so does not affect bools and numeric values within a Go slice or map, but
+// In v1, the "string" option specifies that Go strings, bools, and numeric
+// values are encoded within a JSON string when marshaling and
+// are unmarshaled from its native representation escaped within a JSON string.
+// The "string" option is not applied recursively, and so does not affect
+// strings, bools, and numeric values within a Go slice or map, but
 // does have special handling to affect the underlying value within a pointer.
 // When unmarshaling, the "string" option permits decoding from a JSON null
 // escaped within a JSON string in some inconsistent cases.
@@ -265,15 +265,14 @@ func addr[T any](v T) *T {
 // and thus affects numeric values within a Go slice or map.
 // There is no support for escaped JSON nulls within a JSON string.
 //
-// The main utility for stringifying JSON primitives (i.e., bools and numbers)
-// is because JSON parsers often represents numbers as IEEE 754
-// floating-point numbers. This results in a loss of precision when trying to
-// represent 64-bit integer values. Consequently, many JSON-based APIs actually
-// requires that such values be encoded within a JSON string.
-// Given the main utility of stringification is for numeric values,
-// v2 limits the effect of the "string" option to just numeric Go types.
-// According to all code known by the Go module proxy,
-// there are close to zero usages of the "string" option with a Go bool.
+// The main utility for stringifying JSON numbers is because JSON parsers
+// often represents numbers as IEEE 754 floating-point numbers.
+// This results in a loss of precision representing 64-bit integer values.
+// Consequently, many JSON-based APIs actually requires that such values
+// be encoded within a JSON string. Since the main utility of stringification
+// is for numeric values, v2 limits the effect of the "string" option
+// to just numeric Go types. According to all code known by the Go module proxy,
+// there are close to zero usages of the "string" option on a Go string or bool.
 //
 // Regarding the recursive application of the "string" option,
 // there have been a number of issues filed about users being surprised that
@@ -295,6 +294,7 @@ func addr[T any](v T) *T {
 //	https://go.dev/issue/50997
 func TestStringOption(t *testing.T) {
 	type Types struct {
+		String     string              `json:",string"`
 		Bool       bool                `json:",string"`
 		Int        int                 `json:",string"`
 		Float      float64             `json:",string"`
@@ -312,6 +312,7 @@ func TestStringOption(t *testing.T) {
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Marshal", json.Version), func(t *testing.T) {
 			in := Types{
+				String:     "string",
 				Bool:       true,
 				Int:        1,
 				Float:      1,
@@ -325,7 +326,10 @@ func TestStringOption(t *testing.T) {
 				InterfaceA: nil,
 				InterfaceB: 1,
 			}
-			quote := func(s string) string { return `"` + s + `"` }
+			quote := func(s string) string {
+				b, _ := jsontext.AppendQuote(nil, s)
+				return string(b)
+			}
 			quoteOnlyV1 := func(s string) string {
 				if json.Version == "v1" {
 					s = quote(s)
@@ -340,7 +344,8 @@ func TestStringOption(t *testing.T) {
 			}
 			want := strings.Join([]string{
 				`{`,
-				`"Bool":` + quoteOnlyV1("true") + `,`, // in v1, Go bool are also stringified
+				`"String":` + quoteOnlyV1(`"string"`) + `,`, // in v1, Go strings are also stringified
+				`"Bool":` + quoteOnlyV1("true") + `,`,       // in v1, Go bools are also stringified
 				`"Int":` + quote("1") + `,`,
 				`"Float":` + quote("1") + `,`,
 				`"Map":{"Name":` + quoteOnlyV2("1") + `},`,     // in v2, numbers are recursively stringified
