@@ -151,6 +151,12 @@ func EscapeInvalidUTF8(v bool) Options {
 //     In contrast, the v2 default is to report an error unmarshaling
 //     a JSON array when expecting some form of binary data encoding.
 //
+//   - When unmarshaling, '\r' and '\n' characters are ignored
+//     within the encoded "base32" and "base64" data.
+//     In contrast, the v2 default is to report an error in order to be
+//     strictly compliant with RFC 4648, section 3.3,
+//     which specifies that non-alphabet characters must be rejected.
+//
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
 func FormatBytesWithLegacySemantics(v bool) Options {

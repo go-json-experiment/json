@@ -4857,11 +4857,23 @@ func TestUnmarshal(t *testing.T) {
 		want:    addr([2]byte{1, 0}),
 		wantErr: EU(errors.New("decoded length of 1 mismatches array length of 2")).withType('"', T[[2]byte]()),
 	}, {
+		name:  jsontest.Name("Bytes/ByteArray2/Underflow/Allowed"),
+		opts:  []Options{jsonflags.UnmarshalArrayFromAnyLength | 1},
+		inBuf: `"AQ=="`,
+		inVal: new([2]byte),
+		want:  addr([2]byte{1, 0}),
+	}, {
 		name:    jsontest.Name("Bytes/ByteArray2/Overflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([2]byte),
 		want:    addr([2]byte{1, 2}),
 		wantErr: EU(errors.New("decoded length of 3 mismatches array length of 2")).withType('"', T[[2]byte]()),
+	}, {
+		name:  jsontest.Name("Bytes/ByteArray2/Overflow/Allowed"),
+		opts:  []Options{jsonflags.UnmarshalArrayFromAnyLength | 1},
+		inBuf: `"AQID"`,
+		inVal: new([2]byte),
+		want:  addr([2]byte{1, 2}),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray3/Valid"),
 		inBuf: `"AQID"`,
@@ -6386,6 +6398,12 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"Base64": "aa=\r="}`,
 		inVal:   new(structFormatBytes),
 		wantErr: EU(errors.New("illegal character '\\r' at offset 3")).withPos(`{"Base64": `, "/Base64").withType('"', T[[]byte]()),
+	}, {
+		name:  jsontest.Name("Structs/Format/Bytes/Base64/NonAlphabet/Ignored"),
+		opts:  []Options{jsonflags.FormatBytesWithLegacySemantics | 1},
+		inBuf: `{"Base64": "aa=\r\n="}`,
+		inVal: new(structFormatBytes),
+		want:  &structFormatBytes{Base64: []byte{105}},
 	}, {
 		name:    jsontest.Name("Structs/Format/Bytes/Invalid/Base64/NonAlphabet/Space"),
 		inBuf:   `{"Base64": "aa= ="}`,
