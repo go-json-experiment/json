@@ -56,6 +56,7 @@ const (
 		FormatNilMapAsNull |
 		FormatNilSliceAsNull |
 		MatchCaseInsensitiveNames |
+		CallMethodsWithLegacySemantics |
 		FormatBytesWithLegacySemantics |
 		FormatTimeDurationAsNanosecond |
 		IgnoreStructErrors |
@@ -64,7 +65,6 @@ const (
 		OmitEmptyWithLegacyDefinition |
 		RejectFloatOverflow |
 		ReportLegacyErrorValues |
-		SkipUnaddressableMethods |
 		StringifyWithLegacySemantics |
 		UnmarshalArrayFromAnyLength
 
@@ -123,6 +123,7 @@ const (
 const (
 	_ Bools = (maxArshalV2Flag >> 1) << iota
 
+	CallMethodsWithLegacySemantics // marshal or unmarshal
 	FormatBytesWithLegacySemantics // marshal or unmarshal
 	FormatTimeDurationAsNanosecond // marshal or unmarshal
 	IgnoreStructErrors             // marshal or unmarshal
@@ -131,7 +132,6 @@ const (
 	OmitEmptyWithLegacyDefinition  // marshal
 	RejectFloatOverflow            // unmarshal
 	ReportLegacyErrorValues        // marshal or unmarshal
-	SkipUnaddressableMethods       // marshal or unmarshal
 	StringifyWithLegacySemantics   // marshal or unmarshal
 	StringifyBoolsAndStrings       // marshal or unmarshal; for internal use by jsonv2.makeStructArshaler
 	UnmarshalAnyWithRawNumber      // unmarshal; for internal use by jsonv1.Decoder.UseNumber
