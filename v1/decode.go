@@ -8,6 +8,7 @@
 package json
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -189,12 +190,14 @@ var numberType = reflect.TypeFor[Number]()
 
 // MarshalJSONV2 implements [jsonv2.MarshalerV2].
 func (n Number) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error {
-	if n == "" {
-		return enc.WriteToken(jsontext.Int(0))
+	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
+	if k, n := enc.StackIndex(enc.StackDepth()); k == '{' && n%2 == 0 {
+		stringify = true // expecting a JSON object name
 	}
+	n = cmp.Or(n, "0")
 	var num []byte
 	val := enc.UnusedBuffer()
-	if stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers); stringify {
+	if stringify {
 		val = append(val, '"')
 		val = append(val, n...)
 		val = append(val, '"')
@@ -212,6 +215,9 @@ func (n Number) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error 
 // UnmarshalJSONV2 implements [jsonv2.UnmarshalerV2].
 func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) error {
 	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
+	if k, n := dec.StackIndex(dec.StackDepth()); k == '{' && n%2 == 0 {
+		stringify = true // expecting a JSON object name
+	}
 	val, err := dec.ReadValue()
 	if err != nil {
 		return err
@@ -233,9 +239,10 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 		if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
 			return &jsonv2.SemanticError{JSONKind: val0.Kind(), JSONValue: val0, GoType: numberType, Err: strconv.ErrSyntax}
 		}
-		fallthrough
+		*n = Number(val)
+		return nil
 	case '0':
-		if stringify && k == '0' {
+		if stringify {
 			break
 		}
 		*n = Number(val)
