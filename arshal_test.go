@@ -4834,7 +4834,7 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Bytes/ByteArray1/Overflow"),
 		inBuf:   `"AQI="`,
 		inVal:   new([1]byte),
-		want:    addr([1]byte{}),
+		want:    addr([1]byte{1}),
 		wantErr: EU(errors.New("decoded length of 2 mismatches array length of 1")).withType('"', T[[1]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray2/Valid"),
@@ -4854,13 +4854,13 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Bytes/ByteArray2/Underflow"),
 		inBuf:   `"AQ=="`,
 		inVal:   new([2]byte),
-		want:    addr([2]byte{}),
+		want:    addr([2]byte{1, 0}),
 		wantErr: EU(errors.New("decoded length of 1 mismatches array length of 2")).withType('"', T[[2]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray2/Overflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([2]byte),
-		want:    addr([2]byte{}),
+		want:    addr([2]byte{1, 2}),
 		wantErr: EU(errors.New("decoded length of 3 mismatches array length of 2")).withType('"', T[[2]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray3/Valid"),
@@ -4879,14 +4879,14 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray3/Underflow"),
 		inBuf:   `"AQI="`,
-		inVal:   new([3]byte),
-		want:    addr([3]byte{}),
+		inVal:   addr([3]byte{0xff, 0xff, 0xff}),
+		want:    addr([3]byte{1, 2, 0}),
 		wantErr: EU(errors.New("decoded length of 2 mismatches array length of 3")).withType('"', T[[3]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray3/Overflow"),
 		inBuf:   `"AQIDAQ=="`,
 		inVal:   new([3]byte),
-		want:    addr([3]byte{}),
+		want:    addr([3]byte{1, 2, 3}),
 		wantErr: EU(errors.New("decoded length of 4 mismatches array length of 3")).withType('"', T[[3]byte]()),
 	}, {
 		name:  jsontest.Name("Bytes/ByteArray4/Valid"),
@@ -4906,13 +4906,13 @@ func TestUnmarshal(t *testing.T) {
 		name:    jsontest.Name("Bytes/ByteArray4/Underflow"),
 		inBuf:   `"AQID"`,
 		inVal:   new([4]byte),
-		want:    addr([4]byte{}),
+		want:    addr([4]byte{1, 2, 3, 0}),
 		wantErr: EU(errors.New("decoded length of 3 mismatches array length of 4")).withType('"', T[[4]byte]()),
 	}, {
 		name:    jsontest.Name("Bytes/ByteArray4/Overflow"),
 		inBuf:   `"AQIDBAU="`,
 		inVal:   new([4]byte),
-		want:    addr([4]byte{}),
+		want:    addr([4]byte{1, 2, 3, 4}),
 		wantErr: EU(errors.New("decoded length of 5 mismatches array length of 4")).withType('"', T[[4]byte]()),
 	}, {
 		// NOTE: []namedByte is not assignable to []byte,

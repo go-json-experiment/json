@@ -271,26 +271,21 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 }
 
 var (
-	encodeBase16        = func(dst, src []byte) { hex.Encode(dst, src) }
-	encodeBase32        = base32.StdEncoding.Encode
-	encodeBase32Hex     = base32.HexEncoding.Encode
-	encodeBase64        = base64.StdEncoding.Encode
-	encodeBase64URL     = base64.URLEncoding.Encode
-	encodedLenBase16    = hex.EncodedLen
-	encodedLenBase32    = base32.StdEncoding.EncodedLen
-	encodedLenBase32Hex = base32.HexEncoding.EncodedLen
-	encodedLenBase64    = base64.StdEncoding.EncodedLen
-	encodedLenBase64URL = base64.URLEncoding.EncodedLen
-	decodeBase16        = hex.Decode
-	decodeBase32        = base32.StdEncoding.Decode
-	decodeBase32Hex     = base32.HexEncoding.Decode
-	decodeBase64        = base64.StdEncoding.Decode
-	decodeBase64URL     = base64.URLEncoding.Decode
-	decodedLenBase16    = hex.DecodedLen
-	decodedLenBase32    = base32.StdEncoding.WithPadding(base32.NoPadding).DecodedLen
-	decodedLenBase32Hex = base32.HexEncoding.WithPadding(base32.NoPadding).DecodedLen
-	decodedLenBase64    = base64.StdEncoding.WithPadding(base64.NoPadding).DecodedLen
-	decodedLenBase64URL = base64.URLEncoding.WithPadding(base64.NoPadding).DecodedLen
+	appendEncodeBase16    = hex.AppendEncode
+	appendEncodeBase32    = base32.StdEncoding.AppendEncode
+	appendEncodeBase32Hex = base32.HexEncoding.AppendEncode
+	appendEncodeBase64    = base64.StdEncoding.AppendEncode
+	appendEncodeBase64URL = base64.URLEncoding.AppendEncode
+	encodedLenBase16      = hex.EncodedLen
+	encodedLenBase32      = base32.StdEncoding.EncodedLen
+	encodedLenBase32Hex   = base32.HexEncoding.EncodedLen
+	encodedLenBase64      = base64.StdEncoding.EncodedLen
+	encodedLenBase64URL   = base64.URLEncoding.EncodedLen
+	appendDecodeBase16    = hex.AppendDecode
+	appendDecodeBase32    = base32.StdEncoding.AppendDecode
+	appendDecodeBase32Hex = base32.HexEncoding.AppendDecode
+	appendDecodeBase64    = base64.StdEncoding.AppendDecode
+	appendDecodeBase64URL = base64.URLEncoding.AppendDecode
 )
 
 func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
@@ -308,19 +303,19 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			return marshalArray(enc, va, mo) // treat as []T or [N]T
 		}
 		xe := export.Encoder(enc)
-		encode, encodedLen := encodeBase64, encodedLenBase64
+		appendEncode := appendEncodeBase64
 		if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 			switch mo.Format {
 			case "base64":
-				encode, encodedLen = encodeBase64, encodedLenBase64
+				appendEncode = appendEncodeBase64
 			case "base64url":
-				encode, encodedLen = encodeBase64URL, encodedLenBase64URL
+				appendEncode = appendEncodeBase64URL
 			case "base32":
-				encode, encodedLen = encodeBase32, encodedLenBase32
+				appendEncode = appendEncodeBase32
 			case "base32hex":
-				encode, encodedLen = encodeBase32Hex, encodedLenBase32Hex
+				appendEncode = appendEncodeBase32Hex
 			case "base16", "hex":
-				encode, encodedLen = encodeBase16, encodedLenBase16
+				appendEncode = appendEncodeBase16
 			case "array":
 				mo.Format = ""
 				return marshalArray(enc, va, mo)
@@ -335,18 +330,9 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			// TODO: Provide a "emitempty" format override?
 			return enc.WriteToken(jsontext.Null)
 		}
-		val := enc.UnusedBuffer()
-		b := va.Bytes()
-		n := len(`"`) + encodedLen(len(b)) + len(`"`)
-		if cap(val) < n {
-			val = make([]byte, n)
-		} else {
-			val = val[:n]
-		}
-		val[0] = '"'
-		encode(val[len(`"`):len(val)-len(`"`)], b)
-		val[len(val)-1] = '"'
-		return enc.WriteValue(val)
+		return xe.AppendRaw('"', true, func(b []byte) ([]byte, error) {
+			return appendEncode(b, va.Bytes()), nil
+		})
 	}
 	unmarshalArray := fncs.unmarshal
 	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
@@ -354,19 +340,19 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			return unmarshalArray(dec, va, uo) // treat as []T or [N]T
 		}
 		xd := export.Decoder(dec)
-		decode, decodedLen, encodedLen := decodeBase64, decodedLenBase64, encodedLenBase64
+		appendDecode, encodedLen := appendDecodeBase64, encodedLenBase64
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 			switch uo.Format {
 			case "base64":
-				decode, decodedLen, encodedLen = decodeBase64, decodedLenBase64, encodedLenBase64
+				appendDecode, encodedLen = appendDecodeBase64, encodedLenBase64
 			case "base64url":
-				decode, decodedLen, encodedLen = decodeBase64URL, decodedLenBase64URL, encodedLenBase64URL
+				appendDecode, encodedLen = appendDecodeBase64URL, encodedLenBase64URL
 			case "base32":
-				decode, decodedLen, encodedLen = decodeBase32, decodedLenBase32, encodedLenBase32
+				appendDecode, encodedLen = appendDecodeBase32, encodedLenBase32
 			case "base32hex":
-				decode, decodedLen, encodedLen = decodeBase32Hex, decodedLenBase32Hex, encodedLenBase32Hex
+				appendDecode, encodedLen = appendDecodeBase32Hex, encodedLenBase32Hex
 			case "base16", "hex":
-				decode, decodedLen, encodedLen = decodeBase16, decodedLenBase16, encodedLenBase16
+				appendDecode, encodedLen = appendDecodeBase16, encodedLenBase16
 			case "array":
 				uo.Format = ""
 				return unmarshalArray(dec, va, uo)
@@ -390,43 +376,39 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			}
 			return nil
 		case '"':
+			// NOTE: The v2 default is to strictly comply with RFC 4648.
+			// Section 3.2 specifies that padding is required.
+			// Section 3.3 specifies that non-alphabet characters
+			// (e.g., '\r' or '\n') must be rejected.
+			// Section 3.5 specifies that unnecessary non-zero bits in
+			// the last quantum may be rejected. Since this is optional,
+			// we do not reject such inputs.
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
-
-			// For base64 and base32, decodedLen computes the maximum output size
-			// when given the original input size. To compute the exact size,
-			// adjust the input size by excluding trailing padding characters.
-			// This is unnecessary for base16, but also harmless.
-			n := len(val)
-			for n > 0 && val[n-1] == '=' {
-				n--
+			b, err := appendDecode(va.Bytes()[:0], val)
+			if err != nil {
+				return newUnmarshalErrorAfter(dec, t, err)
 			}
-			n = decodedLen(n)
-			b := va.Bytes()
-			if va.Kind() == reflect.Array {
-				if n != len(b) {
-					err := fmt.Errorf("decoded length of %d mismatches array length of %d", n, len(b))
-					return newUnmarshalErrorAfter(dec, t, err)
-				}
-			} else {
-				if b == nil || cap(b) < n {
-					b = make([]byte, n)
-				} else {
-					b = b[:n]
-				}
-			}
-			n2, err := decode(b, val)
-			if err == nil && len(val) != encodedLen(n2) {
+			if len(val) != encodedLen(len(b)) {
 				// TODO(https://go.dev/issue/53845): RFC 4648, section 3.3,
 				// specifies that non-alphabet characters must be rejected.
 				// Unfortunately, the "base32" and "base64" packages allow
 				// '\r' and '\n' characters by default.
 				i := bytes.IndexAny(val, "\r\n")
-				err = fmt.Errorf("illegal character %s at offset %d", jsonwire.QuoteRune(val[i:]), i)
-			}
-			if err != nil {
+				err := fmt.Errorf("illegal character %s at offset %d", jsonwire.QuoteRune(val[i:]), i)
 				return newUnmarshalErrorAfter(dec, t, err)
 			}
-			if va.Kind() == reflect.Slice {
+
+			if va.Kind() == reflect.Array {
+				dst := va.Bytes()
+				clear(dst[copy(dst, b):]) // noop if len(b) <= len(dst)
+				if len(b) != len(dst) {
+					err := fmt.Errorf("decoded length of %d mismatches array length of %d", len(b), len(dst))
+					return newUnmarshalErrorAfter(dec, t, err)
+				}
+			} else {
+				if b == nil {
+					b = []byte{}
+				}
 				va.SetBytes(b)
 			}
 			return nil
