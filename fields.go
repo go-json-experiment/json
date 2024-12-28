@@ -123,7 +123,7 @@ func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) 
 				// Reject any types with custom serialization otherwise
 				// it becomes impossible to know what sub-fields to inline.
 				tf := indirectType(f.typ)
-				if implementsWhich(tf, allMethodTypes...) != nil && tf != jsontextValueType {
+				if implementsAny(tf, allMethodTypes...) && tf != jsontextValueType {
 					serr = orErrorf(serr, t, "inlined Go struct field %s of type %s must not implement marshal or unmarshal methods", sf.Name, tf)
 					continue // invalid inlined field; treat as ignored
 				}
@@ -151,7 +151,7 @@ func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) 
 				case tf == jsontextValueType:
 					f.fncs = nil // specially handled in arshal_inlined.go
 				case tf.Kind() == reflect.Map && tf.Key().Kind() == reflect.String:
-					if implementsWhich(tf.Key(), allMethodTypes...) != nil {
+					if implementsAny(tf.Key(), allMethodTypes...) {
 						serr = orErrorf(serr, t, "inlined map field %s of type %s must have a string key that does not implement marshal or unmarshal methods", sf.Name, tf)
 						continue // invalid inlined field; treat as ignored
 					}
@@ -185,8 +185,8 @@ func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) 
 					}
 					// Unfortunately, methods on the unexported field
 					// still cannot be called.
-					if implementsWhich(tf, allMethodTypes...) != nil ||
-						(f.omitzero && implementsWhich(tf, isZeroerType) != nil) {
+					if implementsAny(tf, allMethodTypes...) ||
+						(f.omitzero && implementsAny(tf, isZeroerType)) {
 						serr = orErrorf(serr, t, "Go struct field %s is not exported for method calls", sf.Name)
 						continue
 					}
