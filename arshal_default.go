@@ -455,7 +455,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
 			return strconv.AppendInt(b, va.Int(), 10), nil
 		})
@@ -465,6 +465,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 			return newInvalidFormatError(dec, t, uo.Format)
 		}
+		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 		var flags jsonwire.ValueFlags
 		val, err := xd.ReadValue(&flags)
 		if err != nil {
@@ -478,7 +479,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			}
 			return nil
 		case '"':
-			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
+			if !stringify {
 				break
 			}
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -490,7 +491,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if stringify && k == '0' {
 				break
 			}
 			var negOffset int
@@ -541,7 +542,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
 			return strconv.AppendUint(b, va.Uint(), 10), nil
 		})
@@ -551,6 +552,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 			return newInvalidFormatError(dec, t, uo.Format)
 		}
+		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 		var flags jsonwire.ValueFlags
 		val, err := xd.ReadValue(&flags)
 		if err != nil {
@@ -564,7 +566,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			}
 			return nil
 		case '"':
-			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
+			if !stringify {
 				break
 			}
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -576,7 +578,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if stringify && k == '0' {
 				break
 			}
 			n, ok := jsonwire.ParseUint(val)
@@ -632,7 +634,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			return nil
 		}
 
-		k := stringOrNumberKind(mo.Flags.Get(jsonflags.StringifyNumbers))
+		k := stringOrNumberKind(xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
 			return jsonwire.AppendFloat(b, va.Float(), bits), nil
 		})
@@ -647,6 +649,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError(dec, t, uo.Format)
 			}
 		}
+		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 		var flags jsonwire.ValueFlags
 		val, err := xd.ReadValue(&flags)
 		if err != nil {
@@ -674,7 +677,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 					return nil
 				}
 			}
-			if !uo.Flags.Get(jsonflags.StringifyNumbers) {
+			if !stringify {
 				break
 			}
 			if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
@@ -688,7 +691,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 			fallthrough
 		case '0':
-			if uo.Flags.Get(jsonflags.StringifyNumbers) && k == '0' {
+			if stringify && k == '0' {
 				break
 			}
 			fv, ok := jsonwire.ParseFloat(val, bits)
@@ -790,10 +793,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			case !mo.Flags.Get(jsonflags.Deterministic) || n <= 1:
 				for iter := va.Value.MapRange(); iter.Next(); {
 					k.SetIterKey(iter)
-					flagsOriginal := mo.Flags
-					mo.Flags.Set(jsonflags.StringifyNumbers | 1) // stringify for numeric keys
 					err := marshalKey(enc, k, mo)
-					mo.Flags = flagsOriginal
 					if err != nil {
 						if serr, ok := err.(*jsontext.SyntacticError); ok && serr.Err == jsontext.ErrNonStringName {
 							err = newMarshalErrorBefore(enc, k.Type(), err)
@@ -839,10 +839,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					k.SetIterKey(iter)
 					v := addressableValue{vals.Index(i)} // indexed slice element is always addressable
 					v.SetIterValue(iter)
-					flagsOriginal := mo.Flags
-					mo.Flags.Set(jsonflags.StringifyNumbers | 1) // stringify for numeric keys
 					err := marshalKey(enc, k, mo)
-					mo.Flags = flagsOriginal
 					if err != nil {
 						if serr, ok := err.(*jsontext.SyntacticError); ok && serr.Err == jsontext.ErrNonStringName {
 							err = newMarshalErrorBefore(enc, k.Type(), err)

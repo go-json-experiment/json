@@ -89,11 +89,12 @@ func putStructOptions(o *jsonopts.Struct) {
 //     where each byte is recursively JSON-encoded as each JSON array element.
 //
 //   - A Go integer is encoded as a JSON number without fractions or exponents.
-//     If [StringifyNumbers] is specified, then the JSON number is
-//     encoded within a JSON string. It does not support any custom format flags.
+//     If [StringifyNumbers] is specified or encoding a JSON object name,
+//     then the JSON number is encoded within a JSON string.
+//     It does not support any custom format flags.
 //
 //   - A Go float is encoded as a JSON number.
-//     If [StringifyNumbers] is specified,
+//     If [StringifyNumbers] is specified or encoding a JSON object name,
 //     then the JSON number is encoded within a JSON string.
 //     If the format is "nonfinite", then NaN, +Inf, and -Inf are encoded as
 //     the JSON strings "NaN", "Infinity", and "-Infinity", respectively.
@@ -102,9 +103,7 @@ func putStructOptions(o *jsonopts.Struct) {
 //   - A Go map is encoded as a JSON object, where each Go map key and value
 //     is recursively encoded as a name and value pair in the JSON object.
 //     The Go map key must encode as a JSON string, otherwise this results
-//     in a [SemanticError]. When encoding keys, [StringifyNumbers]
-//     is automatically applied so that numeric keys encode as JSON strings.
-//     The Go map is traversed in a non-deterministic order.
+//     in a [SemanticError]. The Go map is traversed in a non-deterministic order.
 //     For deterministic encoding, consider using [jsontext.Value.Canonicalize].
 //     If the format is "emitnull", then a nil map is encoded as a JSON null.
 //     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
@@ -303,16 +302,16 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //     otherwise it fails with a [SemanticError].
 //
 //   - A Go integer is decoded from a JSON number.
-//     It may also be decoded from a JSON string containing a JSON number
-//     if [StringifyNumbers] is specified.
+//     It must be decoded from a JSON string containing a JSON number
+//     if [StringifyNumbers] is specified or decoding a JSON object name.
 //     It fails with a [SemanticError] if the JSON number
 //     has a fractional or exponent component.
 //     It also fails if it overflows the representation of the Go integer type.
 //     It does not support any custom format flags.
 //
 //   - A Go float is decoded from a JSON number.
-//     It may also be decoded from a JSON string containing a JSON number
-//     if [StringifyNumbers] is specified.
+//     It must be decoded from a JSON string containing a JSON number
+//     if [StringifyNumbers] is specified or decoding a JSON object name.
 //     The JSON number is parsed as the closest representable Go float value.
 //     If the format is "nonfinite", then the JSON strings
 //     "NaN", "Infinity", and "-Infinity" are decoded as NaN, +Inf, and -Inf.
@@ -320,9 +319,7 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //
 //   - A Go map is decoded from a JSON object,
 //     where each JSON object name and value pair is recursively decoded
-//     as the Go map key and value. When decoding keys,
-//     [StringifyNumbers] is automatically applied so that
-//     numeric keys can decode from JSON strings. Maps are not cleared.
+//     as the Go map key and value. Maps are not cleared.
 //     If the Go map is nil, then a new map is allocated to decode into.
 //     If the decoded key matches an existing Go map entry, the entry value
 //     is reused by decoding the JSON object value into it.
