@@ -195,7 +195,6 @@ func TestIndentErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			slice := make([]uint8, 0)
 			buf := bytes.NewBuffer(slice)
 			if err := Indent(buf, []uint8(tt.in), "", ""); err != nil {

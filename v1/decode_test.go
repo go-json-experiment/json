@@ -1111,7 +1111,6 @@ func TestMarshalInvalidUTF8(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			got, err := Marshal(tt.in)
 			if string(got) != tt.want || err != nil {
 				t.Errorf("%s: Marshal(%q):\n\tgot:  (%q, %v)\n\twant: (%q, nil)", tt.Where, tt.in, got, err, tt.want)
@@ -1133,7 +1132,6 @@ func TestMarshalNumberZeroVal(t *testing.T) {
 }
 
 func TestMarshalEmbeds(t *testing.T) {
-	skipKnownFailure(t)
 	top := &Top{
 		Level0: 1,
 		Embed0: Embed0{
@@ -1204,7 +1202,6 @@ func equalError(a, b error) bool {
 func TestUnmarshal(t *testing.T) {
 	for _, tt := range unmarshalTests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			in := []byte(tt.in)
 			if err := checkValid(in); err != nil {
 				if !equalError(err, tt.err) {
@@ -1407,7 +1404,6 @@ func TestErrorMessageFromMisusedString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			r := strings.NewReader(tt.in)
 			var s WrongString
 			err := NewDecoder(r).Decode(&s)
@@ -1784,7 +1780,6 @@ func TestEmptyString(t *testing.T) {
 // Test that a null for ,string is not replaced with the previous quoted string (issue 7046).
 // It should also not be an error (issue 2540, issue 8587).
 func TestNullString(t *testing.T) {
-	skipKnownFailure(t)
 	type T struct {
 		A int  `json:",string"`
 		B int  `json:",string"`
@@ -1803,6 +1798,10 @@ func TestNullString(t *testing.T) {
 	case s.C != nil:
 		t.Fatalf("Unmarshal: s.C = %d, want non-nil", s.C)
 	}
+}
+
+func addr[T any](v T) *T {
+	return &v
 }
 
 func TestInterfaceSet(t *testing.T) {
@@ -1913,7 +1912,6 @@ type NullTest struct {
 // JSON null values should be ignored for primitives and string values instead of resulting in an error.
 // Issue 2540
 func TestUnmarshalNulls(t *testing.T) {
-	skipKnownFailure(t)
 	// Unmarshal docs:
 	// The JSON null value unmarshals into an interface, map, pointer, or slice
 	// by setting that Go value to nil. Because null is often used in JSON to mean
@@ -2119,7 +2117,6 @@ func TestUnmarshalTypeError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			err := Unmarshal([]byte(tt.in), tt.dest)
 			if _, ok := err.(*UnmarshalTypeError); !ok {
 				t.Errorf("%s: Unmarshal(%#q, %T):\n\tgot:  %T\n\twant: %T",
@@ -2145,7 +2142,6 @@ func TestUnmarshalSyntax(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			var x any
 			err := Unmarshal([]byte(tt.in), &x)
 			if _, ok := err.(*SyntaxError); !ok {
@@ -2167,7 +2163,6 @@ type unexportedFields struct {
 }
 
 func TestUnmarshalUnexported(t *testing.T) {
-	skipKnownFailure(t)
 	input := `{"Name": "Bob", "m": {"x": 123}, "m2": {"y": 456}, "abcd": {"z": 789}, "s": [2, 3]}`
 	want := &unexportedFields{Name: "Bob"}
 
@@ -2263,7 +2258,6 @@ func TestPrefilled(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			ptrstr := fmt.Sprintf("%v", tt.ptr)
 			err := Unmarshal([]byte(tt.in), tt.ptr) // tt.ptr edited here
 			if err != nil {
@@ -2293,7 +2287,6 @@ func TestInvalidUnmarshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			switch gotErr := Unmarshal([]byte(tt.in), tt.v); {
 			case gotErr == nil:
 				t.Fatalf("%s: Unmarshal error: got nil, want non-nil", tt.Where)
@@ -2471,7 +2464,6 @@ func TestUnmarshalEmbeddedUnexported(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			err := Unmarshal([]byte(tt.in), tt.ptr)
 			if !equalError(err, tt.err) {
 				t.Errorf("%s: Unmarshal error:\n\tgot:  %v\n\twant: %v", tt.Where, err, tt.err)
@@ -2511,7 +2503,6 @@ func TestUnmarshalErrorAfterMultipleJSON(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			dec := NewDecoder(strings.NewReader(tt.in))
 			var err error
 			for err == nil {

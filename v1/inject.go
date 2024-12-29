@@ -29,7 +29,7 @@ func transformMarshalError(root any, err error) error {
 	// Historically, errors returned from Marshal methods were wrapped
 	// in a [MarshalerError]. This is directly performed by the v2 package
 	// via the injected [internal.NewMarshalerError] constructor
-	// while operating under [ReportLegacyErrorValues].
+	// while operating under [ReportErrorsWithLegacySemantics].
 	// Note that errors from a Marshal method were always wrapped,
 	// even if wrapped for multiple layers.
 	if err, ok := err.(*jsonv2.SemanticError); err != nil {
@@ -57,7 +57,7 @@ func transformMarshalError(root any, err error) error {
 
 func transformUnmarshalError(root any, err error) error {
 	// Historically, errors from Unmarshal methods were never wrapped and
-	// returned verbatim while operating under [ReportLegacyErrorValues].
+	// returned verbatim while operating under [ReportErrorsWithLegacySemantics].
 	if err, ok := err.(*jsonv2.SemanticError); err != nil {
 		if err.Err == internal.ErrNonNilReference {
 			return &InvalidUnmarshalError{err.GoType}
@@ -79,7 +79,7 @@ func transformUnmarshalError(root any, err error) error {
 		// to use a '.'-delimited representation. This may be ambiguous,
 		// but the prior representation was always ambiguous as well.
 		// Users that care about precise positions should use v2 errors
-		// by disabling [ReportLegacyErrorValues].
+		// by disabling [ReportErrorsWithLegacySemantics].
 		//
 		// The introduction of a Err field is new to the v1-to-v2 migration
 		// and allows us to preserve stronger error information

@@ -400,6 +400,30 @@ func (d *decoderState) SkipValue() error {
 	}
 }
 
+// SkipValueRemainder skips the remainder of a value
+// after reading a '{' or '[' token.
+func (d *decoderState) SkipValueRemainder() error {
+	if d.Tokens.Depth()-1 > 0 && d.Tokens.Last.Length() == 0 {
+		for n := d.Tokens.Depth(); d.Tokens.Depth() >= n; {
+			if _, err := d.ReadToken(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// SkipUntil skips all tokens until the state machine
+// is at or past the specified depth and length.
+func (d *decoderState) SkipUntil(depth int, length int64) error {
+	for d.Tokens.Depth() > depth || (d.Tokens.Depth() == depth && d.Tokens.Last.Length() < length) {
+		if _, err := d.ReadToken(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ReadToken reads the next [Token], advancing the read offset.
 // The returned token is only valid until the next Peek, Read, or Skip call.
 // It returns [io.EOF] if there are no more tokens.
@@ -710,6 +734,23 @@ func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (Value, error) {
 	d.prevEnd = pos
 	d.prevStart = pos - n
 	return d.buf[pos-n : pos : pos], nil
+}
+
+// CheckNextValue checks whether the next value is syntactically valid,
+// but does not advance the read offset.
+func (d *decoderState) CheckNextValue() error {
+	d.PeekKind() // populates d.peekPos and d.peekErr
+	pos, err := d.peekPos, d.peekErr
+	d.peekPos, d.peekErr = 0, nil
+	if err != nil {
+		return err
+	}
+
+	var flags jsonwire.ValueFlags
+	if pos, err := d.consumeValue(&flags, pos, d.Tokens.Depth()); err != nil {
+		return wrapSyntacticError(d, err, pos, +1)
+	}
+	return nil
 }
 
 // CheckEOF verifies that the input has no more data.

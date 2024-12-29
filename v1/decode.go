@@ -237,7 +237,7 @@ func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) err
 		verbatim := jsonwire.ConsumeSimpleString(val) == len(val)
 		val = jsonwire.UnquoteMayCopy(val, verbatim)
 		if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
-			return &jsonv2.SemanticError{JSONKind: val0.Kind(), JSONValue: val0, GoType: numberType, Err: strconv.ErrSyntax}
+			return &jsonv2.SemanticError{JSONKind: val0.Kind(), JSONValue: val0.Clone(), GoType: numberType, Err: strconv.ErrSyntax}
 		}
 		*n = Number(val)
 		return nil

@@ -1,2 +1,0 @@
-TestStringOption
-TestStringOption/Unmarshal/Deep/v1

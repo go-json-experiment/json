@@ -46,7 +46,7 @@ type Options = jsonopts.Options
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [PreserveRawStrings]
 //   - [RejectFloatOverflow]
-//   - [ReportLegacyErrorValues]
+//   - [ReportErrorsWithLegacySemantics]
 //   - [StringifyWithLegacySemantics]
 //   - [UnmarshalArrayFromAnyLength]
 //   - [jsonv2.Deterministic]
@@ -193,21 +193,6 @@ func FormatTimeWithLegacySemantics(v bool) Options {
 	}
 }
 
-// IgnoreStructErrors specifies that a Go struct with structural errors
-// should not result in a runtime error when marshaling or unmarshaling.
-// Such errors usually occur because of a malformed struct field tag
-// as it pertains to JSON serialization.
-//
-// This affects either marshaling or unmarshaling.
-// The v1 default is true.
-func IgnoreStructErrors(v bool) Options {
-	if v {
-		return jsonflags.IgnoreStructErrors | 1
-	} else {
-		return jsonflags.IgnoreStructErrors | 0
-	}
-}
-
 // MatchCaseSensitiveDelimiter specifies that underscores and dashes are
 // not to be ignored when performing case-insensitive name matching which
 // occurs under [jsonv2.MatchCaseInsensitiveNames] or the `nocase` tag option.
@@ -306,19 +291,55 @@ func RejectFloatOverflow(v bool) Options {
 	}
 }
 
-// ReportLegacyErrorValues specifies that Marshal and Unmarshal should
-// return legacy error values such as [SyntaxError], [MarshalerError],
-// [UnsupportedTypeError], [UnsupportedValueError],
-// [InvalidUnmarshalError], or [UnmarshalTypeError] instead of the
-// [jsonv2.SemanticError] or [jsontext.SyntacticError].
+// ReportErrorsWithLegacySemantics specifies that Marshal and Unmarshal
+// should report errors with legacy semantics:
+//
+//   - When marshaling or unmarshaling, the returned error values are
+//     usually of types such as [SyntaxError], [MarshalerError],
+//     [UnsupportedTypeError], [UnsupportedValueError],
+//     [InvalidUnmarshalError], or [UnmarshalTypeError].
+//     In contrast, the v2 semantic is to always return errors as either
+//     [jsonv2.SemanticError] or [jsontext.SyntacticError].
+//
+//   - When marshaling, if a user-defined marshal method reports an error,
+//     it is always wrapped in a [MarshalerError], even if the error itself
+//     is already a [MarshalerError], which may lead to multiple redundant
+//     layers of wrapping. In contrast, the v2 semantic is to
+//     always wrap an error within [jsonv2.SemanticError]
+//     unless it is already a semantic error.
+//
+//   - When unmarshaling, if a user-defined unmarshal method reports an error,
+//     it is never wrapped and reported verbatim. In contrast, the v2 semantic
+//     is to always wrap an error within [jsonv2.SemanticError]
+//     unless it is already a semantic error.
+//
+//   - When marshaling or unmarshaling, if a Go struct contains type errors
+//     (e.g., conflicting names or malformed field tags), then such errors
+//     are ignored and the Go struct uses a best-effort representation.
+//     In contrast, the v2 semantic is to report a runtime error.
+//
+//   - When unmarshaling, the syntactic structure of the JSON input
+//     is fully validated before performing the semantic unmarshaling
+//     of the JSON data into the Go value. Practically speaking,
+//     this means that JSON input with syntactic errors do not result
+//     in any mutations of the target Go value. In contrast, the v2 semantic
+//     is to perform a streaming decode and gradually unmarshal the JSON input
+//     into the target Go value, which means that the Go value may be
+//     partially mutated when a syntactic error is encountered.
+//
+//   - When unmarshaling, a semantic error does not immediately terminate the
+//     unmarshal procedure, but rather evaluation continues.
+//     When unmarshal returns, only the first semantic error is reported.
+//     In contrast, the v2 semantic is to terminate unmarshal the moment
+//     an error is encountered.
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func ReportLegacyErrorValues(v bool) Options {
+func ReportErrorsWithLegacySemantics(v bool) Options {
 	if v {
-		return jsonflags.ReportLegacyErrorValues | 1
+		return jsonflags.ReportErrorsWithLegacySemantics | 1
 	} else {
-		return jsonflags.ReportLegacyErrorValues | 0
+		return jsonflags.ReportErrorsWithLegacySemantics | 0
 	}
 }
 

@@ -194,7 +194,6 @@ func TestEncoderSetEscapeHTML(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			var buf strings.Builder
 			enc := NewEncoder(&buf)
 			if err := enc.Encode(tt.v); err != nil {
@@ -285,7 +284,6 @@ func nlines(s string, n int) string {
 }
 
 func TestRawMessage(t *testing.T) {
-	skipKnownFailure(t)
 	var data struct {
 		X  float64
 		Id RawMessage
@@ -442,7 +440,6 @@ func TestDecodeInStream(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			skipKnownFailure(t)
 			dec := NewDecoder(strings.NewReader(tt.json))
 			for i, want := range tt.expTokens {
 				var got any

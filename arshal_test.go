@@ -2936,7 +2936,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: EM(errors.New("embedded Go struct field NamedString of non-struct type must be explicitly given a JSON name")).withType(0, T[structExportedEmbedded]()),
 	}, {
 		name: jsontest.Name("Structs/Valid/ExportedEmbedded"),
-		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		opts: []Options{jsonflags.ReportErrorsWithLegacySemantics | 1},
 		in:   structExportedEmbedded{"hello"},
 		want: `{"NamedString":"hello"}`,
 	}, {
@@ -2950,7 +2950,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: EM(errors.New("embedded Go struct field namedString of non-struct type must be explicitly given a JSON name")).withType(0, T[structUnexportedEmbedded]()),
 	}, {
 		name: jsontest.Name("Structs/Valid/UnexportedEmbedded"),
-		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		opts: []Options{jsonflags.ReportErrorsWithLegacySemantics | 1},
 		in:   structUnexportedEmbedded{},
 		want: `{}`,
 	}, {
@@ -2959,12 +2959,12 @@ func TestMarshal(t *testing.T) {
 		wantErr: EM(errors.New("Go struct field namedString is not exported")).withType(0, T[structUnexportedEmbeddedTag]()),
 	}, {
 		name: jsontest.Name("Structs/Valid/UnexportedEmbeddedTag"),
-		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		opts: []Options{jsonflags.ReportErrorsWithLegacySemantics | 1},
 		in:   structUnexportedEmbeddedTag{},
 		want: `{}`,
 	}, {
 		name: jsontest.Name("Structs/Invalid/UnexportedEmbeddedMethodTag"),
-		opts: []Options{jsonflags.IgnoreStructErrors | 1},
+		opts: []Options{jsonflags.ReportErrorsWithLegacySemantics | 1},
 		in:   structUnexportedEmbeddedMethodTag{},
 		want: `{}`,
 	}, {
@@ -7181,7 +7181,7 @@ func TestUnmarshal(t *testing.T) {
 		wantErr: EU(errors.New("embedded Go struct field NamedString of non-struct type must be explicitly given a JSON name")).withType('{', T[structExportedEmbedded]()),
 	}, {
 		name:  jsontest.Name("Structs/Valid/ExportedEmbedded"),
-		opts:  []Options{jsonflags.IgnoreStructErrors | 1},
+		opts:  []Options{jsonflags.ReportErrorsWithLegacySemantics | 1},
 		inBuf: `{"NamedString":"hello"}`,
 		inVal: addr(structExportedEmbedded{}),
 		want:  addr(structExportedEmbedded{"hello"}),
