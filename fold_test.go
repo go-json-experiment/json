@@ -9,8 +9,6 @@ import (
 	"reflect"
 	"testing"
 	"unicode"
-
-	jsonv1 "encoding/json"
 )
 
 var equalFoldTestdata = []struct {
@@ -103,18 +101,10 @@ func TestFoldRune(t *testing.T) {
 // TestBenchmarkUnmarshalUnknown unmarshals an unknown field into a struct with
 // varying number of fields. Since the unknown field does not directly match
 // any known field by name, it must fall back on case-insensitive matching.
-func TestBenchmarkUnmarshalUnknown(t *testing.T) { runUnmarshalUnknown(t) }
-func BenchmarkUnmarshalUnknown(b *testing.B)     { runUnmarshalUnknown(b) }
-
-func runUnmarshalUnknown(tb testing.TB) {
+func TestBenchmarkUnmarshalUnknown(t *testing.T) {
 	in := []byte(`{"NameUnknown":null}`)
 	for _, n := range []int{1, 2, 5, 10, 20, 50, 100} {
 		unmarshal := Unmarshal
-		if benchV1 {
-			unmarshal = func(in []byte, out any, opts ...Options) error {
-				return jsonv1.Unmarshal(in, out)
-			}
-		}
 
 		var fields []reflect.StructField
 		for i := range n {
@@ -126,9 +116,9 @@ func runUnmarshalUnknown(tb testing.TB) {
 		}
 		out := reflect.New(reflect.StructOf(fields)).Interface()
 
-		runTestOrBench(tb, fmt.Sprintf("N%d", n), len64(in), func(tb testing.TB) {
+		t.Run(fmt.Sprintf("N%d", n), func(t *testing.T) {
 			if err := unmarshal(in, out); err != nil {
-				tb.Fatalf("Unmarshal error: %v", err)
+				t.Fatalf("Unmarshal error: %v", err)
 			}
 		})
 	}
