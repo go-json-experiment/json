@@ -389,7 +389,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			if err != nil {
 				return newUnmarshalErrorAfter(dec, t, err)
 			}
-			if len(val) != encodedLen(len(b)) {
+			if len(val) != encodedLen(len(b)) && !uo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) {
 				// TODO(https://go.dev/issue/53845): RFC 4648, section 3.3,
 				// specifies that non-alphabet characters must be rejected.
 				// Unfortunately, the "base32" and "base64" packages allow
@@ -402,7 +402,7 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 			if va.Kind() == reflect.Array {
 				dst := va.Bytes()
 				clear(dst[copy(dst, b):]) // noop if len(b) <= len(dst)
-				if len(b) != len(dst) {
+				if len(b) != len(dst) && !uo.Flags.Get(jsonflags.UnmarshalArrayFromAnyLength) {
 					err := fmt.Errorf("decoded length of %d mismatches array length of %d", len(b), len(dst))
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
