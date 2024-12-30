@@ -132,9 +132,9 @@ type (
 		// cannot be called on an unexported field.
 		netipAddr `json:"name"`
 
-		// structMethodText has a MarshalText method
-		// that cancels out netipAddr.MarshalText.
-		structMethodText
+		// Bogus MarshalText and AppendText methods are declared on
+		// structUnexportedEmbeddedMethodTag to prevent it from
+		// implementing those method interfaces.
 	}
 	structUnexportedEmbeddedStruct struct {
 		structOmitZeroAll
@@ -572,6 +572,9 @@ type (
 		A *cyclicA `json:",inline"`
 	}
 )
+
+func (structUnexportedEmbeddedMethodTag) MarshalText() {}
+func (structUnexportedEmbeddedMethodTag) AppendText()  {}
 
 func (p *allMethods) MarshalJSONV2(enc *jsontext.Encoder, opts Options) error {
 	if got, want := "MarshalJSONV2", p.method; got != want {
@@ -9223,7 +9226,9 @@ func TestCoderBufferGrowth(t *testing.T) {
 		}
 	}
 
-	bb := &bytesBuffer{new(bytes.Buffer)}
+	// bb is identical to bytes.Buffer,
+	// but a different type to avoid any optimizations for bytes.Buffer.
+	bb := struct{ *bytes.Buffer }{new(bytes.Buffer)}
 
 	var writeSizes []int
 	if err := MarshalWrite(WriterFunc(func(b []byte) (int, error) {

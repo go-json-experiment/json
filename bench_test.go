@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package json_test
 
 import (
 	"bytes"
@@ -18,6 +18,7 @@ import (
 
 	jsonv1 "encoding/json"
 
+	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/internal/jsontest"
 	"github.com/go-json-experiment/json/jsontext"
 )
@@ -27,6 +28,14 @@ var benchV1 = os.Getenv("BENCHMARK_V1") != ""
 // bytesBuffer is identical to bytes.Buffer,
 // but a different type to avoid any optimizations for bytes.Buffer.
 type bytesBuffer struct{ *bytes.Buffer }
+
+func addr[T any](v T) *T {
+	return &v
+}
+
+func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
+	return int64(len(in))
+}
 
 var arshalTestdata = []struct {
 	name   string
@@ -206,10 +215,10 @@ func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
 
 type jsonArshalerV2 struct{ _ [4]int }
 
-func (jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts Options) error {
+func (jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error {
 	return enc.WriteToken(jsontext.String("method"))
 }
-func (*jsonArshalerV2) UnmarshalJSONV2(dec *jsontext.Decoder, opts Options) error {
+func (*jsonArshalerV2) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) error {
 	b, err := dec.ReadValue()
 	if string(b) != `"method"` {
 		return fmt.Errorf("UnmarshalJSONV2: got %q, want %q", b, `"method"`)
@@ -226,7 +235,7 @@ func runUnmarshal(tb testing.TB) {
 		var val any
 		run := func(tb testing.TB) {
 			val = tt.new()
-			if err := Unmarshal(tt.raw, val); err != nil {
+			if err := jsonv2.Unmarshal(tt.raw, val); err != nil {
 				tb.Fatalf("Unmarshal error: %v", err)
 			}
 		}
@@ -266,7 +275,7 @@ func runMarshal(tb testing.TB) {
 		var raw []byte
 		run := func(tb testing.TB) {
 			var err error
-			raw, err = Marshal(tt.val)
+			raw, err = jsonv2.Marshal(tt.val)
 			if err != nil {
 				tb.Fatalf("Marshal error: %v", err)
 			}
@@ -347,7 +356,7 @@ func runAllTestdata(tb testing.TB) {
 
 func mustUnmarshalValue(t testing.TB, data []byte, newValue func() any) (value any) {
 	value = newValue()
-	if err := Unmarshal(data, value); err != nil {
+	if err := jsonv2.Unmarshal(data, value); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
 	}
 	return value
@@ -370,11 +379,11 @@ func runArshal(t testing.TB, arshalName string, newValue func() any, data []byte
 
 	switch arshalName {
 	case "Marshal":
-		if _, err := Marshal(value); err != nil {
+		if _, err := jsonv2.Marshal(value); err != nil {
 			t.Fatalf("Marshal error: %v", err)
 		}
 	case "Unmarshal":
-		if err := Unmarshal(data, newValue()); err != nil {
+		if err := jsonv2.Unmarshal(data, newValue()); err != nil {
 			t.Fatalf("Unmarshal error: %v", err)
 		}
 	}
