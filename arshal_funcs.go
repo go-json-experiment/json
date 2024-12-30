@@ -178,7 +178,7 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 			val, err := fn(va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "marshal function of type func(T) ([]byte, error)")
-				if export.Encoder(enc).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV1") // unlike unmarshal, always wrapped
 				}
 				err = newMarshalErrorBefore(enc, t, err)
@@ -230,7 +230,7 @@ func MarshalFuncV2[T any](fn func(*jsontext.Encoder, T, Options) error) *Marshal
 					}
 					err = errSkipMutation
 				}
-				if xe.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV2") // unlike unmarshal, always wrapped
 				}
 				if !export.IsIOError(err) {
@@ -267,7 +267,7 @@ func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 			err = fn(val, va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "unmarshal function of type func([]byte, T) error")
-				if export.Decoder(dec).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
 					return err // unlike marshal, never wrapped
 				}
 				err = newUnmarshalErrorAfter(dec, t, err)
@@ -312,7 +312,7 @@ func UnmarshalFuncV2[T any](fn func(*jsontext.Decoder, T, Options) error) *Unmar
 					}
 					err = errSkipMutation
 				}
-				if export.Decoder(dec).Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
 					return err // unlike marshal, never wrapped
 				}
 				if !isSyntacticError(err) && !export.IsIOError(err) {

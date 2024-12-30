@@ -226,9 +226,8 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t)
 	}
 	if err := marshal(out, va, mo); err != nil {
-		xe := export.Encoder(out)
-		if !xe.Flags.Get(jsonflags.AllowDuplicateNames) {
-			xe.Tokens.InvalidateDisabledNamespaces()
+		if !mo.Flags.Get(jsonflags.AllowDuplicateNames) {
+			export.Encoder(out).Tokens.InvalidateDisabledNamespaces()
 		}
 		return err
 	}
@@ -462,9 +461,8 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct) (err er
 		unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t)
 	}
 	if err := unmarshal(in, va, uo); err != nil {
-		xd := export.Decoder(in)
-		if !xd.Flags.Get(jsonflags.AllowDuplicateNames) {
-			xd.Tokens.InvalidateDisabledNamespaces()
+		if !uo.Flags.Get(jsonflags.AllowDuplicateNames) {
+			export.Decoder(in).Tokens.InvalidateDisabledNamespaces()
 		}
 		return err
 	}
