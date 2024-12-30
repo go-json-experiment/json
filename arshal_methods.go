@@ -196,6 +196,9 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return collapseSemanticErrors(err)
 			}
 			if err := enc.WriteValue(val); err != nil {
+				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalJSON") // unlike unmarshal, always wrapped
+				}
 				if isSyntacticError(err) {
 					err = newMarshalErrorBefore(enc, t, err)
 				}
