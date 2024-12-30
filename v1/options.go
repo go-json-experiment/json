@@ -39,7 +39,7 @@ type Options = jsonopts.Options
 //   - [CallMethodsWithLegacySemantics]
 //   - [EscapeInvalidUTF8]
 //   - [FormatBytesWithLegacySemantics]
-//   - [FormatTimeDurationAsNanosecond]
+//   - [FormatTimeWithLegacySemantics]
 //   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [MergeWithLegacySemantics]
@@ -167,20 +167,29 @@ func FormatBytesWithLegacySemantics(v bool) Options {
 	}
 }
 
-// FormatTimeDurationAsNanosecond specifies that [time.Duration] is formatted
-// by default as a JSON number representing the number of nanoseconds
-// in contrast to the v2 default of using a JSON string with the duration
-// formatted with [time.Duration.String].
-// If a duration field has a `format` tag option,
-// then the specified formatting takes precedence.
+// FormatTimeWithLegacySemantics specifies that [time] types are formatted
+// with legacy semantics:
+//
+//   - When marshaling or unmarshaling, a [time.Duration] is formatted as
+//     a JSON number representing the number of nanoseconds.
+//     In contrast, the default v2 behavior uses a JSON string
+//     with the duration formatted with [time.Duration.String].
+//     If a duration field has a `format` tag option,
+//     then the specified formatting takes precedence.
+//
+//   - When unmarshaling, a [time.Time] follows loose adherence to RFC 3339.
+//     In particular, it permits historically incorrect representations,
+//     allowing for deviations in hour format, sub-second separator,
+//     and timezone representation. In contrast, the default v2 behavior
+//     is to strictly comply with the grammar specified in RFC 3339.
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func FormatTimeDurationAsNanosecond(v bool) Options {
+func FormatTimeWithLegacySemantics(v bool) Options {
 	if v {
-		return jsonflags.FormatTimeDurationAsNanosecond | 1
+		return jsonflags.FormatTimeWithLegacySemantics | 1
 	} else {
-		return jsonflags.FormatTimeDurationAsNanosecond | 0
+		return jsonflags.FormatTimeWithLegacySemantics | 0
 	}
 }
 
