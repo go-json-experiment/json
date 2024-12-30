@@ -185,6 +185,9 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 				return collapseSemanticErrors(err)
 			}
 			if err := enc.WriteValue(val); err != nil {
+				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV1") // unlike unmarshal, always wrapped
+				}
 				if isSyntacticError(err) {
 					err = newMarshalErrorBefore(enc, t, err)
 				}

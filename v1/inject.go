@@ -46,7 +46,8 @@ func transformMarshalError(root any, err error) error {
 			if err.Err == internal.ErrCycle && err.GoType != nil {
 				errStr += " via " + err.GoType.String()
 			}
-			return &UnsupportedValueError{Str: err.Err.Error()}
+			errStr = strings.TrimPrefix(errStr, "unsupported value: ")
+			return &UnsupportedValueError{Str: errStr}
 		}
 	} else if ok {
 		return (*UnsupportedValueError)(nil)
