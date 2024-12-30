@@ -4387,7 +4387,7 @@ func TestMarshal(t *testing.T) {
 }`,
 	}, {
 		name: jsontest.Name("Duration/Format/Legacy"),
-		opts: []Options{jsonflags.FormatTimeDurationAsNanosecond | 1},
+		opts: []Options{jsonflags.FormatTimeWithLegacySemantics | 1},
 		in: structDurationFormat{
 			D1: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 			D2: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
@@ -8850,7 +8850,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Duration/Format/Legacy"),
 		inBuf: `{"D1":45296078090012,"D2":"12h34m56.078090012s"}`,
-		opts:  []Options{jsonflags.FormatTimeDurationAsNanosecond | 1},
+		opts:  []Options{jsonflags.FormatTimeWithLegacySemantics | 1},
 		inVal: new(structDurationFormat),
 		want: addr(structDurationFormat{
 			D1: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,

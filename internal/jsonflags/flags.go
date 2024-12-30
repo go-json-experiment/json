@@ -58,7 +58,7 @@ const (
 		MatchCaseInsensitiveNames |
 		CallMethodsWithLegacySemantics |
 		FormatBytesWithLegacySemantics |
-		FormatTimeDurationAsNanosecond |
+		FormatTimeWithLegacySemantics |
 		IgnoreStructErrors |
 		MatchCaseSensitiveDelimiter |
 		MergeWithLegacySemantics |
@@ -125,7 +125,7 @@ const (
 
 	CallMethodsWithLegacySemantics // marshal or unmarshal
 	FormatBytesWithLegacySemantics // marshal or unmarshal
-	FormatTimeDurationAsNanosecond // marshal or unmarshal
+	FormatTimeWithLegacySemantics  // marshal or unmarshal
 	IgnoreStructErrors             // marshal or unmarshal
 	MatchCaseSensitiveDelimiter    // marshal or unmarshal
 	MergeWithLegacySemantics       // unmarshal

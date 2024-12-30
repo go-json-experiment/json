@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -47,7 +48,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				if !m.initFormat(mo.Format) {
 					return newInvalidFormatError(enc, t, mo.Format)
 				}
-			} else if mo.Flags.Get(jsonflags.FormatTimeDurationAsNanosecond) {
+			} else if mo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
 				return marshalNano(enc, va, mo)
 			}
 
@@ -70,7 +71,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				if !u.initFormat(uo.Format) {
 					return newInvalidFormatError(dec, t, uo.Format)
 				}
-			} else if uo.Flags.Get(jsonflags.FormatTimeDurationAsNanosecond) {
+			} else if uo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
 				return unmarshalNano(dec, va, uo)
 			}
 
@@ -123,6 +124,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			m.tt = *va.Addr().Interface().(*time.Time)
 			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, !m.hasCustomFormat(), m.appendMarshal); err != nil {
+				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalJSON") // unlike unmarshal, always wrapped
+				}
 				if !isSyntacticError(err) && !export.IsIOError(err) {
 					err = newMarshalErrorBefore(enc, t, err)
 				}
@@ -137,6 +141,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				if !u.initFormat(uo.Format) {
 					return newInvalidFormatError(dec, t, uo.Format)
 				}
+			} else if uo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
+				u.looseRFC3339 = true
 			}
 
 			var flags jsonwire.ValueFlags
@@ -157,6 +163,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 				if err := u.unmarshal(val); err != nil {
+					if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+						return err // unlike marshal, never wrapped
+					}
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
 				*tt = u.tt
@@ -166,6 +175,9 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					break
 				}
 				if err := u.unmarshal(val); err != nil {
+					if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+						return err // unlike marshal, never wrapped
+					}
 					return newUnmarshalErrorAfter(dec, t, err)
 				}
 				*tt = u.tt
@@ -245,6 +257,8 @@ type timeArshaler struct {
 	//   - math.MaxUint uses time.Time.Format to encode the timestamp
 	base   uint
 	format string // time format passed to time.Parse
+
+	looseRFC3339 bool
 }
 
 func (a *timeArshaler) initFormat(format string) bool {
@@ -365,6 +379,8 @@ func (a *timeArshaler) unmarshal(b []byte) (err error) {
 			return &time.ParseError{Layout: layout, Value: value, LayoutElem: layoutElem, ValueElem: valueElem, Message: message}
 		}
 		switch {
+		case a.looseRFC3339:
+			return nil
 		case b[len("2006-01-02T")+1] == ':': // hour must be two digits
 			return newParseError(time.RFC3339, string(b), "15", string(b[len("2006-01-02T"):][:1]), "")
 		case b[len("2006-01-02T15:04:05")] == ',': // sub-second separator must be a period
