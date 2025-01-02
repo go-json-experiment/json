@@ -46,7 +46,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			var m durationArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 				if !m.initFormat(mo.Format) {
-					return newInvalidFormatError(enc, t, mo.Format)
+					return newInvalidFormatError(enc, t, mo)
 				}
 			} else if mo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
 				return marshalNano(enc, va, mo)
@@ -69,7 +69,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			var u durationArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 				if !u.initFormat(uo.Format) {
-					return newInvalidFormatError(dec, t, uo.Format)
+					return newInvalidFormatError(dec, t, uo)
 				}
 			} else if uo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
 				return unmarshalNano(dec, va, uo)
@@ -116,7 +116,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			var m timeArshaler
 			if mo.Format != "" && mo.FormatDepth == xe.Tokens.Depth() {
 				if !m.initFormat(mo.Format) {
-					return newInvalidFormatError(enc, t, mo.Format)
+					return newInvalidFormatError(enc, t, mo)
 				}
 			}
 
@@ -124,7 +124,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			m.tt = *va.Addr().Interface().(*time.Time)
 			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, !m.hasCustomFormat(), m.appendMarshal); err != nil {
-				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalJSON") // unlike unmarshal, always wrapped
 				}
 				if !isSyntacticError(err) && !export.IsIOError(err) {
@@ -139,7 +139,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			var u timeArshaler
 			if uo.Format != "" && uo.FormatDepth == xd.Tokens.Depth() {
 				if !u.initFormat(uo.Format) {
-					return newInvalidFormatError(dec, t, uo.Format)
+					return newInvalidFormatError(dec, t, uo)
 				}
 			} else if uo.Flags.Get(jsonflags.FormatTimeWithLegacySemantics) {
 				u.looseRFC3339 = true
@@ -163,7 +163,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 				if err := u.unmarshal(val); err != nil {
-					if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					if uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 						return err // unlike marshal, never wrapped
 					}
 					return newUnmarshalErrorAfter(dec, t, err)
@@ -175,7 +175,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 					break
 				}
 				if err := u.unmarshal(val); err != nil {
-					if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+					if uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 						return err // unlike marshal, never wrapped
 					}
 					return newUnmarshalErrorAfter(dec, t, err)

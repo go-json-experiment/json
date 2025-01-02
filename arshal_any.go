@@ -5,6 +5,7 @@
 package json
 
 import (
+	"cmp"
 	"reflect"
 	"strconv"
 
@@ -171,6 +172,7 @@ func unmarshalObjectAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (map[string]
 		if !uo.Flags.Get(jsonflags.AllowInvalidUTF8) {
 			xd.Tokens.Last.DisableNamespace()
 		}
+		var errUmmarshal error
 		for dec.PeekKind() != '}' {
 			tok, err := dec.ReadToken()
 			if err != nil {
@@ -189,15 +191,18 @@ func unmarshalObjectAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (map[string]
 			val, err := unmarshalValueAny(dec, uo)
 			obj[name] = val
 			if err != nil {
-				return obj, err
+				if isFatalError(err, uo.Flags) {
+					return obj, err
+				}
+				errUmmarshal = cmp.Or(err, errUmmarshal)
 			}
 		}
 		if _, err := dec.ReadToken(); err != nil {
 			return obj, err
 		}
-		return obj, nil
+		return obj, errUmmarshal
 	}
-	return nil, newUnmarshalErrorAfter(dec, mapStringAnyType, nil)
+	return nil, newUnmarshalErrorAfterWithSkipping(dec, uo, mapStringAnyType, nil)
 }
 
 func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) error {
@@ -252,17 +257,21 @@ func unmarshalArrayAny(dec *jsontext.Decoder, uo *jsonopts.Struct) ([]any, error
 		return nil, nil
 	case '[':
 		arr := []any{}
+		var errUmmarshal error
 		for dec.PeekKind() != ']' {
 			val, err := unmarshalValueAny(dec, uo)
 			arr = append(arr, val)
 			if err != nil {
-				return arr, err
+				if isFatalError(err, uo.Flags) {
+					return arr, err
+				}
+				errUmmarshal = cmp.Or(errUmmarshal, err)
 			}
 		}
 		if _, err := dec.ReadToken(); err != nil {
 			return arr, err
 		}
-		return arr, nil
+		return arr, errUmmarshal
 	}
-	return nil, newUnmarshalErrorAfter(dec, sliceAnyType, nil)
+	return nil, newUnmarshalErrorAfterWithSkipping(dec, uo, sliceAnyType, nil)
 }

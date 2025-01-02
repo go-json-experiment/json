@@ -178,14 +178,14 @@ func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
 			val, err := fn(va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "marshal function of type func(T) ([]byte, error)")
-				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV1") // unlike unmarshal, always wrapped
 				}
 				err = newMarshalErrorBefore(enc, t, err)
 				return collapseSemanticErrors(err)
 			}
 			if err := enc.WriteValue(val); err != nil {
-				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV1") // unlike unmarshal, always wrapped
 				}
 				if isSyntacticError(err) {
@@ -233,7 +233,7 @@ func MarshalFuncV2[T any](fn func(*jsontext.Encoder, T, Options) error) *Marshal
 					}
 					err = errSkipMutation
 				}
-				if mo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalFuncV2") // unlike unmarshal, always wrapped
 				}
 				if !export.IsIOError(err) {
@@ -270,7 +270,7 @@ func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
 			err = fn(val, va.castTo(t).Interface().(T))
 			if err != nil {
 				err = wrapSkipFunc(err, "unmarshal function of type func([]byte, T) error")
-				if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return err // unlike marshal, never wrapped
 				}
 				err = newUnmarshalErrorAfter(dec, t, err)
@@ -315,7 +315,10 @@ func UnmarshalFuncV2[T any](fn func(*jsontext.Decoder, T, Options) error) *Unmar
 					}
 					err = errSkipMutation
 				}
-				if uo.Flags.Get(jsonflags.ReportLegacyErrorValues) {
+				if uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+					if err2 := xd.SkipUntil(prevDepth, prevLength+1); err2 != nil {
+						return err2
+					}
 					return err // unlike marshal, never wrapped
 				}
 				if !isSyntacticError(err) && !export.IsIOError(err) {

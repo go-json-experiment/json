@@ -64,7 +64,7 @@ const (
 		MergeWithLegacySemantics |
 		OmitEmptyWithLegacyDefinition |
 		RejectFloatOverflow |
-		ReportLegacyErrorValues |
+		ReportErrorsWithLegacySemantics |
 		StringifyWithLegacySemantics |
 		UnmarshalArrayFromAnyLength
 
@@ -123,19 +123,19 @@ const (
 const (
 	_ Bools = (maxArshalV2Flag >> 1) << iota
 
-	CallMethodsWithLegacySemantics // marshal or unmarshal
-	FormatBytesWithLegacySemantics // marshal or unmarshal
-	FormatTimeWithLegacySemantics  // marshal or unmarshal
-	IgnoreStructErrors             // marshal or unmarshal
-	MatchCaseSensitiveDelimiter    // marshal or unmarshal
-	MergeWithLegacySemantics       // unmarshal
-	OmitEmptyWithLegacyDefinition  // marshal
-	RejectFloatOverflow            // unmarshal
-	ReportLegacyErrorValues        // marshal or unmarshal
-	StringifyWithLegacySemantics   // marshal or unmarshal
-	StringifyBoolsAndStrings       // marshal or unmarshal; for internal use by jsonv2.makeStructArshaler
-	UnmarshalAnyWithRawNumber      // unmarshal; for internal use by jsonv1.Decoder.UseNumber
-	UnmarshalArrayFromAnyLength    // unmarshal
+	CallMethodsWithLegacySemantics  // marshal or unmarshal
+	FormatBytesWithLegacySemantics  // marshal or unmarshal
+	FormatTimeWithLegacySemantics   // marshal or unmarshal
+	IgnoreStructErrors              // marshal or unmarshal
+	MatchCaseSensitiveDelimiter     // marshal or unmarshal
+	MergeWithLegacySemantics        // unmarshal
+	OmitEmptyWithLegacyDefinition   // marshal
+	RejectFloatOverflow             // unmarshal
+	ReportErrorsWithLegacySemantics // marshal or unmarshal
+	StringifyWithLegacySemantics    // marshal or unmarshal
+	StringifyBoolsAndStrings        // marshal or unmarshal; for internal use by jsonv2.makeStructArshaler
+	UnmarshalAnyWithRawNumber       // unmarshal; for internal use by jsonv1.Decoder.UseNumber
+	UnmarshalArrayFromAnyLength     // unmarshal
 
 	maxArshalV1Flag
 )

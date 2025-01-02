@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package json
+package json_test
 
 import (
 	"errors"
@@ -15,6 +15,7 @@ import (
 
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
+	jsonv1 "github.com/go-json-experiment/json/v1"
 )
 
 // NOTE: This file serves as a list of semantic differences between v1 and v2.
@@ -26,7 +27,7 @@ var jsonPackages = []struct {
 	Marshal   func(any) ([]byte, error)
 	Unmarshal func([]byte, any) error
 }{
-	{"v1", Marshal, Unmarshal},
+	{"v1", jsonv1.Marshal, jsonv1.Unmarshal},
 	{"v2",
 		func(in any) ([]byte, error) { return jsonv2.Marshal(in) },
 		func(in []byte, out any) error { return jsonv2.Unmarshal(in, out) }},
@@ -370,7 +371,6 @@ func TestStringOption(t *testing.T) {
 
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Unmarshal/Null", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			var got Types
 			err := json.Unmarshal([]byte(`{
 				"Bool":     "null",
@@ -420,7 +420,6 @@ func TestStringOption(t *testing.T) {
 		})
 
 		t.Run(path.Join("Unmarshal/Deep", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			var got Types
 			want := map[string]Types{
 				"v1": {
@@ -636,7 +635,6 @@ func TestPointerReceiver(t *testing.T) {
 
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Marshal", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			var cc CallCheck
 			in := Values{
 				S: []CallCheck{cc},
@@ -661,7 +659,6 @@ func TestPointerReceiver(t *testing.T) {
 
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Unmarshal", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			in := `{"S":[""],"A":[""],"M":{"":""},"V":"","I":""}`
 			called := CallCheck("CALLED") // resulting state if UnmarshalJSON is called
 			want := map[string]Values{
@@ -888,7 +885,6 @@ func TestMergeNull(t *testing.T) {
 
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Unmarshal", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			// Start with a non-empty value where all fields are populated.
 			in := Types{
 				Bool:      true,
@@ -968,7 +964,6 @@ func TestMergeComposite(t *testing.T) {
 
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Unmarshal", json.Version), func(t *testing.T) {
-			skipKnownFailure(t)
 			// Start with a non-empty value where all fields are populated.
 			in := Composites{
 				Slice:            []Tuple{{Old: true}, {Old: true}}[:1],
