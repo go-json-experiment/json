@@ -31,8 +31,8 @@ sed -i 's/json\.struct/v2.struct/g' $GOROOT/src/encoding/json/v2/errors_test.go
 sed -i 's|"encoding/json"|"encoding/json", "encoding/json/v2"|g' $GOROOT/src/cmd/vendor/golang.org/x/tools/go/analysis/passes/structtag/structtag.go
 
 # Adjust tests that hardcode formatted error strings.
-sed -i 's/looking for beginning of value/at start of token/g' $GOROOT/src/cmd/go/testdata/script/mod_list_update_nolatest.txt
-sed -i 's/looking for beginning of value/at start of token/g' $GOROOT/src/cmd/go/testdata/script/mod_proxy_invalid.txt
+sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/mod_list_update_nolatest.txt
+sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/mod_proxy_invalid.txt
 sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/test_fuzz_io_error.txt
 sed -i 's/: invalid character/: jsontext: invalid character/g' $GOROOT/src/html/template/escape_test.go
 sed -i 's/looking for beginning of object key string/at start of string (expecting \&#39;\&#34;\&#39;) after offset 2/g' $GOROOT/src/html/template/escape_test.go
@@ -75,13 +75,12 @@ echo "pkg encoding/json, func DefaultOptionsV1() jsonopts.Options #$ISSUE" >> $G
 echo "pkg encoding/json, func EscapeInvalidUTF8(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func FormatBytesWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func FormatTimeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, func IgnoreStructErrors(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func MatchCaseSensitiveDelimiter(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func MergeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func OmitEmptyWithLegacyDefinition(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func PreserveRawStrings(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func RejectFloatOverflow(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, func ReportLegacyErrorValues(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, func ReportErrorsWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func StringifyWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func UnmarshalArrayFromAnyLength(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, method (*Number) UnmarshalJSONV2(*jsontext.Decoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
