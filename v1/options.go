@@ -179,12 +179,13 @@ import (
 	"github.com/go-json-experiment/json/jsontext"
 )
 
-// Reference the jsonv2 and jsontext packages to assist pkgsite
-// in being able to hotlink  references to those packages.
+// Reference encoding, jsonv2, and jsontext packages to assist pkgsite
+// in being able to hotlink references to those packages.
 var (
-	_ = jsonv2.Deterministic
-	_ = jsontext.AllowDuplicateNames
-	_ = encoding.TextMarshaler(nil)
+	_ encoding.TextMarshaler
+	_ encoding.TextUnmarshaler
+	_ jsonv2.Options
+	_ jsontext.Options
 )
 
 // Options are a set of options to configure the v2 "json" package

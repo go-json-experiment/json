@@ -6,16 +6,28 @@ package json
 
 import (
 	"bytes"
+	"encoding"
 	"io"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/jsontext"
+)
+
+// Reference encoding and time packages to assist pkgsite
+// in being able to hotlink references to those packages.
+var (
+	_ encoding.TextMarshaler
+	_ encoding.TextAppender
+	_ encoding.TextUnmarshaler
+	_ time.Time
+	_ time.Duration
 )
 
 // export exposes internal functionality of the "jsontext" package.
@@ -76,6 +88,10 @@ func putStructOptions(o *jsonopts.Struct) {
 //
 //   - If the value type implements [Marshaler],
 //     then the MarshalJSON method is called to encode the value.
+//
+//   - If the value type implements [encoding.TextAppender],
+//     then the AppendText method is called to encode the value and
+//     subsequently encode its result as a JSON string.
 //
 //   - If the value type implements [encoding.TextMarshaler],
 //     then the MarshalText method is called to encode the value and
