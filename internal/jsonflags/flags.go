@@ -62,7 +62,6 @@ const (
 		MatchCaseSensitiveDelimiter |
 		MergeWithLegacySemantics |
 		OmitEmptyWithLegacyDefinition |
-		RejectFloatOverflow |
 		ReportErrorsWithLegacySemantics |
 		StringifyWithLegacySemantics |
 		UnmarshalArrayFromAnyLength
@@ -128,7 +127,6 @@ const (
 	MatchCaseSensitiveDelimiter     // marshal or unmarshal
 	MergeWithLegacySemantics        // unmarshal
 	OmitEmptyWithLegacyDefinition   // marshal
-	RejectFloatOverflow             // unmarshal
 	ReportErrorsWithLegacySemantics // marshal or unmarshal
 	StringifyWithLegacySemantics    // marshal or unmarshal
 	StringifyBoolsAndStrings        // marshal or unmarshal; for internal use by jsonv2.makeStructArshaler

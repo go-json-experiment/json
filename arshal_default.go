@@ -680,10 +680,10 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				break
 			}
 			fv, ok := jsonwire.ParseFloat(val, bits)
-			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
+			va.SetFloat(fv)
+			if !ok {
 				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
 			}
-			va.SetFloat(fv)
 			return nil
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)

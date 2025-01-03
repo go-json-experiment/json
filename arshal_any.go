@@ -84,8 +84,8 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 				return internal.RawNumberOf(val), nil
 			}
 			fv, ok := jsonwire.ParseFloat(val, 64)
-			if !ok && uo.Flags.Get(jsonflags.RejectFloatOverflow) {
-				return nil, newUnmarshalErrorAfterWithValue(dec, float64Type, strconv.ErrRange)
+			if !ok {
+				return fv, newUnmarshalErrorAfterWithValue(dec, float64Type, strconv.ErrRange)
 			}
 			return fv, nil
 		default:

@@ -6,7 +6,6 @@ package json_test
 
 import (
 	"errors"
-	"math"
 	"path"
 	"reflect"
 	"strings"
@@ -1064,32 +1063,6 @@ func TestTimeDurations(t *testing.T) {
 				t.Fatalf("json.Unmarshal error: %v", err)
 			case got != time.Minute:
 				t.Fatalf("json.Unmarshal = %v, want 1m0s", got)
-			}
-		})
-	}
-}
-
-// In v1, unmarshaling a JSON number beyond the representation of a Go float
-// would result in an error.
-// In v2, unmarshaling a JSON number beyond the representation of a Go float
-// would use the closest representable value (i.e., ±math.MaxFloatX).
-//
-// The rationale for the change is to ensure that if a JSON value
-// is syntactically valid according to jsontext.Value.IsValid,
-// then it is always valid to unmarshal that into a Go any value.
-func TestMaxFloats(t *testing.T) {
-	for _, json := range jsonPackages {
-		t.Run(path.Join("Unmarshal", json.Version), func(t *testing.T) {
-			const in = `1e1000`
-			var got any
-			err := json.Unmarshal([]byte(in), &got)
-			switch {
-			case json.Version == "v1" && err == nil:
-				t.Fatal("json.Unmarshal error is nil, want non-nil")
-			case json.Version == "v2" && got != any(math.MaxFloat64):
-				t.Fatalf("json.Unmarshal = %v, want %v", got, math.MaxFloat64)
-			case json.Version == "v2" && err != nil:
-				t.Fatalf("json.Unmarshal error: %v", err)
 			}
 		})
 	}

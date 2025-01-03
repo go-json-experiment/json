@@ -79,7 +79,6 @@ echo "pkg encoding/json, func MatchCaseSensitiveDelimiter(bool) jsonopts.Options
 echo "pkg encoding/json, func MergeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func OmitEmptyWithLegacyDefinition(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func PreserveRawStrings(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, func RejectFloatOverflow(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func ReportErrorsWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func StringifyWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func UnmarshalArrayFromAnyLength(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
