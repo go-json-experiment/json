@@ -927,10 +927,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			var errUnmarshal error
 			for dec.PeekKind() != '}' {
 				k.SetZero()
-				flagsOriginal := uo.Flags
-				uo.Flags.Set(jsonflags.StringifyNumbers | 1) // stringify for numeric keys
 				err := unmarshalKey(dec, k, uo)
-				uo.Flags = flagsOriginal
 				if err != nil {
 					if isFatalError(err, uo.Flags) {
 						return err
