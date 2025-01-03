@@ -59,7 +59,6 @@ const (
 		CallMethodsWithLegacySemantics |
 		FormatBytesWithLegacySemantics |
 		FormatTimeWithLegacySemantics |
-		IgnoreStructErrors |
 		MatchCaseSensitiveDelimiter |
 		MergeWithLegacySemantics |
 		OmitEmptyWithLegacyDefinition |
@@ -126,7 +125,6 @@ const (
 	CallMethodsWithLegacySemantics  // marshal or unmarshal
 	FormatBytesWithLegacySemantics  // marshal or unmarshal
 	FormatTimeWithLegacySemantics   // marshal or unmarshal
-	IgnoreStructErrors              // marshal or unmarshal
 	MatchCaseSensitiveDelimiter     // marshal or unmarshal
 	MergeWithLegacySemantics        // unmarshal
 	OmitEmptyWithLegacyDefinition   // marshal

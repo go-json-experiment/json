@@ -40,7 +40,6 @@ type Options = jsonopts.Options
 //   - [EscapeInvalidUTF8]
 //   - [FormatBytesWithLegacySemantics]
 //   - [FormatTimeWithLegacySemantics]
-//   - [IgnoreStructErrors]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [MergeWithLegacySemantics]
 //   - [OmitEmptyWithLegacyDefinition]
