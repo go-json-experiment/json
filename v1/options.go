@@ -2,11 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package json implements legacy support for v1 [encoding/json].
-//
-// The entirety of the v1 API will eventually live in this package.
-// For the time being, it only contains options needed to configure the v2 API
-// to operate under v1 semantics.
 package json
 
 import (
@@ -30,7 +25,7 @@ var (
 // to operate with v1 semantics for particular features.
 // Values of this type can be passed to v2 functions like
 // [jsonv2.Marshal] or [jsonv2.Unmarshal].
-// Instead of referencing this type, use ["encoding/json/v2".Options].
+// Instead of referencing this type, use [jsonv2.Options].
 type Options = jsonopts.Options
 
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
