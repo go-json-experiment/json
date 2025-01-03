@@ -72,13 +72,12 @@ ISSUE=63397 # TODO: Replace with formal proposal issue for encoding/json/v2
 FILE=$(cd $GOROOT/api; ls -v | tail -n 1)
 echo "pkg encoding/json, func CallMethodsWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func DefaultOptionsV1() jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, func EscapeInvalidUTF8(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, func EscapeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func FormatBytesWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func FormatTimeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func MatchCaseSensitiveDelimiter(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func MergeWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func OmitEmptyWithLegacyDefinition(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, func PreserveRawStrings(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func ReportErrorsWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func StringifyWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func UnmarshalArrayFromAnyLength(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
