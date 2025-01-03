@@ -160,7 +160,6 @@ This table shows an overview of the changes:
 | Unmarshaling a JSON null into a non-empty Go value **inconsistently clears the value or does nothing**. | Unmarshaling a JSON null into a non-empty Go value **always clears the value**. | [MergeNull](/v1/diff_test.go#:~:text=TestMergeNull) |
 | Unmarshaling a JSON value into a non-empty Go value **follows inconsistent and bizarre behavior**. | Unmarshaling a JSON value into a non-empty Go value **always merges if the input is an object, and otherwise replaces**.  | [MergeComposite](/v1/diff_test.go#:~:text=TestMergeComposite) |
 | A `time.Duration` is represented as a **JSON number containing the decimal number of nanoseconds**. | A `time.Duration` is represented as a **JSON string containing the formatted duration (e.g., "1h2m3.456s")**. | [TimeDurations](/v1/diff_test.go#:~:text=TestTimeDurations) |
-| Unmarshaling a JSON number into a Go float beyond its representation **results in an error**. | Unmarshaling a JSON number into a Go float beyond its representation **uses the closest representable value (e.g., ±`math.MaxFloat`)**. | [MaxFloats](/v1/diff_test.go#:~:text=TestMaxFloats) |
 | A Go struct with only unexported fields **can be serialized**. | A Go struct with only unexported fields **cannot be serialized**. | [EmptyStructs](/v1/diff_test.go#:~:text=TestEmptyStructs) |
 
 See [diff_test.go](/v1/diff_test.go) for details about every change.

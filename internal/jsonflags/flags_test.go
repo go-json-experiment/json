@@ -44,8 +44,8 @@ func TestFlags(t *testing.T) {
 		Clear{in: AllowDuplicateNames | AllowInvalidUTF8},
 		Check{want: Flags{Presence: uint64(Multiline), Values: uint64(0)}},
 		Set{in: AllowInvalidUTF8 | Deterministic | ReportErrorsWithLegacySemantics | 1},
-		Set{in: Multiline | StringifyNumbers | RejectFloatOverflow | 0},
-		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | ReportErrorsWithLegacySemantics | Multiline | StringifyNumbers | RejectFloatOverflow), Values: uint64(AllowInvalidUTF8 | Deterministic | ReportErrorsWithLegacySemantics)}},
+		Set{in: Multiline | StringifyNumbers | 0},
+		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Deterministic | ReportErrorsWithLegacySemantics | Multiline | StringifyNumbers), Values: uint64(AllowInvalidUTF8 | Deterministic | ReportErrorsWithLegacySemantics)}},
 		Clear{in: ^AllCoderFlags},
 		Check{want: Flags{Presence: uint64(AllowInvalidUTF8 | Multiline), Values: uint64(AllowInvalidUTF8)}},
 	}
