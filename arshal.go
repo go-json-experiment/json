@@ -9,12 +9,12 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
-	"github.com/go-json-experiment/json/internal/jsonwire"
 	"github.com/go-json-experiment/json/jsontext"
 )
 
@@ -550,7 +550,6 @@ func putStrings(s *stringSlice) {
 	stringsPools.Put(s)
 }
 
-// Sort sorts the string slice according to RFC 8785, section 3.2.3.
 func (ss *stringSlice) Sort() {
-	slices.SortFunc(*ss, func(x, y string) int { return jsonwire.CompareUTF16(x, y) })
+	slices.SortFunc(*ss, func(x, y string) int { return strings.Compare(x, y) })
 }
