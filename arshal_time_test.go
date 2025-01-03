@@ -13,7 +13,7 @@ import (
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
 
-func baseLabel(base uint) string {
+func baseLabel(base uint64) string {
 	if log10 := math.Log10(float64(base)); log10 == float64(int64(log10)) {
 		return fmt.Sprintf("1e%d", int(log10))
 	}
@@ -88,7 +88,7 @@ var formatDurationTestdata = []struct {
 
 func TestFormatDuration(t *testing.T) {
 	var gotBuf []byte
-	check := func(td time.Duration, s string, base uint) {
+	check := func(td time.Duration, s string, base uint64) {
 		a := durationArshaler{td, base}
 		gotBuf, _ = a.appendMarshal(gotBuf[:0])
 		if string(gotBuf) != s {
@@ -112,7 +112,7 @@ func TestFormatDuration(t *testing.T) {
 
 var parseDurationTestdata = []struct {
 	in      string
-	base    uint
+	base    uint64
 	want    time.Duration
 	wantErr bool
 }{
@@ -173,7 +173,7 @@ func FuzzFormatDuration(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, want int64) {
 		var buf []byte
-		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9, 60} {
+		for _, base := range [...]uint64{1e0, 1e3, 1e6, 1e9, 60} {
 			a := durationArshaler{td: time.Duration(want), base: base}
 			buf, _ = a.appendMarshal(buf[:0])
 			switch err := a.unmarshal(buf); {
@@ -191,7 +191,7 @@ func FuzzParseDuration(f *testing.F) {
 		f.Add([]byte(tt.in))
 	}
 	f.Fuzz(func(t *testing.T, in []byte) {
-		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9, 60} {
+		for _, base := range [...]uint64{1e0, 1e3, 1e6, 1e9, 60} {
 			a := durationArshaler{base: base}
 			if err := a.unmarshal(in); err == nil && base != 60 {
 				if n, err := jsonwire.ConsumeNumber(in); err != nil || n != len(in) {
@@ -226,7 +226,7 @@ var formatTimeTestdata = func() []formatTimeTestdataEntry {
 
 func TestFormatTime(t *testing.T) {
 	var gotBuf []byte
-	check := func(ts time.Time, s string, pow10 uint) {
+	check := func(ts time.Time, s string, pow10 uint64) {
 		gotBuf = appendTimeUnix(gotBuf[:0], ts, pow10)
 		if string(gotBuf) != s {
 			t.Errorf("formatTime(time.Unix(%d, %d), %s) = %q, want %q", ts.Unix(), ts.Nanosecond(), baseLabel(pow10), string(gotBuf), s)
@@ -249,7 +249,7 @@ func TestFormatTime(t *testing.T) {
 
 var parseTimeTestdata = []struct {
 	in      string
-	base    uint
+	base    uint64
 	want    time.Time
 	wantErr bool
 }{
@@ -294,7 +294,7 @@ func FuzzFormatTime(f *testing.F) {
 	f.Fuzz(func(t *testing.T, wantSec, wantNano int64) {
 		want := time.Unix(wantSec, int64(uint64(wantNano)%1e9)).UTC()
 		var buf []byte
-		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9} {
+		for _, base := range [...]uint64{1e0, 1e3, 1e6, 1e9} {
 			a := timeArshaler{tt: want, base: base}
 			buf, _ = a.appendMarshal(buf[:0])
 			switch err := a.unmarshal(buf); {
@@ -312,7 +312,7 @@ func FuzzParseTime(f *testing.F) {
 		f.Add([]byte(tt.in))
 	}
 	f.Fuzz(func(t *testing.T, in []byte) {
-		for _, base := range [...]uint{1e0, 1e3, 1e6, 1e9} {
+		for _, base := range [...]uint64{1e0, 1e3, 1e6, 1e9} {
 			a := timeArshaler{base: base}
 			if err := a.unmarshal(in); err == nil {
 				if n, err := jsonwire.ConsumeNumber(in); err != nil || n != len(in) {

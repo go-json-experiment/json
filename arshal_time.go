@@ -199,7 +199,7 @@ type durationArshaler struct {
 	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the duration as
 	//     nanoseconds, microseconds, milliseconds, or seconds.
 	//   - 60 uses a "H:MM:SS.SSSSSSSSS" encoding
-	base uint
+	base uint64
 }
 
 func (a *durationArshaler) initFormat(format string) (ok bool) {
@@ -257,7 +257,7 @@ type timeArshaler struct {
 	//   - 1e0, 1e3, 1e6, or 1e9 use a decimal encoding of the timestamp as
 	//     seconds, milliseconds, microseconds, or nanoseconds since Unix epoch.
 	//   - math.MaxUint uses time.Time.Format to encode the timestamp
-	base   uint
+	base   uint64
 	format string // time format passed to time.Parse
 
 	looseRFC3339 bool
@@ -407,16 +407,16 @@ func (a *timeArshaler) unmarshal(b []byte) (err error) {
 
 // appendDurationBase10 appends d formatted as a decimal fractional number,
 // where pow10 is a power-of-10 used to scale down the number.
-func appendDurationBase10(b []byte, d time.Duration, pow10 uint) []byte {
+func appendDurationBase10(b []byte, d time.Duration, pow10 uint64) []byte {
 	b, n := mayAppendDurationSign(b, d)            // append sign
 	whole, frac := bits.Div64(0, n, uint64(pow10)) // compute whole and frac fields
 	b = strconv.AppendUint(b, whole, 10)           // append whole field
-	return appendFracBase10(b, uint(frac), pow10)  // append frac field
+	return appendFracBase10(b, frac, pow10)        // append frac field
 }
 
 // parseDurationBase10 parses d from a decimal fractional number,
 // where pow10 is a power-of-10 used to scale up the number.
-func parseDurationBase10(b []byte, pow10 uint) (time.Duration, error) {
+func parseDurationBase10(b []byte, pow10 uint64) (time.Duration, error) {
 	suffix, neg := consumeSign(b)                            // consume sign
 	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
 	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
@@ -442,7 +442,7 @@ func appendDurationBase60(b []byte, d time.Duration) []byte {
 	b = strconv.AppendUint(b, hour, 10)                    // append hour field
 	b = append(b, ':', '0'+byte(min/10), '0'+byte(min%10)) // append min field
 	b = append(b, ':', '0'+byte(sec/10), '0'+byte(sec%10)) // append sec field
-	return appendFracBase10(b, uint(nsec), 1e9)            // append nsec field
+	return appendFracBase10(b, nsec, 1e9)                  // append nsec field
 }
 
 // parseDurationBase60 parses d formatted with H:MM:SS.SSS notation.
@@ -492,7 +492,7 @@ func mayApplyDurationSign(n uint64, neg bool) time.Duration {
 
 // appendTimeUnix appends t formatted as a decimal fractional number,
 // where pow10 is a power-of-10 used to scale up the number.
-func appendTimeUnix(b []byte, t time.Time, pow10 uint) []byte {
+func appendTimeUnix(b []byte, t time.Time, pow10 uint64) []byte {
 	sec, nsec := t.Unix(), int64(t.Nanosecond())
 	if sec < 0 {
 		b = append(b, '-')
@@ -501,20 +501,20 @@ func appendTimeUnix(b []byte, t time.Time, pow10 uint) []byte {
 	switch {
 	case pow10 == 1e0: // fast case where units is in seconds
 		b = strconv.AppendUint(b, uint64(sec), 10)
-		return appendFracBase10(b, uint(nsec), 1e9)
+		return appendFracBase10(b, uint64(nsec), 1e9)
 	case uint64(sec) < 1e9: // intermediate case where units is not seconds, but no overflow
-		b = strconv.AppendUint(b, uint64(sec)*uint64(pow10)+uint64(uint(nsec)/(1e9/pow10)), 10)
-		return appendFracBase10(b, (uint(nsec)*pow10)%1e9, 1e9)
+		b = strconv.AppendUint(b, uint64(sec)*uint64(pow10)+uint64(uint64(nsec)/(1e9/pow10)), 10)
+		return appendFracBase10(b, (uint64(nsec)*pow10)%1e9, 1e9)
 	default: // slow case where units is not seconds and overflow would occur
 		b = strconv.AppendUint(b, uint64(sec), 10)
-		b = appendPaddedBase10(b, uint(uint(nsec)/(1e9/pow10)), pow10)
-		return appendFracBase10(b, (uint(nsec)*pow10)%1e9, 1e9)
+		b = appendPaddedBase10(b, uint64(nsec)/(1e9/pow10), pow10)
+		return appendFracBase10(b, (uint64(nsec)*pow10)%1e9, 1e9)
 	}
 }
 
 // parseTimeUnix parses t formatted as a decimal fractional number,
 // where pow10 is a power-of-10 used to scale down the number.
-func parseTimeUnix(b []byte, pow10 uint) (time.Time, error) {
+func parseTimeUnix(b []byte, pow10 uint64) (time.Time, error) {
 	suffix, neg := consumeSign(b)                            // consume sign
 	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
 	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
@@ -525,14 +525,14 @@ func parseTimeUnix(b []byte, pow10 uint) (time.Time, error) {
 		sec = int64(whole) // check overflow later after negation
 		nsec = int64(frac) // cannot overflow
 	case okWhole: // intermediate case where units is not seconds, but no overflow
-		sec = int64(whole / uint64(pow10))                         // check overflow later after negation
-		nsec = int64((uint(whole)%pow10)*(1e9/pow10) + uint(frac)) // cannot overflow
+		sec = int64(whole / pow10)                     // check overflow later after negation
+		nsec = int64((whole%pow10)*(1e9/pow10) + frac) // cannot overflow
 	case !okWhole && whole == math.MaxUint64: // slow case where units is not seconds and overflow occurred
 		width := int(math.Log10(float64(pow10)))                                // compute len(strconv.Itoa(pow10-1))
 		whole, okWhole = jsonwire.ParseUint(wholeBytes[:len(wholeBytes)-width]) // parse the upper whole field
 		mid, _ := parsePaddedBase10(wholeBytes[len(wholeBytes)-width:], pow10)  // parse the lower whole field
 		sec = int64(whole)                                                      // check overflow later after negation
-		nsec = int64(uint(mid)*(1e9/pow10) + frac)                              // cannot overflow
+		nsec = int64(mid*(1e9/pow10) + frac)                                    // cannot overflow
 	}
 	if neg {
 		sec, nsec = negateSecNano(sec, nsec)
@@ -558,7 +558,7 @@ func negateSecNano(sec, nsec int64) (int64, int64) {
 
 // appendFracBase10 appends the fraction of n/max10,
 // where max10 is a power-of-10 that is larger than n.
-func appendFracBase10(b []byte, n, max10 uint) []byte {
+func appendFracBase10(b []byte, n, max10 uint64) []byte {
 	if n == 0 {
 		return b
 	}
@@ -567,7 +567,7 @@ func appendFracBase10(b []byte, n, max10 uint) []byte {
 
 // parseFracBase10 parses the fraction of n/max10,
 // where max10 is a power-of-10 that is larger than n.
-func parseFracBase10(b []byte, max10 uint) (n uint, ok bool) {
+func parseFracBase10(b []byte, max10 uint64) (n uint64, ok bool) {
 	switch {
 	case len(b) == 0:
 		return 0, true
@@ -579,31 +579,31 @@ func parseFracBase10(b []byte, max10 uint) (n uint, ok bool) {
 
 // appendPaddedBase10 appends a zero-padded encoding of n,
 // where max10 is a power-of-10 that is larger than n.
-func appendPaddedBase10(b []byte, n, max10 uint) []byte {
+func appendPaddedBase10(b []byte, n, max10 uint64) []byte {
 	if n < max10/10 {
 		// Formatting of n is shorter than log10(max10),
 		// so add max10/10 to ensure the length is equal to log10(max10).
 		i := len(b)
-		b = strconv.AppendUint(b, uint64(n+max10/10), 10)
+		b = strconv.AppendUint(b, n+max10/10, 10)
 		b[i]-- // subtract the addition of max10/10
 		return b
 	}
-	return strconv.AppendUint(b, uint64(n), 10)
+	return strconv.AppendUint(b, n, 10)
 }
 
 // parsePaddedBase10 parses b as the zero-padded encoding of n,
 // where max10 is a power-of-10 that is larger than n.
 // Truncated suffix is treated as implicit zeros.
 // Extended suffix is ignored, but verified to contain only digits.
-func parsePaddedBase10(b []byte, max10 uint) (n uint, ok bool) {
-	pow10 := uint(1)
+func parsePaddedBase10(b []byte, max10 uint64) (n uint64, ok bool) {
+	pow10 := uint64(1)
 	for pow10 < max10 {
 		n *= 10
 		if len(b) > 0 {
 			if b[0] < '0' || '9' < b[0] {
 				return n, false
 			}
-			n += uint(b[0] - '0')
+			n += uint64(b[0] - '0')
 			b = b[1:]
 		}
 		pow10 *= 10
