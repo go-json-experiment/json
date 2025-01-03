@@ -32,13 +32,12 @@ type Options = jsonopts.Options
 // It is equivalent to the following boolean options being set to true:
 //
 //   - [CallMethodsWithLegacySemantics]
-//   - [EscapeInvalidUTF8]
+//   - [EscapeWithLegacySemantics]
 //   - [FormatBytesWithLegacySemantics]
 //   - [FormatTimeWithLegacySemantics]
 //   - [MatchCaseSensitiveDelimiter]
 //   - [MergeWithLegacySemantics]
 //   - [OmitEmptyWithLegacyDefinition]
-//   - [PreserveRawStrings]
 //   - [ReportErrorsWithLegacySemantics]
 //   - [StringifyWithLegacySemantics]
 //   - [UnmarshalArrayFromAnyLength]
@@ -107,19 +106,28 @@ func CallMethodsWithLegacySemantics(v bool) Options {
 	}
 }
 
-// EscapeInvalidUTF8 specifies that bytes of invalid UTF-8 within JSON strings
-// should be escaped as a hexadecimal Unicode codepoint (i.e., \ufffd)
-// of the Unicode replacement character as opposed to being encoded
-// as the Unicode replacement character verbatim (without escaping).
-// This option has no effect if [jsontext.AllowInvalidUTF8] is false.
+// EscapeWithLegacySemantics specifies that JSON strings are escaped
+// with legacy semantics:
+//
+//   - When encoding a literal [jsontext.Token] with bytes of invalid UTF-8,
+//     such bytes are escaped as a hexadecimal Unicode codepoint (i.e., \ufffd).
+//     In contrast, the v2 default is to use the minimal representation,
+//     which is to encode invalid UTF-8 as the Unicode replacement rune itself
+//     (without any form of escaping).
+//
+//   - When encoding a raw [jsontext.Token] or [jsontext.Value]
+//     pre-escaped sequences in a JSON string are preserved to the output.
+//     In contrast, the v2 default is use the unescaped representation,
+//     and only escape what is necessary to satisfy the
+//     [jsontext.EscapeForHTML] and [jsontext.EscapeForJS] options.
 //
 // This only affects encoding and is ignored when decoding.
 // The v1 default is true.
-func EscapeInvalidUTF8(v bool) Options {
+func EscapeWithLegacySemantics(v bool) Options {
 	if v {
-		return jsonflags.EscapeInvalidUTF8 | 1
+		return jsonflags.EscapeWithLegacySemantics | 1
 	} else {
-		return jsonflags.EscapeInvalidUTF8 | 0
+		return jsonflags.EscapeWithLegacySemantics | 0
 	}
 }
 
@@ -250,22 +258,6 @@ func OmitEmptyWithLegacyDefinition(v bool) Options {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 1
 	} else {
 		return jsonflags.OmitEmptyWithLegacyDefinition | 0
-	}
-}
-
-// PreserveRawStrings specifies that raw JSON string values passed to
-// [jsontext.Encoder.WriteValue] and [jsontext.Encoder.WriteToken]
-// preserve their original encoding.
-// However, characters that still need escaping according to
-// [jsontext.EscapeForHTML] and [jsontext.EscapeForJS] are escaped.
-//
-// This only affects encoding and is ignored when decoding.
-// The v1 default is true.
-func PreserveRawStrings(v bool) Options {
-	if v {
-		return jsonflags.PreserveRawStrings | 1
-	} else {
-		return jsonflags.PreserveRawStrings | 0
 	}
 }
 

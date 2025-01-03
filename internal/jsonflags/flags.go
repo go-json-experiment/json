@@ -50,7 +50,7 @@ const (
 		AllowInvalidUTF8 |
 		EscapeForHTML |
 		EscapeForJS |
-		EscapeInvalidUTF8 |
+		EscapeWithLegacySemantics |
 		PreserveRawStrings |
 		Deterministic |
 		FormatNilMapAsNull |
@@ -73,28 +73,31 @@ const (
 	// In contrast to AnyWhitespace, this includes Indent and IndentPrefix
 	// as those settings take no effect if Multiline is false.
 	WhitespaceFlags = AnyWhitespace | Indent | IndentPrefix
+
+	// AnyEscape is the set of flags related to escaping in a JSON string.
+	AnyEscape = EscapeForHTML | EscapeForJS | EscapeWithLegacySemantics
 )
 
 // Encoder and decoder flags.
 const (
 	initFlag Bools = 1 << iota // reserved for the boolean value itself
 
-	AllowDuplicateNames // encode or decode
-	AllowInvalidUTF8    // encode or decode
-	WithinArshalCall    // encode or decode; for internal use by json.Marshal and json.Unmarshal
-	OmitTopLevelNewline // encode only; for internal use by json.Marshal and json.MarshalWrite
-	PreserveRawStrings  // encode only; exposed in v1 and also used by jsontext.Value.Canonicalize
-	CanonicalizeNumbers // encode only; for internal use by jsontext.Value.Canonicalize
-	EscapeForHTML       // encode only
-	EscapeForJS         // encode only
-	EscapeInvalidUTF8   // encode only; only exposed in v1
-	Multiline           // encode only
-	SpaceAfterColon     // encode only
-	SpaceAfterComma     // encode only
-	Indent              // encode only; non-boolean flag
-	IndentPrefix        // encode only; non-boolean flag
-	ByteLimit           // encode or decode; non-boolean flag
-	DepthLimit          // encode or decode; non-boolean flag
+	AllowDuplicateNames       // encode or decode
+	AllowInvalidUTF8          // encode or decode
+	WithinArshalCall          // encode or decode; for internal use by json.Marshal and json.Unmarshal
+	OmitTopLevelNewline       // encode only; for internal use by json.Marshal and json.MarshalWrite
+	PreserveRawStrings        // encode only; exposed in v1 and also used by jsontext.Value.Canonicalize
+	CanonicalizeNumbers       // encode only; for internal use by jsontext.Value.Canonicalize
+	EscapeForHTML             // encode only
+	EscapeForJS               // encode only
+	EscapeWithLegacySemantics // encode only; only exposed in v1
+	Multiline                 // encode only
+	SpaceAfterColon           // encode only
+	SpaceAfterComma           // encode only
+	Indent                    // encode only; non-boolean flag
+	IndentPrefix              // encode only; non-boolean flag
+	ByteLimit                 // encode or decode; non-boolean flag
+	DepthLimit                // encode or decode; non-boolean flag
 
 	maxCoderFlag
 )

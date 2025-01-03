@@ -1098,7 +1098,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 				// Append the token to the output and to the state machine.
 				n0 := len(b) // offset before calling AppendQuote
-				if !mo.Flags.Get(jsonflags.EscapeForHTML | jsonflags.EscapeForJS | jsonflags.EscapeInvalidUTF8) {
+				if !mo.Flags.Get(jsonflags.AnyEscape) {
 					b = append(b, f.quotedName...)
 				} else {
 					b, _ = jsonwire.AppendQuote(b, f.name, &mo.Flags)
