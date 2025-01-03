@@ -4397,6 +4397,15 @@ func TestMarshal(t *testing.T) {
 		},
 		want: `{"D1":45296078090012,"D2":"12h34m56.078090012s","D3":0,"D4":"0","D5":0,"D6":"0","D7":0,"D8":"0","D9":0,"D10":"0","D11":"0:00:00"}`,
 	}, {
+		name: jsontest.Name("Duration/MapKey"),
+		in:   map[time.Duration]string{time.Second: ""},
+		want: `{"1s":""}`,
+	}, {
+		name: jsontest.Name("Duration/MapKey/Legacy"),
+		opts: []Options{jsonflags.FormatTimeWithLegacySemantics | 1},
+		in:   map[time.Duration]string{time.Second: ""},
+		want: `{"1000000000":""}`,
+	}, {
 		name: jsontest.Name("Time/Zero"),
 		in: struct {
 			T1 time.Time
@@ -8860,6 +8869,17 @@ func TestUnmarshal(t *testing.T) {
 			D2: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 		}),
 	}, {
+		name:  jsontest.Name("Duration/MapKey"),
+		inBuf: `{"1s":""}`,
+		inVal: new(map[time.Duration]string),
+		want:  addr(map[time.Duration]string{time.Second: ""}),
+	}, {
+		name:  jsontest.Name("Duration/MapKey/Legacy"),
+		opts:  []Options{jsonflags.FormatTimeWithLegacySemantics | 1},
+		inBuf: `{"1000000000":""}`,
+		inVal: new(map[time.Duration]string),
+		want:  addr(map[time.Duration]string{time.Second: ""}),
+	}, {
 		name:  jsontest.Name("Duration/IgnoreInvalidFormat"),
 		opts:  []Options{invalidFormatOption},
 		inBuf: `"1s"`,
@@ -8954,22 +8974,18 @@ func TestUnmarshal(t *testing.T) {
 			time.Unix(-23225777755, 6).UTC(),
 		}),
 	}, {
-		name: jsontest.Name("Time/Format/UnixString"),
+		name: jsontest.Name("Time/Format/UnixString/InvalidNumber"),
 		inBuf: `{
 			"T23": -23225777754.999999994,
 			"T25": -23225777754999.999994,
 			"T27": -23225777754999999.994,
 			"T29": -23225777754999999994
 		}`,
-		inVal: new(structTimeFormat),
-		want: addr(structTimeFormat{
-			T23: time.Unix(-23225777755, 6).UTC(),
-			T25: time.Unix(-23225777755, 6).UTC(),
-			T27: time.Unix(-23225777755, 6).UTC(),
-			T29: time.Unix(-23225777755, 6).UTC(),
-		}),
+		inVal:   new(structTimeFormat),
+		want:    new(structTimeFormat),
+		wantErr: EU(nil).withPos(`{`+"\n\t\t\t"+`"T23": `, "/T23").withType('0', timeTimeType),
 	}, {
-		name: jsontest.Name("Time/Format/UnixString/Invalid"),
+		name: jsontest.Name("Time/Format/UnixString/InvalidString"),
 		inBuf: `{
 			"T22": "-23225777754.999999994",
 			"T24": "-23225777754999.999994",

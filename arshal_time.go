@@ -54,7 +54,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
 			m.td = *va.Addr().Interface().(*time.Duration)
-			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
+			k := stringOrNumberKind(!m.isNumeric() || xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, true, m.appendMarshal); err != nil {
 				if !isSyntacticError(err) && !export.IsIOError(err) {
 					err = newMarshalErrorBefore(enc, t, err)
@@ -75,6 +75,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return unmarshalNano(dec, va, uo)
 			}
 
+			stringify := !u.isNumeric() || xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 			var flags jsonwire.ValueFlags
 			td := va.Addr().Interface().(*time.Duration)
 			val, err := xd.ReadValue(&flags)
@@ -88,7 +89,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 				return nil
 			case '"':
-				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
+				if !stringify {
 					break
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -98,7 +99,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*td = u.td
 				return nil
 			case '0':
-				if !u.isNumeric() {
+				if stringify {
 					break
 				}
 				if err := u.unmarshal(val); err != nil {
@@ -122,7 +123,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
 			m.tt = *va.Addr().Interface().(*time.Time)
-			k := stringOrNumberKind(!m.isNumeric() || mo.Flags.Get(jsonflags.StringifyNumbers))
+			k := stringOrNumberKind(!m.isNumeric() || xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, !m.hasCustomFormat(), m.appendMarshal); err != nil {
 				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalJSON") // unlike unmarshal, always wrapped
@@ -145,6 +146,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				u.looseRFC3339 = true
 			}
 
+			stringify := !u.isNumeric() || xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 			var flags jsonwire.ValueFlags
 			tt := va.Addr().Interface().(*time.Time)
 			val, err := xd.ReadValue(&flags)
@@ -158,7 +160,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 				return nil
 			case '"':
-				if u.isNumeric() && !uo.Flags.Get(jsonflags.StringifyNumbers) {
+				if !stringify {
 					break
 				}
 				val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
@@ -171,7 +173,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				*tt = u.tt
 				return nil
 			case '0':
-				if !u.isNumeric() {
+				if stringify {
 					break
 				}
 				if err := u.unmarshal(val); err != nil {
