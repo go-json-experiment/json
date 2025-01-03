@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-json-experiment/json/internal"
@@ -851,7 +852,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				// to reflect.Value as well if the names are equal.
 				// See internal/fmtsort.
 				slices.SortFunc(members, func(x, y member) int {
-					return jsonwire.CompareUTF16(x.name, y.name)
+					return strings.Compare(x.name, y.name)
 				})
 				for _, member := range members {
 					if err := enc.WriteToken(jsontext.String(member.name)); err != nil {
