@@ -125,8 +125,8 @@ func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 
 // Reset resets a decoder such that it is reading afresh from r and
 // configured with the provided options. Reset must not be called on an
-// a Decoder passed to the [encoding/json/v2.UnmarshalerV2.UnmarshalJSONV2] method
-// or the [encoding/json/v2.UnmarshalFuncV2] function.
+// a Decoder passed to the [encoding/json/v2.UnmarshalerFrom.UnmarshalJSONFrom] method
+// or the [encoding/json/v2.UnmarshalFromFunc] function.
 func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	switch {
 	case d == nil:
@@ -134,7 +134,7 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	case r == nil:
 		panic("jsontext: invalid nil io.Reader")
 	case d.s.Flags.Get(jsonflags.WithinArshalCall):
-		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerV2")
+		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerFrom")
 	}
 	d.s.reset(nil, r, opts...)
 }

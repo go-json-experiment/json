@@ -29,7 +29,7 @@ var (
 )
 
 func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
-	// Ideally, time types would implement MarshalerV2 and UnmarshalerV2,
+	// Ideally, time types would implement MarshalerTo and UnmarshalerFrom,
 	// but that would incur a dependency on package json from package time.
 	// Given how widely used time is, it is more acceptable that we incur a
 	// dependency on time from json.

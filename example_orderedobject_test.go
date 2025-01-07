@@ -28,8 +28,8 @@ type ObjectMember[V any] struct {
 	Value V
 }
 
-// MarshalJSONV2 encodes obj as a JSON object into enc.
-func (obj *OrderedObject[V]) MarshalJSONV2(enc *jsontext.Encoder, opts json.Options) error {
+// MarshalJSONTo encodes obj as a JSON object into enc.
+func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Options) error {
 	if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
 		return err
 	}
@@ -48,8 +48,8 @@ func (obj *OrderedObject[V]) MarshalJSONV2(enc *jsontext.Encoder, opts json.Opti
 	return nil
 }
 
-// UnmarshalJSONV2 decodes a JSON object from dec into obj.
-func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *jsontext.Decoder, opts json.Options) error {
+// UnmarshalJSONFrom decodes a JSON object from dec into obj.
+func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder, opts json.Options) error {
 	if k := dec.PeekKind(); k != '{' {
 		return fmt.Errorf("expected object start, but encountered %v", k)
 	}
@@ -73,7 +73,7 @@ func (obj *OrderedObject[V]) UnmarshalJSONV2(dec *jsontext.Decoder, opts json.Op
 }
 
 // The exact order of JSON object can be preserved through the use of a
-// specialized type that implements [MarshalerV2] and [UnmarshalerV2].
+// specialized type that implements [MarshalerTo] and [UnmarshalerFrom].
 func Example_orderedObject() {
 	// Round-trip marshal and unmarshal an ordered object.
 	// We expect the order and duplicity of JSON object members to be preserved.

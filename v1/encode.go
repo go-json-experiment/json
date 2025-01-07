@@ -179,7 +179,7 @@ func MarshalIndent(v any, prefix, indent string) ([]byte, error) {
 
 // Marshaler is the interface implemented by types that
 // can marshal themselves into valid JSON.
-type Marshaler = jsonv2.MarshalerV1
+type Marshaler = jsonv2.Marshaler
 
 // An UnsupportedTypeError is returned by [Marshal] when attempting
 // to encode an unsupported value type.

@@ -1705,10 +1705,10 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			if va.Elem().Kind() == reflect.Pointer && va.Elem().IsNil() {
 				v2 := newAddressableValue(whichMarshaler)
 				switch whichMarshaler {
-				case jsonMarshalerV2Type:
-					v2.Set(reflect.ValueOf(struct{ MarshalerV2 }{va.Elem().Interface().(MarshalerV2)}))
-				case jsonMarshalerV1Type:
-					v2.Set(reflect.ValueOf(struct{ MarshalerV1 }{va.Elem().Interface().(MarshalerV1)}))
+				case jsonMarshalerToType:
+					v2.Set(reflect.ValueOf(struct{ MarshalerTo }{va.Elem().Interface().(MarshalerTo)}))
+				case jsonMarshalerType:
+					v2.Set(reflect.ValueOf(struct{ Marshaler }{va.Elem().Interface().(Marshaler)}))
 				case textAppenderType:
 					v2.Set(reflect.ValueOf(struct{ encodingTextAppender }{va.Elem().Interface().(encodingTextAppender)}))
 				case textMarshalerType:

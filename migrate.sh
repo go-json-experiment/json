@@ -81,14 +81,14 @@ echo "pkg encoding/json, func OmitEmptyWithLegacyDefinition(bool) jsonopts.Optio
 echo "pkg encoding/json, func ReportErrorsWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func StringifyWithLegacySemantics(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, func UnmarshalArrayFromAnyLength(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, method (*Number) UnmarshalJSONV2(*jsontext.Decoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, method (*Number) UnmarshalJSONFrom(*jsontext.Decoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, method (*UnmarshalTypeError) Unwrap() error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, method (Number) MarshalJSONV2(*jsontext.Encoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, type Marshaler = json.MarshalerV1 #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, method (Number) MarshalJSONTo(*jsontext.Encoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, type Marshaler = json.Marshaler #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, type Options = jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, type RawMessage = jsontext.Value #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, type UnmarshalTypeError struct, Err error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json, type Unmarshaler = json.UnmarshalerV1 #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, type Unmarshaler = json.Unmarshaler #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AllowDuplicateNames(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AllowInvalidUTF8(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AppendQuote[\$0 interface{ ~[]uint8 | ~string }]([]uint8, \$0) ([]uint8, error) #$ISSUE" >> $GOROOT/api/$FILE
@@ -179,8 +179,8 @@ echo "pkg encoding/json/v2, func GetOption[\$0 interface{}](jsonopts.Options, fu
 echo "pkg encoding/json/v2, func JoinOptions(...jsonopts.Options) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func Marshal(interface{}, ...jsonopts.Options) ([]uint8, error) #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func MarshalEncode(*jsontext.Encoder, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func MarshalFuncV1[\$0 interface{}](func(\$0) ([]uint8, error)) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func MarshalFuncV2[\$0 interface{}](func(*jsontext.Encoder, \$0, jsonopts.Options) error) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func MarshalFunc[\$0 interface{}](func(\$0) ([]uint8, error)) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func MarshalToFunc[\$0 interface{}](func(*jsontext.Encoder, \$0, jsonopts.Options) error) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func MarshalWrite(io.Writer, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func MatchCaseInsensitiveNames(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func NewMarshalers(...*typedArshalers[jsontext.Encoder]) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
@@ -190,17 +190,17 @@ echo "pkg encoding/json/v2, func RejectUnknownMembers(bool) jsonopts.Options #$I
 echo "pkg encoding/json/v2, func StringifyNumbers(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func Unmarshal([]uint8, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func UnmarshalDecode(*jsontext.Decoder, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func UnmarshalFuncV1[\$0 interface{}](func([]uint8, \$0) error) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func UnmarshalFuncV2[\$0 interface{}](func(*jsontext.Decoder, \$0, jsonopts.Options) error) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func UnmarshalFunc[\$0 interface{}](func([]uint8, \$0) error) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func UnmarshalFromFunc[\$0 interface{}](func(*jsontext.Decoder, \$0, jsonopts.Options) error) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func UnmarshalRead(io.Reader, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func WithMarshalers(*typedArshalers[jsontext.Encoder]) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func WithUnmarshalers(*typedArshalers[jsontext.Decoder]) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, method (*SemanticError) Error() string #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, method (*SemanticError) Unwrap() error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type MarshalerV1 interface { MarshalJSON } #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type MarshalerV1 interface, MarshalJSON() ([]uint8, error) #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type MarshalerV2 interface { MarshalJSONV2 } #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type MarshalerV2 interface, MarshalJSONV2(*jsontext.Encoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type Marshaler interface { MarshalJSON } #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type Marshaler interface, MarshalJSON() ([]uint8, error) #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type MarshalerTo interface { MarshalJSONTo } #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type MarshalerTo interface, MarshalJSONTo(*jsontext.Encoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type Marshalers = typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type Options = jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type SemanticError struct #$ISSUE" >> $GOROOT/api/$FILE
@@ -210,10 +210,10 @@ echo "pkg encoding/json/v2, type SemanticError struct, GoType reflect.Type #$ISS
 echo "pkg encoding/json/v2, type SemanticError struct, JSONKind jsontext.Kind #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type SemanticError struct, JSONPointer jsontext.Pointer #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type SemanticError struct, JSONValue jsontext.Value #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type UnmarshalerV1 interface { UnmarshalJSON } #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type UnmarshalerV1 interface, UnmarshalJSON([]uint8) error #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type UnmarshalerV2 interface { UnmarshalJSONV2 } #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, type UnmarshalerV2 interface, UnmarshalJSONV2(*jsontext.Decoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type Unmarshaler interface { UnmarshalJSON } #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type Unmarshaler interface, UnmarshalJSON([]uint8) error #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type UnmarshalerFrom interface { UnmarshalJSONFrom } #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, type UnmarshalerFrom interface, UnmarshalJSONFrom(*jsontext.Decoder, jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, type Unmarshalers = typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, var ErrUnknownName error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, var SkipFunc error #$ISSUE" >> $GOROOT/api/$FILE

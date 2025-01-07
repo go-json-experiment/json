@@ -101,7 +101,7 @@ func Unmarshal(data []byte, v any) error {
 // The input can be assumed to be a valid encoding of
 // a JSON value. UnmarshalJSON must copy the JSON data
 // if it wishes to retain the data after returning.
-type Unmarshaler = jsonv2.UnmarshalerV1
+type Unmarshaler = jsonv2.Unmarshaler
 
 // An UnmarshalTypeError describes a JSON value that was
 // not appropriate for a value of a specific Go type.
@@ -188,8 +188,8 @@ func (n Number) Int64() (int64, error) {
 
 var numberType = reflect.TypeFor[Number]()
 
-// MarshalJSONV2 implements [jsonv2.MarshalerV2].
-func (n Number) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error {
+// MarshalJSONTo implements [jsonv2.MarshalerTo].
+func (n Number) MarshalJSONTo(enc *jsontext.Encoder, opts jsonv2.Options) error {
 	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
 	if k, n := enc.StackIndex(enc.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name
@@ -212,8 +212,8 @@ func (n Number) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error 
 	return enc.WriteValue(val)
 }
 
-// UnmarshalJSONV2 implements [jsonv2.UnmarshalerV2].
-func (n *Number) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) error {
+// UnmarshalJSONFrom implements [jsonv2.UnmarshalerFrom].
+func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder, opts jsonv2.Options) error {
 	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
 	if k, n := dec.StackIndex(dec.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name

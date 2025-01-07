@@ -529,7 +529,7 @@ func Example_protoJSON() {
 	// Marshal using protojson.Marshal for proto.Message types.
 	b, err := json.Marshal(&value,
 		// Use protojson.Marshal as a type-specific marshaler.
-		json.WithMarshalers(json.MarshalFuncV1(protojson.Marshal)))
+		json.WithMarshalers(json.MarshalFunc(protojson.Marshal)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -537,7 +537,7 @@ func Example_protoJSON() {
 	// Unmarshal using protojson.Unmarshal for proto.Message types.
 	err = json.Unmarshal(b, &value,
 		// Use protojson.Unmarshal as a type-specific unmarshaler.
-		json.WithUnmarshalers(json.UnmarshalFuncV1(protojson.Unmarshal)))
+		json.WithUnmarshalers(json.UnmarshalFunc(protojson.Unmarshal)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -564,13 +564,13 @@ func ExampleWithMarshalers_errors() {
 			// Suppose we consider strconv.NumError to be a safe to serialize:
 			// this type-specific marshal function intercepts this type
 			// and encodes the error message as a JSON string.
-			json.MarshalFuncV2(func(enc *jsontext.Encoder, err *strconv.NumError, opts json.Options) error {
+			json.MarshalToFunc(func(enc *jsontext.Encoder, err *strconv.NumError, opts json.Options) error {
 				return enc.WriteToken(jsontext.String(err.Error()))
 			}),
 			// Error messages may contain sensitive information that may not
 			// be appropriate to serialize. For all errors not handled above,
 			// report some generic error message.
-			json.MarshalFuncV1(func(error) ([]byte, error) {
+			json.MarshalFunc(func(error) ([]byte, error) {
 				return []byte(`"internal server error"`), nil
 			}),
 		)),
@@ -606,7 +606,7 @@ func ExampleWithUnmarshalers_rawNumber() {
 	err := json.Unmarshal([]byte(input), &value,
 		// Intercept every attempt to unmarshal into the any type.
 		json.WithUnmarshalers(
-			json.UnmarshalFuncV2(func(dec *jsontext.Decoder, val *any, opts json.Options) error {
+			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any, opts json.Options) error {
 				// If the next value to be decoded is a JSON number,
 				// then provide a concrete Go type to unmarshal into.
 				if dec.PeekKind() == '0' {
@@ -654,7 +654,7 @@ func ExampleWithUnmarshalers_recordOffsets() {
 	err := json.Unmarshal([]byte(input), &tunnels,
 		// Intercept every attempt to unmarshal into the Tunnel type.
 		json.WithUnmarshalers(
-			json.UnmarshalFuncV2(func(dec *jsontext.Decoder, tunnel *Tunnel, opts json.Options) error {
+			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, tunnel *Tunnel, opts json.Options) error {
 				// Decoder.InputOffset reports the offset after the last token,
 				// but we want to record the offset before the next token.
 				//
