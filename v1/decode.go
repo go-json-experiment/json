@@ -231,9 +231,6 @@ func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder, opts jsonv2.Options) e
 		}
 		return nil
 	case '"':
-		if !stringify {
-			break
-		}
 		verbatim := jsonwire.ConsumeSimpleString(val) == len(val)
 		val = jsonwire.UnquoteMayCopy(val, verbatim)
 		if n, err := jsonwire.ConsumeNumber(val); n != len(val) || err != nil {
