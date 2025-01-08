@@ -24,7 +24,7 @@ in v2 to be named the same and have a mostly compatible signature.
 Behaviorally, we should aim for 95% to 99% backwards compatibility.
 We do not aim for 100% compatibility since we want the freedom to break
 certain behaviors that are now considered to have been a mistake.
-We may provide options that can bring the v2 implementation to 100% compatibility,
+Options exist that can bring the v2 implementation to 100% compatibility,
 but it will not be the default.
 
 * **More flexible:** There is a
