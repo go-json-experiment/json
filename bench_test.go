@@ -215,13 +215,13 @@ func (*jsonArshalerV1) UnmarshalJSON(b []byte) error {
 
 type jsonArshalerV2 struct{ _ [4]int }
 
-func (jsonArshalerV2) MarshalJSONV2(enc *jsontext.Encoder, opts jsonv2.Options) error {
+func (jsonArshalerV2) MarshalJSONTo(enc *jsontext.Encoder, opts jsonv2.Options) error {
 	return enc.WriteToken(jsontext.String("method"))
 }
-func (*jsonArshalerV2) UnmarshalJSONV2(dec *jsontext.Decoder, opts jsonv2.Options) error {
+func (*jsonArshalerV2) UnmarshalJSONFrom(dec *jsontext.Decoder, opts jsonv2.Options) error {
 	b, err := dec.ReadValue()
 	if string(b) != `"method"` {
-		return fmt.Errorf("UnmarshalJSONV2: got %q, want %q", b, `"method"`)
+		return fmt.Errorf("UnmarshalJSONFrom: got %q, want %q", b, `"method"`)
 	}
 	return err
 }

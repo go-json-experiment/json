@@ -51,10 +51,10 @@ func putStructOptions(o *jsonopts.Struct) {
 //     If all applicable functions return [SkipFunc],
 //     then the value is encoded according to subsequent rules.
 //
-//   - If the value type implements [MarshalerV2],
-//     then the MarshalJSONV2 method is called to encode the value.
+//   - If the value type implements [MarshalerTo],
+//     then the MarshalJSONTo method is called to encode the value.
 //
-//   - If the value type implements [MarshalerV1],
+//   - If the value type implements [Marshaler],
 //     then the MarshalJSON method is called to encode the value.
 //
 //   - If the value type implements [encoding.TextMarshaler],
@@ -254,10 +254,10 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //     value. If all applicable functions return [SkipFunc],
 //     then the input is decoded according to subsequent rules.
 //
-//   - If the value type implements [UnmarshalerV2],
-//     then the UnmarshalJSONV2 method is called to decode the JSON value.
+//   - If the value type implements [UnmarshalerFrom],
+//     then the UnmarshalJSONFrom method is called to decode the JSON value.
 //
-//   - If the value type implements [UnmarshalerV1],
+//   - If the value type implements [Unmarshaler],
 //     then the UnmarshalJSON method is called to decode the JSON value.
 //
 //   - If the value type implements [encoding.TextUnmarshaler],

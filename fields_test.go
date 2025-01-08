@@ -260,17 +260,17 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.encodingTextAppender } must not implement marshal or unmarshal methods`),
 	}, {
-		name: jsontest.Name("UnknownJSONMarshalerV1"),
+		name: jsontest.Name("UnknownJSONMarshaler"),
 		in: struct {
-			A struct{ MarshalerV1 } `json:",unknown"`
+			A struct{ Marshaler } `json:",unknown"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV1 } must not implement marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.Marshaler } must not implement marshal or unmarshal methods`),
 	}, {
-		name: jsontest.Name("InlineJSONMarshalerV2"),
+		name: jsontest.Name("InlineJSONMarshalerTo"),
 		in: struct {
-			A struct{ MarshalerV2 } `json:",inline"`
+			A struct{ MarshalerTo } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerV2 } must not implement marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerTo } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownTextUnmarshaler"),
 		in: struct {
@@ -278,17 +278,17 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextUnmarshaler } must not implement marshal or unmarshal methods`),
 	}, {
-		name: jsontest.Name("InlineJSONUnmarshalerV1"),
+		name: jsontest.Name("InlineJSONUnmarshaler"),
 		in: struct {
-			A *struct{ UnmarshalerV1 } `json:",inline"`
+			A *struct{ Unmarshaler } `json:",inline"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV1 } must not implement marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.Unmarshaler } must not implement marshal or unmarshal methods`),
 	}, {
-		name: jsontest.Name("UnknownJSONUnmarshalerV2"),
+		name: jsontest.Name("UnknownJSONUnmarshalerFrom"),
 		in: struct {
-			A struct{ UnmarshalerV2 } `json:",unknown"`
+			A struct{ UnmarshalerFrom } `json:",unknown"`
 		}{},
-		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerV2 } must not implement marshal or unmarshal methods`),
+		wantErr: errors.New(`inlined Go struct field A of type struct { json.UnmarshalerFrom } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownStruct"),
 		in: struct {
@@ -310,7 +310,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		wantErr: errors.New(`inlined map field A of type map[json.nocaseString]interface {} must have a string key that does not implement marshal or unmarshal methods`),
 	}, {
-		name: jsontest.Name("InlineUnsupported/MapMarshalerV1StringKey"),
+		name: jsontest.Name("InlineUnsupported/MapMarshalerStringKey"),
 		in: struct {
 			A map[stringMarshalEmpty]any `json:",inline"`
 		}{},
