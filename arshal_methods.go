@@ -33,11 +33,8 @@ var (
 	// There is no semantic difference with this change.
 	appenderToType = reflect.TypeFor[interface{ AppendTo([]byte) []byte }]()
 
-	jsonMarshalerV2Type   = reflect.TypeFor[MarshalerV2]()
-	jsonUnmarshalerV2Type = reflect.TypeFor[UnmarshalerV2]()
-
-	allMarshalerTypes   = []reflect.Type{jsonMarshalerV2Type, jsonMarshalerToType, jsonMarshalerType, textAppenderType, textMarshalerType}
-	allUnmarshalerTypes = []reflect.Type{jsonUnmarshalerV2Type, jsonUnmarshalerFromType, jsonUnmarshalerType, textUnmarshalerType}
+	allMarshalerTypes   = []reflect.Type{jsonMarshalerToType, jsonMarshalerType, textAppenderType, textMarshalerType}
+	allUnmarshalerTypes = []reflect.Type{jsonUnmarshalerFromType, jsonUnmarshalerType, textUnmarshalerType}
 	allMethodTypes      = append(allMarshalerTypes, allUnmarshalerTypes...)
 )
 
@@ -211,37 +208,6 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if needAddr, ok := implements(t, jsonMarshalerV2Type); ok {
-		fncs.nonDefault = true
-		prevMarshal := fncs.marshal
-		fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
-			if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
-				((needAddr && va.forcedAddr) || export.Encoder(enc).Tokens.Last.NeedObjectName()) {
-				return prevMarshal(enc, va, mo)
-			}
-			xe := export.Encoder(enc)
-			prevDepth, prevLength := xe.Tokens.DepthLength()
-			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.Addr().Interface().(MarshalerV2).MarshalJSONV2(enc, mo)
-			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := xe.Tokens.DepthLength()
-			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
-				err = errNonSingularValue
-			}
-			if err != nil {
-				err = wrapSkipFunc(err, "marshal method")
-				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
-					return internal.NewMarshalerError(va.Addr().Interface(), err, "MarshalJSONV2") // unlike unmarshal, always wrapped
-				}
-				if !export.IsIOError(err) {
-					err = newSemanticErrorWithPosition(enc, t, prevDepth, prevLength, err)
-				}
-				return err
-			}
-			return nil
-		}
-	}
-
 	if needAddr, ok := implements(t, jsonMarshalerToType); ok {
 		fncs.nonDefault = true
 		prevMarshal := fncs.marshal
@@ -332,40 +298,6 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 		}
 	}
 
-	if _, ok := implements(t, jsonUnmarshalerV2Type); ok {
-		fncs.nonDefault = true
-		prevUnmarshal := fncs.unmarshal
-		fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
-			if uo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
-				export.Decoder(dec).Tokens.Last.NeedObjectName() {
-				return prevUnmarshal(dec, va, uo)
-			}
-			xd := export.Decoder(dec)
-			prevDepth, prevLength := xd.Tokens.DepthLength()
-			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.Addr().Interface().(UnmarshalerV2).UnmarshalJSONV2(dec, uo)
-			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
-			currDepth, currLength := xd.Tokens.DepthLength()
-			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
-				err = errNonSingularValue
-			}
-			if err != nil {
-				err = wrapSkipFunc(err, "unmarshal method")
-				if uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
-					if err2 := xd.SkipUntil(prevDepth, prevLength+1); err2 != nil {
-						return err2
-					}
-					return err // unlike marshal, never wrapped
-				}
-				if !isSyntacticError(err) && !export.IsIOError(err) {
-					err = newSemanticErrorWithPosition(dec, t, prevDepth, prevLength, err)
-				}
-				return err
-			}
-			return nil
-		}
-	}
-
 	if _, ok := implements(t, jsonUnmarshalerFromType); ok {
 		fncs.nonDefault = true
 		prevUnmarshal := fncs.unmarshal
@@ -427,24 +359,4 @@ func implements(t, ifaceType reflect.Type) (needAddr, ok bool) {
 	default:
 		return false, false
 	}
-}
-
-// Deprecated: Use [Marshaler] instead.
-type MarshalerV1 interface {
-	MarshalJSON() ([]byte, error)
-}
-
-// Deprecated: Use [MarshalerTo] instead.
-type MarshalerV2 interface {
-	MarshalJSONV2(*jsontext.Encoder, Options) error
-}
-
-// Deprecated: Use [Unmarshaler] instead.
-type UnmarshalerV1 interface {
-	UnmarshalJSON([]byte) error
-}
-
-// Deprecated: Use [UnmarshalerFrom] instead.
-type UnmarshalerV2 interface {
-	UnmarshalJSONV2(*jsontext.Decoder, Options) error
 }
