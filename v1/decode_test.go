@@ -1050,13 +1050,13 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `"invalid"`,
 		ptr:      new(Number),
-		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
+		err:      &UnmarshalTypeError{Value: `string "invalid"`, Type: reflect.TypeFor[Number](), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"A":"invalid"}`,
 		ptr:      new(struct{ A Number }),
-		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
+		err:      &UnmarshalTypeError{Value: `string "invalid"`, Type: reflect.TypeFor[Number](), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
@@ -1070,7 +1070,50 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"A":"invalid"}`,
 		ptr:      new(map[string]Number),
-		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Number]()},
+		err:      &UnmarshalTypeError{Value: `string "invalid"`, Type: reflect.TypeFor[Number](), Err: strconv.ErrSyntax},
+	},
+
+	{
+		CaseName: Name(""),
+		in:       `5`,
+		ptr:      new(Number),
+		out:      Number("5"),
+	},
+	{
+		CaseName: Name(""),
+		in:       `"5"`,
+		ptr:      new(Number),
+		out:      Number("5"),
+	},
+	{
+		CaseName: Name(""),
+		in:       `{"N":5}`,
+		ptr:      new(struct{ N Number }),
+		out:      struct{ N Number }{"5"},
+	},
+	{
+		CaseName: Name(""),
+		in:       `{"N":"5"}`,
+		ptr:      new(struct{ N Number }),
+		out:      struct{ N Number }{"5"},
+	},
+	{
+		CaseName: Name(""),
+		in:       `{"N":5}`,
+		ptr: new(struct {
+			N Number `json:",string"`
+		}),
+		err: &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[Number]()},
+	},
+	{
+		CaseName: Name(""),
+		in:       `{"N":"5"}`,
+		ptr: new(struct {
+			N Number `json:",string"`
+		}),
+		out: struct {
+			N Number `json:",string"`
+		}{"5"},
 	},
 }
 
