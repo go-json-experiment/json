@@ -246,6 +246,15 @@ func TestMakeStructFields(t *testing.T) {
 		in: struct {
 			A map[string]any `json:",inline,omitempty"`
 		}{},
+		want: structFields{inlinedFallback: &structField{
+			index: []int{0},
+			typ:   reflect.TypeFor[map[string]any](),
+			fieldOptions: fieldOptions{
+				name:       "A",
+				quotedName: `"A"`,
+				inline:     true,
+			},
+		}},
 		wantErr: errors.New("Go struct field A cannot have any options other than `inline` or `unknown` specified"),
 	}, {
 		name: jsontest.Name("InlineTextMarshaler"),
