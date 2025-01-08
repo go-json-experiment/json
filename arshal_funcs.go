@@ -428,23 +428,3 @@ func wrapSkipFunc(err error, what string) error {
 	}
 	return err
 }
-
-// Deprecated: Use [MarshalFunc] instead.
-func MarshalFuncV1[T any](fn func(T) ([]byte, error)) *Marshalers {
-	return MarshalFunc(fn)
-}
-
-// Deprecated: Use [MarshalToFunc] instead.
-func MarshalFuncV2[T any](fn func(*jsontext.Encoder, T, Options) error) *Marshalers {
-	return MarshalToFunc(fn)
-}
-
-// Deprecated: Use [UnmarshalFunc] instead.
-func UnmarshalFuncV1[T any](fn func([]byte, T) error) *Unmarshalers {
-	return UnmarshalFunc(fn)
-}
-
-// Deprecated: Use [UnmarshalFromFunc] instead.
-func UnmarshalFuncV2[T any](fn func(*jsontext.Decoder, T, Options) error) *Unmarshalers {
-	return UnmarshalFromFunc(fn)
-}
