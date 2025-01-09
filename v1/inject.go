@@ -5,6 +5,7 @@
 package json
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -14,6 +15,38 @@ import (
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/jsontext"
 )
+
+// CheckMarshalResults checks the result of Marshal and Encoder.Encode
+// against both the v1 and v2 implementations.
+// The v1 implementation is not tested if this is nil.
+var CheckMarshalResults = func(name string, b1, b2 []byte, err1, err2 error) {
+	const checkExactErrors = false
+	switch {
+	case !bytes.Equal(b1, b2) && err1 == nil && err2 == nil:
+		panic(fmt.Sprintf("%s output mismatch:\n\tv1: %s\n\tv2: %s", name, b1, b2))
+	case (err1 == nil) != (err2 == nil):
+		panic(fmt.Sprintf("%s error mismatch:\n\tv1: %v\n\tv2: %v", name, err1, err2))
+	case checkExactErrors && !reflect.DeepEqual(err1, err2):
+		panic(fmt.Sprintf("%s error mismatch:\n\tv1: %v\n\tv2: %v", name, err1, err2))
+	}
+}
+
+// CheckUnmarshalResults checks the result of Unmarshal and Decoder.Decode
+// against both the v1 and v2 implementation
+// if the output Go value is a pointer to a zero value.
+// The v1 implementation is not tested if this is nil.
+var CheckUnmarshalResults = func(name string, in []byte, v1, v2 any, err1, err2 error) {
+	const checkExactErrors = false
+	switch {
+	// TODO: We should verify that v1 and v2 are identical even under errors.
+	case !reflect.DeepEqual(v1, v2) && err1 == nil && err2 == nil:
+		panic(fmt.Sprintf("%s(`%s`, new(%v)) mismatch:\n\tv1: %v\n\tv2: %v", name, in, reflect.TypeOf(v1).Elem(), v1, v2))
+	case (err1 == nil) != (err2 == nil):
+		panic(fmt.Sprintf("%s error mismatch:\n\tv1: %v\n\tv2: %v", name, err1, err2))
+	case checkExactErrors && !reflect.DeepEqual(err1, err2):
+		panic(fmt.Sprintf("%s error mismatch:\n\tv1: %v\n\tv2: %v", name, err1, err2))
+	}
+}
 
 // Inject functionality into v2 to properly handle v1 types.
 func init() {

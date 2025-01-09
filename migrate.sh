@@ -84,6 +84,8 @@ echo "pkg encoding/json, type Options = jsonopts.Options #$ISSUE" >> $GOROOT/api
 echo "pkg encoding/json, type RawMessage = jsontext.Value #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, type UnmarshalTypeError struct, Err error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json, type Unmarshaler = json.Unmarshaler #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, var CheckMarshalResults func(string, []uint8, []uint8, error, error) #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json, var CheckUnmarshalResults func(string, []uint8, interface{}, interface{}, error, error) #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AllowDuplicateNames(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AllowInvalidUTF8(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, func AppendFormat([]uint8, []uint8, ...jsonopts.Options) ([]uint8, error) #$ISSUE" >> $GOROOT/api/$FILE
