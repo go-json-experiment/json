@@ -462,10 +462,10 @@ var unmarshalTests = []struct {
 
 	// Z has a "-" tag.
 	{CaseName: Name(""), in: `{"Y": 1, "Z": 2}`, ptr: new(T), out: T{Y: 1}},
-	{CaseName: Name(""), in: `{"Y": 1, "Z": 2}`, ptr: new(T), err: fmt.Errorf("json: unknown field \"Z\""), disallowUnknownFields: true},
+	{CaseName: Name(""), in: `{"Y": 1, "Z": 2}`, ptr: new(T), out: T{Y: 1}, err: fmt.Errorf("json: unknown field \"Z\""), disallowUnknownFields: true},
 
 	{CaseName: Name(""), in: `{"alpha": "abc", "alphabet": "xyz"}`, ptr: new(U), out: U{Alphabet: "abc"}},
-	{CaseName: Name(""), in: `{"alpha": "abc", "alphabet": "xyz"}`, ptr: new(U), err: fmt.Errorf("json: unknown field \"alphabet\""), disallowUnknownFields: true},
+	{CaseName: Name(""), in: `{"alpha": "abc", "alphabet": "xyz"}`, ptr: new(U), out: U{Alphabet: "abc"}, err: fmt.Errorf("json: unknown field \"alphabet\""), disallowUnknownFields: true},
 	{CaseName: Name(""), in: `{"alpha": "abc"}`, ptr: new(U), out: U{Alphabet: "abc"}},
 	{CaseName: Name(""), in: `{"alphabet": "xyz"}`, ptr: new(U), out: U{}},
 	{CaseName: Name(""), in: `{"alphabet": "xyz"}`, ptr: new(U), err: fmt.Errorf("json: unknown field \"alphabet\""), disallowUnknownFields: true},
@@ -475,7 +475,7 @@ var unmarshalTests = []struct {
 	{CaseName: Name(""), in: `[1, 2, 3+]`, err: &SyntaxError{"invalid character '+' after array value (expecting ',' or ']')", len64(`[1, 2, 3`)}},
 	{CaseName: Name(""), in: `{"X":12x}`, err: &SyntaxError{"invalid character 'x' after object value (expecting ',' or '}')", len64(`{"X":12`)}, useNumber: true},
 	{CaseName: Name(""), in: `[2, 3`, err: &SyntaxError{msg: "unexpected end of JSON input", Offset: len64(`[2, 3`)}},
-	{CaseName: Name(""), in: `{"F3": -}`, ptr: new(V), out: V{F3: Number("-")}, err: &SyntaxError{msg: "invalid character '}' within number (expecting digit)", Offset: len64(`{"F3": -`)}},
+	{CaseName: Name(""), in: `{"F3": -}`, ptr: new(V), err: &SyntaxError{msg: "invalid character '}' within number (expecting digit)", Offset: len64(`{"F3": -`)}},
 
 	// raw value errors
 	{CaseName: Name(""), in: "\x01 42", err: &SyntaxError{"invalid character '\\x01' at start of value", len64(``)}},
@@ -567,6 +567,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"2":4}`,
 		ptr:      new(map[u8marshal]int),
+		out:      map[u8marshal]int{},
 		err:      errMissingU8Prefix,
 	},
 
@@ -575,36 +576,42 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"abc":"abc"}`,
 		ptr:      new(map[int]string),
+		out:      map[int]string{},
 		err:      &UnmarshalTypeError{Value: `string "abc"`, Type: reflect.TypeFor[int](), Field: "abc", Offset: len64(`{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"256":"abc"}`,
 		ptr:      new(map[uint8]string),
+		out:      map[uint8]string{},
 		err:      &UnmarshalTypeError{Value: `string "256"`, Type: reflect.TypeFor[uint8](), Field: "256", Offset: len64(`{`), Err: strconv.ErrRange},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"128":"abc"}`,
 		ptr:      new(map[int8]string),
+		out:      map[int8]string{},
 		err:      &UnmarshalTypeError{Value: `string "128"`, Type: reflect.TypeFor[int8](), Field: "128", Offset: len64(`{`), Err: strconv.ErrRange},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"-1":"abc"}`,
 		ptr:      new(map[uint8]string),
+		out:      map[uint8]string{},
 		err:      &UnmarshalTypeError{Value: `string "-1"`, Type: reflect.TypeFor[uint8](), Field: "-1", Offset: len64(`{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"F":{"a":2,"3":4}}`,
 		ptr:      new(map[string]map[int]int),
+		out:      map[string]map[int]int{"F": {3: 4}},
 		err:      &UnmarshalTypeError{Value: `string "a"`, Type: reflect.TypeFor[int](), Field: "F.a", Offset: len64(`{"F":{`), Err: strconv.ErrSyntax},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"F":{"a":2,"3":4}}`,
 		ptr:      new(map[string]map[uint]int),
+		out:      map[string]map[uint]int{"F": {3: 4}},
 		err:      &UnmarshalTypeError{Value: `string "a"`, Type: reflect.TypeFor[uint](), Field: "F.a", Offset: len64(`{"F":{`), Err: strconv.ErrSyntax},
 	},
 
@@ -686,6 +693,7 @@ var unmarshalTests = []struct {
 		CaseName:              Name(""),
 		in:                    `{"X": 1,"Y":2}`,
 		ptr:                   new(S5),
+		out:                   S5{S8: S8{S9{Y: 2}}},
 		err:                   fmt.Errorf("json: unknown field \"X\""),
 		disallowUnknownFields: true,
 	},
@@ -699,6 +707,7 @@ var unmarshalTests = []struct {
 		CaseName:              Name(""),
 		in:                    `{"X": 1,"Y":2}`,
 		ptr:                   new(S10),
+		out:                   S10{S13: S13{S8{S9{Y: 2}}}},
 		err:                   fmt.Errorf("json: unknown field \"X\""),
 		disallowUnknownFields: true,
 	},
@@ -766,12 +775,14 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"2009-11-10T23:00:00Z": "hello world"}`,
 		ptr:      new(map[Point]string),
+		out:      map[Point]string{},
 		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[Point](), Field: `2009-11-10T23:00:00Z`, Offset: len64(`{`)},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"asdf": "hello world"}`,
 		ptr:      new(map[unmarshaler]string),
+		out:      map[unmarshaler]string{},
 		err:      &UnmarshalTypeError{Value: "string", Type: reflect.TypeFor[unmarshaler](), Field: "asdf", Offset: len64(`{`)},
 	},
 
@@ -893,6 +904,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"V": {"F4": {}, "F2": "hello"}}`,
 		ptr:      new(VOuter),
+		out:      VOuter{V: V{F4: &VOuter{}}},
 		err: &UnmarshalTypeError{
 			Value:  "string",
 			Struct: "VOuter",
@@ -906,6 +918,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"Level1a": "hello"}`,
 		ptr:      new(Top),
+		out:      Top{Embed0a: &Embed0a{}},
 		err: &UnmarshalTypeError{
 			Value:  "string",
 			Struct: "Top",
@@ -951,7 +964,29 @@ var unmarshalTests = []struct {
 			"Q": 18,
 			"extra": true
 		}`,
-		ptr:                   new(Top),
+		ptr: new(Top),
+		out: Top{
+			Level0: 1,
+			Embed0: Embed0{
+				Level1b: 2,
+				Level1c: 3,
+			},
+			Embed0a: &Embed0a{Level1a: 5, Level1b: 6},
+			Embed0b: &Embed0b{Level1a: 8, Level1b: 9, Level1c: 10, Level1d: 11, Level1e: 12},
+			Loop: Loop{
+				Loop1: 13,
+				Loop2: 14,
+				Loop:  nil,
+			},
+			Embed0p: Embed0p{
+				Point: image.Point{
+					X: 15,
+					Y: 16,
+				},
+			},
+			Embed0q: Embed0q{Point: Point{Z: 17}},
+			embed:   embed{Q: 18},
+		},
 		err:                   fmt.Errorf("json: unknown field \"extra\""),
 		disallowUnknownFields: true,
 	},
@@ -979,7 +1014,29 @@ var unmarshalTests = []struct {
 			"Z": 17,
 			"Q": 18
 		}`,
-		ptr:                   new(Top),
+		ptr: new(Top),
+		out: Top{
+			Level0: 1,
+			Embed0: Embed0{
+				Level1b: 2,
+				Level1c: 3,
+			},
+			Embed0a: &Embed0a{Level1a: 5, Level1b: 6},
+			Embed0b: &Embed0b{Level1a: 8, Level1b: 9, Level1c: 10, Level1d: 11, Level1e: 12},
+			Loop: Loop{
+				Loop1: 13,
+				Loop2: 14,
+				Loop:  nil,
+			},
+			Embed0p: Embed0p{
+				Point: image.Point{
+					X: 15,
+					Y: 16,
+				},
+			},
+			Embed0q: Embed0q{Point: Point{Z: 17}},
+			embed:   embed{Q: 18},
+		},
 		err:                   fmt.Errorf("json: unknown field \"extra\""),
 		disallowUnknownFields: true,
 	},
@@ -989,12 +1046,14 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"data":{"test1": "bob", "test2": 123}}`,
 		ptr:      new(mapStringToStringData),
+		out:      mapStringToStringData{map[string]string{"test1": "bob", "test2": ""}},
 		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: len64(`{"data":{"test1": "bob", "test2": `), Struct: "mapStringToStringData", Field: "data.test2"},
 	},
 	{
 		CaseName: Name(""),
 		in:       `{"data":{"test1": 123, "test2": "bob"}}`,
 		ptr:      new(mapStringToStringData),
+		out:      mapStringToStringData{Data: map[string]string{"test1": "", "test2": "bob"}},
 		err:      &UnmarshalTypeError{Value: "number", Type: reflect.TypeFor[string](), Offset: len64(`{"data":{"test1": `), Struct: "mapStringToStringData", Field: "data.test1"},
 	},
 
@@ -1028,6 +1087,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"Ts": [{"Y": 1}, {"Y": 2}, {"Y": "bad-type"}]}`,
 		ptr:      new(PP),
+		out:      PP{Ts: []T{{Y: 1}, {Y: 2}, {Y: 0}}},
 		err: &UnmarshalTypeError{
 			Value:  "string",
 			Struct: "PP",
@@ -1070,6 +1130,7 @@ var unmarshalTests = []struct {
 		CaseName: Name(""),
 		in:       `{"A":"invalid"}`,
 		ptr:      new(map[string]Number),
+		out:      map[string]Number{"A": ""},
 		err:      &UnmarshalTypeError{Value: `string "invalid"`, Type: reflect.TypeFor[Number](), Err: strconv.ErrSyntax},
 	},
 
@@ -1283,8 +1344,10 @@ func TestUnmarshal(t *testing.T) {
 			}
 			if err := dec.Decode(v.Interface()); !equalError(err, tt.err) {
 				t.Fatalf("%s: Decode error:\n\tgot:  %v\n\twant: %v\n\n\tgot:  %#v\n\twant: %#v", tt.Where, err, tt.err, err, tt.err)
-			} else if err != nil {
-				return
+			} else if err != nil && tt.out == nil {
+				// Initialize tt.out during an error where there are no mutations,
+				// so the output is just the zero value of the input type.
+				tt.out = reflect.Zero(v.Elem().Type()).Interface()
 			}
 			if got := v.Elem().Interface(); !reflect.DeepEqual(got, tt.out) {
 				gotJSON, _ := Marshal(got)
