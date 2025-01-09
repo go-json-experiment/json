@@ -85,10 +85,6 @@ func (nps *NoPanicStruct) IsZero() bool {
 	return nps.Int != 0
 }
 
-type isZeroer interface {
-	IsZero() bool
-}
-
 type OptionalsZero struct {
 	Sr string `json:"sr"`
 	So string `json:"so,omitzero"`

@@ -7,6 +7,7 @@ package json
 import (
 	"bytes"
 	"io"
+	"reflect"
 
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -17,6 +18,8 @@ type Decoder struct {
 	dec  *jsontext.Decoder
 	opts jsonv2.Options
 	err  error
+
+	d decodeState
 }
 
 // NewDecoder returns a new decoder that reads from r.
@@ -59,7 +62,7 @@ func (dec *Decoder) DisallowUnknownFields() {
 //
 // See the documentation for [Unmarshal] for details about
 // the conversion of JSON into a Go value.
-func (dec *Decoder) Decode(v any) error {
+func (dec *Decoder) Decode(v2 any) (err2 error) {
 	if dec.err != nil {
 		return dec.err
 	}
@@ -73,7 +76,26 @@ func (dec *Decoder) Decode(v any) error {
 		}
 		return dec.err
 	}
-	return jsonv2.Unmarshal(b, v, dec.opts)
+	if CheckUnmarshalResults != nil {
+		// NOTE: We can only perform a diff check if the output is the zero value,
+		// otherwise we cannot reproduce the same starting conditions.
+		var v1 any
+		rv := reflect.ValueOf(v2)
+		if rv.Kind() == reflect.Pointer && !rv.IsNil() && rv.Elem().IsZero() {
+			v1 = reflect.New(rv.Elem().Type()).Interface()
+		}
+		defer func() {
+			if v1 == nil {
+				return
+			}
+			dec.d.useNumber, _ = jsonv2.GetOption(dec.opts, unmarshalAnyWithRawNumber)
+			dec.d.disallowUnknownFields, _ = jsonv2.GetOption(dec.opts, jsonv2.RejectUnknownMembers)
+			dec.d.init(b)
+			err1 := dec.d.unmarshal(v1)
+			CheckUnmarshalResults("Decode", b, v1, v2, err1, err2)
+		}()
+	}
+	return jsonv2.Unmarshal(b, v2, dec.opts)
 }
 
 // Buffered returns a reader of the data remaining in the Decoder's
@@ -113,15 +135,28 @@ func (enc *Encoder) Encode(v any) error {
 		return enc.err
 	}
 
+	var b2 []byte
+	var err2 error
 	buf := &enc.buf
 	buf.Reset()
-	if err := jsonv2.MarshalWrite(buf, v, enc.opts); err != nil {
-		return err
+	if CheckMarshalResults != nil {
+		defer func() {
+			e := newEncodeState()
+			defer encodeStatePool.Put(e)
+			escapeHTML, _ := jsonv2.GetOption(enc.opts, jsontext.EscapeForHTML)
+			err1 := e.marshal(v, encOpts{escapeHTML: escapeHTML})
+			b1 := e.Bytes()
+			CheckMarshalResults("Encode", b1, b2, err1, err2)
+		}()
 	}
+	if err2 = jsonv2.MarshalWrite(buf, v, enc.opts); err2 != nil {
+		return err2
+	}
+	b2 = buf.Bytes()
 	if len(enc.indentPrefix)+len(enc.indentValue) > 0 {
 		enc.indentBuf.Reset()
-		if err := Indent(&enc.indentBuf, buf.Bytes(), enc.indentPrefix, enc.indentValue); err != nil {
-			return err
+		if err2 = Indent(&enc.indentBuf, buf.Bytes(), enc.indentPrefix, enc.indentValue); err2 != nil {
+			return err2
 		}
 		buf = &enc.indentBuf
 	}

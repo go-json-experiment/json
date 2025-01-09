@@ -55,6 +55,47 @@ func Compact(dst *bytes.Buffer, src []byte) error {
 	return nil
 }
 
+func appendCompact(dst, src []byte, escape bool) ([]byte, error) {
+	origLen := len(dst)
+	scan := newScanner()
+	defer freeScanner(scan)
+	start := 0
+	for i, c := range src {
+		if escape && (c == '<' || c == '>' || c == '&') {
+			if start < i {
+				dst = append(dst, src[start:i]...)
+			}
+			dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&0xF])
+			start = i + 1
+		}
+		// Convert U+2028 and U+2029 (E2 80 A8 and E2 80 A9).
+		if escape && c == 0xE2 && i+2 < len(src) && src[i+1] == 0x80 && src[i+2]&^1 == 0xA8 {
+			if start < i {
+				dst = append(dst, src[start:i]...)
+			}
+			dst = append(dst, '\\', 'u', '2', '0', '2', hex[src[i+2]&0xF])
+			start = i + 3
+		}
+		v := scan.step(scan, c)
+		if v >= scanSkipSpace {
+			if v == scanError {
+				break
+			}
+			if start < i {
+				dst = append(dst, src[start:i]...)
+			}
+			start = i + 1
+		}
+	}
+	if scan.eof() == scanError {
+		return dst[:origLen], scan.err
+	}
+	if start < len(src) {
+		dst = append(dst, src[start:]...)
+	}
+	return dst, nil
+}
+
 // indentGrowthFactor specifies the growth factor of indenting JSON input.
 // Empirically, the growth factor was measured to be between 1.4x to 1.8x
 // for some set of compacted JSON with the indent being a single tab.
