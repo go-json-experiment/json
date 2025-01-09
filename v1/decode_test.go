@@ -1176,6 +1176,23 @@ var unmarshalTests = []struct {
 			N Number `json:",string"`
 		}{"5"},
 	},
+
+	// Verify that syntactic errors are immediately fatal,
+	// while semantic errors are lazily reported
+	// (i.e., allow processing to continue).
+	{
+		CaseName: Name(""),
+		in:       `[1,2,true,4,5}`,
+		ptr:      new([]int),
+		err:      &SyntaxError{msg: "invalid character '}' after array value (expecting ',' or ']')", Offset: len64(`[1,2,true,4,5`)},
+	},
+	{
+		CaseName: Name(""),
+		in:       `[1,2,true,4,5]`,
+		ptr:      new([]int),
+		out:      []int{1, 2, 0, 4, 5},
+		err:      &UnmarshalTypeError{Value: "true", Type: reflect.TypeFor[int](), Field: "2", Offset: len64(`[1,2,`)},
+	},
 }
 
 func TestMarshal(t *testing.T) {
