@@ -63,8 +63,12 @@ func (dec *Decoder) Decode(v any) error {
 	if dec.err != nil {
 		return dec.err
 	}
-	dec.err = jsonv2.UnmarshalDecode(dec.dec, v, dec.opts)
-	return dec.err
+	b, err := dec.dec.ReadValue()
+	if err != nil {
+		dec.err = transformSyntacticError(err)
+		return dec.err
+	}
+	return jsonv2.Unmarshal(b, v, dec.opts)
 }
 
 // Buffered returns a reader of the data remaining in the Decoder's
