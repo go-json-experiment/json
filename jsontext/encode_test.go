@@ -172,7 +172,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidNull"),
 	calls: []encoderMethodCall{
-		{Value(`nulL`), newInvalidCharacterError("L", "within literal null (expecting 'l')").withPos(`nul`, ""), ""},
+		{Value(`nulL`), newInvalidCharacterError("L", "in literal null (expecting 'l')").withPos(`nul`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedFalse"),
@@ -182,7 +182,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidFalse"),
 	calls: []encoderMethodCall{
-		{Value(`falsE`), newInvalidCharacterError("E", "within literal false (expecting 'e')").withPos(`fals`, ""), ""},
+		{Value(`falsE`), newInvalidCharacterError("E", "in literal false (expecting 'e')").withPos(`fals`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedTrue"),
@@ -192,7 +192,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidTrue"),
 	calls: []encoderMethodCall{
-		{Value(`truE`), newInvalidCharacterError("E", "within literal true (expecting 'e')").withPos(`tru`, ""), ""},
+		{Value(`truE`), newInvalidCharacterError("E", "in literal true (expecting 'e')").withPos(`tru`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedString"),
@@ -202,7 +202,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidString"),
 	calls: []encoderMethodCall{
-		{Value(`"ok` + "\x00"), newInvalidCharacterError("\x00", `within string (expecting non-control character)`).withPos(`"ok`, ""), ""},
+		{Value(`"ok` + "\x00"), newInvalidCharacterError("\x00", `in string (expecting non-control character)`).withPos(`"ok`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
@@ -239,7 +239,7 @@ var encoderErrorTestdata = []struct {
 }, {
 	name: jsontest.Name("InvalidNumber"),
 	calls: []encoderMethodCall{
-		{Value(`0.e`), newInvalidCharacterError("e", "within number (expecting digit)").withPos(`0.`, ""), ""},
+		{Value(`0.e`), newInvalidCharacterError("e", "in number (expecting digit)").withPos(`0.`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterStart"),

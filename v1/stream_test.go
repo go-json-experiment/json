@@ -424,18 +424,18 @@ func TestDecodeInStream(t *testing.T) {
 		{CaseName: Name(""), json: ` [{"a": 1} {"a": 2}] `, expTokens: []any{
 			Delim('['),
 			decodeThis{map[string]any{"a": float64(1)}},
-			decodeThis{&SyntaxError{"missing character ',' after object or array value", len64(` [{"a": 1} `)}},
+			decodeThis{&SyntaxError{"invalid character '{' after array element", len64(` [{"a": 1} `)}},
 		}},
 		{CaseName: Name(""), json: `{ "` + strings.Repeat("a", 513) + `" 1 }`, expTokens: []any{
 			Delim('{'), strings.Repeat("a", 513),
-			decodeThis{&SyntaxError{"missing character ':' after object name", len64(`{ "` + strings.Repeat("a", 513) + `" `)}},
+			decodeThis{&SyntaxError{"invalid character '1' after object key", len64(`{ "` + strings.Repeat("a", 513) + `" `)}},
 		}},
 		{CaseName: Name(""), json: `{ "\a" }`, expTokens: []any{
 			Delim('{'),
-			&SyntaxError{"invalid escape sequence `\\a` within string", len64(`{ "`)},
+			&SyntaxError{"invalid escape sequence `\\a` in string", len64(`{ "`)},
 		}},
 		{CaseName: Name(""), json: ` \a`, expTokens: []any{
-			&SyntaxError{"invalid character '\\\\' at start of token", len64(` `)},
+			&SyntaxError{"invalid character '\\\\' looking for beginning of value", len64(` `)},
 		}},
 	}
 	for _, tt := range tests {
