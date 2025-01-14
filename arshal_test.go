@@ -2531,7 +2531,7 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidObjectEnd"),
 		in:      structInlineTextValue{X: jsontext.Value(` { "name" : false , } `)},
 		want:    `{"name":false`,
-		wantErr: EM(newInvalidCharacterError(",", "before next token", len64(` { "name" : false `), "")).withPos(`{"name":false,`, "").withType(0, T[jsontext.Value]()),
+		wantErr: EM(newInvalidCharacterError(",", "at start of value", len64(` { "name" : false `), "")).withPos(`{"name":false,`, "").withType(0, T[jsontext.Value]()),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidDualObject"),
 		in:      structInlineTextValue{X: jsontext.Value(`{}{}`)},
@@ -6626,7 +6626,7 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineTextValue),
 		want:    addr(structInlineTextValue{A: 1, X: jsontext.Value(`{"fizz":`)}),
-		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
+		wantErr: newInvalidCharacterError("i", "in literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/TextValue/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -6736,13 +6736,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineMapStringAny),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": nil}}),
-		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
+		wantErr: newInvalidCharacterError("i", "in literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapStringAny/MergeInvalidValue/Existing"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
 		want:    addr(structInlineMapStringAny{A: 1, X: jsonObject{"fizz": true}}),
-		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
+		wantErr: newInvalidCharacterError("i", "in literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapStringAny/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,
@@ -6959,13 +6959,13 @@ func TestUnmarshal(t *testing.T) {
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   new(structInlineMapNamedStringAny),
 		want:    addr(structInlineMapNamedStringAny{A: 1, X: map[namedString]any{"fizz": nil}}),
-		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
+		wantErr: newInvalidCharacterError("i", "in literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:    jsontest.Name("Structs/InlinedFallback/MapNamedStringAny/MergeInvalidValue/Existing"),
 		inBuf:   `{"A":1,"fizz":nil,"B":2}`,
 		inVal:   addr(structInlineMapNamedStringAny{A: 1, X: map[namedString]any{"fizz": true}}),
 		want:    addr(structInlineMapNamedStringAny{A: 1, X: map[namedString]any{"fizz": true}}),
-		wantErr: newInvalidCharacterError("i", "within literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
+		wantErr: newInvalidCharacterError("i", "in literal null (expecting 'u')", len64(`{"A":1,"fizz":n`), "/fizz"),
 	}, {
 		name:  jsontest.Name("Structs/InlinedFallback/MapNamedStringAny/CaseSensitive"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2,"a":3}`,

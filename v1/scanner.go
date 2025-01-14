@@ -7,6 +7,7 @@ package json
 import (
 	"errors"
 	"io"
+	"strings"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
@@ -52,7 +53,11 @@ func transformSyntacticError(err error) error {
 		if serr.Err == io.ErrUnexpectedEOF {
 			serr.Err = errUnexpectedEnd
 		}
-		return &SyntaxError{Offset: serr.ByteOffset, msg: serr.Err.Error()}
+		msg := serr.Err.Error()
+		if i := strings.Index(msg, " (expecting"); i >= 0 && !strings.Contains(msg, " in literal") {
+			msg = msg[:i]
+		}
+		return &SyntaxError{Offset: serr.ByteOffset, msg: syntaxErrorReplacer.Replace(msg)}
 	case ok:
 		return (*SyntaxError)(nil)
 	case export.IsIOError(err):
@@ -61,3 +66,15 @@ func transformSyntacticError(err error) error {
 		return err
 	}
 }
+
+// syntaxErrorReplacer replaces certain string literals in the v2 error
+// to better match the historical string rendering of syntax errors.
+// In particular, v2 uses the terminology "object name" to match RFC 8259,
+// while v1 uses "object key", which is not a term found in JSON literature.
+var syntaxErrorReplacer = strings.NewReplacer(
+	"object name", "object key",
+	"at start of value", "looking for beginning of value",
+	"at start of string", "looking for beginning of object key string",
+	"after object value", "after object key:value pair",
+	"in number", "in numeric literal",
+)

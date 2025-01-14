@@ -31,11 +31,6 @@ sed -i 's/json\.struct/v2.struct/g' $GOROOT/src/encoding/json/v2/errors_test.go
 sed -i 's|"encoding/json"|"encoding/json", "encoding/json/v2"|g' $GOROOT/src/cmd/vendor/golang.org/x/tools/go/analysis/passes/structtag/structtag.go
 
 # Adjust tests that hardcode formatted error strings.
-sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/mod_list_update_nolatest.txt
-sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/mod_proxy_invalid.txt
-sed -i 's/looking for beginning of value/at start of value/g' $GOROOT/src/cmd/go/testdata/script/test_fuzz_io_error.txt
-sed -i 's/: invalid character/: jsontext: invalid character/g' $GOROOT/src/html/template/escape_test.go
-sed -i 's/looking for beginning of object key string/at start of string (expecting \&#39;\&#34;\&#39;) after offset 2/g' $GOROOT/src/html/template/escape_test.go
 sed -i 's/}`, "Time.UnmarshalJSON: input is not a JSON string/}`, "json: cannot unmarshal JSON object into Go type time.Time/g' $GOROOT/src/time/time_test.go
 sed -i 's/]`, "Time.UnmarshalJSON: input is not a JSON string/]`, "json: cannot unmarshal JSON array into Go type time.Time/g' $GOROOT/src/time/time_test.go
 

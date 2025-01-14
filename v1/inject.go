@@ -7,10 +7,12 @@ package json
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/internal"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // Inject functionality into v2 to properly handle v1 types.
@@ -52,6 +54,10 @@ func transformMarshalError(root any, err error) error {
 	} else if ok {
 		return (*UnsupportedValueError)(nil)
 	}
+	if err, _ := err.(*MarshalerError); err != nil {
+		err.Err = transformSyntacticError(err.Err)
+		return err
+	}
 	return transformSyntacticError(err)
 }
 
@@ -88,14 +94,36 @@ func transformUnmarshalError(root any, err error) error {
 		// See https://go.dev/issue/43126
 		var value string
 		switch err.JSONKind {
-		case 'n', 'f', 't', '"', '0':
+		case 'n', '"', '0':
 			value = err.JSONKind.String()
+		case 'f', 't':
+			value = "bool"
 		case '[', ']':
 			value = "array"
 		case '{', '}':
 			value = "object"
 		}
 		if len(err.JSONValue) > 0 {
+			isStrconvError := err.Err == strconv.ErrRange || err.Err == strconv.ErrSyntax
+			isNumericKind := func(t reflect.Type) bool {
+				if t == nil {
+					return false
+				}
+				switch t.Kind() {
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+					reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+					reflect.Float32, reflect.Float64:
+					return true
+				}
+				return false
+			}
+			if isStrconvError && isNumericKind(err.GoType) {
+				value = "number"
+				if err.JSONKind == '"' {
+					err.JSONValue, _ = jsontext.AppendUnquote(nil, err.JSONValue)
+				}
+				err.Err = nil
+			}
 			value += " " + string(err.JSONValue)
 		}
 		var rootName string
@@ -114,7 +142,7 @@ func transformUnmarshalError(root any, err error) error {
 			Offset: err.ByteOffset,
 			Struct: rootName,
 			Field:  fieldPath,
-			Err:    err.Err,
+			Err:    transformSyntacticError(err.Err),
 		}
 	} else if ok {
 		return (*UnmarshalTypeError)(nil)
