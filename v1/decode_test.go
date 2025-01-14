@@ -2250,6 +2250,7 @@ func TestUnmarshalTypeError(t *testing.T) {
 }
 
 func TestUnmarshalSyntax(t *testing.T) {
+	var x any
 	tests := []struct {
 		CaseName
 		in string
@@ -2265,7 +2266,6 @@ func TestUnmarshalSyntax(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
-			var x any
 			err := Unmarshal([]byte(tt.in), &x)
 			if _, ok := err.(*SyntaxError); !ok {
 				t.Errorf("%s: Unmarshal(%#q, any):\n\tgot:  %T\n\twant: %T",
