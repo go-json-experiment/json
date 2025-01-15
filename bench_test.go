@@ -595,10 +595,10 @@ func runValue(tb testing.TB) {
 
 	methods := []struct {
 		name   string
-		format func(*jsontext.Value) error
+		format func(*jsontext.Value, ...jsontext.Options) error
 	}{
 		{"Compact", (*jsontext.Value).Compact},
-		{"Indent", func(v *jsontext.Value) error { return v.Indent("\t", "    ") }},
+		{"Indent", (*jsontext.Value).Indent},
 		{"Canonicalize", (*jsontext.Value).Canonicalize},
 	}
 

@@ -5,11 +5,11 @@
 package jsonwire
 
 import (
-	"bytes"
 	"cmp"
 	"slices"
 	"testing"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 func TestQuoteRune(t *testing.T) {
@@ -31,7 +31,7 @@ func TestQuoteRune(t *testing.T) {
 	}
 }
 
-var compareUTF16Testdata = []string{"", "\r", "1", "\u0080", "\u00f6", "\u20ac", "\U0001f600", "\ufb33"}
+var compareUTF16Testdata = []string{"", "\r", "1", "f\xfe", "f\xfe\xff", "f\xff", "\u0080", "\u00f6", "\u20ac", "\U0001f600", "\ufb33"}
 
 func TestCompareUTF16(t *testing.T) {
 	for i, si := range compareUTF16Testdata {
@@ -58,17 +58,14 @@ func FuzzCompareUTF16(f *testing.F) {
 	CompareUTF16Simple := func(x, y []byte) int {
 		ux := utf16.Encode([]rune(string(x)))
 		uy := utf16.Encode([]rune(string(y)))
-		if n := slices.Compare(ux, uy); n != 0 {
-			return n
-		}
-		return bytes.Compare(x, y) // only occurs for strings with invalid UTF-8
+		return slices.Compare(ux, uy)
 	}
 
 	f.Fuzz(func(t *testing.T, s1, s2 []byte) {
 		// Compare the optimized and simplified implementations.
 		got := CompareUTF16(s1, s2)
 		want := CompareUTF16Simple(s1, s2)
-		if got != want {
+		if got != want && utf8.Valid(s1) && utf8.Valid(s2) {
 			t.Errorf("CompareUTF16(%q, %q) = %v, want %v", s1, s2, got, want)
 		}
 	})
