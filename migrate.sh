@@ -178,8 +178,8 @@ echo "pkg encoding/json/v2, func MarshalFunc[\$0 interface{}](func(\$0) ([]uint8
 echo "pkg encoding/json/v2, func MarshalToFunc[\$0 interface{}](func(*jsontext.Encoder, \$0, jsonopts.Options) error) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func MarshalWrite(io.Writer, interface{}, ...jsonopts.Options) error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func MatchCaseInsensitiveNames(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func NewMarshalers(...*typedArshalers[jsontext.Encoder]) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/v2, func NewUnmarshalers(...*typedArshalers[jsontext.Decoder]) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func JoinMarshalers(...*typedArshalers[jsontext.Encoder]) *typedArshalers[jsontext.Encoder] #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/v2, func JoinUnmarshalers(...*typedArshalers[jsontext.Decoder]) *typedArshalers[jsontext.Decoder] #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func OmitZeroStructFields(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func RejectUnknownMembers(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func StringifyNumbers(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE

@@ -2661,7 +2661,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Structs/InlinedFallback/MapStringInt/MarshalFunc"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				// Marshalers do not affect the string key of inlined maps.
 				MarshalFunc(func(v string) ([]byte, error) {
 					return []byte(fmt.Sprintf(`"%q"`, strings.ToUpper(v))), nil
@@ -3594,7 +3594,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/Empty2/NoMatch"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers()),
+			WithMarshalers(JoinMarshalers()),
 		},
 		in:   true,
 		want: `true`,
@@ -3854,7 +3854,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Funtions/Struct/Fields"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(v bool) ([]byte, error) {
 					return []byte(`"called1"`), nil
 				}),
@@ -3874,7 +3874,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Struct/OmitEmpty"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(v bool) ([]byte, error) {
 					return []byte(`null`), nil
 				}),
@@ -3906,7 +3906,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Struct/OmitZero"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(v bool) ([]byte, error) {
 					panic("should not be called")
 				}),
@@ -3926,7 +3926,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Struct/Inlined"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(v structInlinedL1) ([]byte, error) {
 					panic("should not be called")
 				}),
@@ -4219,7 +4219,7 @@ func TestMarshal(t *testing.T) {
 					return checkLast()
 				})
 
-				return NewMarshalers(
+				return JoinMarshalers(
 					anyMarshaler,
 					pointerAnyMarshaler,
 					namedAnyMarshaler,
@@ -4237,7 +4237,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V1First"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
@@ -4251,7 +4251,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2First"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
 					return enc.WriteToken(jsontext.String("called"))
 				}),
@@ -4265,7 +4265,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
 					return SkipFunc
 				}),
@@ -4279,8 +4279,8 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedFirst"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
-				NewMarshalers(
+			WithMarshalers(JoinMarshalers(
+				JoinMarshalers(
 					MarshalFunc(func(bool) ([]byte, error) {
 						return []byte(`"called"`), nil
 					}),
@@ -4295,11 +4295,11 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedLast"),
 		opts: []Options{
-			WithMarshalers(NewMarshalers(
+			WithMarshalers(JoinMarshalers(
 				MarshalFunc(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
-				NewMarshalers(
+				JoinMarshalers(
 					MarshalFunc(func(bool) ([]byte, error) {
 						panic("should not be called")
 					}),
@@ -7972,7 +7972,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/Empty2/NoMatch"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers()),
+			WithUnmarshalers(JoinUnmarshalers()),
 		},
 		inBuf: `""`,
 		inVal: addr(""),
@@ -8216,7 +8216,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Funtions/Struct/Fields"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFunc(func(b []byte, v *bool) error {
 					if string(b) != `"called1"` {
 						return fmt.Errorf("got %s, want %s", b, `"called1"`)
@@ -8259,7 +8259,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Struct/Inlined"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFunc(func([]byte, *structInlinedL1) error {
 					panic("should not be called")
 				}),
@@ -8370,7 +8370,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NilPointerNetIP/Override"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer, opts Options) error {
 					*v = (*net.IP)(nil)
 					return SkipFunc
@@ -8578,7 +8578,7 @@ func TestUnmarshal(t *testing.T) {
 					return checkLast()
 				})
 
-				return NewUnmarshalers(
+				return JoinUnmarshalers(
 					// This is just like unmarshaling into a Go array,
 					// but avoids zeroing the element before calling unmarshal.
 					UnmarshalFromFunc(func(dec *jsontext.Decoder, v *[14]any, opts Options) error {
@@ -8611,7 +8611,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V1First"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFunc(func(b []byte, v *string) error {
 					if string(b) != `"called"` {
 						return fmt.Errorf("got %s, want %s", b, `"called"`)
@@ -8630,7 +8630,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2First"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
 					switch t, err := dec.ReadToken(); {
 					case err != nil:
@@ -8652,7 +8652,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
 					return SkipFunc
 				}),
@@ -8671,8 +8671,8 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedFirst"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
-				NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
+				JoinUnmarshalers(
 					UnmarshalFunc(func(b []byte, v *string) error {
 						if string(b) != `"called"` {
 							return fmt.Errorf("got %s, want %s", b, `"called"`)
@@ -8692,7 +8692,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Precedence/NestedLast"),
 		opts: []Options{
-			WithUnmarshalers(NewUnmarshalers(
+			WithUnmarshalers(JoinUnmarshalers(
 				UnmarshalFunc(func(b []byte, v *string) error {
 					if string(b) != `"called"` {
 						return fmt.Errorf("got %s, want %s", b, `"called"`)
@@ -8700,7 +8700,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called"
 					return nil
 				}),
-				NewUnmarshalers(
+				JoinUnmarshalers(
 					UnmarshalFunc(func([]byte, *string) error {
 						panic("should not be called")
 					}),
