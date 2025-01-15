@@ -47,8 +47,11 @@ func appendHTMLEscape(dst, src []byte) []byte {
 func Compact(dst *bytes.Buffer, src []byte) error {
 	dst.Grow(len(src))
 	b := dst.AvailableBuffer()
-	b = append(b, src...)
-	if err := (*jsontext.Value)(&b).Compact(); err != nil {
+	b, err := jsontext.AppendFormat(b, src,
+		jsontext.AllowDuplicateNames(true),
+		jsontext.AllowInvalidUTF8(true),
+		jsontext.PreserveRawStrings(true))
+	if err != nil {
 		return transformSyntacticError(err)
 	}
 	dst.Write(b)
@@ -114,8 +117,14 @@ func appendIndent(dst, src []byte, prefix, indent string) ([]byte, error) {
 		}()
 	}
 
-	dst = append(dst, src...)
-	if err := (*jsontext.Value)(&dst).Indent(prefix, indent); err != nil {
+	dst, err := jsontext.AppendFormat(dst, src,
+		jsontext.AllowDuplicateNames(true),
+		jsontext.AllowInvalidUTF8(true),
+		jsontext.PreserveRawStrings(true),
+		jsontext.Multiline(true),
+		jsontext.WithIndentPrefix(prefix),
+		jsontext.WithIndent(indent))
+	if err != nil {
 		return dst[:dstLen], transformSyntacticError(err)
 	}
 	return dst, nil

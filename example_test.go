@@ -34,7 +34,7 @@ func Example_textMarshal() {
 		netip.MustParseAddr("192.168.0.101"): "obsidian",
 		netip.MustParseAddr("192.168.0.102"): "diamond",
 	}
-	b, err := json.Marshal(&want)
+	b, err := json.Marshal(&want, json.Deterministic(true))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,10 +49,8 @@ func Example_textMarshal() {
 		log.Fatalf("roundtrip mismatch: got %v, want %v", got, want)
 	}
 
-	// Print the serialized JSON object. Canonicalize the JSON first since
-	// Go map entries are not serialized in a deterministic order.
-	(*jsontext.Value)(&b).Canonicalize()
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
+	// Print the serialized JSON object.
+	(*jsontext.Value)(&b).Indent() // indent for readability
 	fmt.Println(string(b))
 
 	// Output:
@@ -93,7 +91,7 @@ func Example_fieldNames() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
+	(*jsontext.Value)(&b).Indent() // indent for readability
 	fmt.Println(string(b))
 
 	// Output:
@@ -218,8 +216,8 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
-	fmt.Println("OmitZero:", string(b))    // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
+	(*jsontext.Value)(&b).Indent()      // indent for readability
+	fmt.Println("OmitZero:", string(b)) // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
 
 	// Demonstrate behavior of "omitempty".
 	b, err = json.Marshal(struct {
@@ -264,8 +262,8 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
-	fmt.Println("OmitEmpty:", string(b))   // outputs "Bool", "Int", and "Time"
+	(*jsontext.Value)(&b).Indent()       // indent for readability
+	fmt.Println("OmitEmpty:", string(b)) // outputs "Bool", "Int", and "Time"
 
 	// Output:
 	// OmitZero: {
@@ -323,7 +321,7 @@ func Example_inlinedFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
+	(*jsontext.Value)(&b).Indent() // indent for readability
 	fmt.Println(string(b))
 
 	// Output:
@@ -431,7 +429,7 @@ func Example_formatFlags() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
+	(*jsontext.Value)(&b).Indent() // indent for readability
 	fmt.Println(string(b))
 
 	// Output:

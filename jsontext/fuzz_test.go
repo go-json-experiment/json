@@ -134,9 +134,9 @@ func FuzzResumableDecoder(f *testing.F) {
 	})
 }
 
-func FuzzValueReformat(f *testing.F) {
+func FuzzValueFormat(f *testing.F) {
 	for _, td := range valueTestdata {
-		f.Add([]byte(td.in))
+		f.Add(int64(0), []byte(td.in))
 	}
 
 	// isValid reports whether b is valid according to the specified options.
@@ -160,7 +160,23 @@ func FuzzValueReformat(f *testing.F) {
 		return out
 	}
 
-	f.Fuzz(func(t *testing.T, b []byte) {
+	allOptions := []Options{
+		AllowDuplicateNames(true),
+		AllowInvalidUTF8(true),
+		EscapeForHTML(true),
+		EscapeForJS(true),
+		PreserveRawStrings(true),
+		CanonicalizeRawInts(true),
+		CanonicalizeRawFloats(true),
+		ReorderRawObjects(true),
+		SpaceAfterColon(true),
+		SpaceAfterComma(true),
+		Multiline(true),
+		WithIndent("\t"),
+		WithIndentPrefix("    "),
+	}
+
+	f.Fuzz(func(t *testing.T, seed int64, b []byte) {
 		validRFC7159 := isValid(b, AllowInvalidUTF8(true), AllowDuplicateNames(true))
 		validRFC8259 := isValid(b, AllowInvalidUTF8(false), AllowDuplicateNames(true))
 		validRFC7493 := isValid(b, AllowInvalidUTF8(false), AllowDuplicateNames(false))
@@ -188,7 +204,7 @@ func FuzzValueReformat(f *testing.F) {
 		}
 
 		gotIndented := Value(string(b))
-		gotIndentOk := gotIndented.Indent("", " ") == nil
+		gotIndentOk := gotIndented.Indent() == nil
 		wantIndentOk := validRFC7159
 		if !bytes.Equal(stripWhitespace(gotIndented), stripWhitespace(b)) {
 			t.Errorf("stripWhitespace(Value.Indent) = %s, want %s", stripWhitespace(gotIndented), stripWhitespace(b))
@@ -203,5 +219,16 @@ func FuzzValueReformat(f *testing.F) {
 		if gotCanonicalizeOk != wantCanonicalizeOk {
 			t.Errorf("Value.Canonicalize success mismatch: got %v, want %v", gotCanonicalizeOk, wantCanonicalizeOk)
 		}
+
+		// Random options should not result in a panic.
+		var opts []Options
+		rn := rand.New(rand.NewSource(seed))
+		for _, opt := range allOptions {
+			if rn.Intn(len(allOptions)/4) == 0 {
+				opts = append(opts, opt)
+			}
+		}
+		v := Value(b)
+		v.Format(opts...) // should not panic
 	})
 }
