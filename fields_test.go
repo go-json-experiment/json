@@ -261,6 +261,14 @@ func TestMakeStructFields(t *testing.T) {
 		in: struct {
 			A struct{ encoding.TextMarshaler } `json:",inline"`
 		}{},
+		want: structFields{flattened: []structField{{
+			index: []int{0, 0},
+			typ:   reflect.TypeFor[encoding.TextMarshaler](),
+			fieldOptions: fieldOptions{
+				name:       "TextMarshaler",
+				quotedName: `"TextMarshaler"`,
+			},
+		}}},
 		wantErr: errors.New(`inlined Go struct field A of type struct { encoding.TextMarshaler } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("InlineTextAppender"),
@@ -279,6 +287,14 @@ func TestMakeStructFields(t *testing.T) {
 		in: struct {
 			A struct{ MarshalerTo } `json:",inline"`
 		}{},
+		want: structFields{flattened: []structField{{
+			index: []int{0, 0},
+			typ:   reflect.TypeFor[MarshalerTo](),
+			fieldOptions: fieldOptions{
+				name:       "MarshalerTo",
+				quotedName: `"MarshalerTo"`,
+			},
+		}}},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.MarshalerTo } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownTextUnmarshaler"),
@@ -291,6 +307,14 @@ func TestMakeStructFields(t *testing.T) {
 		in: struct {
 			A *struct{ Unmarshaler } `json:",inline"`
 		}{},
+		want: structFields{flattened: []structField{{
+			index: []int{0, 0},
+			typ:   reflect.TypeFor[Unmarshaler](),
+			fieldOptions: fieldOptions{
+				name:       "Unmarshaler",
+				quotedName: `"Unmarshaler"`,
+			},
+		}}},
 		wantErr: errors.New(`inlined Go struct field A of type struct { json.Unmarshaler } must not implement marshal or unmarshal methods`),
 	}, {
 		name: jsontest.Name("UnknownJSONUnmarshalerFrom"),
