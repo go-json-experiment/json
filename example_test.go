@@ -560,7 +560,7 @@ func ExampleWithMarshalers_errors() {
 
 	b, err := json.Marshal(&response,
 		// Intercept every attempt to marshal an error type.
-		json.WithMarshalers(json.NewMarshalers(
+		json.WithMarshalers(json.JoinMarshalers(
 			// Suppose we consider strconv.NumError to be a safe to serialize:
 			// this type-specific marshal function intercepts this type
 			// and encodes the error message as a JSON string.
