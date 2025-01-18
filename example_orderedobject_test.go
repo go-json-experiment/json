@@ -99,7 +99,7 @@ func Example_orderedObject() {
 	}
 
 	// Print the serialized JSON object.
-	(*jsontext.Value)(&b).Indent("", "\t") // indent for readability
+	(*jsontext.Value)(&b).Indent() // indent for readability
 	fmt.Println(string(b))
 
 	// Output:
