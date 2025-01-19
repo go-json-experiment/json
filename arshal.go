@@ -198,7 +198,7 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	xe := export.Encoder(out)
 	mo.CopyCoderOptions(&xe.Struct)
 	err = marshalEncode(out, in, mo)
-	if err != nil && xe.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+	if err != nil && mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 		return internal.TransformMarshalError(in, err)
 	}
 	return err
