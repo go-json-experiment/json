@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestPointer(t *testing.T) {
@@ -17,14 +18,16 @@ func TestPointer(t *testing.T) {
 		wantParent Pointer
 		wantLast   string
 		wantTokens []string
+		wantValid  bool
 	}{
-		{"", "", "", nil},
-		{"a", "", "a", []string{"a"}},
-		{"~", "", "~", []string{"~"}},
-		{"/a", "", "a", []string{"a"}},
-		{"/foo/bar", "/foo", "bar", []string{"foo", "bar"}},
-		{"///", "//", "", []string{"", "", ""}},
-		{"/~0~1", "", "~/", []string{"~/"}},
+		{"", "", "", nil, true},
+		{"a", "", "a", []string{"a"}, false},
+		{"~", "", "~", []string{"~"}, false},
+		{"/a", "", "a", []string{"a"}, true},
+		{"/foo/bar", "/foo", "bar", []string{"foo", "bar"}, true},
+		{"///", "//", "", []string{"", "", ""}, true},
+		{"/~0~1", "", "~/", []string{"~/"}, true},
+		{"/\xde\xad\xbe\xef", "", "\xde\xad\xbe\xef", []string{"\xde\xad\xbe\xef"}, false},
 	}
 	for _, tt := range tests {
 		if got := tt.in.Parent(); got != tt.wantParent {
@@ -34,7 +37,12 @@ func TestPointer(t *testing.T) {
 			t.Errorf("Pointer(%q).Last = %q, want %q", tt.in, got, tt.wantLast)
 		}
 		if strings.HasPrefix(string(tt.in), "/") {
-			if got := tt.in.Parent().AppendToken(tt.in.LastToken()); got != tt.in {
+			wantRoundtrip := tt.in
+			if !utf8.ValidString(string(wantRoundtrip)) {
+				// Replace bytes of invalid UTF-8 with Unicode replacement character.
+				wantRoundtrip = Pointer([]rune(wantRoundtrip))
+			}
+			if got := tt.in.Parent().AppendToken(tt.in.LastToken()); got != wantRoundtrip {
 				t.Errorf("Pointer(%q).Parent().AppendToken(LastToken()) = %q, want %q", tt.in, got, tt.in)
 			}
 			in := tt.in
@@ -53,6 +61,9 @@ func TestPointer(t *testing.T) {
 		}
 		if got := slices.Collect(tt.in.Tokens()); !slices.Equal(got, tt.wantTokens) {
 			t.Errorf("Pointer(%q).Tokens = %q, want %q", tt.in, got, tt.wantTokens)
+		}
+		if got := tt.in.IsValid(); got != tt.wantValid {
+			t.Errorf("Pointer(%q).IsValid = %v, want %v", tt.in, got, tt.wantValid)
 		}
 	}
 }
