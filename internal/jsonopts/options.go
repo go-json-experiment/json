@@ -22,6 +22,11 @@ type Struct struct {
 
 	CoderValues
 	ArshalValues
+
+	// UserValues is a map of user-defined option values
+	// keyed by [reflect.Type] to the concrete user-defined value.
+	// The key type is not [reflect.Type] to avoid a dependency on reflect.
+	UserValues map[any]any
 }
 
 type CoderValues struct {
@@ -166,6 +171,14 @@ func (dst *Struct) Join(srcs ...Options) {
 			if src.Format != "" {
 				dst.Format = src.Format
 				dst.FormatDepth = src.FormatDepth
+			}
+			if len(src.UserValues) > 0 {
+				if dst.UserValues == nil {
+					dst.UserValues = make(map[any]any)
+				}
+				for k, v := range src.UserValues {
+					dst.UserValues[k] = v
+				}
 			}
 		default:
 			JoinUnknownOption(dst, src)

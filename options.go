@@ -6,6 +6,7 @@ package json
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
@@ -245,20 +246,47 @@ func WithUnmarshalers(v *Unmarshalers) Options {
 	return (*unmarshalersOption)(v)
 }
 
+// WithOption constructs a user-defined option value.
+// Later occurrences of an option of a particular type overrides
+// prior occurrences of an option of the exact same type.
+// The type T must be a declared type in a package or
+// a pointer to such a type.
+//
+// A user-defined option can be constructed using:
+//
+//	var v mypkg.MyType = ...
+//	opts := json.WithOption(v)
+//
+// The option value can be retrieved using:
+//
+//	v, ok := json.GetOption(opts, json.WithOption[mypkg.MyType])
+func WithOption[T any](v T) Options {
+	t := reflect.TypeFor[T]()
+	if t.PkgPath() == "" && (t.Kind() != reflect.Pointer || t.Elem().PkgPath() == "") {
+		panic(fmt.Sprintf("%T must a declared type or a pointer to such a type", v))
+	}
+	// TODO: Limit this to non-interface types?
+	return userOption[T]{v}
+}
+
 // These option types are declared here instead of "jsonopts"
 // to avoid a dependency on "reflect" from "jsonopts".
 type (
 	marshalersOption   Marshalers
 	unmarshalersOption Unmarshalers
+	userOption[T any]  struct{ v T }
 )
 
 func (*marshalersOption) JSONOptions(internal.NotForPublicUse)   {}
 func (*unmarshalersOption) JSONOptions(internal.NotForPublicUse) {}
+func (userOption[T]) JSONOptions(internal.NotForPublicUse)       {}
+func (userOption[T]) key() any                                   { return reflect.TypeFor[T]() }
+func (v userOption[T]) val() any                                 { return v.v }
 
 // Inject support into "jsonopts" to handle these types.
 func init() {
 	jsonopts.GetUnknownOption = func(src *jsonopts.Struct, zero jsonopts.Options) (any, bool) {
-		switch zero.(type) {
+		switch zero := zero.(type) {
 		case *marshalersOption:
 			if !src.Flags.Has(jsonflags.Marshalers) {
 				return (*Marshalers)(nil), false
@@ -269,6 +297,14 @@ func init() {
 				return (*Unmarshalers)(nil), false
 			}
 			return src.Unmarshalers.(*Unmarshalers), true
+		case interface {
+			key() any
+			val() any
+		}: // implemented by [userOption]
+			if v, ok := src.UserValues[zero.key()]; ok {
+				return v, true
+			}
+			return zero.val(), false
 		default:
 			panic(fmt.Sprintf("unknown option %T", zero))
 		}
@@ -281,6 +317,14 @@ func init() {
 		case *unmarshalersOption:
 			dst.Flags.Set(jsonflags.Unmarshalers | 1)
 			dst.Unmarshalers = (*Unmarshalers)(src)
+		case interface {
+			key() any
+			val() any
+		}: // implemented by [userOption]
+			if dst.UserValues == nil {
+				dst.UserValues = make(map[any]any)
+			}
+			dst.UserValues[src.key()] = src.val()
 		default:
 			panic(fmt.Sprintf("unknown option %T", src))
 		}
