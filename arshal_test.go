@@ -9299,3 +9299,31 @@ func TestUintSet(t *testing.T) {
 		}
 	}
 }
+
+// Benchmarks very simple decode to assert the overhead before ashaler.
+func BenchmarkDecodeSimple(b *testing.B) {
+	do := func(b *testing.B, f func(*jsontext.Decoder)) {
+		data := []byte(`0`)
+		reader := bytes.NewReader(data)
+		for range b.N {
+			reader.Reset(data)
+			decoder := jsontext.NewDecoder(reader)
+			f(decoder)
+		}
+	}
+
+	b.Run("Init", func(b *testing.B) {
+		do(b, func(decoder *jsontext.Decoder) {})
+	})
+	var i int
+	b.Run("SameOpt", func(b *testing.B) {
+		do(b, func(decoder *jsontext.Decoder) {
+			UnmarshalDecode(decoder, &i, &export.Decoder(decoder).Struct)
+		})
+	})
+	b.Run("NewOpt", func(b *testing.B) {
+		do(b, func(decoder *jsontext.Decoder) {
+			UnmarshalDecode(decoder, &i, DefaultOptionsV2())
+		})
+	})
+}
