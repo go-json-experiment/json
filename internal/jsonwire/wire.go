@@ -141,6 +141,7 @@ func truncateMaxUTF8[Bytes ~[]byte | ~string](b Bytes) Bytes {
 	return b
 }
 
+// TODO(https://go.dev/issue/70547): Use utf8.ErrInvalid instead.
 var ErrInvalidUTF8 = errors.New("invalid UTF-8")
 
 func NewInvalidCharacterError[Bytes ~[]byte | ~string](prefix Bytes, where string) error {
