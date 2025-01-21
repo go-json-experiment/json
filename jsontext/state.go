@@ -10,6 +10,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -80,10 +81,31 @@ func (s *state) reset() {
 // Pointer is a JSON Pointer (RFC 6901) that references a particular JSON value
 // relative to the root of the top-level JSON value.
 //
+// A Pointer is a slash-separated list of tokens, where each token is
+// either a JSON object name or an index to a JSON array element
+// encoded as a base-10 integer value.
+// It is impossible to distinguish between an array index and an object name
+// (that happens to be an base-10 encoded integer) without also knowing
+// the structure of the top-level JSON value that the pointer refers to.
+//
 // There is exactly one representation of a pointer to a particular value,
 // so comparability of Pointer values is equivalent to checking whether
 // they both point to the exact same value.
 type Pointer string
+
+// IsValid reports whether p is a valid JSON Pointer according to RFC 6901.
+// Note that the concatenation of two valid pointers produces a valid pointer.
+func (p Pointer) IsValid() bool {
+	for i, r := range p {
+		switch {
+		case r == '~' && (i+1 == len(p) || (p[i+1] != '0' && p[i+1] != '1')):
+			return false // invalid escape
+		case r == '\ufffd' && !strings.HasPrefix(string(p[i:]), "\ufffd"):
+			return false // invalid UTF-8
+		}
+	}
+	return len(p) == 0 || p[0] == '/'
+}
 
 // Contains reports whether the JSON value that p1 points to
 // is equal to or contains the JSON value that p2 points to.
@@ -108,17 +130,14 @@ func (p Pointer) LastToken() string {
 
 // AppendToken appends a token to the end of p and returns the full pointer.
 func (p Pointer) AppendToken(tok string) Pointer {
-	return p + "/" + Pointer(appendEscapePointerName(nil, []byte(string([]rune(tok)))))
+	return Pointer(appendEscapePointerName([]byte(p+"/"), tok))
 }
+
+// TODO: Add Pointer.AppendTokens,
+// but should this take in a ...string or an iter.Seq[string]?
 
 // Tokens returns an iterator over the reference tokens in the JSON pointer,
 // starting from the first token until the last token (unless stopped early).
-//
-// A token is either a JSON object name or an index to a JSON array element
-// encoded as a base-10 integer value.
-// It is impossible to distinguish between an array index and an object name
-// (that happens to be an base-10 encoded integer) without also knowing
-// the structure of the top-level JSON value that the pointer refers to.
 func (p Pointer) Tokens() iter.Seq[string] {
 	return func(yield func(string) bool) {
 		for len(p) > 0 {
@@ -182,16 +201,16 @@ func (s state) appendStackPointer(b []byte, where int) []byte {
 	return b
 }
 
-func appendEscapePointerName(b, name []byte) []byte {
-	for _, c := range name {
+func appendEscapePointerName[Bytes ~[]byte | ~string](b []byte, name Bytes) []byte {
+	for _, r := range string(name) {
 		// Per RFC 6901, section 3, escape '~' and '/' characters.
-		switch c {
+		switch r {
 		case '~':
 			b = append(b, "~0"...)
 		case '/':
 			b = append(b, "~1"...)
 		default:
-			b = append(b, c)
+			b = utf8.AppendRune(b, r)
 		}
 	}
 	return b
