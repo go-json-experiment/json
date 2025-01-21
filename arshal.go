@@ -21,6 +21,26 @@ import (
 // export exposes internal functionality of the "jsontext" package.
 var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 
+// mayReuseOpt reuses coderOpts if joining opts with the coderOpts
+// would produce the equivalent set of options.
+func mayReuseOpt(coderOpts *jsonopts.Struct, opts []Options) *jsonopts.Struct {
+	switch len(opts) {
+	// In the common case, the caller plumbs down options from the caller's caller,
+	// which is usually the [jsonopts.Struct] constructed by the top-level arshal call.
+	case 1:
+		o, _ := opts[0].(*jsonopts.Struct)
+		if o == coderOpts {
+			return coderOpts
+		}
+	// If the caller provides no options, then just reuse the coder's options,
+	// which should only contain encoding/decoding related flags.
+	case 0:
+		// TODO: This is buggy if coderOpts ever contains non-coder options.
+		return coderOpts
+	}
+	return nil
+}
+
 var structOptionsPool = &sync.Pool{New: func() any { return new(jsonopts.Struct) }}
 
 func getStructOptions() *jsonopts.Struct {
@@ -184,23 +204,6 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 		return internal.TransformMarshalError(in, err)
 	}
 	return err
-}
-
-func mayReuseOpt(coder *jsonopts.Struct, opts []Options) *jsonopts.Struct {
-	switch len(opts) {
-	// In the common case, the caller plumbs down options from the caller's caller,
-	// which is usually the [jsonopts.Struct] constructed by the top-level arshal call.
-	case 1:
-		o, _ := opts[0].(*jsonopts.Struct)
-		if o == coder {
-			return coder
-		}
-	// If the caller provides no options, then just reuse the coder's options,
-	// which should only contain encoding/decoding related flags.
-	case 0:
-		return coder
-	}
-	return nil
 }
 
 // MarshalEncode serializes a Go value into an [jsontext.Encoder] according to
