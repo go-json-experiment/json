@@ -9299,3 +9299,47 @@ func TestUintSet(t *testing.T) {
 		}
 	}
 }
+
+// BenchmarkUnmarshalDecodeOptions is a minimal decode operation to measure
+// the overhead options setup before the unmarshal operation.
+func BenchmarkUnmarshalDecodeOptions(b *testing.B) {
+	var i int
+	in := new(bytes.Buffer)
+	dec := jsontext.NewDecoder(in)
+	makeBench := func(opts ...Options) func(*testing.B) {
+		return func(b *testing.B) {
+			for range b.N {
+				in.WriteString("0 ")
+			}
+			dec.Reset(in)
+			b.ResetTimer()
+			for range b.N {
+				UnmarshalDecode(dec, &i, opts...)
+			}
+		}
+	}
+	b.Run("None", makeBench())
+	b.Run("Same", makeBench(&export.Decoder(dec).Struct))
+	b.Run("New", makeBench(DefaultOptionsV2()))
+}
+
+// BenchmarkMarshalEncodeOptions is a minimal encode operation to measure
+// the overhead of options setup before the marshal operation.
+func BenchmarkMarshalEncodeOptions(b *testing.B) {
+	var i int
+	out := new(bytes.Buffer)
+	enc := jsontext.NewEncoder(out)
+	makeBench := func(opts ...Options) func(*testing.B) {
+		return func(b *testing.B) {
+			out.Reset()
+			enc.Reset(out)
+			b.ResetTimer()
+			for range b.N {
+				MarshalEncode(enc, &i, opts...)
+			}
+		}
+	}
+	b.Run("None", makeBench())
+	b.Run("Same", makeBench(&export.Encoder(enc).Struct))
+	b.Run("New", makeBench(DefaultOptionsV2()))
+}

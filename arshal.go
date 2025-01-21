@@ -21,6 +21,26 @@ import (
 // export exposes internal functionality of the "jsontext" package.
 var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 
+// mayReuseOpt reuses coderOpts if joining opts with the coderOpts
+// would produce the equivalent set of options.
+func mayReuseOpt(coderOpts *jsonopts.Struct, opts []Options) *jsonopts.Struct {
+	switch len(opts) {
+	// In the common case, the caller plumbs down options from the caller's caller,
+	// which is usually the [jsonopts.Struct] constructed by the top-level arshal call.
+	case 1:
+		o, _ := opts[0].(*jsonopts.Struct)
+		if o == coderOpts {
+			return coderOpts
+		}
+	// If the caller provides no options, then just reuse the coder's options,
+	// which should only contain encoding/decoding related flags.
+	case 0:
+		// TODO: This is buggy if coderOpts ever contains non-coder options.
+		return coderOpts
+	}
+	return nil
+}
+
 var structOptionsPool = &sync.Pool{New: func() any { return new(jsonopts.Struct) }}
 
 func getStructOptions() *jsonopts.Struct {
@@ -192,13 +212,16 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 // they must have already been specified on the provided [jsontext.Encoder].
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
-	mo := getStructOptions()
-	defer putStructOptions(mo)
-	mo.Join(opts...)
 	xe := export.Encoder(out)
-	mo.CopyCoderOptions(&xe.Struct)
+	mo := mayReuseOpt(&xe.Struct, opts)
+	if mo == nil {
+		mo = getStructOptions()
+		defer putStructOptions(mo)
+		mo.Join(opts...)
+		mo.CopyCoderOptions(&xe.Struct)
+	}
 	err = marshalEncode(out, in, mo)
-	if err != nil && xe.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+	if err != nil && mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 		return internal.TransformMarshalError(in, err)
 	}
 	return err
@@ -435,11 +458,14 @@ func unmarshalFull(in *jsontext.Decoder, out any, uo *jsonopts.Struct) error {
 // The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
-	uo := getStructOptions()
-	defer putStructOptions(uo)
-	uo.Join(opts...)
 	xd := export.Decoder(in)
-	uo.CopyCoderOptions(&xd.Struct)
+	uo := mayReuseOpt(&xd.Struct, opts)
+	if uo == nil {
+		uo = getStructOptions()
+		defer putStructOptions(uo)
+		uo.Join(opts...)
+		uo.CopyCoderOptions(&xd.Struct)
+	}
 	err = unmarshalDecode(in, out, uo)
 	if err != nil && uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 		return internal.TransformUnmarshalError(out, err)
