@@ -431,6 +431,48 @@ var encoderErrorTestdata = []struct {
 	calls:   []encoderMethodCall{{Value(`["fizz","buzz"]`), nil, ""}},
 	wantOut: "[\n\t\"fizz\",\n\t\"buzz\"\n]\n",
 }, {
+	name: jsontest.Name("Format/ReorderWithWhitespace"),
+	opts: []Options{
+		AllowDuplicateNames(true),
+		AllowInvalidUTF8(true),
+		ReorderRawObjects(true),
+		SpaceAfterComma(true),
+		SpaceAfterColon(false),
+		Multiline(true),
+		WithIndentPrefix("    "),
+		WithIndent("\t"),
+		PreserveRawStrings(true),
+	},
+	calls: []encoderMethodCall{
+		{ArrayStart, nil, ""},
+		{ArrayStart, nil, ""},
+		{Value(` { "fizz" : "buzz" ,
+			"zip" : {
+				"x` + "\xfd" + `x" : 123 , "x` + "\xff" + `x" : 123, "x` + "\xfe" + `x" : 123
+			},
+			"zap" : {
+				"xxx" : 333, "xxx": 1, "xxx": 22
+			},
+			"alpha" : "bravo" } `), nil, ""},
+		{ArrayEnd, nil, ""},
+		{ArrayEnd, nil, ""},
+	},
+	wantOut: "[\n    \t[\n    \t\t{\n    \t\t\t\"alpha\":\"bravo\", \n    \t\t\t\"fizz\":\"buzz\", \n    \t\t\t\"zap\":{\n    \t\t\t\t\"xxx\":1, \n    \t\t\t\t\"xxx\":22, \n    \t\t\t\t\"xxx\":333\n    \t\t\t}, \n    \t\t\t\"zip\":{\n    \t\t\t\t\"x\xfdx\":123, \n    \t\t\t\t\"x\xfex\":123, \n    \t\t\t\t\"x\xffx\":123\n    \t\t\t}\n    \t\t}\n    \t]\n    ]\n",
+}, {
+	name: jsontest.Name("Format/CanonicalizeRawInts"),
+	opts: []Options{CanonicalizeRawInts(true), SpaceAfterComma(true)},
+	calls: []encoderMethodCall{
+		{Value(`[0.100,5.0,1E6,-9223372036854775808,-10,-1,-0,0,1,10,9223372036854775807]`), nil, ""},
+	},
+	wantOut: "[0.100, 5.0, 1E6, -9223372036854776000, -10, -1, 0, 0, 1, 10, 9223372036854776000]\n",
+}, {
+	name: jsontest.Name("Format/CanonicalizeRawFloats"),
+	opts: []Options{CanonicalizeRawFloats(true), SpaceAfterComma(true)},
+	calls: []encoderMethodCall{
+		{Value(`[0.100,5.0,1E6,-9223372036854775808,-10,-1,-0,0,1,10,9223372036854775807]`), nil, ""},
+	},
+	wantOut: "[0.1, 5, 1000000, -9223372036854775808, -10, -1, 0, 0, 1, 10, 9223372036854775807]\n",
+}, {
 	name: jsontest.Name("ErrorPosition"),
 	calls: []encoderMethodCall{
 		{Value(` "a` + "\xff" + `0" `), E(jsonwire.ErrInvalidUTF8).withPos(` "a`, ""), ""},

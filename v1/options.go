@@ -195,7 +195,7 @@ type Options = jsonopts.Options
 // It is equivalent to the following boolean options being set to true:
 //
 //   - [CallMethodsWithLegacySemantics]
-//   - [EscapeWithLegacySemantics]
+//   - [EscapeInvalidUTF8]
 //   - [FormatBytesWithLegacySemantics]
 //   - [FormatTimeWithLegacySemantics]
 //   - [MatchCaseSensitiveDelimiter]
@@ -212,6 +212,7 @@ type Options = jsonopts.Options
 //   - [jsontext.AllowInvalidUTF8]
 //   - [jsontext.EscapeForHTML]
 //   - [jsontext.EscapeForJS]
+//   - [jsontext.PreserveRawString]
 //
 // All other boolean options are set to false.
 // All non-boolean options are set to the zero value,
@@ -269,28 +270,20 @@ func CallMethodsWithLegacySemantics(v bool) Options {
 	}
 }
 
-// EscapeWithLegacySemantics specifies that JSON strings are escaped
-// with legacy semantics:
-//
-//   - When encoding a literal [jsontext.Token] with bytes of invalid UTF-8,
-//     such bytes are escaped as a hexadecimal Unicode codepoint (i.e., \ufffd).
-//     In contrast, the v2 default is to use the minimal representation,
-//     which is to encode invalid UTF-8 as the Unicode replacement rune itself
-//     (without any form of escaping).
-//
-//   - When encoding a raw [jsontext.Token] or [jsontext.Value]
-//     pre-escaped sequences in a JSON string are preserved to the output.
-//     In contrast, the v2 default is use the unescaped representation,
-//     and only escape what is necessary to satisfy the
-//     [jsontext.EscapeForHTML] and [jsontext.EscapeForJS] options.
+// EscapeInvalidUTF8 specifies that when encoding a [jsontext.String]
+// with bytes of invalid UTF-8, such bytes are escaped as
+// a hexadecimal Unicode codepoint (i.e., \ufffd).
+// In contrast, the v2 default is to use the minimal representation,
+// which is to encode invalid UTF-8 as the Unicode replacement rune itself
+// (without any form of escaping).
 //
 // This only affects encoding and is ignored when decoding.
 // The v1 default is true.
-func EscapeWithLegacySemantics(v bool) Options {
+func EscapeInvalidUTF8(v bool) Options {
 	if v {
-		return jsonflags.EscapeWithLegacySemantics | 1
+		return jsonflags.EscapeInvalidUTF8 | 1
 	} else {
-		return jsonflags.EscapeWithLegacySemantics | 0
+		return jsonflags.EscapeInvalidUTF8 | 0
 	}
 }
 

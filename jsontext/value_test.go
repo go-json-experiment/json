@@ -47,19 +47,20 @@ var valueTestdata = append(func() (out []valueTestdataEntry) {
 	name: jsontest.Name("RFC8785/Primitives"),
 	in: `{
 		"numbers": [333333333.33333329, 1E30, 4.50,
-					2e-3, 0.000000000000000000000000001],
+					2e-3, 0.000000000000000000000000001, -0],
 		"string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/",
 		"literals": [null, true, false]
 	}`,
 	wantValid:     true,
-	wantCompacted: `{"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],"string":"\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/","literals":[null,true,false]}`,
+	wantCompacted: `{"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001,-0],"string":"\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/","literals":[null,true,false]}`,
 	wantIndented: `{
 	    "numbers": [
 	        333333333.33333329,
 	        1E30,
 	        4.50,
 	        2e-3,
-	        0.000000000000000000000000001
+	        0.000000000000000000000000001,
+	        -0
 	    ],
 	    "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/",
 	    "literals": [
@@ -68,7 +69,7 @@ var valueTestdata = append(func() (out []valueTestdataEntry) {
 	        false
 	    ]
 	}`,
-	wantCanonicalized: `{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}`,
+	wantCanonicalized: `{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27,0],"string":"€$\u000f\nA'B\"\\\\\"/"}`,
 }, {
 	name: jsontest.Name("RFC8785/ObjectOrdering"),
 	in: `{
@@ -176,7 +177,7 @@ func TestValueMethods(t *testing.T) {
 			}
 
 			gotIndented := Value(td.in)
-			gotIndentErr := gotIndented.Indent("\t", "    ")
+			gotIndentErr := gotIndented.Indent(WithIndentPrefix("\t"), WithIndent("    "))
 			if string(gotIndented) != td.wantIndented {
 				t.Errorf("%s: Value.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
 			}
