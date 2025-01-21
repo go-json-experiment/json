@@ -9300,7 +9300,7 @@ func TestUintSet(t *testing.T) {
 	}
 }
 
-// Benchmarks very simple decode to assert the overhead before ashaler.
+// Benchmarks a very simple decode operation to assert the overhead before ashaler.
 func BenchmarkDecodeSimple(b *testing.B) {
 	do := func(b *testing.B, f func(*jsontext.Decoder)) {
 		data := []byte(`0`)
