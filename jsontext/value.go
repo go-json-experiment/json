@@ -200,7 +200,7 @@ func (v *Value) Indent(opts ...Options) error {
 // Any numbers with precision beyond what is representable by that form
 // will lose their precision when canonicalized. For example, integer values
 // beyond ±2⁵³ will lose their precision. To preserve the original representation
-// of JSON integers, additionally set CanonicalizeRawInts to false:
+// of JSON integers, additionally set [CanonicalizeRawInts] to false:
 //
 //	v.Canonicalize(jsontext.CanonicalizeRawInts(false))
 func (v *Value) Canonicalize(opts ...Options) error {
