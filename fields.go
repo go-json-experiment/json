@@ -361,16 +361,17 @@ const (
 )
 
 type fieldOptions struct {
-	name       string
-	quotedName string // quoted name per RFC 8785, section 3.2.2.2.
-	hasName    bool
-	casing     int8 // either 0, nocase, or strictcase
-	inline     bool
-	unknown    bool
-	omitzero   bool
-	omitempty  bool
-	string     bool
-	format     string
+	name           string
+	quotedName     string // quoted name per RFC 8785, section 3.2.2.2.
+	hasName        bool
+	nameNeedEscape bool
+	casing         int8 // either 0, nocase, or strictcase
+	inline         bool
+	unknown        bool
+	omitzero       bool
+	omitempty      bool
+	string         bool
+	format         string
 }
 
 // parseFieldOptions parses the `json` tag in a Go struct field as
@@ -435,6 +436,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 	}
 	b, _ := jsonwire.AppendQuote(nil, out.name, &jsonflags.Flags{})
 	out.quotedName = string(b)
+	out.nameNeedEscape = jsonwire.NeedEscape(out.name)
 
 	// Handle any additional tag options (if any).
 	var wasFormat bool

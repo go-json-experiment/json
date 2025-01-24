@@ -217,7 +217,7 @@ func TestMakeStructFields(t *testing.T) {
 		}{},
 		want: structFields{
 			flattened: []structField{
-				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{hasName: true, name: "\u07ad\ufffd\ufffd", quotedName: "\"\u07ad\ufffd\ufffd\""}},
+				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{hasName: true, name: "\u07ad\ufffd\ufffd", quotedName: "\"\u07ad\ufffd\ufffd\"", nameNeedEscape: true}},
 			},
 		},
 		wantErr: errors.New(`Go struct field Name has JSON object name "ޭ\xbe\xef" with invalid UTF-8`),
@@ -574,13 +574,13 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V string `json:"!#$%&()*+-./:;<=>?@[]^_{|}~ "`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
+		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`, nameNeedEscape: true},
 	}, {
 		name: jsontest.Name("QuotedPunctuationName"),
 		in: struct {
 			V string `json:"'!#$%&()*+-./:;<=>?@[]^_{|}~ '"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`},
+		wantOpts: fieldOptions{hasName: true, name: "!#$%&()*+-./:;<=>?@[]^_{|}~ ", quotedName: `"!#$%&()*+-./:;<=>?@[]^_{|}~ "`, nameNeedEscape: true},
 	}, {
 		name: jsontest.Name("EmptyName"),
 		in: struct {
@@ -598,7 +598,7 @@ func TestParseTagOptions(t *testing.T) {
 		in: struct {
 			V int `json:"',\\'\"\\\"'"`
 		}{},
-		wantOpts: fieldOptions{hasName: true, name: `,'""`, quotedName: `",'\"\""`},
+		wantOpts: fieldOptions{hasName: true, name: `,'""`, quotedName: `",'\"\""`, nameNeedEscape: true},
 	}, {
 		name: jsontest.Name("SingleComma"),
 		in: struct {
