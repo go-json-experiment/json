@@ -9,15 +9,31 @@ If you've already read the discussion and only want to know
 what changed relative to the discussion,
 skip over to the ["Changes from discussion"](#changes-from-discussion) section.
 
+Thank you to everyone who has been involved with the discussion, design review, code review, etc. This proposal is better off because of all your feedback.
+This proposal was written with feedback from @mvdan, @johanbrandhorst, @rogpeppe, @chrishines, @neild, and @rsc.
+
+## Overview
+
 In general, we propose the addition of the following:
 * Package "encoding/json/jsontext", which handles processing of JSON purely at a syntactic layer (with no dependencies on Go reflection). This is a lower-level
 package that most users will not use, but still sufficiently useful to expose
 as a standalone package.
 * Package "encoding/json/v2", which will serve as the second major version of the v1 "encoding/json" package. It is implemented in terms of "jsontext".
-* Additional API in v1 "encoding/json" to provide inter-operability with v2.
-It is implemented in terms of "json/v2".
+* Options in v1 "encoding/json" to provide inter-operability with v2.
+The v1 package will be implemented entirely in terms of "json/v2".
 
-Thank you to everyone who has been involved with the discussion, design review, code review, etc. This proposal is better off because of all your feedback.
+JSON serialization can be broken down into two primary components:
+
+- **syntactic functionality** that is concerned with processing JSON based on its grammar, and
+- **semantic functionality** that determines the meaning of JSON values as Go values and vice-versa.
+
+We use the terms "encode" and "decode" to describe syntactic functionality and the terms "marshal" and "unmarshal" to describe semantic functionality.
+
+We aim to provide a clear distinction between functionality that is purely concerned with encoding versus that of marshaling. For example, it should be possible to  encode a stream of JSON tokens without needing to marshal a concrete Go value representing them. Similarly, it should be possible to  decode a stream of JSON tokens without needing to unmarshal them into a concrete Go value.
+
+![block-diagram](https://raw.githubusercontent.com/go-json-experiment/json/6e475c84a2bf3c304682aef375e000771a318a5c/api.png)
+
+This diagram provides a high-level overview of the v2 API. Purple blocks represent types, while blue blocks represent functions or methods. The direction of the arrows represent the approximate flow of data. The bottom half (as implemented by the "jsontext" package) of the diagram contains functionality that is only concerned with syntax, while the upper half (as implemented by the "json" package) contains functionality that assigns semantic meaning to syntactic data handled by the bottom half.
 
 ## Package "encoding/json/jsontext"
 
@@ -36,7 +52,7 @@ func (*Encoder) WriteValue(Value) error
 
 type Decoder struct { /* no exported fields */ }
 func NewDecoder(io.Reader, ...Options) *Decoder
-func (*Decoder) PeekKind() Kind // MUSTDO: Should return an error?
+func (*Decoder) PeekKind() Kind
 func (*Decoder) ReadToken() (Token, error)
 func (*Decoder) ReadValue() (Value, error)
 func (*Decoder) SkipValue() error
@@ -48,11 +64,11 @@ type Value []byte
 func (Value) Kind() Kind
 ```
 
-### Values and Tokens
+### Tokens and Values
 
-The primary data types for interacting with JSON are `Kind`, `Value`, and `Token`.
+The primary data types for interacting with JSON are `Kind`, `Token`, and `Value`.
 
-The `Kind` is an enumeration that describes the kind of a value or token.
+The `Kind` is an enumeration that describes the kind of a token or value.
 ```go
 // Kind represents each possible JSON token kind with a single byte,
 // which is the first byte of that kind's grammar:
@@ -68,31 +84,13 @@ The `Kind` is an enumeration that describes the kind of a value or token.
 type Kind byte
 func (k Kind) String() string
 ```
-
-A `Value` is the raw representation of a single JSON value, which can represent entire array or object values. It is analogous to the v1 `RawMessage` type.
-```go
-type Value []byte
-
-func (v Value) Clone() Value
-func (v Value) String() string
-func (v Value) IsValid(opts ...Options) bool
-func (v *Value) Format(opts ...Options) error
-func (v *Value) Compact(opts ...Options) error
-func (v *Value) Indent(opts ...Options) error
-func (v *Value) Canonicalize(opts ...Options) error
-func (v Value) MarshalJSON() ([]byte, error)
-func (v *Value) UnmarshalJSON(b []byte) error
-func (v Value) Kind() Kind // never ']' or '}' if valid
-```
-
-By default, `IsValid` validates according to RFC 7493, but accepts options to
-validate according to looser guarantees (such as allowing duplicate names).
-
-The `Format` method formats the value according to the specified options.
-The `Compact` and `Indent` methods operate similar to the v1 `Compact` and `Indent` function.
-The `Canonicalize` method canonicalizes the JSON value according to the JSON Canonicalization Scheme as defined in [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
-The `Compact`, `Indent`, and `Canonicalize` each called `Format` with a default list
-of options. The caller may provide more options to override the defaults.
+At present, there are no constants declared for individual kinds since
+each value is humanly readable. Declaring constants will lead
+to inconsistent usage where some users use the `'n'` byte literal,
+while other users reference the `jsontext.KindNull` constant.
+This is a similar problem to the introduction of the `http.MethodGet` constant,
+which has led to inconsistency in codebases where the `"GET"` literal
+is more frequently used (~75% of the time).
 
 A `Token` represents a lexical JSON token, which cannot represent entire array or object values. It is analogous to the v1 `Token` type, but is designed to be allocation-free by being an opaque struct type.
 ```go
@@ -123,6 +121,32 @@ func (t Token) String() string
 func (t Token) Kind() Kind
 ```
 
+A `Value` is the raw representation of a single JSON value so, unlike `Token`, can also represent entire array or object values. It is analogous to the v1 `RawMessage` type.
+```go
+type Value []byte
+
+func (v Value) Clone() Value
+func (v Value) String() string
+func (v Value) IsValid(opts ...Options) bool
+func (v *Value) Format(opts ...Options) error
+func (v *Value) Compact(opts ...Options) error
+func (v *Value) Indent(opts ...Options) error
+func (v *Value) Canonicalize(opts ...Options) error
+func (v Value) MarshalJSON() ([]byte, error)
+func (v *Value) UnmarshalJSON(b []byte) error
+func (v Value) Kind() Kind // never ']' or '}' if valid
+```
+
+By default, `IsValid` validates according to [RFC 7493](https://www.rfc-editor.org/rfc/rfc7493),
+but accepts options to validate according to looser guarantees
+(such as allowing duplicate names or invalid UTF-8).
+
+The `Format` method formats the value according to the specified encoder options.
+The `Compact` and `Indent` methods operate similar to the v1 `Compact` and `Indent` functions.
+The `Canonicalize` method canonicalizes the JSON value according to the JSON Canonicalization Scheme as defined in [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
+The `Compact`, `Indent`, and `Canonicalize` each call `Format` with a default list
+of options. The caller may provide additional options to override the defaults.
+
 ### Formatting
 
 Some top-level functions are provided for formatting JSON values and strings.
@@ -145,7 +169,7 @@ func AppendUnquote[Bytes ~[]byte | ~string](dst []byte, src Bytes) ([]byte, erro
 
 ### Encoder and Decoder
 
-The `Encoder` and `Decoder` types provide the functionality for encoding to or decoding from an `io.Writer` or an `io.Reader`. An `Encoder` or `Decoder` can be constructed with`NewEncoder` or `NewDecoder` using default options.
+The `Encoder` and `Decoder` types provide the functionality for encoding to or decoding from an `io.Writer` or an `io.Reader`. An `Encoder` or `Decoder` can be constructed with `NewEncoder` or `NewDecoder` using default options.
 
 The `Encoder` is a streaming encoder from raw JSON tokens and values. It is used to write a stream of top-level JSON values, each terminated with a newline character.
 ```go
@@ -260,24 +284,24 @@ func AllowDuplicateNames(v bool) Options // affects encode and decode
 // which will be mangled as the Unicode replacement character, U+FFFD.
 func AllowInvalidUTF8(v bool) Options // affects encode and decode
 
-// CanonicalizeRawFloats specifies that when encoding a raw JSON floating-pointer number
+// CanonicalizeRawFloats specifies that when encoding a raw JSON floating-point number
 // (i.e., a number with a fraction or exponent) in a [Token] or [Value],
 // the number is canonicalized according to RFC 8785, section 3.2.2.3.
-func CanonicalizeRawFloats(v bool) Options // affect encode only
+func CanonicalizeRawFloats(v bool) Options // affects encode only
 
 // CanonicalizeRawInts specifies that when encoding a raw JSON integer number
 // (i.e., a number without a fraction and exponent) in a [Token] or [Value],
 // the number is canonicalized according to RFC 8785, section 3.2.2.3.
-func CanonicalizeRawInts(v bool) Options // affect encode only
+func CanonicalizeRawInts(v bool) Options // affects encode only
 
 // PreserveRawStrings specifies that when encoding a raw JSON string
 // in a [Token] or [Value], pre-escaped sequences in a JSON string
 // are preserved to the output.
-func PreserveRawStrings(v bool) Options // affect encode only
+func PreserveRawStrings(v bool) Options // affects encode only
 
 // ReorderRawObjects specifies that when encoding a raw JSON object in a [Value],
 // the object members are reordered according to RFC 8785, section 3.2.3.
-func ReorderRawObjects(v bool) Options // affect encode only
+func ReorderRawObjects(v bool) Options // affects encode only
 
 // EscapeForHTML specifies that '<', '>', and '&' characters within JSON strings
 // should be escaped as a hexadecimal Unicode codepoint (e.g., \u003c)
@@ -310,15 +334,15 @@ func WithIndentPrefix(prefix string) Options // affects encode only
 
 // SpaceAfterColon specifies that the JSON output should emit a space character
 // after each colon separator following a JSON object name.
-func SpaceAfterColon(v bool) Options // affect encode only
+func SpaceAfterColon(v bool) Options // affects encode only
 
 // SpaceAfterComma specifies that the JSON output should emit a space character
 // after each comma separator following a JSON object value or array element.
-func SpaceAfterComma(v bool) Options // affect encode only
+func SpaceAfterComma(v bool) Options // affects encode only
 ```
 The `Options` type is a type alias to an internal type that is an interface type with no exported methods. It is used simply as a marker type for options declared in the "json" and "jsontext" packages.
 
-Latter option specified in the variadic list passed to `NewEncoder` and `NewDecoder` takes precedence over prior option values. For example, `NewEncoder(AllowInvalidUTF8(false), AllowInvalidUTF8(true))` results in `AllowInvalidUTF8(true)` taking precedence.
+Latter options specified in the variadic list passed to `NewEncoder` and `NewDecoder` take precedence over prior option values. For example, `NewEncoder(AllowInvalidUTF8(false), AllowInvalidUTF8(true))` results in `AllowInvalidUTF8(true)` taking precedence.
 
 Options that do not affect the operation in question are ignored. For example, passing `Multiline` to `NewDecoder` does nothing.
 
@@ -326,7 +350,7 @@ The `WithIndent` and `WithIndentPrefix` flags configure the appearance of whites
 
 ### Errors
 
-Errors due to non-compliance with the JSON grammar are reported as `SyntacticError`. 
+Errors due to non-compliance with the JSON grammar are reported as a `SyntacticError`.
 ```go
 type SyntacticError struct {
 	// ByteOffset indicates that an error occurred after this byte offset.
@@ -357,23 +381,45 @@ var ErrNonStringName = errors.New("object member name must be a string")
 returned while being wrapped within a `SyntacticError`.
 
 ```go
+// Pointer is a JSON Pointer (RFC 6901) that references a particular JSON value
+// relative to the root of the top-level JSON value.
+//
+// A Pointer is a slash-separated list of tokens, where each token is
+// either a JSON object name or an index to a JSON array element
+// encoded as a base-10 integer value.
 type Pointer string
+
+// IsValid reports whether p is a valid JSON Pointer according to RFC 6901.
 func (p Pointer) IsValid() bool
+
+// AppendToken appends a token to the end of p and returns the full pointer.
 func (p Pointer) AppendToken(tok string) Pointer
+
+// Parent strips off the last token and returns the remaining pointer.
 func (p Pointer) Parent() Pointer
-func (p1 Pointer) Contains(p2 Pointer) bool
+
+// Contains reports whether the JSON value that p points to
+// is equal to or contains the JSON value that pc points to.
+func (p Pointer) Contains(pc Pointer) bool
+
+// LastToken returns the last token in the pointer.
 func (p Pointer) LastToken() string
+
+// Tokens returns an iterator over the reference tokens in the JSON pointer.
 func (p Pointer) Tokens() iter.Seq[string]
 ```
-`Pointer` is a named type representing a JSON Pointer (RFC 6901) and
-references a particular JSON value relative a top-level JSON value.
-It is primarily used for error reporting, but it's utility could be expanded
+`Pointer` is a named type representing a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) and
+references a particular JSON value relative to a top-level JSON value.
+It is primarily used for error reporting, but its utility could be expanded
 in the future (e.g. extracting or modifying a portion of a `Value`
 by `Pointer` reference alone).
 
 ## Package "encoding/json/v2"
 
 The v2 "json" package provides functionality to marshal or unmarshal JSON data from or into Go value types. This package depends on "jsontext" to process JSON text and the "reflect" package to dynamically introspect Go values at runtime.
+
+Most users will interact directly with the "json" package
+without ever needing to interact with the lower-level "jsontext package.
 
 ### Overview
 
@@ -395,6 +441,9 @@ The `MarshalWrite` and `UnmarshalRead` functions are equivalent functionality th
 
 The `MarshalEncode` and `UnmarshalDecode` functions are equivalent functionality that operate on an `*jsontext.Encoder` and `*jsontext.Decoder` instead of `[]byte`.
 
+All marshal and unmarshal functions accept a variadic list of options
+that configure the behavior of serialization.
+
 ### Default behavior
 
 The marshal and unmarshal logic in v2 is mostly identical to v1 with following changes:
@@ -406,6 +455,7 @@ The marshal and unmarshal logic in v2 is mostly identical to v1 with following c
   options control this behavior difference. To explicitly specify a Go struct
   field to use a particular name matching scheme, either the `nocase`
   or the `strictcase` field option can be specified.
+  Field-specified options take precedence over caller-specified options.
 
 - In v1, when marshaling a Go struct, a field marked as `omitempty`
   is omitted if the field value is an "empty" Go value, which is defined as
@@ -415,25 +465,28 @@ The marshal and unmarshal logic in v2 is mostly identical to v1 with following c
   which is defined as a JSON null, or an empty JSON string, object, or array.
   The `jsonv1.OmitEmptyWithLegacyDefinition` option controls this behavior difference.
   Note that `omitempty` behaves identically in both v1 and v2 for a
-  Go array, slice, map, or string (assuming no user-defined MarshalJSON method
-  The `jsonv1.StringifyWithLegacySemantics` option controls this behavior difference.
+  Go array, slice, map, or string (assuming no user-defined `MarshalJSON` method
   overrides the default representation). Existing usages of `omitempty` on a
   Go bool, number, pointer, or interface value should migrate to specifying
   `omitzero` instead (which is identically supported in both v1 and v2).
+  See [prior discussion](https://github.com/golang/go/discussions/63397#discussioncomment-7201224) for more information.
 
 - In v1, a Go struct field marked as `string` can be used to quote a
   Go string, bool, or number as a JSON string. It does not recursively
   take effect on composite Go types. In contrast, v2 restricts
   the `string` option to only quote a Go number as a JSON string.
   It does recursively take effect on Go numbers within a composite Go type.
+  The `jsonv1.StringifyWithLegacySemantics` option controls this behavior difference.
 
-- In v1, a nil Go slice or Go map are marshaled as a JSON null.
+- In v1, a nil Go slice or Go map is marshaled as a JSON null.
   In contrast, v2 marshals a nil Go slice or Go map as
   an empty JSON array or JSON object, respectively.
   The `FormatNilSliceAsNull` and `FormatNilMapAsNull` options
   control this behavior difference. To explicitly specify a Go struct field
   to use a particular representation for nil, either the `format:emitempty`
   or `format:emitnull` field option can be specified.
+  Field-specified options take precedence over caller-specified options.
+  See [prior discussion](https://github.com/golang/go/discussions/63397#discussioncomment-7201222) for more information.
 
 - In v1, a Go array may be unmarshaled from a JSON array of any length.
   In contrast, in v2 a Go array must be unmarshaled from a JSON array
@@ -445,20 +498,22 @@ The marshal and unmarshal logic in v2 is mostly identical to v1 with following c
   The `jsonv1.FormatBytesWithLegacySemantics` option controls this behavior difference.
   To explicitly specify a Go struct field to use a particular representation,
   either the `format:array` or `format:base64` field option can be specified.
+  Field-specified options take precedence over caller-specified options.
 
-- In v1, MarshalJSON methods declared on a pointer receiver are only called
-  if the Go value is addressable. In contrast, in v2 a MarshalJSON method
+- In v1, `MarshalJSON` methods declared on a pointer receiver are only called
+  if the Go value is addressable. In contrast, in v2 a `MarshalJSON` method
   is always callable regardless of addressability.
   The `jsonv1.CallMethodsWithLegacySemantics` option controls this behavior difference.
 
-- In v1, MarshalJSON and UnmarshalJSON methods are never called for Go map keys.
-  In contrast, in v2 a MarshalJSON or UnmarshalJSON method is eligible for
+- In v1, `MarshalJSON` and `UnmarshalJSON` methods are never called for Go map keys.
+  In contrast, in v2 a `MarshalJSON` or `UnmarshalJSON` method is eligible for
   being called for Go map keys.
   The `jsonv1.CallMethodsWithLegacySemantics` option controls this behavior difference.
 
 - In v1, a Go map is marshaled in a deterministic order.
   In contrast, in v2 a Go map is marshaled in a non-deterministic order.
   The `Deterministic` option controls this behavior difference.
+  See [prior discussion](https://github.com/golang/go/discussions/63397#discussioncomment-7201221) for more information.
 
 - In v1, JSON strings are encoded with HTML-specific or JavaScript-specific
   characters being escaped. In contrast, in v2 JSON strings use the minimal
@@ -498,6 +553,7 @@ The marshal and unmarshal logic in v2 is mostly identical to v1 with following c
   The `jsonv1.FormatTimeWithLegacySemantics` option controls this behavior difference.
   To explicitly specify a Go struct field to use a particular representation,
   either the `format:nano` or `format:units` field option can be specified.
+  Field-specified options take precedence over caller-specified options.
 
 - In v1, errors are never reported at runtime for Go struct types
   that have some form of structural error (e.g., a malformed tag option).
@@ -505,6 +561,9 @@ The marshal and unmarshal logic in v2 is mostly identical to v1 with following c
   as they relate to JSON serialization. For example, a Go struct
   with only unexported fields cannot be serialized.
   The `jsonv1.ReportErrorsWithLegacySemantics` option controls this behavior difference.
+
+While the behavior of `Marshal` and `Unmarshal` in "json/v2" is changing
+relative to v1 "json", note that the behavior of v1 "json" remains as is.
 
 ### Struct tag options
 
@@ -516,9 +575,9 @@ Similar to v1, v2 also supports customized representation of Go struct fields th
 
 - **omitempty**: When marshaling, the "omitempty" option specifies that the struct field should be omitted if the field value would have been encoded as a JSON null, empty string, empty object, or empty array. This option has no effect when unmarshaling. ([example](https://pkg.go.dev/github.com/go-json-experiment/json#example-package-OmitFields))
 
-    - **Changed in v2**. In v1, the "omitempty" option was narrowly defined as only omitting a field if it is a Go false, 0, a nil pointer, a nil interface value, and any empty array, slice, map, or string. In v2, it has been redefined in terms of the JSON type system, rather than the Go type system. They are practically equivalent except for Go bools and numbers, for which the "omitzero" option can be used instead.
+    - **Changed in v2**. In v1, the "omitempty" option was narrowly defined as only omitting a field if it is a Go false, 0, a nil pointer, a nil interface value, and any empty array, slice, map, or string. In v2, it has been redefined in terms of the JSON type system, rather than the Go type system. They are practically equivalent except for Go bools, numbers, pointers, and interfaces for which the "omitzero" option can be used instead.
 
-- **string**: The "string" option specifies that `StringifyNumbers` be set when marshaling or unmarshaling a struct field value. This causes numeric types to be encoded as a JSON number within a JSON string, and to be decoded from either a JSON number or a JSON string containing a JSON number. This extra level of encoding is often necessary since many JSON parsers cannot precisely represent 64-bit integers.
+- **string**: The "string" option specifies that `StringifyNumbers` be set when marshaling or unmarshaling a struct field value. This causes numeric types to be encoded as a JSON number within a JSON string, and to be decoded from a JSON string containing a JSON number. This extra level of encoding is often necessary since many JSON parsers cannot precisely represent 64-bit integers.
 
     - **Changed in v2**. In v1, the "string" option applied to certain types where use of a JSON string did not make sense (e.g., a bool) and could not be applied recursively (e.g., a slice of integers). In v2, this feature only applies to numeric types and applies recursively.
 
@@ -530,12 +589,13 @@ Similar to v1, v2 also supports customized representation of Go struct fields th
 
     - **New in v2** to provide an explicit author-specified way to prevent `MatchCaseInsensitiveNames`
     from taking effect on a particular field.
+    This option provides a means to opt-into the v2-like behavior.
 
 - **inline**: The "inline" option specifies that the JSON object representation of this field is to be promoted as if it were specified in the parent struct. It is the JSON equivalent of Go struct embedding. A Go embedded field is implicitly inlined unless an explicit JSON name is specified. The inlined field must be a Go struct that does not implement `Marshaler` or `Unmarshaler`. Inlined fields of type `jsontext.Value` and `map[~string]T` are called “inlined fallbacks”, as they can represent all possible JSON object members not directly handled by the parent struct. Only one inlined fallback field may be specified in a struct, while many non-fallback fields may be specified. This option must not be specified with any other tag option. ([example](https://pkg.go.dev/github.com/go-json-experiment/json#example-package-InlinedFields))
 
     - **New in v2**. Inlining is an explicit way to embed a JSON object within another JSON object without relying on Go struct embedding. The feature is capable of inlining Go maps and `jsontext.Value` ([#6213](https://github.com/golang/go/issues/6213)).
 
-- **unknown**: The "unknown" option is a specialized variant of the inlined fallback to indicate that this Go struct field contains any number of “unknown” JSON object members. The field type must be a `jsontext.Value`, `map[~string]T`. If `DiscardUnknownMembers` is specified when marshaling, the contents of this field are ignored. If `RejectUnknownMembers` is specified when unmarshaling, any unknown object members are rejected even if a field exists with the "unknown" option. This option must not be specified with any other tag option. ([example](https://pkg.go.dev/github.com/go-json-experiment/json#example-package-UnknownMembers))
+- **unknown**: The "unknown" option is a specialized variant of the inlined fallback to indicate that this Go struct field contains any number of “unknown” JSON object members. The field type must be a `jsontext.Value` or a `map[~string]T`. If `DiscardUnknownMembers` is specified when marshaling, the contents of this field are ignored. If `RejectUnknownMembers` is specified when unmarshaling, any unknown object members are rejected even if a field exists with the "unknown" option. This option must not be specified with any other tag option. ([example](https://pkg.go.dev/github.com/go-json-experiment/json#example-package-UnknownMembers))
 
     - **New in v2**. The "inline" feature technically provides a way to preserve unknown member ([#22533](https://github.com/golang/go/issues/22533)). However, the "inline" feature alone does not semantically tell us whether this field is meant to store unknown members. The "unknown" option gives us this extra bit of information so that we can cooperate with options that affect unknown membership.
 
@@ -543,7 +603,7 @@ Similar to v1, v2 also supports customized representation of Go struct fields th
 
     - **New in v2**. The "format" option provides a general way to customize formatting of arbitrary types.
 
-    - `[]byte` and `[N]byte` types accept "format" values of either "base64", "base64url", "base32", "base32hex", "base16", or "hex", where it represents the binary bytes as a JSON string encoded using the specified format in RFC 4648. It may also be "array" to treat the slice or array as a JSON array of numbers. The "array" format exists for backwards compatibility since the default representation of an array of bytes now uses Base-64.
+    - `[]byte` and `[N]byte` types accept "format" values of either "base64", "base64url", "base32", "base32hex", "base16", or "hex", where it represents the binary bytes as a JSON string encoded using the specified format in [RFC 4648](https://www.rfc-editor.org/rfc/rfc4648). It may also be "array" to treat the slice or array as a JSON array of numbers. The "array" format exists for backwards compatibility since the default representation of an array of bytes now uses Base-64.
 
     - `float32` and `float64` types accept a "format" value of "nonfinite", where NaN and infinity are represented as JSON strings.
 
@@ -556,6 +616,12 @@ Similar to v1, v2 also supports customized representation of Go struct fields th
     - The `time.Duration` type accepts a "format" value of "sec", "milli", "micro", or "nano" to represent it as the number of seconds (or milliseconds, etc.) formatted as a JSON number. This exists for backwards compatibility since the default representation now uses a string representation (e.g., "53.241s"). If the format is "base60", it is encoded as a JSON string using the "H:MM:SS.SSSSSSSSS" representation.
 
 The "omitzero" and "omitempty" options are similar. The former is defined in terms of the Go type system, while the latter in terms of the JSON type system. Consequently they behave differently in some circumstances. For example, only a nil slice or map is omitted under "omitzero", while an empty slice or map is omitted under "omitempty" regardless of nilness. The "omitzero" option is useful for types with a well-defined zero value (e.g., `netip.Addr`) or have an `IsZero` method (e.g., `time.Time`).
+
+Note that all tag options labeled with "**Changed in v2**"
+will behave as it has always historically behaved when using v1 "json".
+However, all tag options labeled with "**New in v2**"
+will be implicitly and retroactively supported in v1 "json" because
+v1 will be implemented under-the-hood using "json/v2".
 
 ### Type-specified customization
 
@@ -575,7 +641,13 @@ type UnmarshalerFrom interface {
 	UnmarshalJSONFrom(*jsontext.Decoder, Options) error
 }
 ```
-The v1 interfaces are supported in v2 to provide greater degrees of backward compatibility. If a type implements both v1 and v2 interfaces, the v2 variant takes precedence. The v2 interfaces operate in a purely streaming manner. This API can provide dramatic performance improvements. For example, switching from `UnmarshalJSON` to `UnmarshalJSONFrom` for `spec.Swagger` resulted in an [~40x performance improvement](https://github.com/kubernetes/kube-openapi/issues/315#issuecomment-1240030015).
+The v1 `Marshaler` and `Unmarshaler` interfaces are supported in v2 to provide greater degrees of backward compatibility.
+
+The `MarshalerTo` and `UnmarshalerFrom` interfaces operate in a purely streaming manner and provide a means for plumbing down options. This API can provide dramatic performance improvements (see ["Performance"](#performance)).
+
+If a type implements both sets of marshaling or unmarshaling interfaces, then the streaming variant takes precedence.
+
+Just like v1, `encoding.TextMarshaler` and `encoding.TextUnmarshaler` interfaces remain supported in v2, where these interfaces are treated with lower precedence than JSON-specific serialization interfaces.
 
 ### Caller-specified customization
 
@@ -685,8 +757,8 @@ func DefaultOptionsV2() Options
 
 // StringifyNumbers specifies that numeric Go types should be marshaled as
 // a JSON string containing the equivalent JSON number value.
-// When unmarshaling, numeric Go types can be parsed from either a JSON number
-// or a JSON string containing the JSON number without any surrounding whitespace.
+// When unmarshaling, numeric Go types are parsed from a JSON string
+// containing the JSON number without any surrounding whitespace.
 func StringifyNumbers(v bool) Options // affects marshal and unmarshal
 
 // Deterministic specifies that the same input value will be serialized
@@ -802,8 +874,6 @@ type Options = jsonopts.Options
 
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
 // It is equivalent to the following boolean options being set to true:
-//   - [StringifyWithLegacySemantics]
-//   - [UnmarshalArrayFromAnyLength]
 //
 //   - [CallMethodsWithLegacySemantics]
 //   - [EscapeInvalidUTF8]
@@ -813,6 +883,8 @@ type Options = jsonopts.Options
 //   - [MergeWithLegacySemantics]
 //   - [OmitEmptyWithLegacyDefinition]
 //   - [ReportErrorsWithLegacySemantics]
+//   - [StringifyWithLegacySemantics]
+//   - [UnmarshalArrayFromAnyLength]
 //   - [jsonv2.Deterministic]
 //   - [jsonv2.FormatNilMapAsNull]
 //   - [jsonv2.FormatNilSliceAsNull]
@@ -993,8 +1065,6 @@ func OmitEmptyWithLegacyDefinition(bool) jsonopts.Options // affects marshal onl
 //     in any mutations of the target Go value. In contrast, the v2 semantic
 //     is to perform a streaming decode and gradually unmarshal the JSON input
 //     into the target Go value, which means that the Go value may be
-// StringifyWithLegacySemantics specifies that the `string` tag option
-// may stringify bools and string values. It only takes effect on fields
 //     partially mutated when a syntactic error is encountered.
 //
 //   - When unmarshaling, a semantic error does not immediately terminate the
@@ -1004,9 +1074,10 @@ func OmitEmptyWithLegacyDefinition(bool) jsonopts.Options // affects marshal onl
 //     an error is encountered.
 func ReportErrorsWithLegacySemantics(bool) jsonopts.Options // affects marshal and unmarshal
 
+// StringifyWithLegacySemantics specifies that the `string` tag option
+// may stringify bools and string values. It only takes effect on fields
 // where the top-level type is a bool, string, numeric kind, or a pointer to
 // such a kind. Specifically, `string` will not stringify bool, string,
-func StringifyWithLegacySemantics(bool) jsonopts.Options // affects marshal only
 // or numeric kinds within a composite data type
 // (e.g., array, slice, struct, map, or interface).
 //
@@ -1016,6 +1087,7 @@ func StringifyWithLegacySemantics(bool) jsonopts.Options // affects marshal only
 // a JSON string containing their usual JSON representation.
 // A JSON null quoted in a JSON string is a valid substitute for JSON null
 // while unmarshaling into a Go value that `string` takes effect on.
+func StringifyWithLegacySemantics(bool) jsonopts.Options // affects marshal only
 
 // UnmarshalArrayFromAnyLength specifies that Go arrays can be unmarshaled
 // from input JSON arrays of any length. If the JSON array is too short,
@@ -1025,8 +1097,25 @@ func UnmarshalArrayFromAnyLength(bool) jsonopts.Options // affects unmarshal onl
 ```
 
 Many of the options configure fairly obscure behavior.
-Unfortunately, many of the behaviors cannot be changed due in order to maintain
+Unfortunately, many of the behaviors cannot be changed in order to maintain
 backwards compatibility. This is a major justification for a v2 "json" package.
+
+Let `jsonv1` be v1 "encoding/json" and `jsonv2` be "encoding/json/v2",
+then the v1 and v2 options can be composed together to obtain behavior
+that is identical to v1, identical to v2, or anywhere in between. For example:
+
+- `jsonv1.Marshal(v)`
+  - uses default v1 semantics
+- `jsonv2.Marshal(in, jsonv1.DefaultOptionsV1())`
+  - semantically equivalent to `jsonv1.Marshal`
+- `jsonv2.Marshal(in, jsonv1.DefaultOptionsV1(), jsontext.AllowDuplicateNames(false))`
+  - uses mostly v1 semantics, but opts into one v2-specific behavior
+- `jsonv2.Marshal(in, jsonv1.StringifyWithLegacySemantics(true), jsonv1.ReportErrorsWithLegacySemantics(true))`
+  - uses mostly v2 semantics, but opts into two v1-specific behaviors
+- `jsonv2.Marshal(v, ..., jsonv2.DefaultOptionsV2())`
+  - semantically equivalent to `jsonv2.Marshal` since `jsonv2.DefaultOptionsV2` overrides any options specified earlier in the `...`
+- `jsonv2.Marshal(v)`
+  - uses default v2 semantics
 
 ### Types aliases
 
@@ -1058,7 +1147,7 @@ type UnmarshalTypeError struct {
 
 func (*UnmarshalTypeError) Unwrap() error
 ```
-Errors returned v2 "json" are much richer, so the wrapped error provides
+Errors returned by v2 "json" are much richer, so the wrapped error provides
 a way for v1 "json" to preserve some of that context,
 while still using the `UnmarshalTypeError` type,
 which many programs may still be expecting.
@@ -1068,18 +1157,6 @@ where each path segment is either a JSON array and map index operation.
 This is a divergence from prior behavior which was always inconsistent
 about whether the position was reported according to the Go namespace
 or the JSON namespace (see #43126).
-
-## Proposed implementation
-
-This proposal has been implemented by the [`github.com/go-json-experiment/json`](https://pkg.go.dev/github.com/go-json-experiment/json) module.
-
-If this proposal is accepted, the implementation in `github.com/go-json-experiment/json`
-will be moved into the standard library.
-
-We may also provide a `golang.org/x/json` module that contains an identical copy
-of the implementation so that users on older Go releases can make use of v2.
-This module will use type-aliases to the Go standard library if the user
-is compiling with a sufficiently new version of the Go toolchain.
 
 ## Changes from discussion
 
@@ -1110,8 +1187,8 @@ the ergonomics of the method as most users just want indented output
 without thinking about the particular `indent` string used.
 These can still be specified using the `WithIndentPrefix` and `WithIndent` options.
 
-One major criticism of `Canonicalize` (per RFC 8785) is that it mangles
-the precision of wide integers. By accepting options, users can
+One major criticism of `Canonicalize` (per [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785))
+is that it mangles the precision of wide integers. By accepting options, users can
 additionally specify `CanonicalizeRawInts(false)` to prevent this behavior,
 while still having canonicalization for all other JSON artifacts.
 
@@ -1144,6 +1221,8 @@ The following formatting API has been added:
 The length returned by `StackIndex` is now a `int64` instead of `int`
 since the length of a JSON array or object could theoretically exceed `int`
 when handling JSON in a purely streaming manner.
+The stack depth, however, remains fundamentally limited by
+the amount of system memory, so an `int` is still an appropriate type.
 ```diff
 -func (e *Encoder) StackIndex(i int) (Kind, int)
 +func (e *Encoder) StackIndex(i int) (Kind, int64)
@@ -1159,6 +1238,20 @@ The pointer returned by `StackPointer` is now the named `Pointer` type.
 + func (d *Decoder) StackPointer() Pointer
 ```
 
+An explicit `Pointer` type was added to represent a JSON Pointer
+([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901))
+as a means to identify exactly where an error occurred.
+Convenience methods are defined for interacting with a pointer.
+```diff
++ type Pointer string
++ func (p Pointer) IsValid() bool
++ func (p Pointer) AppendToken(tok string) Pointer
++ func (p Pointer) Parent() Pointer
++ func (p1 Pointer) Contains(p2 Pointer) bool
++ func (p Pointer) LastToken() string
++ func (p Pointer) Tokens() iter.Seq[string]
+```
+
 Handling of errors was improved:
 ```diff
   type SyntacticError struct {
@@ -1169,22 +1262,10 @@ Handling of errors was improved:
 
 + var ErrDuplicateName = errors.New("duplicate object member name")
 + var ErrNonStringName = errors.New("object member name must be a string")
-
-+ type Pointer string
-+ func (p Pointer) IsValid() bool
-+ func (p Pointer) AppendToken(tok string) Pointer
-+ func (p Pointer) Parent() Pointer
-+ func (p1 Pointer) Contains(p2 Pointer) bool
-+ func (p Pointer) LastToken() string
-+ func (p Pointer) Tokens() iter.Seq[string]
 ```
-An explicit `Pointer` type was added to represent a JSON Pointer (RFC 6901)
-as a means to identify exactly where an error occurred.
-
-Convenience methods are defined for interacting with a pointer.
 
 The `ErrDuplicateName` and `ErrNonStringName` errors were added to support
-common error conditions users may want to distinguish uppon
+common error conditions users may want to distinguish upon
 through the use of `errors.Is`.
 
 ### Package "encoding/json/v2"
@@ -1259,17 +1340,17 @@ wanting to distinguish this particular condition (see #29035).
 
 The following behavior changes were made to marshal and unmarshal:
 
-* There is newely added support for the `strictcase` option to provide
+* There is newly added support for the `strictcase` option to provide
   a better migration path between users of both v1 and v2.
 
-* Specificying the `string` tag option now rejects also unmarshaling
+* Specifying the `string` tag option now rejects unmarshaling
   from a JSON number and only permits unmarshaling from a JSON string.
   This exactly matches the behavior of v1.
 
 * When unmarshaling, a floating-point overflow results in an error.
   This exactly matches the behavior of v1.
 
-* Serialization now supports embeddedd fields of unexported struct types
+* Serialization now supports embedded fields of unexported struct types
   with exported fields.
   This exactly matches the behavior of v1.
 
@@ -1304,7 +1385,8 @@ floating-point overflows just like v1.
 
 The `EscapeInvalidUTF8` option was added in order to support a
 behavior difference that was discovered while implementing
-v1 support in terms of v2.
+v1 support in terms of v2. We may avoid adding this as it controls
+fairly esoteric and undocumented behavior.
 
 The `Number` type implements `MarshalerTo` and `UnmarshalerFrom` for
 better compatibility with v2.
@@ -1322,3 +1404,72 @@ The `UnmarshalTypeError` type now supports error wrapping.
 
 + func (*UnmarshalTypeError) Unwrap() error
 ```
+
+## Proposed implementation
+
+This proposal has been implemented by the [`github.com/go-json-experiment/json`](https://pkg.go.dev/github.com/go-json-experiment/json) module.
+
+If this proposal is accepted, the implementation in `github.com/go-json-experiment/json`
+will be moved into the standard library.
+
+We may also provide a `golang.org/x/json` module that contains an identical copy
+of the implementation so that users on older Go releases can make use of v2.
+This module will use type-aliases to the Go standard library if the user
+is compiling with a sufficiently new version of the Go toolchain.
+
+### Performance
+
+For more information, see the [`github.com/go-json-experiment/jsonbench`](https://github.com/go-json-experiment/jsonbench) module.
+
+The following benchmarks compares performance across several different JSON implementations:
+
+* `JSONv1` is `encoding/json` at `v1.23.5`
+* `JSONv1in2` is `github.com/go-json-experiment/json/v1` at `v0.0.0-20250127181117-bbe7ee0d7d2c`
+* `JSONv2` is `github.com/go-json-experiment/json` at `v0.0.0-20250127181117-bbe7ee0d7d2c`
+
+The `JSONv1in2` implementation replicates the `JSONv1` API and behavior purely in terms of the `JSONv2` implementation by setting the appropriate set of options to reproduce legacy v1 behavior.
+
+Benchmarks were run across various datasets:
+
+* `CanadaGeometry` is a GeoJSON (RFC 7946) representation of Canada. It contains many JSON arrays of arrays of two-element arrays of numbers.
+* `CITMCatalog` contains many JSON objects using numeric names.
+* `SyntheaFHIR` is sample JSON data from the healthcare industry. It contains many nested JSON objects with mostly string values, where the set of unique string values is relatively small.
+* `TwitterStatus` is the JSON response from the Twitter API. It contains a mix of all different JSON kinds, where string values are a mix of both single-byte ASCII and multi-byte Unicode.
+* `GolangSource` is a simple tree representing the Go source code. It contains many nested JSON objects, each with the same schema.
+* `StringUnicode` contains many strings with multi-byte Unicode runes.
+
+`JSONv2` has several semantic changes relative to `JSONv1` that impact performance:
+
+* When marshaling, `JSONv2` no longer sorts the keys of a Go map. This will improve performance.
+
+* When marshaling or unmarshaling, `JSONv2` always checks to make sure JSON object names are unique. This will hurt performance, but is more correct.
+
+* When unmarshaling, `JSONv2` always performs a case-sensitive match for JSON object names.
+  This will improve performance and is generally more correct.
+
+* When marshaling or unmarshaling, `JSONv2` always shallow copies the underlying value for a Go interface and shallow copies the key and value for entries in a Go map. This is done to keep the value as addressable so that `JSONv2` can call methods and functions that operate on a pointer receiver. This will hurt performance, but is more correct.
+
+* When marshaling or unmarshaling, `JSONv2` supports calling type-defined methods or caller-defined functions with the current `jsontext.Encoder` or `jsontext.Decoder`. The `Encoder` or `Decoder` must contain a state machine to validate calls according to the JSON grammar. Maintaining this state will hurt performance. The `JSONv1` API provides no means for obtaining the `Encoder` or `Decoder` so it never needed to explicitly maintain a state machine. Conformance to the JSON grammar is implicitly accomplished by matching against the structure of the call stack.
+
+All of the charts are unit-less since the values are normalized relative to `JSONv1`, which is why `JSONv1` always has a value of 1. A lower value is better (i.e., runs faster).
+
+![marshal-performance](https://raw.githubusercontent.com/go-json-experiment/jsonbench/a05b1d16f57185a257748aed79c08336adc2caa5/images/benchmark-marshal-concrete-v1in2.png)
+
+When marshaling, `JSONv1in2` and `JSONv2` is roughly at parity in performance with `JSONv1`. It is faster for some datasets, yet slower in others.
+
+Compared to [high-performance third-party alternatives](https://raw.githubusercontent.com/go-json-experiment/jsonbench/refs/heads/master/images/benchmark-marshal-concrete.png), the proposed "encoding/json/v2" implementation performs within the same order of magnitude, indicating near-optimal efficiency.
+
+![unmarshal-performance](https://raw.githubusercontent.com/go-json-experiment/jsonbench/a05b1d16f57185a257748aed79c08336adc2caa5/images/benchmark-unmarshal-concrete-v1in2.png)
+
+When unmarshaling, `JSONv2` is 2.7x to 10.2x faster than `JSONv1`.
+Most of the performance gained is due to a faster syntactic parser.
+`JSONv1` takes a lexical scanning approach, which performs a virtual function call for every byte of input. In contrast, `JSONv2` makes heavy use of iterative and linear parsing logic (with extra complexity to resume parsing when encountering segmented buffers).
+
+Compared to [high-performance third-party alternatives](https://raw.githubusercontent.com/go-json-experiment/jsonbench/refs/heads/master/images/benchmark-unmarshal-concrete.png), the proposed "encoding/json/v2" implementation performs within the same order of magnitude, indicating near-optimal efficiency.
+
+While maintaining a JSON state machine hurts the v2 implementation in terms of performance, it provides the ability to marshal or unmarshal in a purely streaming manner. This feature is necessary to convert [certain pathological O(N²) runtime scenarios into O(N)](https://youtu.be/avilmOcHKHE?feature=shared&t=686).
+For example, switching from `UnmarshalJSON` to `UnmarshalJSONFrom` for `spec.Swagger` resulted in an [~40x performance improvement](https://github.com/kubernetes/kube-openapi/issues/315#issuecomment-1240030015).
+These performance gains are not unique to streaming unmarshal,
+but also apply to streaming marshal.
+The benchmark charts above do not exercise recursive `MarshalJSON` or `UnmarshalJSON` calls,
+and thus do not demonstrate the significant gains of a pure streaming API.
