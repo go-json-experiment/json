@@ -79,7 +79,7 @@ func EscapeForJS(v bool) Options {
 }
 
 // PreserveRawStrings specifies that when encoding a raw JSON string in a
-// [jsontext.Token] or [jsontext.Value], pre-escaped sequences
+// [Token] or [Value], pre-escaped sequences
 // in a JSON string are preserved to the output.
 // However, raw strings still respect [EscapeForHTML] and [EscapeForJS]
 // such that the relevant characters are escaped.
@@ -97,7 +97,7 @@ func PreserveRawStrings(v bool) Options {
 
 // CanonicalizeRawInts specifies that when encoding a raw JSON
 // integer number (i.e., a number without a fraction and exponent) in a
-// [jsontext.Token] or [jsontext.Value], the number is canonicalized
+// [Token] or [Value], the number is canonicalized
 // according to RFC 8785, section 3.2.2.3. As a special case,
 // the number -0 is canonicalized as 0.
 //
@@ -118,7 +118,7 @@ func CanonicalizeRawInts(v bool) Options {
 
 // CanonicalizeRawFloats specifies that when encoding a raw JSON
 // floating-pointer number (i.e., a number with a fraction or exponent) in a
-// [jsontext.Token] or [jsontext.Value], the number is canonicalized
+// [Token] or [Value], the number is canonicalized
 // according to RFC 8785, section 3.2.2.3. As a special case,
 // the number -0 is canonicalized as 0.
 //
@@ -138,7 +138,7 @@ func CanonicalizeRawFloats(v bool) Options {
 }
 
 // ReorderRawObjects specifies that when encoding a raw JSON object in a
-// [jsontext.Value], the object members are reordered according to
+// [Value], the object members are reordered according to
 // RFC 8785, section 3.2.3.
 //
 // This only affects encoding and is ignored when decoding.

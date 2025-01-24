@@ -54,6 +54,7 @@
 //     control this behavior difference. To explicitly specify a Go struct field
 //     to use a particular representation for nil, either the `format:emitempty`
 //     or `format:emitnull` field option can be specified.
+//     Field-specified options take precedence over caller-specified options.
 //
 //   - In v1, a Go array may be unmarshaled from a JSON array of any length.
 //     In contrast, in v2 a Go array must be unmarshaled from a JSON array
@@ -65,6 +66,7 @@
 //     The [FormatBytesWithLegacySemantics] option controls this behavior difference.
 //     To explicitly specify a Go struct field to use a particular representation,
 //     either the `format:array` or `format:base64` field option can be specified.
+//     Field-specified options take precedence over caller-specified options.
 //
 //   - In v1, MarshalJSON methods declared on a pointer receiver are only called
 //     if the Go value is addressable. In contrast, in v2 a MarshalJSON method
@@ -116,6 +118,9 @@
 //     is represented as a JSON string containing the formatted duration
 //     (e.g., "1h2m3.456s") according to [time.Duration.String].
 //     The [FormatTimeWithLegacySemantics] option controls this behavior difference.
+//     To explicitly specify a Go struct field to use a particular representation,
+//     either the `format:nano` or `format:units` field option can be specified.
+//     Field-specified options take precedence over caller-specified options.
 //
 //   - In v1, errors are never reported at runtime for Go struct types
 //     that have some form of structural error (e.g., a malformed tag option).

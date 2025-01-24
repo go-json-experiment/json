@@ -54,6 +54,8 @@
 // "json" struct field tag, where the tag is a comma separated list of options.
 // As a special case, if the entire tag is `json:"-"`,
 // then the field is ignored with regard to its JSON representation.
+// Some options also have equivalent behavior controlled by a caller-specified [Options].
+// Field-specified options take precedence over caller-specified options.
 //
 // The first option is the JSON object name override for the Go struct field.
 // If the name is not specified, then the Go struct field name
