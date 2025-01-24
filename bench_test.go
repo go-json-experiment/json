@@ -6,6 +6,7 @@ package json_test
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"io"
 	"os"
@@ -21,9 +22,96 @@ import (
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/internal/jsontest"
 	"github.com/go-json-experiment/json/jsontext"
+	jsonv1in2 "github.com/go-json-experiment/json/v1"
 )
 
-var benchV1 = os.Getenv("BENCHMARK_V1") != ""
+// benchVersion is the version to benchmark (either "v1", "v1in2", or "v2").
+var benchVersion = cmp.Or(os.Getenv("BENCHMARK_VERSION"), "v2")
+
+var jsonFuncs = func() (funcs struct {
+	marshal      func(any) ([]byte, error)
+	unmarshal    func([]byte, any) error
+	encodeValue  func(w io.Writer, b []byte) error
+	encodeTokens func(w io.Writer, toks []jsontext.Token) error
+	decodeValue  func(r io.Reader) error
+	decodeTokens func(r io.Reader) error
+}) {
+	ignoreEOF := func(err error) error {
+		if err == io.EOF {
+			err = nil
+		}
+		return err
+	}
+
+	switch benchVersion {
+	case "v1":
+		funcs.marshal = jsonv1.Marshal
+		funcs.unmarshal = jsonv1.Unmarshal
+		funcs.encodeValue = func(w io.Writer, b []byte) error {
+			return jsonv1.NewEncoder(w).Encode(jsonv1.RawMessage(b))
+		}
+		funcs.decodeValue = func(r io.Reader) error {
+			var v jsonv1.RawMessage
+			return jsonv1.NewDecoder(r).Decode(&v)
+		}
+		funcs.decodeTokens = func(r io.Reader) error {
+			d := jsonv1.NewDecoder(r)
+			for {
+				if _, err := d.Token(); err != nil {
+					return ignoreEOF(err)
+				}
+			}
+		}
+	case "v1in2":
+		funcs.marshal = jsonv1in2.Marshal
+		funcs.unmarshal = jsonv1in2.Unmarshal
+		funcs.encodeValue = func(w io.Writer, b []byte) error {
+			return jsonv1in2.NewEncoder(w).Encode(jsonv1in2.RawMessage(b))
+		}
+		funcs.decodeValue = func(r io.Reader) error {
+			var v jsonv1in2.RawMessage
+			return jsonv1in2.NewDecoder(r).Decode(&v)
+		}
+		funcs.decodeTokens = func(r io.Reader) error {
+			d := jsonv1in2.NewDecoder(r)
+			for {
+				if _, err := d.Token(); err != nil {
+					return ignoreEOF(err)
+				}
+			}
+		}
+	case "v2":
+		funcs.marshal = func(v any) ([]byte, error) { return jsonv2.Marshal(v) }
+		funcs.unmarshal = func(b []byte, v any) error { return jsonv2.Unmarshal(b, v) }
+		funcs.encodeValue = func(w io.Writer, b []byte) error {
+			return jsontext.NewEncoder(w).WriteValue(b)
+		}
+		funcs.encodeTokens = func(w io.Writer, toks []jsontext.Token) error {
+			e := jsontext.NewEncoder(w)
+			for _, tok := range toks {
+				if err := e.WriteToken(tok); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		funcs.decodeValue = func(r io.Reader) error {
+			_, err := jsontext.NewDecoder(r).ReadValue()
+			return err
+		}
+		funcs.decodeTokens = func(r io.Reader) error {
+			d := jsontext.NewDecoder(r)
+			for {
+				if _, err := d.ReadToken(); err != nil {
+					return ignoreEOF(err)
+				}
+			}
+		}
+	default:
+		panic("unknown version: " + benchVersion)
+	}
+	return
+}()
 
 // bytesBuffer is identical to bytes.Buffer,
 // but a different type to avoid any optimizations for bytes.Buffer.
@@ -231,23 +319,17 @@ func BenchmarkUnmarshal(b *testing.B)     { runUnmarshal(b) }
 
 func runUnmarshal(tb testing.TB) {
 	for _, tt := range arshalTestdata {
+		if tt.skipV1 && strings.HasPrefix(benchVersion, "v1") {
+			runTestOrBench(tb, tt.name, 0, func(tb testing.TB) { tb.Skip("not supported in v1") })
+			return
+		}
+
 		// Setup the unmarshal operation.
 		var val any
 		run := func(tb testing.TB) {
 			val = tt.new()
-			if err := jsonv2.Unmarshal(tt.raw, val); err != nil {
+			if err := jsonFuncs.unmarshal(tt.raw, val); err != nil {
 				tb.Fatalf("Unmarshal error: %v", err)
-			}
-		}
-		if benchV1 {
-			run = func(tb testing.TB) {
-				if tt.skipV1 {
-					tb.Skip("not supported in v1")
-				}
-				val = tt.new()
-				if err := jsonv1.Unmarshal(tt.raw, val); err != nil {
-					tb.Fatalf("Unmarshal error: %v", err)
-				}
 			}
 		}
 
@@ -271,25 +353,18 @@ func BenchmarkMarshal(b *testing.B)     { runMarshal(b) }
 
 func runMarshal(tb testing.TB) {
 	for _, tt := range arshalTestdata {
+		if tt.skipV1 && strings.HasPrefix(benchVersion, "v1") {
+			runTestOrBench(tb, tt.name, 0, func(tb testing.TB) { tb.Skip("not supported in v1") })
+			return
+		}
+
 		// Setup the marshal operation.
 		var raw []byte
 		run := func(tb testing.TB) {
 			var err error
-			raw, err = jsonv2.Marshal(tt.val)
+			raw, err = jsonFuncs.marshal(tt.val)
 			if err != nil {
 				tb.Fatalf("Marshal error: %v", err)
-			}
-		}
-		if benchV1 {
-			run = func(tb testing.TB) {
-				if tt.skipV1 {
-					tb.Skip("not supported in v1")
-				}
-				var err error
-				raw, err = jsonv1.Marshal(tt.val)
-				if err != nil {
-					tb.Fatalf("Marshal error: %v", err)
-				}
 			}
 		}
 
@@ -363,27 +438,13 @@ func mustUnmarshalValue(t testing.TB, data []byte, newValue func() any) (value a
 }
 
 func runArshal(t testing.TB, arshalName string, newValue func() any, data []byte, value any) {
-	if benchV1 {
-		switch arshalName {
-		case "Marshal":
-			if _, err := jsonv1.Marshal(value); err != nil {
-				t.Fatalf("Marshal error: %v", err)
-			}
-		case "Unmarshal":
-			if err := jsonv1.Unmarshal(data, newValue()); err != nil {
-				t.Fatalf("Unmarshal error: %v", err)
-			}
-		}
-		return
-	}
-
 	switch arshalName {
 	case "Marshal":
-		if _, err := jsonv2.Marshal(value); err != nil {
+		if _, err := jsonFuncs.marshal(value); err != nil {
 			t.Fatalf("Marshal error: %v", err)
 		}
 	case "Unmarshal":
-		if err := jsonv2.Unmarshal(data, newValue()); err != nil {
+		if err := jsonFuncs.unmarshal(data, newValue()); err != nil {
 			t.Fatalf("Unmarshal error: %v", err)
 		}
 	}
@@ -425,88 +486,53 @@ func runCode(t testing.TB, codeName, typeName, modeName string, buffer, data []b
 }
 
 func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
-	if benchV1 {
-		if modeName == "Buffered" {
-			t.Skip("no support for direct buffered input in v1")
-		}
-		enc := jsonv1.NewEncoder(bytes.NewBuffer(buffer[:0]))
-		switch typeName {
-		case "Token":
+	if strings.HasPrefix(benchVersion, "v1") {
+		switch {
+		case modeName == "Buffered":
+			t.Skip("no support for direct buffered output in v1; see https://go.dev/issue/7872")
+		case typeName == "Token":
 			t.Skip("no support for encoding tokens in v1; see https://go.dev/issue/40127")
-		case "Value":
-			val := jsonv1.RawMessage(data)
-			if err := enc.Encode(val); err != nil {
-				t.Fatalf("Decoder.Encode error: %v", err)
-			}
 		}
-		return
 	}
 
-	var enc *jsontext.Encoder
+	var w io.Writer
 	switch modeName {
 	case "Streaming":
-		enc = jsontext.NewEncoder(bytesBuffer{bytes.NewBuffer(buffer[:0])})
+		w = bytesBuffer{bytes.NewBuffer(buffer[:0])}
 	case "Buffered":
-		enc = jsontext.NewEncoder(bytes.NewBuffer(buffer[:0]))
+		w = bytes.NewBuffer(buffer[:0])
 	}
 	switch typeName {
 	case "Token":
-		for _, tok := range tokens {
-			if err := enc.WriteToken(tok); err != nil {
-				t.Fatalf("Encoder.WriteToken error: %v", err)
-			}
+		if err := jsonFuncs.encodeTokens(w, tokens); err != nil {
+			t.Fatalf("Encoder.WriteToken error: %v", err)
 		}
 	case "Value":
-		if err := enc.WriteValue(data); err != nil {
+		if err := jsonFuncs.encodeValue(w, data); err != nil {
 			t.Fatalf("Encoder.WriteValue error: %v", err)
 		}
 	}
 }
 
 func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
-	if benchV1 {
-		if modeName == "Buffered" {
-			t.Skip("no support for direct buffered output in v1")
-		}
-		dec := jsonv1.NewDecoder(bytes.NewReader(data))
-		switch typeName {
-		case "Token":
-			for {
-				if _, err := dec.Token(); err != nil {
-					if err == io.EOF {
-						break
-					}
-					t.Fatalf("Decoder.Token error: %v", err)
-				}
-			}
-		case "Value":
-			var val jsonv1.RawMessage
-			if err := dec.Decode(&val); err != nil {
-				t.Fatalf("Decoder.Decode error: %v", err)
-			}
-		}
-		return
+	if strings.HasPrefix(benchVersion, "v1") && modeName == "Buffered " {
+		t.Skip("no support for direct buffered input in v1; see https://go.dev/issue/11046")
 	}
 
-	var dec *jsontext.Decoder
+	var r io.Reader
 	switch modeName {
 	case "Streaming":
-		dec = jsontext.NewDecoder(bytesBuffer{bytes.NewBuffer(data)})
+		r = bytesBuffer{bytes.NewBuffer(data)}
 	case "Buffered":
-		dec = jsontext.NewDecoder(bytes.NewBuffer(data))
+		r = bytes.NewBuffer(data)
 	}
 	switch typeName {
 	case "Token":
-		for {
-			if _, err := dec.ReadToken(); err != nil {
-				if err == io.EOF {
-					break
-				}
-				t.Fatalf("Decoder.ReadToken error: %v", err)
-			}
+		if err := jsonFuncs.decodeTokens(r); err != nil {
+			t.Fatalf("Decoder.ReadToken error: %v", err)
 		}
 	case "Value":
-		if _, err := dec.ReadValue(); err != nil {
+		if err := jsonFuncs.decodeValue(r); err != nil {
 			t.Fatalf("Decoder.ReadValue error: %v", err)
 		}
 	}
@@ -542,34 +568,14 @@ func runAllSlowStreamingDecode(tb testing.TB) {
 // a slow io.Reader that only returns 1 byte at a time,
 // which tends to exercise pathological behavior.
 func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
-	if benchV1 {
-		dec := jsonv1.NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
-		switch typeName {
-		case "Token":
-			for dec.More() {
-				if _, err := dec.Token(); err != nil {
-					t.Fatalf("Decoder.Token error: %v", err)
-				}
-			}
-		case "Value":
-			var val jsonv1.RawMessage
-			if err := dec.Decode(&val); err != nil {
-				t.Fatalf("Decoder.Decode error: %v", err)
-			}
-		}
-		return
-	}
-
-	dec := jsontext.NewDecoder(iotest.OneByteReader(bytes.NewReader(data)))
+	r := iotest.OneByteReader(bytes.NewReader(data))
 	switch typeName {
 	case "Token":
-		for dec.PeekKind() > 0 {
-			if _, err := dec.ReadToken(); err != nil {
-				t.Fatalf("Decoder.ReadToken error: %v", err)
-			}
+		if err := jsonFuncs.decodeTokens(r); err != nil {
+			t.Fatalf("Decoder.ReadToken error: %v", err)
 		}
 	case "Value":
-		if _, err := dec.ReadValue(); err != nil {
+		if err := jsonFuncs.decodeValue(r); err != nil {
 			t.Fatalf("Decoder.ReadValue error: %v", err)
 		}
 	}
