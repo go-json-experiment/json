@@ -515,7 +515,7 @@ func runEncode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 }
 
 func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tokens []jsontext.Token) {
-	if strings.HasPrefix(benchVersion, "v1") && modeName == "Buffered " {
+	if strings.HasPrefix(benchVersion, "v1") && modeName == "Buffered" {
 		t.Skip("no support for direct buffered input in v1; see https://go.dev/issue/11046")
 	}
 

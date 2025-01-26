@@ -420,6 +420,7 @@ func TestMakeStructFields(t *testing.T) {
 				gotErr = err.Err
 			}
 
+			tt.want.reindex()
 			if !reflect.DeepEqual(got, tt.want) || !reflect.DeepEqual(gotErr, tt.wantErr) {
 				t.Errorf("%s: makeStructFields(%T):\n\tgot  (%v, %v)\n\twant (%v, %v)", tt.name.Where, tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
