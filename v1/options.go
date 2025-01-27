@@ -26,6 +26,7 @@
 //     options control this behavior difference. To explicitly specify a Go struct
 //     field to use a particular name matching scheme, either the `nocase`
 //     or the `strictcase` field option can be specified.
+//     Field-specified options take precedence over caller-specified options.
 //
 //   - In v1, when marshaling a Go struct, a field marked as `omitempty`
 //     is omitted if the field value is an "empty" Go value, which is defined as
@@ -47,7 +48,7 @@
 //     It does recursively take effect on Go numbers within a composite Go type.
 //     The [StringifyWithLegacySemantics] option controls this behavior difference.
 //
-//   - In v1, a nil Go slice or Go map are marshaled as a JSON null.
+//   - In v1, a nil Go slice or Go map is marshaled as a JSON null.
 //     In contrast, v2 marshals a nil Go slice or Go map as
 //     an empty JSON array or JSON object, respectively.
 //     The [jsonv2.FormatNilSliceAsNull] and [jsonv2.FormatNilMapAsNull] options

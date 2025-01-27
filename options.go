@@ -105,9 +105,8 @@ func DefaultOptionsV2() Options {
 
 // StringifyNumbers specifies that numeric Go types should be marshaled
 // as a JSON string containing the equivalent JSON number value.
-// When unmarshaling, numeric Go types can be parsed from either
-// a JSON number or a JSON string containing the JSON number
-// without any surrounding whitespace.
+// When unmarshaling, numeric Go types are parsed from a JSON string
+// containing the JSON number without any surrounding whitespace.
 //
 // According to RFC 8259, section 6, a JSON implementation may choose to
 // limit the representation of a JSON number to an IEEE 754 binary64 value.

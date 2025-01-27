@@ -83,8 +83,8 @@
 //   - string: The "string" option specifies that [StringifyNumbers]
 //     be set when marshaling or unmarshaling a struct field value.
 //     This causes numeric types to be encoded as a JSON number
-//     within a JSON string, and to be decoded from either a JSON number or
-//     a JSON string containing a JSON number.
+//     within a JSON string, and to be decoded from a JSON string
+//     containing the JSON number without any surrounding whitespace.
 //     This extra level of encoding is often necessary since
 //     many JSON parsers cannot precisely represent 64-bit integers.
 //
