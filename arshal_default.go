@@ -201,20 +201,22 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError(enc, t, mo)
 		}
 
-		// Optimize for marshaling without preceding whitespace or string escaping.
+		// Optimize for marshaling without preceding whitespace.
 		s := va.String()
-		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() && !jsonwire.NeedEscape(s) {
+		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace|jsonflags.StringifyBoolsAndStrings) && !xe.Tokens.Last.NeedObjectName() {
 			b := xe.Buf
 			b = xe.Tokens.MayAppendDelim(b, '"')
-			b = append(b, '"')
-			b = append(b, s...)
-			b = append(b, '"')
-			xe.Buf = b
-			xe.Tokens.Last.Increment()
-			if xe.NeedFlush() {
-				return xe.Flush()
+			b, err := jsonwire.AppendQuote(b, s, &mo.Flags)
+			if err == nil {
+				xe.Buf = b
+				xe.Tokens.Last.Increment()
+				if xe.NeedFlush() {
+					return xe.Flush()
+				}
+				return nil
 			}
-			return nil
+			// Otherwise, the string contains invalid UTF-8,
+			// so let the logic below construct the proper error.
 		}
 
 		if mo.Flags.Get(jsonflags.StringifyBoolsAndStrings) {

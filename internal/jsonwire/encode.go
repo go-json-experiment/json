@@ -66,39 +66,41 @@ func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes, flags *jsonflag
 	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
 	dst = append(dst, '"')
 	for uint(len(src)) > uint(n) {
-		// Handle single-byte ASCII.
 		if c := src[n]; c < utf8.RuneSelf {
+			// Handle single-byte ASCII.
 			n++
-			if escapeASCII[c] > 0 {
-				if (c == '<' || c == '>' || c == '&') && !flags.Get(jsonflags.EscapeForHTML) {
-					continue
-				}
+			if escapeASCII[c] == 0 {
+				continue // no escaping possibly needed
+			}
+			// Handle escaping of single-byte ASCII.
+			if !(c == '<' || c == '>' || c == '&') || flags.Get(jsonflags.EscapeForHTML) {
 				dst = append(dst, src[i:n-1]...)
 				dst = appendEscapedASCII(dst, c)
 				i = n
 			}
-			continue
-		}
-
-		// Handle multi-byte Unicode.
-		switch r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:]))); {
-		case isInvalidUTF8(r, rn):
-			hasInvalidUTF8 = true
-			dst = append(dst, src[i:n]...)
-			if flags.Get(jsonflags.EscapeInvalidUTF8) {
-				dst = append(dst, `\ufffd`...)
-			} else {
-				dst = append(dst, "\ufffd"...)
+		} else {
+			// Handle multi-byte Unicode.
+			r, rn := utf8.DecodeRuneInString(string(truncateMaxUTF8(src[n:])))
+			n += rn
+			if r != utf8.RuneError && r != '\u2028' && r != '\u2029' {
+				continue // no escaping possibly needed
 			}
-			n += rn
-			i = n
-		case (r == '\u2028' || r == '\u2029') && flags.Get(jsonflags.EscapeForJS):
-			dst = append(dst, src[i:n]...)
-			dst = appendEscapedUnicode(dst, r)
-			n += rn
-			i = n
-		default:
-			n += rn
+			// Handle escaping of multi-byte Unicode.
+			switch {
+			case isInvalidUTF8(r, rn):
+				hasInvalidUTF8 = true
+				dst = append(dst, src[i:n-rn]...)
+				if flags.Get(jsonflags.EscapeInvalidUTF8) {
+					dst = append(dst, `\ufffd`...)
+				} else {
+					dst = append(dst, "\ufffd"...)
+				}
+				i = n
+			case (r == '\u2028' || r == '\u2029') && flags.Get(jsonflags.EscapeForJS):
+				dst = append(dst, src[i:n-rn]...)
+				dst = appendEscapedUnicode(dst, r)
+				i = n
+			}
 		}
 	}
 	dst = append(dst, src[i:n]...)
