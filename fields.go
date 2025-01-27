@@ -33,6 +33,27 @@ type structFields struct {
 	inlinedFallback *structField
 }
 
+// reindex recomputes index to avoid bounds check during runtime.
+//
+// During the construction of each [structField] in [makeStructFields],
+// the index field is 0-indexed. However, before it returns,
+// the 0th field is stored in index0 and index stores the remainder.
+func (sf *structFields) reindex() {
+	reindex := func(f *structField) {
+		f.index0 = f.index[0]
+		f.index = f.index[1:]
+		if len(f.index) == 0 {
+			f.index = nil // avoid pinning the backing slice
+		}
+	}
+	for i := range sf.flattened {
+		reindex(&sf.flattened[i])
+	}
+	if sf.inlinedFallback != nil {
+		reindex(sf.inlinedFallback)
+	}
+}
+
 // lookupByFoldedName looks up name by a case-insensitive match
 // that also ignores the presence of dashes and underscores.
 func (fs *structFields) lookupByFoldedName(name []byte) []*structField {
@@ -41,7 +62,8 @@ func (fs *structFields) lookupByFoldedName(name []byte) []*structField {
 
 type structField struct {
 	id      int   // unique numeric ID in breadth-first ordering
-	index   []int // index into a struct according to reflect.Type.FieldByIndex
+	index0  int   // 0th index into a struct according to [reflect.Type.FieldByIndex]
+	index   []int // 1st index and remainder according to [reflect.Type.FieldByIndex]
 	typ     reflect.Type
 	fncs    *arshaler
 	isZero  func(addressableValue) bool
@@ -51,7 +73,7 @@ type structField struct {
 
 var errNoExportedFields = errors.New("Go struct has no exported fields")
 
-func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) {
+func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) {
 	orErrorf := func(serr *SemanticError, t reflect.Type, f string, a ...any) *SemanticError {
 		return cmp.Or(serr, &SemanticError{GoType: t, Err: fmt.Errorf(f, a...)})
 	}
@@ -297,7 +319,7 @@ func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) 
 
 	// Compute the mapping of fields in the byActualName map.
 	// Pre-fold all names so that we can lookup folded names quickly.
-	fs := structFields{
+	fs = structFields{
 		flattened:    flattened,
 		byActualName: make(map[string]*structField, len(flattened)),
 		byFoldedName: make(map[string][]*structField, len(flattened)),
@@ -320,6 +342,7 @@ func makeStructFields(root reflect.Type) (sf structFields, serr *SemanticError) 
 	if n := len(inlinedFallbacks); n == 1 || (n > 1 && len(inlinedFallbacks[0].index) != len(inlinedFallbacks[1].index)) {
 		fs.inlinedFallback = &inlinedFallbacks[0] // dominant inlined fallback field
 	}
+	fs.reindex()
 	return fs, serr
 }
 

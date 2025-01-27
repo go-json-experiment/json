@@ -1045,9 +1045,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		xe.Tokens.Last.DisableNamespace() // we manually ensure unique names below
 		for i := range fields.flattened {
 			f := &fields.flattened[i]
-			v := addressableValue{va.Field(f.index[0]), va.forcedAddr} // addressable if struct value is addressable
-			if len(f.index) > 1 {
-				v = v.fieldByIndex(f.index[1:], false)
+			v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+			if len(f.index) > 0 {
+				v = v.fieldByIndex(f.index, false)
 				if !v.IsValid() {
 					continue // implies a nil inlined field
 				}
@@ -1282,9 +1282,9 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					uo.FormatDepth = xd.Tokens.Depth()
 					uo.Format = f.format
 				}
-				v := addressableValue{va.Field(f.index[0]), va.forcedAddr} // addressable if struct value is addressable
-				if len(f.index) > 1 {
-					v = v.fieldByIndex(f.index[1:], true)
+				v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+				if len(f.index) > 0 {
+					v = v.fieldByIndex(f.index, true)
 					if !v.IsValid() {
 						err := newUnmarshalErrorBefore(dec, t, errNilField)
 						if !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
