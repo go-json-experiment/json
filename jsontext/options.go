@@ -117,7 +117,7 @@ func CanonicalizeRawInts(v bool) Options {
 }
 
 // CanonicalizeRawFloats specifies that when encoding a raw JSON
-// floating-pointer number (i.e., a number with a fraction or exponent) in a
+// floating-point number (i.e., a number with a fraction or exponent) in a
 // [Token] or [Value], the number is canonicalized
 // according to RFC 8785, section 3.2.2.3. As a special case,
 // the number -0 is canonicalized as 0.
