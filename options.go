@@ -61,6 +61,7 @@ import (
 //   - [Deterministic] affects marshaling only
 //   - [FormatNilSliceAsNull] affects marshaling only
 //   - [FormatNilMapAsNull] affects marshaling only
+//   - [OmitZeroStructFields] affects marshaling only
 //   - [MatchCaseInsensitiveNames] affects marshaling and unmarshaling
 //   - [DiscardUnknownMembers] affects marshaling only
 //   - [RejectUnknownMembers] affects unmarshaling only
