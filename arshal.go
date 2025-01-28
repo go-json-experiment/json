@@ -124,7 +124,7 @@ func putStructOptions(o *jsonopts.Struct) {
 //     is recursively encoded as a name and value pair in the JSON object.
 //     The Go map key must encode as a JSON string, otherwise this results
 //     in a [SemanticError]. The Go map is traversed in a non-deterministic order.
-//     For deterministic encoding, consider using [jsontext.Value.Canonicalize].
+//     For deterministic encoding, consider using the [Deterministic] option.
 //     If the format is "emitnull", then a nil map is encoded as a JSON null.
 //     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
 //     regardless of whether [FormatNilMapAsNull] is specified.
@@ -335,7 +335,7 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //   - A Go float is decoded from a JSON number.
 //     It must be decoded from a JSON string containing a JSON number
 //     if [StringifyNumbers] is specified or decoding a JSON object name.
-//     The JSON number is parsed as the closest representable Go float value.
+//     It fails if it overflows the representation of the Go float type.
 //     If the format is "nonfinite", then the JSON strings
 //     "NaN", "Infinity", and "-Infinity" are decoded as NaN, +Inf, and -Inf.
 //     Otherwise, the presence of such strings results in a [SemanticError].
