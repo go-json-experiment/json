@@ -285,7 +285,10 @@ func (d *decodeBuffer) PreviousTokenOrValue() []byte {
 }
 
 // PeekKind retrieves the next token kind, but does not advance the read offset.
-// It returns 0 if there are no more tokens.
+//
+// It returns 0 if an error occurs. Any such error is cached until
+// the next read call and it is the caller's responsibility to eventually
+// follow up a PeekKind call with a read call.
 func (d *Decoder) PeekKind() Kind {
 	return d.s.PeekKind()
 }
