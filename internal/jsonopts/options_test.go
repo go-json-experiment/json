@@ -21,32 +21,11 @@ func makeFlags(f ...jsonflags.Bools) (fs jsonflags.Flags) {
 	return fs
 }
 
-func TestCopyCoderOptions(t *testing.T) {
-	got := &Struct{
-		Flags:        makeFlags(jsonflags.Indent|jsonflags.AllowInvalidUTF8|0, jsonflags.Multiline|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
-		CoderValues:  CoderValues{Indent: "    "},
-		ArshalValues: ArshalValues{Unmarshalers: "something"},
-	}
-	src := &Struct{
-		Flags:        makeFlags(jsonflags.Indent|jsonflags.Deterministic|jsonflags.Marshalers|1, jsonflags.Multiline|0),
-		CoderValues:  CoderValues{Indent: "\t"},
-		ArshalValues: ArshalValues{Marshalers: "something"},
-	}
-	want := &Struct{
-		Flags:        makeFlags(jsonflags.AllowInvalidUTF8|jsonflags.Multiline|0, jsonflags.Indent|jsonflags.AllowDuplicateNames|jsonflags.Unmarshalers|1),
-		CoderValues:  CoderValues{Indent: "\t"},
-		ArshalValues: ArshalValues{Unmarshalers: "something"},
-	}
-	got.CopyCoderOptions(src)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("CopyCoderOptions:\n\tgot:  %+v\n\twant: %+v", got, want)
-	}
-}
-
 func TestJoin(t *testing.T) {
 	tests := []struct {
-		in   Options
-		want *Struct
+		in            Options
+		excludeCoders bool
+		want          *Struct
 	}{{
 		in:   jsonflags.AllowInvalidUTF8 | 1,
 		want: &Struct{Flags: makeFlags(jsonflags.AllowInvalidUTF8 | 1)},
@@ -69,7 +48,8 @@ func TestJoin(t *testing.T) {
 			CoderValues: CoderValues{Indent: "\t"},
 		},
 	}, {
-		in: &DefaultOptionsV1, want: func() *Struct {
+		in: &DefaultOptionsV1,
+		want: func() *Struct {
 			v1 := DefaultOptionsV1
 			v1.Flags.Set(jsonflags.Indent | 1)
 			v1.Flags.Set(jsonflags.Multiline | 0)
@@ -77,17 +57,90 @@ func TestJoin(t *testing.T) {
 			return &v1
 		}(), // v1 fully replaces before (except for whitespace related flags)
 	}, {
-		in: &DefaultOptionsV2, want: func() *Struct {
+		in: &DefaultOptionsV2,
+		want: func() *Struct {
 			v2 := DefaultOptionsV2
 			v2.Flags.Set(jsonflags.Indent | 1)
 			v2.Flags.Set(jsonflags.Multiline | 0)
 			v2.Indent = "\t"
 			return &v2
 		}(), // v2 fully replaces before (except for whitespace related flags)
+	}, {
+		in: jsonflags.Deterministic | jsonflags.AllowInvalidUTF8 | 1, excludeCoders: true,
+		want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Deterministic | 1)
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.Multiline | 0)
+			v2.Indent = "\t"
+			return &v2
+		}(),
+	}, {
+		in: jsontext.WithIndentPrefix("    "), excludeCoders: true,
+		want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Deterministic | 1)
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.Multiline | 0)
+			v2.Indent = "\t"
+			return &v2
+		}(),
+	}, {
+		in: jsontext.WithIndentPrefix("    "), excludeCoders: false,
+		want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Deterministic | 1)
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.IndentPrefix | 1)
+			v2.Flags.Set(jsonflags.Multiline | 1)
+			v2.Indent = "\t"
+			v2.IndentPrefix = "    "
+			return &v2
+		}(),
+	}, {
+		in: &Struct{
+			Flags: jsonflags.Flags{
+				Presence: uint64(jsonflags.Deterministic | jsonflags.Indent | jsonflags.IndentPrefix),
+				Values:   uint64(jsonflags.Indent | jsonflags.IndentPrefix),
+			},
+			CoderValues: CoderValues{Indent: "  ", IndentPrefix: "  "},
+		},
+		excludeCoders: true,
+		want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.IndentPrefix | 1)
+			v2.Flags.Set(jsonflags.Multiline | 1)
+			v2.Indent = "\t"
+			v2.IndentPrefix = "    "
+			return &v2
+		}(),
+	}, {
+		in: &Struct{
+			Flags: jsonflags.Flags{
+				Presence: uint64(jsonflags.Deterministic | jsonflags.Indent | jsonflags.IndentPrefix),
+				Values:   uint64(jsonflags.Indent | jsonflags.IndentPrefix),
+			},
+			CoderValues: CoderValues{Indent: "  ", IndentPrefix: "  "},
+		},
+		excludeCoders: false,
+		want: func() *Struct {
+			v2 := DefaultOptionsV2
+			v2.Flags.Set(jsonflags.Indent | 1)
+			v2.Flags.Set(jsonflags.IndentPrefix | 1)
+			v2.Flags.Set(jsonflags.Multiline | 1)
+			v2.Indent = "  "
+			v2.IndentPrefix = "  "
+			return &v2
+		}(),
 	}}
 	got := new(Struct)
 	for i, tt := range tests {
-		got.Join(tt.in)
+		if tt.excludeCoders {
+			got.JoinWithoutCoderOptions(tt.in)
+		} else {
+			got.Join(tt.in)
+		}
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Fatalf("%d: Join:\n\tgot:  %+v\n\twant: %+v", i, got, tt.want)
 		}

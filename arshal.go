@@ -45,9 +45,8 @@ func mayReuseOpt(coderOpts *jsonopts.Struct, opts []Options) *jsonopts.Struct {
 			return coderOpts
 		}
 	// If the caller provides no options, then just reuse the coder's options,
-	// which should only contain encoding/decoding related flags.
+	// which may contain both marshaling/unmarshaling and encoding/decoding flags.
 	case 0:
-		// TODO: This is buggy if coderOpts ever contains non-coder options.
 		return coderOpts
 	}
 	return nil
@@ -224,8 +223,11 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 
 // MarshalEncode serializes a Go value into an [jsontext.Encoder] according to
 // the provided marshal options (while ignoring unmarshal, encode, or decode options).
+// Any marshal-relevant options already specified on the [jsontext.Encoder]
+// take lower precedence than the set of options provided by the caller.
 // Unlike [Marshal] and [MarshalWrite], encode options are ignored because
 // they must have already been specified on the provided [jsontext.Encoder].
+//
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	xe := export.Encoder(out)
@@ -233,8 +235,8 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	if mo == nil {
 		mo = getStructOptions()
 		defer putStructOptions(mo)
-		mo.Join(opts...)
-		mo.CopyCoderOptions(&xe.Struct)
+		*mo = xe.Struct // initialize with encoder options before joining
+		mo.JoinWithoutCoderOptions(opts...)
 	}
 	err = marshalEncode(out, in, mo)
 	if err != nil && mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -467,8 +469,11 @@ func unmarshalFull(in *jsontext.Decoder, out any, uo *jsonopts.Struct) error {
 
 // UnmarshalDecode deserializes a Go value from a [jsontext.Decoder] according to
 // the provided unmarshal options (while ignoring marshal, encode, or decode options).
+// Any unmarshal options already specified on the [jsontext.Decoder]
+// take lower precedence than the set of options provided by the caller.
 // Unlike [Unmarshal] and [UnmarshalRead], decode options are ignored because
 // they must have already been specified on the provided [jsontext.Decoder].
+//
 // The input may be a stream of one or more JSON values,
 // where this only unmarshals the next JSON value in the stream.
 // The output must be a non-nil pointer.
@@ -479,8 +484,8 @@ func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error)
 	if uo == nil {
 		uo = getStructOptions()
 		defer putStructOptions(uo)
-		uo.Join(opts...)
-		uo.CopyCoderOptions(&xd.Struct)
+		*uo = xd.Struct // initialize with decoder options before joining
+		uo.JoinWithoutCoderOptions(opts...)
 	}
 	err = unmarshalDecode(in, out, uo)
 	if err != nil && uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {

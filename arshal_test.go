@@ -9300,6 +9300,66 @@ func TestUintSet(t *testing.T) {
 	}
 }
 
+func TestUnmarshalDecodeOptions(t *testing.T) {
+	var calledFuncs int
+	var calledOptions Options
+	in := strings.NewReader(strings.Repeat("\"\xde\xad\xbe\xef\"\n", 5))
+	dec := jsontext.NewDecoder(in,
+		jsontext.AllowInvalidUTF8(true), // decoder-specific option
+		WithUnmarshalers(UnmarshalFromFunc(func(_ *jsontext.Decoder, _ any, opts Options) error {
+			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
+				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
+			}
+			calledFuncs++
+			calledOptions = opts
+			return SkipFunc
+		})), // unmarshal-specific option; only relevant for UnmarshalDecode
+	)
+
+	if err := UnmarshalDecode(dec, new(string)); err != nil {
+		t.Fatalf("UnmarshalDecode: %v", err)
+	}
+	if calledFuncs != 1 {
+		t.Fatalf("calledFuncs = %d, want 1", calledFuncs)
+	}
+	if err := UnmarshalDecode(dec, new(string), calledOptions); err != nil {
+		t.Fatalf("UnmarshalDecode: %v", err)
+	}
+	if calledFuncs != 2 {
+		t.Fatalf("calledFuncs = %d, want 2", calledFuncs)
+	}
+	if err := UnmarshalDecode(dec, new(string),
+		jsontext.AllowInvalidUTF8(false), // should be ignored
+		WithUnmarshalers(nil),            // should override
+	); err != nil {
+		t.Fatalf("UnmarshalDecode: %v", err)
+	}
+	if calledFuncs != 2 {
+		t.Fatalf("calledFuncs = %d, want 2", calledFuncs)
+	}
+	if err := UnmarshalDecode(dec, new(string)); err != nil {
+		t.Fatalf("UnmarshalDecode: %v", err)
+	}
+	if calledFuncs != 3 {
+		t.Fatalf("calledFuncs = %d, want 3", calledFuncs)
+	}
+	if err := UnmarshalDecode(dec, new(string), JoinOptions(
+		jsontext.AllowInvalidUTF8(false), // should be ignored
+		WithUnmarshalers(UnmarshalFromFunc(func(_ *jsontext.Decoder, _ any, opts Options) error {
+			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
+				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
+			}
+			calledFuncs = math.MaxInt
+			return SkipFunc
+		})), // should override
+	)); err != nil {
+		t.Fatalf("UnmarshalDecode: %v", err)
+	}
+	if calledFuncs != math.MaxInt {
+		t.Fatalf("calledFuncs = %d, want %d", calledFuncs, math.MaxInt)
+	}
+}
+
 // BenchmarkUnmarshalDecodeOptions is a minimal decode operation to measure
 // the overhead options setup before the unmarshal operation.
 func BenchmarkUnmarshalDecodeOptions(b *testing.B) {
@@ -9321,6 +9381,70 @@ func BenchmarkUnmarshalDecodeOptions(b *testing.B) {
 	b.Run("None", makeBench())
 	b.Run("Same", makeBench(&export.Decoder(dec).Struct))
 	b.Run("New", makeBench(DefaultOptionsV2()))
+}
+
+func TestMarshalEncodeOptions(t *testing.T) {
+	var calledFuncs int
+	var calledOptions Options
+	out := new(bytes.Buffer)
+	enc := jsontext.NewEncoder(
+		out,
+		jsontext.AllowInvalidUTF8(true), // encoder-specific option
+		WithMarshalers(MarshalToFunc(func(_ *jsontext.Encoder, _ any, opts Options) error {
+			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
+				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
+			}
+			calledFuncs++
+			calledOptions = opts
+			return SkipFunc
+		})), // marshal-specific option; only relevant for MarshalEncode
+	)
+
+	if err := MarshalEncode(enc, "\xde\xad\xbe\xef"); err != nil {
+		t.Fatalf("MarshalEncode: %v", err)
+	}
+	if calledFuncs != 1 {
+		t.Fatalf("calledFuncs = %d, want 1", calledFuncs)
+	}
+	if err := MarshalEncode(enc, "\xde\xad\xbe\xef", calledOptions); err != nil {
+		t.Fatalf("MarshalEncode: %v", err)
+	}
+	if calledFuncs != 2 {
+		t.Fatalf("calledFuncs = %d, want 2", calledFuncs)
+	}
+	if err := MarshalEncode(enc, "\xde\xad\xbe\xef",
+		jsontext.AllowInvalidUTF8(false), // should be ignored
+		WithMarshalers(nil),              // should override
+	); err != nil {
+		t.Fatalf("MarshalEncode: %v", err)
+	}
+	if calledFuncs != 2 {
+		t.Fatalf("calledFuncs = %d, want 2", calledFuncs)
+	}
+	if err := MarshalEncode(enc, "\xde\xad\xbe\xef"); err != nil {
+		t.Fatalf("MarshalEncode: %v", err)
+	}
+	if calledFuncs != 3 {
+		t.Fatalf("calledFuncs = %d, want 3", calledFuncs)
+	}
+	if err := MarshalEncode(enc, "\xde\xad\xbe\xef", JoinOptions(
+		jsontext.AllowInvalidUTF8(false), // should be ignored
+		WithMarshalers(MarshalToFunc(func(_ *jsontext.Encoder, _ any, opts Options) error {
+			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
+				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
+			}
+			calledFuncs = math.MaxInt
+			return SkipFunc
+		})), // should override
+	)); err != nil {
+		t.Fatalf("MarshalEncode: %v", err)
+	}
+	if calledFuncs != math.MaxInt {
+		t.Fatalf("calledFuncs = %d, want %d", calledFuncs, math.MaxInt)
+	}
+	if out.String() != strings.Repeat("\"\xde\xad\ufffd\ufffd\"\n", 5) {
+		t.Fatalf("output mismatch:\n\tgot:  %s\n\twant: %s", out.String(), strings.Repeat("\"\xde\xad\xbe\xef\"\n", 5))
+	}
 }
 
 // BenchmarkMarshalEncodeOptions is a minimal encode operation to measure
