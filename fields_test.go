@@ -38,13 +38,13 @@ func TestMakeStructFields(t *testing.T) {
 			F2 string `json:"-"`
 			F3 string `json:"json_name"`
 			f3 string
-			F5 string `json:"json_name_nocase,nocase"`
+			F5 string `json:"json_name_nocase,case:ignore"`
 		}{},
 		want: structFields{
 			flattened: []structField{
 				{id: 0, index: []int{0}, typ: stringType, fieldOptions: fieldOptions{name: "F1", quotedName: `"F1"`}},
 				{id: 1, index: []int{2}, typ: stringType, fieldOptions: fieldOptions{name: "json_name", quotedName: `"json_name"`, hasName: true}},
-				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", quotedName: `"json_name_nocase"`, hasName: true, casing: nocase}},
+				{id: 2, index: []int{4}, typ: stringType, fieldOptions: fieldOptions{name: "json_name_nocase", quotedName: `"json_name_nocase"`, hasName: true, casing: caseIgnore}},
 			},
 		},
 	}, {
@@ -615,24 +615,45 @@ func TestParseTagOptions(t *testing.T) {
 		wantOpts: fieldOptions{name: "V", quotedName: `"V"`, inline: true, unknown: true},
 		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid character ',' at start of option (expecting Unicode letter or single quote)"),
 	}, {
-		name: jsontest.Name("NoCaseOption"),
+		name: jsontest.Name("CaseAloneOption"),
 		in: struct {
-			FieldName int `json:",nocase"`
+			FieldName int `json:",case"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: nocase},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
+		wantErr:  errors.New("Go struct field FieldName is missing value for `case` tag option; specify `case:ignore` or `case:strict` instead"),
 	}, {
-		name: jsontest.Name("StrictCaseOption"),
+		name: jsontest.Name("CaseIgnoreOption"),
 		in: struct {
-			FieldName int `json:",strictcase"`
+			FieldName int `json:",case:ignore"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: strictcase},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: caseIgnore},
+	}, {
+		name: jsontest.Name("CaseStrictOption"),
+		in: struct {
+			FieldName int `json:",case:strict"`
+		}{},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: caseStrict},
+	}, {
+		name: jsontest.Name("CaseUnknownOption"),
+		in: struct {
+			FieldName int `json:",case:unknown"`
+		}{},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
+		wantErr:  errors.New("Go struct field FieldName has unknown `case:unknown` tag value"),
+	}, {
+		name: jsontest.Name("CaseQuotedOption"),
+		in: struct {
+			FieldName int `json:",case:'ignore'"`
+		}{},
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: caseIgnore},
+		wantErr:  errors.New("Go struct field FieldName has unnecessarily quoted appearance of `case:'ignore'` tag option; specify `case:ignore` instead"),
 	}, {
 		name: jsontest.Name("BothCaseOptions"),
 		in: struct {
-			FieldName int `json:",nocase,strictcase"`
+			FieldName int `json:",case:ignore,case:strict"`
 		}{},
-		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: nocase | strictcase},
-		wantErr:  errors.New("Go struct field FieldName cannot have both `nocase` and `strictcase` tag options"),
+		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`, casing: caseIgnore | caseStrict},
+		wantErr:  errors.New("Go struct field FieldName cannot have both `case:ignore` and `case:strict` tag options"),
 	}, {
 		name: jsontest.Name("InlineOption"),
 		in: struct {
@@ -699,12 +720,12 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: jsontest.Name("AllOptions"),
 		in: struct {
-			FieldName int `json:",nocase,inline,unknown,omitzero,omitempty,string,format:format"`
+			FieldName int `json:",case:ignore,inline,unknown,omitzero,omitempty,string,format:format"`
 		}{},
 		wantOpts: fieldOptions{
 			name:       "FieldName",
 			quotedName: `"FieldName"`,
-			casing:     nocase,
+			casing:     caseIgnore,
 			inline:     true,
 			unknown:    true,
 			omitzero:   true,
@@ -715,12 +736,12 @@ func TestParseTagOptions(t *testing.T) {
 	}, {
 		name: jsontest.Name("AllOptionsQuoted"),
 		in: struct {
-			FieldName int `json:",'nocase','inline','unknown','omitzero','omitempty','string','format':'format'"`
+			FieldName int `json:",'case':'ignore','inline','unknown','omitzero','omitempty','string','format':'format'"`
 		}{},
 		wantOpts: fieldOptions{
 			name:       "FieldName",
 			quotedName: `"FieldName"`,
-			casing:     nocase,
+			casing:     caseIgnore,
 			inline:     true,
 			unknown:    true,
 			omitzero:   true,
@@ -728,18 +749,18 @@ func TestParseTagOptions(t *testing.T) {
 			string:     true,
 			format:     "format",
 		},
-		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `'nocase'` tag option; specify `nocase` instead"),
+		wantErr: errors.New("Go struct field FieldName has unnecessarily quoted appearance of `'case'` tag option; specify `case` instead"),
 	}, {
 		name: jsontest.Name("AllOptionsCaseSensitive"),
 		in: struct {
-			FieldName int `json:",NOCASE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT:FORMAT"`
+			FieldName int `json:",CASE:IGNORE,INLINE,UNKNOWN,OMITZERO,OMITEMPTY,STRING,FORMAT:FORMAT"`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
-		wantErr:  errors.New("Go struct field FieldName has invalid appearance of `NOCASE` tag option; specify `nocase` instead"),
+		wantErr:  errors.New("Go struct field FieldName has invalid appearance of `CASE` tag option; specify `case` instead"),
 	}, {
 		name: jsontest.Name("AllOptionsSpaceSensitive"),
 		in: struct {
-			FieldName int `json:", nocase , inline , unknown , omitzero , omitempty , string , format:format "`
+			FieldName int `json:", case:ignore , inline , unknown , omitzero , omitempty , string , format:format "`
 		}{},
 		wantOpts: fieldOptions{name: "FieldName", quotedName: `"FieldName"`},
 		wantErr:  errors.New("Go struct field FieldName has malformed `json` tag: invalid character ' ' at start of option (expecting Unicode letter or single quote)"),

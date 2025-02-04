@@ -111,7 +111,7 @@ func TestBenchmarkUnmarshalUnknown(t *testing.T) {
 			fields = append(fields, reflect.StructField{
 				Name: fmt.Sprintf("Name%d", i),
 				Type: T[int](),
-				Tag:  `json:",nocase"`,
+				Tag:  `json:",case:ignore"`,
 			})
 		}
 		out := reflect.New(reflect.StructOf(fields)).Interface()

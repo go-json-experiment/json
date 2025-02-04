@@ -37,7 +37,7 @@ var jsonPackages = []struct {
 //
 // Case-insensitive matching is a surprising default and
 // incurs significant performance cost when unmarshaling unknown fields.
-// In v2, we can opt into v1-like behavior with the `nocase` tag option.
+// In v2, we can opt into v1-like behavior with the `case:ignore` tag option.
 // The case-insensitive matching performed by v2 is looser than that of v1
 // where it also ignores dashes and underscores.
 // This allows v2 to match fields regardless of whether the name is in
@@ -50,7 +50,7 @@ func TestCaseSensitivity(t *testing.T) {
 	type Fields struct {
 		FieldA bool
 		FieldB bool `json:"fooBar"`
-		FieldC bool `json:"fizzBuzz,nocase"` // `nocase` is used by v2 to explicitly enable case-insensitive matching
+		FieldC bool `json:"fizzBuzz,case:ignore"` // `case:ignore` is used by v2 to explicitly enable case-insensitive matching
 	}
 
 	for _, json := range jsonPackages {
@@ -82,8 +82,8 @@ func TestCaseSensitivity(t *testing.T) {
 				},
 				"FieldC": {
 					"fizzBuzz":  true,   // exact match for explicitly specified JSON name
-					"fizzbuzz":  true,   // v2 is case-insensitive due to `nocase` tag
-					"FIZZBUZZ":  true,   // v2 is case-insensitive due to `nocase` tag
+					"fizzbuzz":  true,   // v2 is case-insensitive due to `case:ignore` tag
+					"FIZZBUZZ":  true,   // v2 is case-insensitive due to `case:ignore` tag
 					"fizz_buzz": onlyV2, // case-insensitivity in v2 ignores dashes and underscores
 					"fizz-buzz": onlyV2, // case-insensitivity in v2 ignores dashes and underscores
 					"fooBar":    false,

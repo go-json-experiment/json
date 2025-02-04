@@ -24,8 +24,8 @@
 //     In contrast, v2 matches fields using an exact, case-sensitive match.
 //     The [jsonv2.MatchCaseInsensitiveNames] and [MatchCaseSensitiveDelimiter]
 //     options control this behavior difference. To explicitly specify a Go struct
-//     field to use a particular name matching scheme, either the `nocase`
-//     or the `strictcase` field option can be specified.
+//     field to use a particular name matching scheme, either the `case:ignore`
+//     or the `case:strict` field option can be specified.
 //     Field-specified options take precedence over caller-specified options.
 //
 //   - In v1, when marshaling a Go struct, a field marked as `omitempty`
@@ -358,7 +358,7 @@ func FormatTimeWithLegacySemantics(v bool) Options {
 
 // MatchCaseSensitiveDelimiter specifies that underscores and dashes are
 // not to be ignored when performing case-insensitive name matching which
-// occurs under [jsonv2.MatchCaseInsensitiveNames] or the `nocase` tag option.
+// occurs under [jsonv2.MatchCaseInsensitiveNames] or the `case:ignore` tag option.
 // Thus, case-insensitive name matching is identical to [strings.EqualFold].
 // Use of this option diminishes the ability of case-insensitive matching
 // to be able to match common case variants (e.g, "foo_bar" with "fooBar").

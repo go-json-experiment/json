@@ -158,10 +158,10 @@ type (
 		Quote string `json:"'\"'"`
 	}
 	structNoCase struct {
-		Aaa  string `json:",strictcase"`
+		Aaa  string `json:",case:strict"`
 		AA_A string
-		AaA  string `json:",nocase"`
-		AAa  string `json:",nocase"`
+		AaA  string `json:",case:ignore"`
+		AAa  string `json:",case:ignore"`
 		AAA  string
 	}
 	structScalars struct {
@@ -476,17 +476,17 @@ type (
 		B int                 `json:",omitzero"`
 	}
 	structNoCaseInlineTextValue struct {
-		AAA  string         `json:",omitempty,strictcase"`
+		AAA  string         `json:",omitempty,case:strict"`
 		AA_b string         `json:",omitempty"`
-		AaA  string         `json:",omitempty,nocase"`
-		AAa  string         `json:",omitempty,nocase"`
+		AaA  string         `json:",omitempty,case:ignore"`
+		AAa  string         `json:",omitempty,case:ignore"`
 		Aaa  string         `json:",omitempty"`
 		X    jsontext.Value `json:",inline"`
 	}
 	structNoCaseInlineMapStringAny struct {
 		AAA string     `json:",omitempty"`
-		AaA string     `json:",omitempty,nocase"`
-		AAa string     `json:",omitempty,nocase"`
+		AaA string     `json:",omitempty,case:ignore"`
+		AAa string     `json:",omitempty,case:ignore"`
 		Aaa string     `json:",omitempty"`
 		X   jsonObject `json:",inline"`
 	}

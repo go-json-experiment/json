@@ -331,7 +331,7 @@ func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) 
 	}
 	for foldedName, fields := range fs.byFoldedName {
 		if len(fields) > 1 {
-			// The precedence order for conflicting nocase names
+			// The precedence order for conflicting ignoreCase names
 			// is by breadth-first order, rather than depth-first order.
 			slices.SortFunc(fields, func(x, y *structField) int {
 				return cmp.Compare(x.id, y.id)
@@ -359,10 +359,10 @@ func indirectType(t reflect.Type) reflect.Type {
 // matchFoldedName matches a case-insensitive name depending on the options.
 // It assumes that foldName(f.name) == foldName(name).
 //
-// Case-insensitive matching is used if the `nocase` tag option is specified
+// Case-insensitive matching is used if the `case:ignore` tag option is specified
 // or the MatchCaseInsensitiveNames call option is specified
-// (and the `strictcase` tag option is not specified).
-// Functionally, the `nocase` and `strictcase` tag options take precedence.
+// (and the `case:strict` tag option is not specified).
+// Functionally, the `case:ignore` and `case:strict` tag options take precedence.
 //
 // The v1 definition of case-insensitivity operated under strings.EqualFold
 // and would strictly compare dashes and underscores,
@@ -370,7 +370,7 @@ func indirectType(t reflect.Type) reflect.Type {
 // Thus, if the MatchCaseSensitiveDelimiter call option is specified,
 // the match is further restricted to using strings.EqualFold.
 func (f *structField) matchFoldedName(name []byte, flags *jsonflags.Flags) bool {
-	if f.casing == nocase || (flags.Get(jsonflags.MatchCaseInsensitiveNames) && f.casing != strictcase) {
+	if f.casing == caseIgnore || (flags.Get(jsonflags.MatchCaseInsensitiveNames) && f.casing != caseStrict) {
 		if !flags.Get(jsonflags.MatchCaseSensitiveDelimiter) || strings.EqualFold(string(name), f.name) {
 			return true
 		}
@@ -379,8 +379,8 @@ func (f *structField) matchFoldedName(name []byte, flags *jsonflags.Flags) bool 
 }
 
 const (
-	nocase     = 1
-	strictcase = 2
+	caseIgnore = 1
+	caseStrict = 2
 )
 
 type fieldOptions struct {
@@ -388,7 +388,7 @@ type fieldOptions struct {
 	quotedName     string // quoted name per RFC 8785, section 3.2.2.2.
 	hasName        bool
 	nameNeedEscape bool
-	casing         int8 // either 0, nocase, or strictcase
+	casing         int8 // either 0, caseIgnore, or caseStrict
 	inline         bool
 	unknown        bool
 	omitzero       bool
@@ -490,10 +490,30 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 			err = cmp.Or(err, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `%s` tag option; specify `%s` instead", sf.Name, rawOpt, opt))
 		}
 		switch opt {
-		case "nocase":
-			out.casing |= nocase
-		case "strictcase":
-			out.casing |= strictcase
+		case "case":
+			if !strings.HasPrefix(tag, ":") {
+				err = cmp.Or(err, fmt.Errorf("Go struct field %s is missing value for `case` tag option; specify `case:ignore` or `case:strict` instead", sf.Name))
+				break
+			}
+			tag = tag[len(":"):]
+			opt, n, err2 := consumeTagOption(tag)
+			if err2 != nil {
+				err = cmp.Or(err, fmt.Errorf("Go struct field %s has malformed value for `case` tag option: %v", sf.Name, err2))
+				break
+			}
+			rawOpt := tag[:n]
+			tag = tag[n:]
+			if strings.HasPrefix(rawOpt, "'") {
+				err = cmp.Or(err, fmt.Errorf("Go struct field %s has unnecessarily quoted appearance of `case:%s` tag option; specify `case:%s` instead", sf.Name, rawOpt, opt))
+			}
+			switch opt {
+			case "ignore":
+				out.casing |= caseIgnore
+			case "strict":
+				out.casing |= caseStrict
+			default:
+				err = cmp.Or(err, fmt.Errorf("Go struct field %s has unknown `case:%s` tag value", sf.Name, rawOpt))
+			}
 		case "inline":
 			out.inline = true
 		case "unknown":
@@ -523,7 +543,7 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 			// This catches invalid mutants such as "omitEmpty" or "omit_empty".
 			normOpt := strings.ReplaceAll(strings.ToLower(opt), "_", "")
 			switch normOpt {
-			case "nocase", "strictcase", "inline", "unknown", "omitzero", "omitempty", "string", "format":
+			case "case", "inline", "unknown", "omitzero", "omitempty", "string", "format":
 				err = cmp.Or(err, fmt.Errorf("Go struct field %s has invalid appearance of `%s` tag option; specify `%s` instead", sf.Name, opt, normOpt))
 			}
 
@@ -534,8 +554,8 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 
 		// Reject duplicates.
 		switch {
-		case out.casing == nocase|strictcase:
-			err = cmp.Or(err, fmt.Errorf("Go struct field %s cannot have both `nocase` and `strictcase` tag options", sf.Name))
+		case out.casing == caseIgnore|caseStrict:
+			err = cmp.Or(err, fmt.Errorf("Go struct field %s cannot have both `case:ignore` and `case:strict` tag options", sf.Name))
 		case seenOpts[opt]:
 			err = cmp.Or(err, fmt.Errorf("Go struct field %s has duplicate appearance of `%s` tag option", sf.Name, rawOpt))
 		}
