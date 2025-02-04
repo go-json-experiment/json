@@ -947,8 +947,6 @@ func (e *Encoder) StackIndex(i int) (Kind, int64) {
 }
 
 // StackPointer returns a JSON Pointer (RFC 6901) to the most recently written value.
-// Object names are only present if [AllowDuplicateNames] is false, otherwise
-// object members are represented using their index within the object.
 func (e *Encoder) StackPointer() Pointer {
 	return Pointer(e.s.AppendStackPointer(nil, -1))
 }
