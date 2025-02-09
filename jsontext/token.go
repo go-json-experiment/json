@@ -357,7 +357,7 @@ func (t Token) Int() int64 {
 		if len(buf) > 0 && buf[0] == '-' {
 			neg, buf = true, buf[1:]
 		}
-		if numAbs, ok := jsonwire.ParseUint(buf); ok {
+		if numAbs, err := jsonwire.ParseUint(buf, 64); err == nil {
 			if neg {
 				if numAbs > -minInt64 {
 					return minInt64
@@ -418,7 +418,7 @@ func (t Token) Uint() uint64 {
 		if len(buf) > 0 && buf[0] == '-' {
 			neg, buf = true, buf[1:]
 		}
-		if num, ok := jsonwire.ParseUint(buf); ok {
+		if num, err := jsonwire.ParseUint(buf, 64); err == nil {
 			if neg {
 				return minUint64
 			}

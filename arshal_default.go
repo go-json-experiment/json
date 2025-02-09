@@ -479,28 +479,11 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			var negOffset int
-			neg := len(val) > 0 && val[0] == '-'
-			if neg {
-				negOffset = 1
+			n, err := jsonwire.ParseInt(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
-			n, ok := jsonwire.ParseUint(val[negOffset:])
-			maxInt := uint64(1) << (bits - 1)
-			overflow := (neg && n > maxInt) || (!neg && n > maxInt-1)
-			if !ok {
-				if n != math.MaxUint64 {
-					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
-				}
-				overflow = true
-			}
-			if overflow {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
-			}
-			if neg {
-				va.SetInt(int64(-n))
-			} else {
-				va.SetInt(int64(+n))
-			}
+			va.SetInt(n)
 			return nil
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
@@ -566,17 +549,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			n, ok := jsonwire.ParseUint(val)
-			maxUint := uint64(1) << bits
-			overflow := n > maxUint-1
-			if !ok {
-				if n != math.MaxUint64 {
-					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
-				}
-				overflow = true
-			}
-			if overflow {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
+			n, err := jsonwire.ParseUint(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
 			va.SetUint(n)
 			return nil
@@ -679,9 +654,9 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			fv, ok := jsonwire.ParseFloat(val, bits)
-			if !ok {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
+			fv, err := jsonwire.ParseFloat(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
 			va.SetFloat(fv)
 			return nil
