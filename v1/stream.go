@@ -206,7 +206,7 @@ func (dec *Decoder) Token() (Token, error) {
 		if useNumber, _ := jsonv2.GetOption(dec.opts, unmarshalAnyWithRawNumber); useNumber {
 			return Number(tok.String()), nil
 		}
-		return tok.Float(), nil
+		return tok.ParseFloat(64)
 	case '{', '}', '[', ']':
 		return Delim(k), nil
 	default:

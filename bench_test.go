@@ -407,9 +407,13 @@ func mustDecodeTokens(t testing.TB, data []byte) []jsontext.Token {
 		case '"':
 			tokens = append(tokens, jsontext.String(tok.String()))
 		case '0':
-			tokens = append(tokens, jsontext.Float(tok.Float()))
+			v, err := tok.ParseFloat(64)
+			if err != nil {
+				t.Fatalf("ParseFloat error: %v", err)
+			}
+			tokens = append(tokens, jsontext.Float(v))
 		default:
-			tokens = append(tokens, tok.Clone())
+			tokens = append(tokens, jsontext.Raw(tok.Clone()))
 		}
 	}
 	return tokens

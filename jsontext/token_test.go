@@ -7,7 +7,15 @@ package jsontext
 import (
 	"math"
 	"reflect"
+	"strconv"
 	"testing"
+)
+
+const (
+	maxInt64  = math.MaxInt64
+	minInt64  = math.MinInt64
+	maxUint64 = math.MaxUint64
+	minUint64 = 0 // for consistency and readability purposes
 )
 
 func TestTokenStringAllocations(t *testing.T) {
@@ -56,35 +64,23 @@ func TestTokenAccessors(t *testing.T) {
 		{String(""), token{String: "", Kind: '"'}},
 		{String("hello, world!"), token{String: "hello, world!", Kind: '"'}},
 		{rawToken(`"hello, world!"`), token{String: "hello, world!", Kind: '"'}},
-		{Float(0), token{String: "0", Float: 0, Int: 0, Uint: 0, Kind: '0'}},
+		{Float(0), token{String: "0", Float: 0, Kind: '0'}},
+		{Float(1.2), token{String: "1.2", Float: 1.2, Kind: '0'}},
 		{Float(math.Copysign(0, -1)), token{String: "-0", Float: math.Copysign(0, -1), Int: 0, Uint: 0, Kind: '0'}},
-		{Float(math.NaN()), token{String: "NaN", Float: math.NaN(), Int: 0, Uint: 0, Kind: '"'}},
-		{Float(math.Inf(+1)), token{String: "Infinity", Float: math.Inf(+1), Kind: '"'}},
-		{Float(math.Inf(-1)), token{String: "-Infinity", Float: math.Inf(-1), Kind: '"'}},
-		{Int(minInt64), token{String: "-9223372036854775808", Float: minInt64, Int: minInt64, Uint: minUint64, Kind: '0'}},
-		{Int(minInt64 + 1), token{String: "-9223372036854775807", Float: minInt64 + 1, Int: minInt64 + 1, Uint: minUint64, Kind: '0'}},
-		{Int(-1), token{String: "-1", Float: -1, Int: -1, Uint: minUint64, Kind: '0'}},
-		{Int(0), token{String: "0", Float: 0, Int: 0, Uint: 0, Kind: '0'}},
-		{Int(+1), token{String: "1", Float: +1, Int: +1, Uint: +1, Kind: '0'}},
-		{Int(maxInt64 - 1), token{String: "9223372036854775806", Float: maxInt64 - 1, Int: maxInt64 - 1, Uint: maxInt64 - 1, Kind: '0'}},
-		{Int(maxInt64), token{String: "9223372036854775807", Float: maxInt64, Int: maxInt64, Uint: maxInt64, Kind: '0'}},
+		{Float(math.NaN()), token{String: "NaN", Float: math.NaN(), Int: 0, Uint: 0, Kind: '0'}},
+		{Float(math.Inf(+1)), token{String: "Infinity", Float: math.Inf(+1), Kind: '0'}},
+		{Float(math.Inf(-1)), token{String: "-Infinity", Float: math.Inf(-1), Kind: '0'}},
+		{Int(minInt64), token{String: "-9223372036854775808", Int: minInt64, Uint: minUint64, Kind: '0'}},
+		{Int(minInt64 + 1), token{String: "-9223372036854775807", Int: minInt64 + 1, Kind: '0'}},
+		{Int(-1), token{String: "-1", Int: -1, Kind: '0'}},
+		{Int(0), token{String: "0", Int: 0, Kind: '0'}},
+		{Int(+1), token{String: "1", Int: +1, Kind: '0'}},
+		{Int(maxInt64 - 1), token{String: "9223372036854775806", Int: maxInt64 - 1, Kind: '0'}},
+		{Int(maxInt64), token{String: "9223372036854775807", Int: maxInt64, Kind: '0'}},
 		{Uint(minUint64), token{String: "0", Kind: '0'}},
-		{Uint(minUint64 + 1), token{String: "1", Float: minUint64 + 1, Int: minUint64 + 1, Uint: minUint64 + 1, Kind: '0'}},
-		{Uint(maxUint64 - 1), token{String: "18446744073709551614", Float: maxUint64 - 1, Int: maxInt64, Uint: maxUint64 - 1, Kind: '0'}},
-		{Uint(maxUint64), token{String: "18446744073709551615", Float: maxUint64, Int: maxInt64, Uint: maxUint64, Kind: '0'}},
-		{rawToken(`-0`), token{String: "-0", Float: math.Copysign(0, -1), Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`1e1000`), token{String: "1e1000", Float: math.Inf(+1), Int: maxInt64, Uint: maxUint64, Kind: '0'}},
-		{rawToken(`-1e1000`), token{String: "-1e1000", Float: math.Inf(-1), Int: minInt64, Uint: minUint64, Kind: '0'}},
-		{rawToken(`0.1`), token{String: "0.1", Float: 0.1, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`0.5`), token{String: "0.5", Float: 0.5, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`0.9`), token{String: "0.9", Float: 0.9, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`1.1`), token{String: "1.1", Float: 1.1, Int: 1, Uint: 1, Kind: '0'}},
-		{rawToken(`-0.1`), token{String: "-0.1", Float: -0.1, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`-0.5`), token{String: "-0.5", Float: -0.5, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`-0.9`), token{String: "-0.9", Float: -0.9, Int: 0, Uint: 0, Kind: '0'}},
-		{rawToken(`-1.1`), token{String: "-1.1", Float: -1.1, Int: -1, Uint: 0, Kind: '0'}},
-		{rawToken(`99999999999999999999`), token{String: "99999999999999999999", Float: 1e20 - 1, Int: maxInt64, Uint: maxUint64, Kind: '0'}},
-		{rawToken(`-99999999999999999999`), token{String: "-99999999999999999999", Float: -1e20 - 1, Int: minInt64, Uint: minUint64, Kind: '0'}},
+		{Uint(minUint64 + 1), token{String: "1", Uint: minUint64 + 1, Kind: '0'}},
+		{Uint(maxUint64 - 1), token{String: "18446744073709551614", Uint: maxUint64 - 1, Kind: '0'}},
+		{Uint(maxUint64), token{String: "18446744073709551615", Uint: maxUint64, Kind: '0'}},
 	}
 
 	for _, tt := range tests {
@@ -132,6 +128,69 @@ func TestTokenAccessors(t *testing.T) {
 	}
 }
 
+func TestTokenAccessorRaw(t *testing.T) {
+	if !reflect.DeepEqual(False, Raw(False.Raw())) {
+		t.Error("False != Raw(False.Raw())")
+	}
+
+	raw := func() *RawToken {
+		defer func() { recover() }()
+		raw := Float(0.).Raw()
+		return &raw
+	}()
+	if raw != nil {
+		t.Error("Float(0.).Raw() should panic")
+	}
+}
+
+func TestTokenParseFloat(t *testing.T) {
+	tests := []struct {
+		in   string
+		want float64
+		err  error
+	}{
+		{`-0`, math.Copysign(0, -1), nil},
+		{`1e1000`, math.Inf(+1), strconv.ErrRange},
+		{`"Infinity"`, math.Inf(+1), nil},
+		{`"-Infinity"`, math.Inf(-1), nil},
+		{`"NaN"`, math.NaN(), nil},
+		{`"anything"`, 0, ErrUnexpectedKind},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			gotV, gotErr := rawToken(tt.in).raw.ParseFloat(64)
+			if math.Float64bits(gotV) != math.Float64bits(tt.want) {
+				t.Errorf("RawToken.ParseFloat(64) = %v, want %v", gotV, tt.want)
+			}
+			if gotErr != tt.err {
+				t.Errorf("RawToken.ParseFloat(64) error = %v, want %v", gotErr, tt.err)
+			}
+		})
+	}
+}
+
+func assertParse[T comparable](t *testing.T, s string, parse func(t RawToken, bits int) (T, error), wantV T, wantErr error) {
+	t.Helper()
+	gotV, gotErr := parse(rawToken(s).raw, 64)
+	if gotV != wantV {
+		t.Errorf("RawToken.ParseXXX(64) = %v, want %v", gotV, wantV)
+	}
+	if gotErr != wantErr {
+		t.Errorf("RawToken.ParseXXX(64) error = %v, want %v", gotErr, wantErr)
+	}
+}
+
+func TestTokenParseInt(t *testing.T) {
+	assertParse(t, "123", RawToken.ParseInt, 123, nil)
+	assertParse(t, "99999999999999999999", RawToken.ParseInt, math.MaxInt64, strconv.ErrRange)
+	assertParse(t, "false", RawToken.ParseInt, 0, ErrUnexpectedKind)
+
+	assertParse(t, "123", RawToken.ParseUint, 123, nil)
+	assertParse(t, "-1", RawToken.ParseUint, 0, strconv.ErrSyntax)
+	assertParse(t, "false", RawToken.ParseUint, 0, ErrUnexpectedKind)
+}
+
 func TestTokenClone(t *testing.T) {
 	tests := []struct {
 		in           Token
@@ -157,7 +216,7 @@ func TestTokenClone(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.in) {
 				t.Errorf("Token(%s) == Token(%s).Clone() = false, want true", tt.in, tt.in)
 			}
-			gotExactRaw := got.raw == tt.in.raw
+			gotExactRaw := got.raw.dBuf == tt.in.raw.dBuf
 			if gotExactRaw != tt.wantExactRaw {
 				t.Errorf("Token(%s).raw == Token(%s).Clone().raw = %v, want %v", tt.in, tt.in, gotExactRaw, tt.wantExactRaw)
 			}

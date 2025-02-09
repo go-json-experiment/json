@@ -70,8 +70,8 @@ func FuzzCoder(f *testing.F) {
 		enc := NewEncoder(dst)
 		for _, tokVal := range tokVals {
 			switch tokVal := tokVal.(type) {
-			case Token:
-				if err := enc.WriteToken(tokVal); err != nil {
+			case RawToken:
+				if err := enc.WriteToken(Raw(tokVal)); err != nil {
 					t.Fatalf("Encoder.WriteToken error: %v", err)
 				}
 			case Value:
@@ -88,14 +88,14 @@ func FuzzCoder(f *testing.F) {
 			if err != nil {
 				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
-			got = append(got, tok.Clone())
+			got = append(got, Raw(tok.Clone()))
 		}
 		for dec := NewDecoder(dst); dec.PeekKind() > 0; {
 			tok, err := dec.ReadToken()
 			if err != nil {
 				t.Fatalf("Decoder.ReadToken error: %v", err)
 			}
-			want = append(want, tok.Clone())
+			want = append(want, Raw(tok.Clone()))
 		}
 		if !equalTokens(got, want) {
 			t.Fatalf("mismatching output:\ngot  %v\nwant %v", got, want)

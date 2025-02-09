@@ -437,13 +437,13 @@ func (d *decoderState) SkipUntil(depth int, length int64) error {
 	return nil
 }
 
-// ReadToken reads the next [Token], advancing the read offset.
+// ReadToken reads the next [RawToken], advancing the read offset.
 // The returned token is only valid until the next Peek, Read, or Skip call.
 // It returns [io.EOF] if there are no more tokens.
-func (d *Decoder) ReadToken() (Token, error) {
+func (d *Decoder) ReadToken() (RawToken, error) {
 	return d.s.ReadToken()
 }
-func (d *decoderState) ReadToken() (Token, error) {
+func (d *decoderState) ReadToken() (RawToken, error) {
 	// Determine the next kind.
 	var err error
 	var next Kind
@@ -453,7 +453,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if d.peekErr != nil {
 			err := d.peekErr
 			d.peekPos, d.peekErr = 0, nil // possibly a transient I/O error
-			return Token{}, err
+			return RawToken{}, err
 		}
 		next = Kind(d.buf[pos]).normalize()
 		d.peekPos = 0 // reset cache
@@ -468,7 +468,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 				if err == io.ErrUnexpectedEOF && d.Tokens.Depth() == 1 {
 					err = io.EOF // EOF possibly if no Tokens present after top-level value
 				}
-				return Token{}, wrapSyntacticError(d, err, pos, 0)
+				return RawToken{}, wrapSyntacticError(d, err, pos, 0)
 			}
 		}
 
@@ -481,13 +481,13 @@ func (d *decoderState) ReadToken() (Token, error) {
 			if d.needMore(pos) {
 				if pos, err = d.consumeWhitespace(pos); err != nil {
 					err = wrapSyntacticError(d, err, pos, 0)
-					return Token{}, d.checkDelimBeforeIOError(delim, err)
+					return RawToken{}, d.checkDelimBeforeIOError(delim, err)
 				}
 			}
 		}
 		next = Kind(d.buf[pos]).normalize()
 		if d.Tokens.needDelim(next) != delim {
-			return Token{}, d.checkDelim(delim, next)
+			return RawToken{}, d.checkDelim(delim, next)
 		}
 	}
 
@@ -498,46 +498,46 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if jsonwire.ConsumeNull(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "null")
 			if err != nil {
-				return Token{}, wrapSyntacticError(d, err, pos, +1)
+				return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 			}
 		} else {
 			pos += len("null")
 		}
 		if err = d.Tokens.appendLiteral(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos-len("null"), +1) // report position at start of literal
+			return RawToken{}, wrapSyntacticError(d, err, pos-len("null"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return Null, nil
+		return Null.raw, nil
 
 	case 'f':
 		if jsonwire.ConsumeFalse(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "false")
 			if err != nil {
-				return Token{}, wrapSyntacticError(d, err, pos, +1)
+				return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 			}
 		} else {
 			pos += len("false")
 		}
 		if err = d.Tokens.appendLiteral(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos-len("false"), +1) // report position at start of literal
+			return RawToken{}, wrapSyntacticError(d, err, pos-len("false"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return False, nil
+		return False.raw, nil
 
 	case 't':
 		if jsonwire.ConsumeTrue(d.buf[pos:]) == 0 {
 			pos, err = d.consumeLiteral(pos, "true")
 			if err != nil {
-				return Token{}, wrapSyntacticError(d, err, pos, +1)
+				return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 			}
 		} else {
 			pos += len("true")
 		}
 		if err = d.Tokens.appendLiteral(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos-len("true"), +1) // report position at start of literal
+			return RawToken{}, wrapSyntacticError(d, err, pos-len("true"), +1) // report position at start of literal
 		}
 		d.prevStart, d.prevEnd = pos, pos
-		return True, nil
+		return True.raw, nil
 
 	case '"':
 		var flags jsonwire.ValueFlags // TODO: Preserve this in Token?
@@ -547,7 +547,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
 			if err != nil {
-				return Token{}, wrapSyntacticError(d, err, pos, +1)
+				return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 			}
 		} else {
 			pos += n
@@ -555,20 +555,20 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if d.Tokens.Last.NeedObjectName() {
 			if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
 				if !d.Tokens.Last.isValidNamespace() {
-					return Token{}, wrapSyntacticError(d, errInvalidNamespace, pos-n, +1)
+					return RawToken{}, wrapSyntacticError(d, errInvalidNamespace, pos-n, +1)
 				}
 				if d.Tokens.Last.isActiveNamespace() && !d.Namespaces.Last().insertQuoted(d.buf[pos-n:pos], flags.IsVerbatim()) {
 					err = wrapWithObjectName(ErrDuplicateName, d.buf[pos-n:pos])
-					return Token{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of string
+					return RawToken{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of string
 				}
 			}
 			d.Names.ReplaceLastQuotedOffset(pos - n) // only replace if insertQuoted succeeds
 		}
 		if err = d.Tokens.appendString(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of string
+			return RawToken{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of string
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
-		return Token{raw: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
+		return RawToken{dBuf: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
 
 	case '0':
 		// NOTE: Since JSON numbers are not self-terminating,
@@ -579,20 +579,20 @@ func (d *decoderState) ReadToken() (Token, error) {
 			newAbsPos := d.baseOffset + int64(pos)
 			n = int(newAbsPos - oldAbsPos)
 			if err != nil {
-				return Token{}, wrapSyntacticError(d, err, pos, +1)
+				return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 			}
 		} else {
 			pos += n
 		}
 		if err = d.Tokens.appendNumber(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of number
+			return RawToken{}, wrapSyntacticError(d, err, pos-n, +1) // report position at start of number
 		}
 		d.prevStart, d.prevEnd = pos-n, pos
-		return Token{raw: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
+		return RawToken{dBuf: &d.decodeBuffer, num: uint64(d.previousOffsetStart())}, nil
 
 	case '{':
 		if err = d.Tokens.pushObject(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos, +1)
+			return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 		}
 		d.Names.push()
 		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
@@ -600,11 +600,11 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectStart, nil
+		return ObjectStart.raw, nil
 
 	case '}':
 		if err = d.Tokens.popObject(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos, +1)
+			return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 		}
 		d.Names.pop()
 		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
@@ -612,27 +612,27 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectEnd, nil
+		return ObjectEnd.raw, nil
 
 	case '[':
 		if err = d.Tokens.pushArray(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos, +1)
+			return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayStart, nil
+		return ArrayStart.raw, nil
 
 	case ']':
 		if err = d.Tokens.popArray(); err != nil {
-			return Token{}, wrapSyntacticError(d, err, pos, +1)
+			return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayEnd, nil
+		return ArrayEnd.raw, nil
 
 	default:
 		err = jsonwire.NewInvalidCharacterError(d.buf[pos:], "at start of value")
-		return Token{}, wrapSyntacticError(d, err, pos, +1)
+		return RawToken{}, wrapSyntacticError(d, err, pos, +1)
 	}
 }
 
