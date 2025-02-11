@@ -55,7 +55,6 @@ type state struct {
 	Tokens stateMachine
 
 	// Names is a stack of object names.
-	// Not used if AllowDuplicateNames is true.
 	Names objectNameStack
 
 	// Namespaces is a stack of object namespaces.
@@ -107,11 +106,11 @@ func (p Pointer) IsValid() bool {
 	return len(p) == 0 || p[0] == '/'
 }
 
-// Contains reports whether the JSON value that p1 points to
-// is equal to or contains the JSON value that p2 points to.
-func (p1 Pointer) Contains(p2 Pointer) bool {
-	// Invariant: len(p1) <= len(p2) if p1.Contains(p2)
-	suffix, ok := strings.CutPrefix(string(p2), string(p1))
+// Contains reports whether the JSON value that p points to
+// is equal to or contains the JSON value that pc points to.
+func (p Pointer) Contains(pc Pointer) bool {
+	// Invariant: len(p) <= len(pc) if p.Contains(pc)
+	suffix, ok := strings.CutPrefix(string(pc), string(p))
 	return ok && (suffix == "" || suffix[0] == '/')
 }
 
