@@ -74,7 +74,7 @@ func Example_fieldNames() {
 		// A JSON name is provided without any special characters.
 		JSONName any `json:"jsonName"`
 		// No JSON name is not provided, so the Go field name is used.
-		Option any `json:",nocase"`
+		Option any `json:",case:ignore"`
 		// An empty JSON name specified using an single-quoted string literal.
 		Empty any `json:"''"`
 		// A dash JSON name specified using an single-quoted string literal.
@@ -108,8 +108,8 @@ func Example_fieldNames() {
 
 // Unmarshal matches JSON object names with Go struct fields using
 // a case-sensitive match, but can be configured to use a case-insensitive
-// match with the "nocase" option. This permits unmarshaling from inputs that
-// use naming conventions such as camelCase, snake_case, or kebab-case.
+// match with the "case:ignore" option. This permits unmarshaling from inputs
+// that use naming conventions such as camelCase, snake_case, or kebab-case.
 func Example_caseSensitivity() {
 	// JSON input using various naming conventions.
 	const input = `[
@@ -124,24 +124,24 @@ func Example_caseSensitivity() {
 		{"unknown": true}
 	]`
 
-	// Without "nocase", Unmarshal looks for an exact match.
-	var withcase []struct {
+	// Without "case:ignore", Unmarshal looks for an exact match.
+	var caseStrict []struct {
 		X bool `json:"firstName"`
 	}
-	if err := json.Unmarshal([]byte(input), &withcase); err != nil {
+	if err := json.Unmarshal([]byte(input), &caseStrict); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(withcase) // exactly 1 match found
+	fmt.Println(caseStrict) // exactly 1 match found
 
-	// With "nocase", Unmarshal looks first for an exact match,
+	// With "case:ignore", Unmarshal looks first for an exact match,
 	// then for a case-insensitive match if none found.
-	var nocase []struct {
-		X bool `json:"firstName,nocase"`
+	var caseIgnore []struct {
+		X bool `json:"firstName,case:ignore"`
 	}
-	if err := json.Unmarshal([]byte(input), &nocase); err != nil {
+	if err := json.Unmarshal([]byte(input), &caseIgnore); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(nocase) // 8 matches found
+	fmt.Println(caseIgnore) // 8 matches found
 
 	// Output:
 	// [{false} {true} {false} {false} {false} {false} {false} {false} {false}]
