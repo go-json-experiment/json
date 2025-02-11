@@ -24,25 +24,14 @@ var (
 	jsonMarshalerToType     = reflect.TypeFor[MarshalerTo]()
 	jsonUnmarshalerType     = reflect.TypeFor[Unmarshaler]()
 	jsonUnmarshalerFromType = reflect.TypeFor[UnmarshalerFrom]()
-	textAppenderType        = reflect.TypeFor[encodingTextAppender]()
+	textAppenderType        = reflect.TypeFor[encoding.TextAppender]()
 	textMarshalerType       = reflect.TypeFor[encoding.TextMarshaler]()
 	textUnmarshalerType     = reflect.TypeFor[encoding.TextUnmarshaler]()
-
-	// TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead of this hack.
-	// This exists for now to provide performance benefits to netip types.
-	// There is no semantic difference with this change.
-	appenderToType = reflect.TypeFor[interface{ AppendTo([]byte) []byte }]()
 
 	allMarshalerTypes   = []reflect.Type{jsonMarshalerToType, jsonMarshalerType, textAppenderType, textMarshalerType}
 	allUnmarshalerTypes = []reflect.Type{jsonUnmarshalerFromType, jsonUnmarshalerType, textUnmarshalerType}
 	allMethodTypes      = append(allMarshalerTypes, allUnmarshalerTypes...)
 )
-
-// TODO(https://go.dev/issue/62384): Use encoding.TextAppender instead
-// and document public support for this method in json.Marshal.
-type encodingTextAppender interface {
-	AppendText(b []byte) ([]byte, error)
-}
 
 // Marshaler is implemented by types that can marshal themselves.
 // It is recommended that types implement [MarshalerTo] unless the implementation
@@ -137,21 +126,6 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			}
 			return nil
 		}
-		// TODO(https://go.dev/issue/62384): Rely on encoding.TextAppender instead.
-		if implementsAny(t, appenderToType) && t.PkgPath() == "net/netip" {
-			fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
-				appender := va.Addr().Interface().(interface{ AppendTo([]byte) []byte })
-				if err := export.Encoder(enc).AppendRaw('"', false, func(b []byte) ([]byte, error) {
-					return appender.AppendTo(b), nil
-				}); err != nil {
-					if !isSemanticError(err) && !export.IsIOError(err) {
-						err = newMarshalErrorBefore(enc, t, err)
-					}
-					return err
-				}
-				return nil
-			}
-		}
 	}
 
 	if needAddr, ok := implements(t, textAppenderType); ok {
@@ -162,7 +136,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				(needAddr && va.forcedAddr) {
 				return prevMarshal(enc, va, mo)
 			}
-			appender := va.Addr().Interface().(encodingTextAppender)
+			appender := va.Addr().Interface().(encoding.TextAppender)
 			if err := export.Encoder(enc).AppendRaw('"', false, appender.AppendText); err != nil {
 				err = wrapSkipFunc(err, "append method")
 				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {

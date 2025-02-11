@@ -3,4 +3,4 @@
 // This package will regularly experience breaking changes.
 module github.com/go-json-experiment/json
 
-go 1.23
+go 1.24
