@@ -2528,7 +2528,7 @@ func TestMarshal(t *testing.T) {
 		want:    `{`,
 		wantErr: EM(newNonStringNameError(len64(" { "), "")).withPos(`{`, "").withType(0, T[jsontext.Value]()),
 	}, {
-		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidObjectEnd"),
+		name:    jsontest.Name("Structs/InlinedFallback/TextValue/InvalidEndObject"),
 		in:      structInlineTextValue{X: jsontext.Value(` { "name" : false , } `)},
 		want:    `{"name":false`,
 		wantErr: EM(newInvalidCharacterError(",", "at start of value", len64(` { "name" : false `), "")).withPos(`{"name":false,`, "").withType(0, T[jsontext.Value]()),
@@ -6615,7 +6615,7 @@ func TestUnmarshal(t *testing.T) {
 		inVal: addr(structInlineTextValue{X: jsontext.Value(` { "fizz" : "buzz" } `)}),
 		want:  addr(structInlineTextValue{A: 1, X: jsontext.Value(` { "fizz" : "buzz","fizz":"buzz","foo":[ 1 , 2 , 3 ]}`), B: 2}),
 	}, {
-		name:  jsontest.Name("Structs/InlinedFallback/TextValue/Merge/ObjectEnd"),
+		name:  jsontest.Name("Structs/InlinedFallback/TextValue/Merge/EndObject"),
 		inBuf: `{"A":1,"fizz":"buzz","B":2}`,
 		inVal: addr(structInlineTextValue{X: jsontext.Value(` } `)}),
 		// NOTE: This produces invalid output,
@@ -9100,7 +9100,7 @@ func TestMarshalInvalidNamespace(t *testing.T) {
 				t.Fatalf("%s: MarshalEncode error is nil, want non-nil", tt.name.Where)
 			}
 			for _, tok := range []jsontext.Token{
-				jsontext.Null, jsontext.String(""), jsontext.Int(0), jsontext.ObjectStart, jsontext.ObjectEnd, jsontext.ArrayStart, jsontext.ArrayEnd,
+				jsontext.Null, jsontext.String(""), jsontext.Int(0), jsontext.BeginObject, jsontext.EndObject, jsontext.BeginArray, jsontext.EndArray,
 			} {
 				if err := enc.WriteToken(tok); err == nil {
 					t.Fatalf("%s: WriteToken error is nil, want non-nil", tt.name.Where)

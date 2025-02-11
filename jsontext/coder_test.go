@@ -169,12 +169,12 @@ var coderTestdata = []coderTestdataEntry{{
 	]`,
 	outCanonicalized: `[0,0,0,0,1,1.7976931348623157e+308,-5e-324,1e+100,1.7976931348623157e+308,9007199254740990,9007199254740991,9007199254740992,9007199254740992,9007199254740994,-9223372036854776000,9223372036854776000,0,18446744073709552000]`,
 	tokens: []Token{
-		ArrayStart,
+		BeginArray,
 		Float(0), Float(math.Copysign(0, -1)), rawToken(`0.0`), rawToken(`-0.0`), rawToken(`1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001`), rawToken(`1e1000`),
 		Float(-5e-324), Float(1e100), Float(1.7976931348623157e+308),
 		Float(9007199254740990), Float(9007199254740991), Float(9007199254740992), rawToken(`9007199254740993`), rawToken(`9007199254740994`),
 		Int(minInt64), Int(maxInt64), Uint(minUint64), Uint(maxUint64),
-		ArrayEnd,
+		EndArray,
 	},
 	pointers: []Pointer{
 		"", "/0", "/1", "/2", "/3", "/4", "/5", "/6", "/7", "/8", "/9", "/10", "/11", "/12", "/13", "/14", "/15", "/16", "/17", "",
@@ -183,7 +183,7 @@ var coderTestdata = []coderTestdataEntry{{
 	name:         jsontest.Name("ObjectN0"),
 	in:           ` { } `,
 	outCompacted: `{}`,
-	tokens:       []Token{ObjectStart, ObjectEnd},
+	tokens:       []Token{BeginObject, EndObject},
 	pointers:     []Pointer{"", ""},
 }, {
 	name:         jsontest.Name("ObjectN1"),
@@ -193,7 +193,7 @@ var coderTestdata = []coderTestdataEntry{{
 	outIndented: `{
 	    "0": 0
 	}`,
-	tokens:   []Token{ObjectStart, String("0"), Uint(0), ObjectEnd},
+	tokens:   []Token{BeginObject, String("0"), Uint(0), EndObject},
 	pointers: []Pointer{"", "/0", "/0", ""},
 }, {
 	name:         jsontest.Name("ObjectN2"),
@@ -204,7 +204,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    "0": 0,
 	    "1": 1
 	}`,
-	tokens:   []Token{ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd},
+	tokens:   []Token{BeginObject, String("0"), Uint(0), String("1"), Uint(1), EndObject},
 	pointers: []Pointer{"", "/0", "/0", "/1", "/1", ""},
 }, {
 	name:         jsontest.Name("ObjectNested"),
@@ -222,7 +222,7 @@ var coderTestdata = []coderTestdataEntry{{
 	        }
 	    }
 	}`,
-	tokens: []Token{ObjectStart, String("0"), ObjectStart, String("1"), ObjectStart, String("2"), ObjectStart, String("3"), ObjectStart, String("4"), ObjectStart, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd, ObjectEnd},
+	tokens: []Token{BeginObject, String("0"), BeginObject, String("1"), BeginObject, String("2"), BeginObject, String("3"), BeginObject, String("4"), BeginObject, EndObject, EndObject, EndObject, EndObject, EndObject, EndObject},
 	pointers: []Pointer{
 		"",
 		"/0", "/0",
@@ -269,23 +269,23 @@ var coderTestdata = []coderTestdataEntry{{
 	}`,
 	outCanonicalized: `{"":{"0":{"11":"","222":"aaaaa","3333":"bbb"},"44444":{"555555":"aaaa","6666666":"ccccccc","77777777":"bb"}}}`,
 	tokens: []Token{
-		ObjectStart,
+		BeginObject,
 		String(""),
-		ObjectStart,
+		BeginObject,
 		String("44444"),
-		ObjectStart,
+		BeginObject,
 		String("6666666"), String("ccccccc"),
 		String("77777777"), String("bb"),
 		String("555555"), String("aaaa"),
-		ObjectEnd,
+		EndObject,
 		String("0"),
-		ObjectStart,
+		BeginObject,
 		String("3333"), String("bbb"),
 		String("11"), String(""),
 		String("222"), String("aaaaa"),
-		ObjectEnd,
-		ObjectEnd,
-		ObjectEnd,
+		EndObject,
+		EndObject,
+		EndObject,
 	},
 	pointers: []Pointer{
 		"",
@@ -307,7 +307,7 @@ var coderTestdata = []coderTestdataEntry{{
 	name:         jsontest.Name("ArrayN0"),
 	in:           ` [ ] `,
 	outCompacted: `[]`,
-	tokens:       []Token{ArrayStart, ArrayEnd},
+	tokens:       []Token{BeginArray, EndArray},
 	pointers:     []Pointer{"", ""},
 }, {
 	name:         jsontest.Name("ArrayN1"),
@@ -316,7 +316,7 @@ var coderTestdata = []coderTestdataEntry{{
 	outIndented: `[
 	    0
 	]`,
-	tokens:   []Token{ArrayStart, Uint(0), ArrayEnd},
+	tokens:   []Token{BeginArray, Uint(0), EndArray},
 	pointers: []Pointer{"", "/0", ""},
 }, {
 	name:         jsontest.Name("ArrayN2"),
@@ -326,7 +326,7 @@ var coderTestdata = []coderTestdataEntry{{
 	    0,
 	    1
 	]`,
-	tokens: []Token{ArrayStart, Uint(0), Uint(1), ArrayEnd},
+	tokens: []Token{BeginArray, Uint(0), Uint(1), EndArray},
 }, {
 	name:         jsontest.Name("ArrayNested"),
 	in:           ` [ [ [ [ [ ] ] ] ] ] `,
@@ -340,7 +340,7 @@ var coderTestdata = []coderTestdataEntry{{
 	        ]
 	    ]
 	]`,
-	tokens: []Token{ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayStart, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd, ArrayEnd},
+	tokens: []Token{BeginArray, BeginArray, BeginArray, BeginArray, BeginArray, EndArray, EndArray, EndArray, EndArray, EndArray},
 	pointers: []Pointer{
 		"",
 		"/0",
@@ -395,17 +395,17 @@ var coderTestdata = []coderTestdataEntry{{
 	}`,
 	outCanonicalized: `{"arrayN0":[],"arrayN1":[0],"arrayN2":[0,1],"literals":[null,false,true],"number":3.14159,"objectN0":{},"objectN1":{"0":0},"objectN2":{"0":0,"1":1},"string":"Hello, 世界"}`,
 	tokens: []Token{
-		ObjectStart,
-		String("literals"), ArrayStart, Null, False, True, ArrayEnd,
+		BeginObject,
+		String("literals"), BeginArray, Null, False, True, EndArray,
 		String("string"), String("Hello, 世界"),
 		String("number"), Float(3.14159),
-		String("arrayN0"), ArrayStart, ArrayEnd,
-		String("arrayN1"), ArrayStart, Uint(0), ArrayEnd,
-		String("arrayN2"), ArrayStart, Uint(0), Uint(1), ArrayEnd,
-		String("objectN0"), ObjectStart, ObjectEnd,
-		String("objectN1"), ObjectStart, String("0"), Uint(0), ObjectEnd,
-		String("objectN2"), ObjectStart, String("0"), Uint(0), String("1"), Uint(1), ObjectEnd,
-		ObjectEnd,
+		String("arrayN0"), BeginArray, EndArray,
+		String("arrayN1"), BeginArray, Uint(0), EndArray,
+		String("arrayN2"), BeginArray, Uint(0), Uint(1), EndArray,
+		String("objectN0"), BeginObject, EndObject,
+		String("objectN1"), BeginObject, String("0"), Uint(0), EndObject,
+		String("objectN2"), BeginObject, String("0"), Uint(0), String("1"), Uint(1), EndObject,
+		EndObject,
 	},
 	pointers: []Pointer{
 		"",
@@ -517,27 +517,27 @@ func TestCoderStackPointer(t *testing.T) {
 	}{
 		{Null, ""},
 
-		{ArrayStart, ""},
-		{ArrayEnd, ""},
+		{BeginArray, ""},
+		{EndArray, ""},
 
-		{ArrayStart, ""},
+		{BeginArray, ""},
 		{Bool(true), "/0"},
-		{ArrayEnd, ""},
+		{EndArray, ""},
 
-		{ArrayStart, ""},
+		{BeginArray, ""},
 		{String("hello"), "/0"},
 		{String("goodbye"), "/1"},
-		{ArrayEnd, ""},
+		{EndArray, ""},
 
-		{ObjectStart, ""},
-		{ObjectEnd, ""},
+		{BeginObject, ""},
+		{EndObject, ""},
 
-		{ObjectStart, ""},
+		{BeginObject, ""},
 		{String("hello"), "/hello"},
 		{String("goodbye"), "/hello"},
-		{ObjectEnd, ""},
+		{EndObject, ""},
 
-		{ObjectStart, ""},
+		{BeginObject, ""},
 		{String(""), "/"},
 		{Null, "/"},
 		{String("0"), "/0"},
@@ -550,19 +550,19 @@ func TestCoderStackPointer(t *testing.T) {
 		{Null, "/a~1~1b~0~1c~1~0d~0~0e"},
 		{String(" \r\n\t"), "/ \r\n\t"},
 		{Null, "/ \r\n\t"},
-		{ObjectEnd, ""},
+		{EndObject, ""},
 
-		{ArrayStart, ""},
-		{ObjectStart, "/0"},
+		{BeginArray, ""},
+		{BeginObject, "/0"},
 		{String(""), "/0/"},
-		{ArrayStart, "/0/"},
-		{ObjectStart, "/0//0"},
+		{BeginArray, "/0/"},
+		{BeginObject, "/0//0"},
 		{String("#"), "/0//0/#"},
 		{Null, "/0//0/#"},
-		{ObjectEnd, "/0//0"},
-		{ArrayEnd, "/0/"},
-		{ObjectEnd, "/0"},
-		{ArrayEnd, ""},
+		{EndObject, "/0//0"},
+		{EndArray, "/0/"},
+		{EndObject, "/0"},
+		{EndArray, ""},
 	}
 
 	for _, allowDupes := range []bool{false, true} {
@@ -738,19 +738,19 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("Arrays/TokenThenValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			checkWriteToken(t, ArrayStart, nil)
+			checkWriteToken(t, BeginArray, nil)
 			checkWriteValue(t, trimArray(maxArrays), wantErr)
 			checkWriteValue(t, trimArray(trimArray(maxArrays)), nil)
-			checkWriteToken(t, ArrayEnd, nil)
+			checkWriteToken(t, EndArray, nil)
 		})
 		t.Run("Arrays/AllTokens", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
 			for range maxNestingDepth {
-				checkWriteToken(t, ArrayStart, nil)
+				checkWriteToken(t, BeginArray, nil)
 			}
-			checkWriteToken(t, ArrayStart, wantErr)
+			checkWriteToken(t, BeginArray, wantErr)
 			for range maxNestingDepth {
-				checkWriteToken(t, ArrayEnd, nil)
+				checkWriteToken(t, EndArray, nil)
 			}
 		})
 
@@ -766,24 +766,24 @@ func TestCoderMaxDepth(t *testing.T) {
 		})
 		t.Run("Objects/TokenThenValue", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
-			checkWriteToken(t, ObjectStart, nil)
+			checkWriteToken(t, BeginObject, nil)
 			checkWriteToken(t, String(""), nil)
 			checkWriteValue(t, trimObject(maxObjects), wantErr)
 			checkWriteValue(t, trimObject(trimObject(maxObjects)), nil)
-			checkWriteToken(t, ObjectEnd, nil)
+			checkWriteToken(t, EndObject, nil)
 		})
 		t.Run("Objects/AllTokens", func(t *testing.T) {
 			enc.s.reset(enc.s.Buf[:0], nil)
 			for range maxNestingDepth - 1 {
-				checkWriteToken(t, ObjectStart, nil)
+				checkWriteToken(t, BeginObject, nil)
 				checkWriteToken(t, String(""), nil)
 			}
-			checkWriteToken(t, ObjectStart, nil)
+			checkWriteToken(t, BeginObject, nil)
 			checkWriteToken(t, String(""), nil)
-			checkWriteToken(t, ObjectStart, wantErr)
+			checkWriteToken(t, BeginObject, wantErr)
 			checkWriteToken(t, String(""), nil)
 			for range maxNestingDepth {
-				checkWriteToken(t, ObjectEnd, nil)
+				checkWriteToken(t, EndObject, nil)
 			}
 		})
 	})

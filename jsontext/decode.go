@@ -603,7 +603,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectStart, nil
+		return BeginObject, nil
 
 	case '}':
 		if err = d.Tokens.popObject(); err != nil {
@@ -615,7 +615,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ObjectEnd, nil
+		return EndObject, nil
 
 	case '[':
 		if err = d.Tokens.pushArray(); err != nil {
@@ -623,7 +623,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayStart, nil
+		return BeginArray, nil
 
 	case ']':
 		if err = d.Tokens.popArray(); err != nil {
@@ -631,7 +631,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
-		return ArrayEnd, nil
+		return EndArray, nil
 
 	default:
 		err = jsonwire.NewInvalidCharacterError(d.buf[pos:], "at start of value")
@@ -1110,8 +1110,8 @@ func (d *Decoder) UnreadBuffer() []byte {
 
 // StackDepth returns the depth of the state machine for read JSON data.
 // Each level on the stack represents a nested JSON object or array.
-// It is incremented whenever an [ObjectStart] or [ArrayStart] token is encountered
-// and decremented whenever an [ObjectEnd] or [ArrayEnd] token is encountered.
+// It is incremented whenever an [BeginObject] or [BeginArray] token is encountered
+// and decremented whenever an [EndObject] or [EndArray] token is encountered.
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (d *Decoder) StackDepth() int {
 	// NOTE: Keep in sync with Encoder.StackDepth.
