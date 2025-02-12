@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"math"
 	"path"
 	"slices"
 	"testing"
@@ -74,8 +75,11 @@ func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName stri
 				}
 			default:
 				val := Value(tok.String())
-				if tok.Kind() == '"' {
-					val, _ = jsonwire.AppendQuote(nil, tok.String(), &jsonflags.Flags{})
+				switch tok.Kind() {
+				case '"':
+					val, _ = tok.appendString(nil, &jsonflags.Flags{})
+				case '0':
+					val, _ = tok.appendNumber(nil, &jsonflags.Flags{})
 				}
 				if err := enc.WriteValue(val); err != nil {
 					t.Fatalf("%s: Encoder.WriteValue error: %v", where, err)
@@ -240,6 +244,11 @@ var encoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidNumber"),
 	calls: []encoderMethodCall{
 		{Value(`0.e`), newInvalidCharacterError("e", "in number (expecting digit)").withPos(`0.`, ""), ""},
+	},
+}, {
+	name: jsontest.Name("InfinityNumber"),
+	calls: []encoderMethodCall{
+		{Float(math.Inf(+1)), E(errors.New("unsupported value: +Inf")), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterStart"),

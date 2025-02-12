@@ -59,7 +59,7 @@ func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coder
 				}
 				t.Fatalf("%s: Decoder.ReadToken error: %v", where, err)
 			}
-			tokens = append(tokens, tok.Clone())
+			tokens = append(tokens, Raw(tok.Clone()))
 			if td.pointers != nil {
 				pointers = append(pointers, dec.StackPointer())
 			}
@@ -94,7 +94,7 @@ func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coder
 					}
 					t.Fatalf("%s: Decoder.ReadToken error: %v", where, err)
 				}
-				tokens = append(tokens, tok.Clone())
+				tokens = append(tokens, Raw(tok.Clone()))
 			default:
 				val, err := dec.ReadValue()
 				if err != nil {
@@ -148,7 +148,7 @@ func testFaultyDecoder(t *testing.T, where jsontest.CasePos, typeName string, td
 				}
 				continue
 			}
-			tokens = append(tokens, tok.Clone())
+			tokens = append(tokens, Raw(tok.Clone()))
 		}
 		if !equalTokens(tokens, td.tokens) {
 			t.Fatalf("%s: tokens mismatch:\ngot  %s\nwant %s", where, tokens, td.tokens)
@@ -1007,9 +1007,9 @@ func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, in 
 		var gotErr error
 		switch wantOut := call.wantOut.(type) {
 		case Token:
-			var gotOut Token
+			var gotOut RawToken
 			gotOut, gotErr = dec.ReadToken()
-			if gotOut.String() != wantOut.String() {
+			if Raw(gotOut).String() != wantOut.String() {
 				t.Fatalf("%s: %d: Decoder.ReadToken = %v, want %v", where, i, gotOut, wantOut)
 			}
 		case Value:

@@ -419,18 +419,19 @@ func appendDurationBase10(b []byte, d time.Duration, pow10 uint64) []byte {
 func parseDurationBase10(b []byte, pow10 uint64) (time.Duration, error) {
 	suffix, neg := consumeSign(b)                            // consume sign
 	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
-	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
+	whole, err := jsonwire.ParseUint(wholeBytes, 64)         // parse whole field; may overflow
 	frac, okFrac := parseFracBase10(fracBytes, pow10)        // parse frac field
 	hi, lo := bits.Mul64(whole, uint64(pow10))               // overflow if hi > 0
 	sum, co := bits.Add64(lo, uint64(frac), 0)               // overflow if co > 0
 	switch d := mayApplyDurationSign(sum, neg); {            // overflow if neg != (d < 0)
-	case (!okWhole && whole != math.MaxUint64) || !okFrac:
-		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrSyntax)
-	case !okWhole || hi > 0 || co > 0 || neg != (d < 0):
-		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrRange)
-	default:
+	case !okFrac:
+		err = strconv.ErrSyntax
+	case hi > 0 || co > 0 || neg != (d < 0):
+		err = strconv.ErrRange
+	case err == nil:
 		return d, nil
 	}
+	return 0, fmt.Errorf("invalid duration %q: %w", b, err)
 }
 
 // appendDurationBase60 appends d formatted with H:MM:SS.SSS notation.
@@ -455,7 +456,7 @@ func parseDurationBase60(b []byte) (time.Duration, error) {
 	hourBytes, suffix := bytesCutByte(suffix, ':', false)    // consume hour field
 	minBytes, suffix := bytesCutByte(suffix, ':', false)     // consume min field
 	secBytes, nsecBytes := bytesCutByte(suffix, '.', true)   // consume sec and nsec fields
-	hour, okHour := jsonwire.ParseUint(hourBytes)            // parse hour field; may overflow
+	hour, err := jsonwire.ParseUint(hourBytes, 64)           // parse hour field; may overflow
 	min := parseDec2(minBytes)                               // parse min field
 	sec := parseDec2(secBytes)                               // parse sec field
 	nsec, okNsec := parseFracBase10(nsecBytes, 1e9)          // parse nsec field
@@ -463,13 +464,14 @@ func parseDurationBase60(b []byte) (time.Duration, error) {
 	hi, lo := bits.Mul64(hour, 60*60*1e9)                    // overflow if hi > 0
 	sum, co := bits.Add64(lo, n, 0)                          // overflow if co > 0
 	switch d := mayApplyDurationSign(sum, neg); {            // overflow if neg != (d < 0)
-	case (!okHour && hour != math.MaxUint64) || !checkBase60(minBytes) || !checkBase60(secBytes) || !okNsec:
-		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrSyntax)
-	case !okHour || hi > 0 || co > 0 || neg != (d < 0):
-		return 0, fmt.Errorf("invalid duration %q: %w", b, strconv.ErrRange)
-	default:
+	case !checkBase60(minBytes) || !checkBase60(secBytes) || !okNsec:
+		err = strconv.ErrSyntax
+	case hi > 0 || co > 0 || neg != (d < 0):
+		err = strconv.ErrRange
+	case err == nil:
 		return d, nil
 	}
+	return 0, fmt.Errorf("invalid duration %q: %w", b, err)
 }
 
 // mayAppendDurationSign appends a negative sign if n is negative.
@@ -517,19 +519,19 @@ func appendTimeUnix(b []byte, t time.Time, pow10 uint64) []byte {
 func parseTimeUnix(b []byte, pow10 uint64) (time.Time, error) {
 	suffix, neg := consumeSign(b)                            // consume sign
 	wholeBytes, fracBytes := bytesCutByte(suffix, '.', true) // consume whole and frac fields
-	whole, okWhole := jsonwire.ParseUint(wholeBytes)         // parse whole field; may overflow
+	whole, err := jsonwire.ParseUint(wholeBytes, 64)         // parse whole field; may overflow
 	frac, okFrac := parseFracBase10(fracBytes, 1e9/pow10)    // parse frac field
 	var sec, nsec int64
 	switch {
 	case pow10 == 1e0: // fast case where units is in seconds
 		sec = int64(whole) // check overflow later after negation
 		nsec = int64(frac) // cannot overflow
-	case okWhole: // intermediate case where units is not seconds, but no overflow
+	case err == nil: // intermediate case where units is not seconds, but no overflow
 		sec = int64(whole / pow10)                     // check overflow later after negation
 		nsec = int64((whole%pow10)*(1e9/pow10) + frac) // cannot overflow
-	case !okWhole && whole == math.MaxUint64: // slow case where units is not seconds and overflow occurred
+	case err == strconv.ErrRange: // slow case where units is not seconds and overflow occurred
 		width := int(math.Log10(float64(pow10)))                                // compute len(strconv.Itoa(pow10-1))
-		whole, okWhole = jsonwire.ParseUint(wholeBytes[:len(wholeBytes)-width]) // parse the upper whole field
+		whole, err = jsonwire.ParseUint(wholeBytes[:len(wholeBytes)-width], 64) // parse the upper whole field
 		mid, _ := parsePaddedBase10(wholeBytes[len(wholeBytes)-width:], pow10)  // parse the lower whole field
 		sec = int64(whole)                                                      // check overflow later after negation
 		nsec = int64(mid*(1e9/pow10) + frac)                                    // cannot overflow
@@ -538,13 +540,14 @@ func parseTimeUnix(b []byte, pow10 uint64) (time.Time, error) {
 		sec, nsec = negateSecNano(sec, nsec)
 	}
 	switch t := time.Unix(sec, nsec).UTC(); {
-	case (!okWhole && whole != math.MaxUint64) || !okFrac:
-		return time.Time{}, fmt.Errorf("invalid time %q: %w", b, strconv.ErrSyntax)
-	case !okWhole || neg != (t.Unix() < 0):
-		return time.Time{}, fmt.Errorf("invalid time %q: %w", b, strconv.ErrRange)
-	default:
+	case !okFrac:
+		err = strconv.ErrSyntax
+	case neg != (t.Unix() < 0):
+		err = strconv.ErrRange
+	case err == nil:
 		return t, nil
 	}
+	return time.Time{}, fmt.Errorf("invalid time %q: %w", b, err)
 }
 
 // negateSecNano negates a Unix timestamp, where nsec must be within [0, 1e9).

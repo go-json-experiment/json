@@ -7,7 +7,6 @@ package json
 import (
 	"cmp"
 	"reflect"
-	"strconv"
 
 	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
@@ -83,9 +82,9 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 			if uo.Flags.Get(jsonflags.UnmarshalAnyWithRawNumber) {
 				return internal.RawNumberOf(val), nil
 			}
-			fv, ok := jsonwire.ParseFloat(val, 64)
-			if !ok {
-				return fv, newUnmarshalErrorAfterWithValue(dec, float64Type, strconv.ErrRange)
+			fv, err := jsonwire.ParseFloat(val, 64)
+			if err != nil {
+				return nil, newUnmarshalErrorAfterWithValue(dec, float64Type, err)
 			}
 			return fv, nil
 		default:
@@ -196,13 +195,13 @@ func unmarshalObjectAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (map[string]
 		}
 
 		val, err := unmarshalValueAny(dec, uo)
-		obj[name] = val
 		if err != nil {
 			if isFatalError(err, uo.Flags) {
 				return obj, err
 			}
 			errUnmarshal = cmp.Or(err, errUnmarshal)
 		}
+		obj[name] = val
 	}
 	if _, err := dec.ReadToken(); err != nil {
 		return obj, err
@@ -266,13 +265,13 @@ func unmarshalArrayAny(dec *jsontext.Decoder, uo *jsonopts.Struct) ([]any, error
 	var errUnmarshal error
 	for dec.PeekKind() != ']' {
 		val, err := unmarshalValueAny(dec, uo)
-		arr = append(arr, val)
 		if err != nil {
 			if isFatalError(err, uo.Flags) {
 				return arr, err
 			}
 			errUnmarshal = cmp.Or(errUnmarshal, err)
 		}
+		arr = append(arr, val)
 	}
 	if _, err := dec.ReadToken(); err != nil {
 		return arr, err

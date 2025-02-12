@@ -43,6 +43,10 @@ var (
 
 	bytesType       = reflect.TypeFor[[]byte]()
 	emptyStructType = reflect.TypeFor[struct{}]()
+
+	nanString  = jsontext.String("NaN")
+	pinfString = jsontext.String("Infinity")
+	ninfString = jsontext.String("-Infinity")
 )
 
 const startDetectingCyclesAfter = 1000
@@ -481,28 +485,11 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			var negOffset int
-			neg := len(val) > 0 && val[0] == '-'
-			if neg {
-				negOffset = 1
+			n, err := jsonwire.ParseInt(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
-			n, ok := jsonwire.ParseUint(val[negOffset:])
-			maxInt := uint64(1) << (bits - 1)
-			overflow := (neg && n > maxInt) || (!neg && n > maxInt-1)
-			if !ok {
-				if n != math.MaxUint64 {
-					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
-				}
-				overflow = true
-			}
-			if overflow {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
-			}
-			if neg {
-				va.SetInt(int64(-n))
-			} else {
-				va.SetInt(int64(+n))
-			}
+			va.SetInt(n)
 			return nil
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
@@ -568,17 +555,9 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			n, ok := jsonwire.ParseUint(val)
-			maxUint := uint64(1) << bits
-			overflow := n > maxUint-1
-			if !ok {
-				if n != math.MaxUint64 {
-					return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrSyntax)
-				}
-				overflow = true
-			}
-			if overflow {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
+			n, err := jsonwire.ParseUint(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
 			va.SetUint(n)
 			return nil
@@ -608,7 +587,18 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				err := fmt.Errorf("unsupported value: %v", fv)
 				return newMarshalErrorBefore(enc, t, err)
 			}
-			return enc.WriteToken(jsontext.Float(fv))
+			var token jsontext.Token
+			switch {
+			case math.IsInf(fv, 1):
+				token = pinfString
+			case math.IsInf(fv, -1):
+				token = ninfString
+			case math.IsNaN(fv):
+				token = nanString
+			default:
+				panic("unreachable")
+			}
+			return enc.WriteToken(token)
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
@@ -681,11 +671,11 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			if stringify && k == '0' {
 				break
 			}
-			fv, ok := jsonwire.ParseFloat(val, bits)
-			va.SetFloat(fv)
-			if !ok {
-				return newUnmarshalErrorAfterWithValue(dec, t, strconv.ErrRange)
+			fv, err := jsonwire.ParseFloat(val, bits)
+			if err != nil {
+				return newUnmarshalErrorAfterWithValue(dec, t, err)
 			}
+			va.SetFloat(fv)
 			return nil
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)

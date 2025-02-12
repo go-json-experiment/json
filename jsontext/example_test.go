@@ -42,6 +42,7 @@ func Example_stringReplace() {
 	for {
 		// Read a token from the input.
 		tok, err := dec.ReadToken()
+		tokW := jsontext.Raw(tok)
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -53,11 +54,11 @@ func Example_stringReplace() {
 		// replace each occurrence with "Go" instead.
 		if tok.Kind() == '"' && strings.Contains(tok.String(), "Golang") {
 			replacements = append(replacements, dec.StackPointer())
-			tok = jsontext.String(strings.ReplaceAll(tok.String(), "Golang", "Go"))
+			tokW = jsontext.String(strings.ReplaceAll(tok.String(), "Golang", "Go"))
 		}
 
 		// Write the (possibly modified) token to the output.
-		if err := enc.WriteToken(tok); err != nil {
+		if err := enc.WriteToken(tokW); err != nil {
 			log.Fatal(err)
 		}
 	}

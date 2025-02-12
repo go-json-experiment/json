@@ -6,7 +6,6 @@ package jsonwire
 
 import (
 	"io"
-	"math"
 	"slices"
 	"strconv"
 	"unicode/utf16"
@@ -586,42 +585,62 @@ func parseHexUint16[Bytes ~[]byte | ~string](b Bytes) (v uint16, ok bool) {
 
 // ParseUint parses b as a decimal unsigned integer according to
 // a strict subset of the JSON number grammar, returning the value if valid.
-// It returns (0, false) if there is a syntax error and
-// returns (math.MaxUint64, false) if there is an overflow.
-func ParseUint(b []byte) (v uint64, ok bool) {
+// It returns (0, strconv.ErrSyntax) if there is a syntax error and
+// returns (max, strconv.ErrRange) if there is an overflow.
+func ParseUint(b []byte, bits int) (uint64, error) {
 	const unsafeWidth = 20 // len(fmt.Sprint(uint64(math.MaxUint64)))
 	var n int
+	var v uint64
 	for ; len(b) > n && ('0' <= b[n] && b[n] <= '9'); n++ {
 		v = 10*v + uint64(b[n]-'0')
 	}
+
+	max := uint64(1)<<uint(bits) - 1
 	switch {
 	case n == 0 || len(b) != n || (b[0] == '0' && string(b) != "0"):
-		return 0, false
+		return 0, strconv.ErrSyntax
 	case n >= unsafeWidth && (b[0] != '1' || v < 1e19 || n > unsafeWidth):
-		return math.MaxUint64, false
+		return max, strconv.ErrRange
+	case v > max:
+		return max, strconv.ErrRange
 	}
-	return v, true
+	return v, nil
+}
+
+func ParseInt(b []byte, bits int) (int64, error) {
+	negOffset := 0
+	neg := len(b) > 0 && b[0] == '-'
+	if neg {
+		negOffset = 1
+	}
+	n, err := ParseUint(b[negOffset:], bits)
+	if err != nil && n == 0 {
+		return 0, err
+	}
+
+	maxInt := uint64(1) << (bits - 1)
+	if neg && n > maxInt {
+		return -int64(maxInt), strconv.ErrRange
+	} else if !neg && n > maxInt-1 {
+		return int64(maxInt - 1), strconv.ErrRange
+	}
+
+	if neg {
+		return int64(-n), nil
+	} else {
+		return int64(+n), nil
+	}
 }
 
 // ParseFloat parses a floating point number according to the Go float grammar.
-// Note that the JSON number grammar is a strict subset.
-//
-// If the number overflows the finite representation of a float,
-// then we return MaxFloat since any finite value will always be infinitely
-// more accurate at representing another finite value than an infinite value.
-func ParseFloat(b []byte, bits int) (v float64, ok bool) {
-	fv, err := strconv.ParseFloat(string(b), bits)
-	if math.IsInf(fv, 0) {
-		switch {
-		case bits == 32 && math.IsInf(fv, +1):
-			fv = +math.MaxFloat32
-		case bits == 64 && math.IsInf(fv, +1):
-			fv = +math.MaxFloat64
-		case bits == 32 && math.IsInf(fv, -1):
-			fv = -math.MaxFloat32
-		case bits == 64 && math.IsInf(fv, -1):
-			fv = -math.MaxFloat64
-		}
+func ParseFloat(b []byte, bits int) (float64, error) {
+	// Note that the JSON number grammar is a strict subset.
+	// We have ensured the input is a valid json number in [ConsumeNumberResumable],
+	// So we may take advantage of the simpler grammar and
+	// replace this with a more efficient implementation in the future.
+	v, err := strconv.ParseFloat(string(b), bits)
+	if err != nil {
+		err = err.(*strconv.NumError).Err
 	}
-	return fv, err == nil
+	return v, err
 }

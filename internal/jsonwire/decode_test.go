@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -342,55 +343,55 @@ func TestParseHexUint16(t *testing.T) {
 
 func TestParseUint(t *testing.T) {
 	tests := []struct {
-		in     string
-		want   uint64
-		wantOk bool
+		in      string
+		want    uint64
+		wantErr error
 	}{
-		{"", 0, false},
-		{"0", 0, true},
-		{"1", 1, true},
-		{"-1", 0, false},
-		{"1f", 0, false},
-		{"00", 0, false},
-		{"01", 0, false},
-		{"10", 10, true},
-		{"10.9", 0, false},
-		{" 10", 0, false},
-		{"10 ", 0, false},
-		{"123456789", 123456789, true},
-		{"123456789d", 0, false},
-		{"18446744073709551614", math.MaxUint64 - 1, true},
-		{"18446744073709551615", math.MaxUint64, true},
-		{"18446744073709551616", math.MaxUint64, false},
-		{"18446744073709551620", math.MaxUint64, false},
-		{"18446744073709551700", math.MaxUint64, false},
-		{"18446744073709552000", math.MaxUint64, false},
-		{"18446744073709560000", math.MaxUint64, false},
-		{"18446744073709600000", math.MaxUint64, false},
-		{"18446744073710000000", math.MaxUint64, false},
-		{"18446744073800000000", math.MaxUint64, false},
-		{"18446744074000000000", math.MaxUint64, false},
-		{"18446744080000000000", math.MaxUint64, false},
-		{"18446744100000000000", math.MaxUint64, false},
-		{"18446745000000000000", math.MaxUint64, false},
-		{"18446750000000000000", math.MaxUint64, false},
-		{"18446800000000000000", math.MaxUint64, false},
-		{"18447000000000000000", math.MaxUint64, false},
-		{"18450000000000000000", math.MaxUint64, false},
-		{"18500000000000000000", math.MaxUint64, false},
-		{"19000000000000000000", math.MaxUint64, false},
-		{"19999999999999999999", math.MaxUint64, false},
-		{"20000000000000000000", math.MaxUint64, false},
-		{"100000000000000000000", math.MaxUint64, false},
-		{"99999999999999999999999999999999", math.MaxUint64, false},
-		{"99999999999999999999999999999999f", 0, false},
+		{"", 0, strconv.ErrSyntax},
+		{"0", 0, nil},
+		{"1", 1, nil},
+		{"-1", 0, strconv.ErrSyntax},
+		{"1f", 0, strconv.ErrSyntax},
+		{"00", 0, strconv.ErrSyntax},
+		{"01", 0, strconv.ErrSyntax},
+		{"10", 10, nil},
+		{"10.9", 0, strconv.ErrSyntax},
+		{" 10", 0, strconv.ErrSyntax},
+		{"10 ", 0, strconv.ErrSyntax},
+		{"123456789", 123456789, nil},
+		{"123456789d", 0, strconv.ErrSyntax},
+		{"18446744073709551614", math.MaxUint64 - 1, nil},
+		{"18446744073709551615", math.MaxUint64, nil},
+		{"18446744073709551616", math.MaxUint64, strconv.ErrRange},
+		{"18446744073709551620", math.MaxUint64, strconv.ErrRange},
+		{"18446744073709551700", math.MaxUint64, strconv.ErrRange},
+		{"18446744073709552000", math.MaxUint64, strconv.ErrRange},
+		{"18446744073709560000", math.MaxUint64, strconv.ErrRange},
+		{"18446744073709600000", math.MaxUint64, strconv.ErrRange},
+		{"18446744073710000000", math.MaxUint64, strconv.ErrRange},
+		{"18446744073800000000", math.MaxUint64, strconv.ErrRange},
+		{"18446744074000000000", math.MaxUint64, strconv.ErrRange},
+		{"18446744080000000000", math.MaxUint64, strconv.ErrRange},
+		{"18446744100000000000", math.MaxUint64, strconv.ErrRange},
+		{"18446745000000000000", math.MaxUint64, strconv.ErrRange},
+		{"18446750000000000000", math.MaxUint64, strconv.ErrRange},
+		{"18446800000000000000", math.MaxUint64, strconv.ErrRange},
+		{"18447000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"18450000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"18500000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"19000000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"19999999999999999999", math.MaxUint64, strconv.ErrRange},
+		{"20000000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"100000000000000000000", math.MaxUint64, strconv.ErrRange},
+		{"99999999999999999999999999999999", math.MaxUint64, strconv.ErrRange},
+		{"99999999999999999999999999999999f", 0, strconv.ErrSyntax},
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			got, gotOk := ParseUint([]byte(tt.in))
-			if got != tt.want || gotOk != tt.wantOk {
-				t.Errorf("ParseUint(%q) = (%v, %v), want (%v, %v)", tt.in, got, gotOk, tt.want, tt.wantOk)
+			got, gotErr := ParseUint([]byte(tt.in), 64)
+			if got != tt.want || gotErr != tt.wantErr {
+				t.Errorf("ParseUint(%q) = (%v, %v), want (%v, %v)", tt.in, got, gotErr, tt.want, tt.wantErr)
 			}
 		})
 	}
@@ -398,43 +399,43 @@ func TestParseUint(t *testing.T) {
 
 func TestParseFloat(t *testing.T) {
 	tests := []struct {
-		in     string
-		want32 float64
-		want64 float64
-		wantOk bool
+		in      string
+		want32  float64
+		want64  float64
+		wantErr error
 	}{
-		{"0", 0, 0, true},
-		{"-1", -1, -1, true},
-		{"1", 1, 1, true},
+		{"0", 0, 0, nil},
+		{"-1", -1, -1, nil},
+		{"1", 1, 1, nil},
 
-		{"-16777215", -16777215, -16777215, true}, // -(1<<24 - 1)
-		{"16777215", 16777215, 16777215, true},    // +(1<<24 - 1)
-		{"-16777216", -16777216, -16777216, true}, // -(1<<24)
-		{"16777216", 16777216, 16777216, true},    // +(1<<24)
-		{"-16777217", -16777216, -16777217, true}, // -(1<<24 + 1)
-		{"16777217", 16777216, 16777217, true},    // +(1<<24 + 1)
+		{"-16777215", -16777215, -16777215, nil}, // -(1<<24 - 1)
+		{"16777215", 16777215, 16777215, nil},    // +(1<<24 - 1)
+		{"-16777216", -16777216, -16777216, nil}, // -(1<<24)
+		{"16777216", 16777216, 16777216, nil},    // +(1<<24)
+		{"-16777217", -16777216, -16777217, nil}, // -(1<<24 + 1)
+		{"16777217", 16777216, 16777217, nil},    // +(1<<24 + 1)
 
-		{"-9007199254740991", -9007199254740992, -9007199254740991, true}, // -(1<<53 - 1)
-		{"9007199254740991", 9007199254740992, 9007199254740991, true},    // +(1<<53 - 1)
-		{"-9007199254740992", -9007199254740992, -9007199254740992, true}, // -(1<<53)
-		{"9007199254740992", 9007199254740992, 9007199254740992, true},    // +(1<<53)
-		{"-9007199254740993", -9007199254740992, -9007199254740992, true}, // -(1<<53 + 1)
-		{"9007199254740993", 9007199254740992, 9007199254740992, true},    // +(1<<53 + 1)
+		{"-9007199254740991", -9007199254740992, -9007199254740991, nil}, // -(1<<53 - 1)
+		{"9007199254740991", 9007199254740992, 9007199254740991, nil},    // +(1<<53 - 1)
+		{"-9007199254740992", -9007199254740992, -9007199254740992, nil}, // -(1<<53)
+		{"9007199254740992", 9007199254740992, 9007199254740992, nil},    // +(1<<53)
+		{"-9007199254740993", -9007199254740992, -9007199254740992, nil}, // -(1<<53 + 1)
+		{"9007199254740993", 9007199254740992, 9007199254740992, nil},    // +(1<<53 + 1)
 
-		{"-1e1000", -math.MaxFloat32, -math.MaxFloat64, false},
-		{"1e1000", +math.MaxFloat32, +math.MaxFloat64, false},
+		{"-1e1000", math.Inf(-1), math.Inf(-1), strconv.ErrRange},
+		{"1e1000", math.Inf(+1), math.Inf(+1), strconv.ErrRange},
 	}
 
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
-			got32, gotOk32 := ParseFloat([]byte(tt.in), 32)
-			if got32 != tt.want32 || gotOk32 != tt.wantOk {
-				t.Errorf("ParseFloat(%q, 32) = (%v, %v), want (%v, %v)", tt.in, got32, gotOk32, tt.want32, tt.wantOk)
+			got32, gotErr32 := ParseFloat([]byte(tt.in), 32)
+			if got32 != tt.want32 || gotErr32 != tt.wantErr {
+				t.Errorf("ParseFloat(%q, 32) = (%v, %v), want (%v, %v)", tt.in, got32, gotErr32, tt.want32, tt.wantErr)
 			}
 
-			got64, gotOk64 := ParseFloat([]byte(tt.in), 64)
-			if got64 != tt.want64 || gotOk64 != tt.wantOk {
-				t.Errorf("ParseFloat(%q, 64) = (%v, %v), want (%v, %v)", tt.in, got64, gotOk64, tt.want64, tt.wantOk)
+			got64, gotErr64 := ParseFloat([]byte(tt.in), 64)
+			if got64 != tt.want64 || gotErr64 != tt.wantErr {
+				t.Errorf("ParseFloat(%q, 64) = (%v, %v), want (%v, %v)", tt.in, got64, gotErr64, tt.want64, tt.wantErr)
 			}
 		})
 	}
