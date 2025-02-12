@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"math"
 	"path"
 	"slices"
 	"testing"
@@ -243,6 +244,11 @@ var encoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidNumber"),
 	calls: []encoderMethodCall{
 		{Value(`0.e`), newInvalidCharacterError("e", "in number (expecting digit)").withPos(`0.`, ""), ""},
+	},
+}, {
+	name: jsontest.Name("InfinityNumber"),
+	calls: []encoderMethodCall{
+		{Float(math.Inf(+1)), E(errors.New("unsupported value: +Inf")), ""},
 	},
 }, {
 	name: jsontest.Name("TruncatedObject/AfterStart"),

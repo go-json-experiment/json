@@ -7,6 +7,7 @@ package jsontext
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 
@@ -95,10 +96,6 @@ var (
 	ObjectEnd   Token = rawToken("}")
 	ArrayStart  Token = rawToken("[")
 	ArrayEnd    Token = rawToken("]")
-
-	nanString  = "NaN"
-	pinfString = "Infinity"
-	ninfString = "-Infinity"
 )
 
 func rawToken(s string) Token {
@@ -125,10 +122,8 @@ func String(s string) Token {
 	}
 }
 
-// Float constructs a Token representing a JSON number.
-// The values NaN, +Inf, and -Inf will be represented
-// as a JSON string with the values "NaN", "Infinity", and "-Infinity",
-// but still has kind '0' and cannot be used as object keys.
+// Float constructs a Token representing a JSON number from a float64.
+// The values NaN, +Inf, and -Inf will result in error if passed to [Encoder.WriteToken]
 func Float(n float64) Token {
 	return Token{
 		raw: RawToken{dBuf: floatTag, num: math.Float64bits(n)},
@@ -280,17 +275,7 @@ func (t Token) string() (string, []byte) {
 	case nil:
 		return "<invalid jsontext.Token>", nil
 	case floatTag:
-		v := math.Float64frombits(t.raw.num)
-		switch {
-		case math.IsNaN(v):
-			return nanString, nil
-		case math.IsInf(v, +1):
-			return pinfString, nil
-		case math.IsInf(v, -1):
-			return ninfString, nil
-		default:
-			return string(jsonwire.AppendFloat(nil, math.Float64frombits(t.raw.num), 64)), nil
-		}
+		return string(jsonwire.AppendFloat(nil, math.Float64frombits(t.raw.num), 64)), nil
 	case intTag:
 		return strconv.FormatInt(int64(t.raw.num), 10), nil
 	case uintTag:
@@ -317,16 +302,10 @@ func (t Token) appendNumber(dst []byte, flags *jsonflags.Flags) ([]byte, error) 
 		switch t.raw.dBuf {
 		case floatTag:
 			v := math.Float64frombits(t.raw.num)
-			switch {
-			case math.IsNaN(v):
-				return jsonwire.AppendQuote(dst, nanString, flags)
-			case math.IsInf(v, +1):
-				return jsonwire.AppendQuote(dst, pinfString, flags)
-			case math.IsInf(v, -1):
-				return jsonwire.AppendQuote(dst, ninfString, flags)
-			default:
-				return jsonwire.AppendFloat(dst, v, 64), nil
+			if math.IsInf(v, 0) || math.IsNaN(v) {
+				return nil, fmt.Errorf("unsupported value: %v", v)
 			}
+			return jsonwire.AppendFloat(dst, v, 64), nil
 		case intTag:
 			return strconv.AppendInt(dst, int64(t.raw.num), 10), nil
 		case uintTag:
@@ -348,18 +327,6 @@ func (t RawToken) ParseFloat(bits int) (float64, error) {
 	if Kind(buf[0]).normalize() == '0' {
 		return jsonwire.ParseFloat(buf, bits)
 	}
-
-	if buf[0] == '"' {
-		switch t.String() {
-		case nanString:
-			return math.NaN(), nil
-		case pinfString:
-			return math.Inf(+1), nil
-		case ninfString:
-			return math.Inf(-1), nil
-		}
-	}
-
 	return 0., ErrUnexpectedKind
 }
 

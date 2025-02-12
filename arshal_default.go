@@ -43,6 +43,10 @@ var (
 
 	bytesType       = reflect.TypeFor[[]byte]()
 	emptyStructType = reflect.TypeFor[struct{}]()
+
+	nanString  = jsontext.String("NaN")
+	pinfString = jsontext.String("Infinity")
+	ninfString = jsontext.String("-Infinity")
 )
 
 const startDetectingCyclesAfter = 1000
@@ -581,7 +585,18 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				err := fmt.Errorf("unsupported value: %v", fv)
 				return newMarshalErrorBefore(enc, t, err)
 			}
-			return enc.WriteToken(jsontext.Float(fv))
+			var token jsontext.Token
+			switch {
+			case math.IsInf(fv, 1):
+				token = pinfString
+			case math.IsInf(fv, -1):
+				token = ninfString
+			case math.IsNaN(fv):
+				token = nanString
+			default:
+				panic("unreachable")
+			}
+			return enc.WriteToken(token)
 		}
 
 		// Optimize for marshaling without preceding whitespace or string escaping.

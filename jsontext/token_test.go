@@ -68,8 +68,8 @@ func TestTokenAccessors(t *testing.T) {
 		{Float(1.2), token{String: "1.2", Float: 1.2, Kind: '0'}},
 		{Float(math.Copysign(0, -1)), token{String: "-0", Float: math.Copysign(0, -1), Int: 0, Uint: 0, Kind: '0'}},
 		{Float(math.NaN()), token{String: "NaN", Float: math.NaN(), Int: 0, Uint: 0, Kind: '0'}},
-		{Float(math.Inf(+1)), token{String: "Infinity", Float: math.Inf(+1), Kind: '0'}},
-		{Float(math.Inf(-1)), token{String: "-Infinity", Float: math.Inf(-1), Kind: '0'}},
+		{Float(math.Inf(+1)), token{String: "+Inf", Float: math.Inf(+1), Kind: '0'}},
+		{Float(math.Inf(-1)), token{String: "-Inf", Float: math.Inf(-1), Kind: '0'}},
 		{Int(minInt64), token{String: "-9223372036854775808", Int: minInt64, Uint: minUint64, Kind: '0'}},
 		{Int(minInt64 + 1), token{String: "-9223372036854775807", Int: minInt64 + 1, Kind: '0'}},
 		{Int(-1), token{String: "-1", Int: -1, Kind: '0'}},
@@ -143,33 +143,6 @@ func TestTokenAccessorRaw(t *testing.T) {
 	}
 }
 
-func TestTokenParseFloat(t *testing.T) {
-	tests := []struct {
-		in   string
-		want float64
-		err  error
-	}{
-		{`-0`, math.Copysign(0, -1), nil},
-		{`1e1000`, math.Inf(+1), strconv.ErrRange},
-		{`"Infinity"`, math.Inf(+1), nil},
-		{`"-Infinity"`, math.Inf(-1), nil},
-		{`"NaN"`, math.NaN(), nil},
-		{`"anything"`, 0, ErrUnexpectedKind},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.in, func(t *testing.T) {
-			gotV, gotErr := rawToken(tt.in).raw.ParseFloat(64)
-			if math.Float64bits(gotV) != math.Float64bits(tt.want) {
-				t.Errorf("RawToken.ParseFloat(64) = %v, want %v", gotV, tt.want)
-			}
-			if gotErr != tt.err {
-				t.Errorf("RawToken.ParseFloat(64) error = %v, want %v", gotErr, tt.err)
-			}
-		})
-	}
-}
-
 func assertParse[T comparable](t *testing.T, s string, parse func(t RawToken, bits int) (T, error), wantV T, wantErr error) {
 	t.Helper()
 	gotV, gotErr := parse(rawToken(s).raw, 64)
@@ -181,7 +154,11 @@ func assertParse[T comparable](t *testing.T, s string, parse func(t RawToken, bi
 	}
 }
 
-func TestTokenParseInt(t *testing.T) {
+func TestTokenParseNumber(t *testing.T) {
+	assertParse(t, `1.23`, RawToken.ParseFloat, 1.23, nil)
+	assertParse(t, `1e1000`, RawToken.ParseFloat, math.Inf(+1), strconv.ErrRange)
+	assertParse(t, `"anything"`, RawToken.ParseFloat, 0, ErrUnexpectedKind)
+
 	assertParse(t, "123", RawToken.ParseInt, 123, nil)
 	assertParse(t, "99999999999999999999", RawToken.ParseInt, math.MaxInt64, strconv.ErrRange)
 	assertParse(t, "false", RawToken.ParseInt, 0, ErrUnexpectedKind)
