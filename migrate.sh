@@ -161,15 +161,15 @@ echo "pkg encoding/json/jsontext, type SyntacticError struct, Err error #$ISSUE"
 echo "pkg encoding/json/jsontext, type SyntacticError struct, JSONPointer Pointer #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, type Token struct #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, type Value []uint8 #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/jsontext, var ArrayEnd Token #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/jsontext, var ArrayStart Token #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/jsontext, var BeginArray Token #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/jsontext, var BeginObject Token #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/jsontext, var EndArray Token #$ISSUE" >> $GOROOT/api/$FILE
+echo "pkg encoding/json/jsontext, var EndObject Token #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var ErrDuplicateName error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var ErrNonStringName error #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var False Token #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var Internal exporter #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var Null Token #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/jsontext, var ObjectEnd Token #$ISSUE" >> $GOROOT/api/$FILE
-echo "pkg encoding/json/jsontext, var ObjectStart Token #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/jsontext, var True Token #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func DefaultOptionsV2() jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE
 echo "pkg encoding/json/v2, func Deterministic(bool) jsonopts.Options #$ISSUE" >> $GOROOT/api/$FILE

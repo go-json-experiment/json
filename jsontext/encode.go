@@ -25,19 +25,19 @@ import (
 //
 // can be composed with the following calls (ignoring errors for brevity):
 //
-//	e.WriteToken(ObjectStart)        // {
+//	e.WriteToken(BeginObject)        // {
 //	e.WriteToken(String("name"))     // "name"
 //	e.WriteToken(String("value"))    // "value"
 //	e.WriteValue(Value(`"array"`))   // "array"
-//	e.WriteToken(ArrayStart)         // [
+//	e.WriteToken(BeginArray)         // [
 //	e.WriteToken(Null)               // null
 //	e.WriteToken(False)              // false
 //	e.WriteValue(Value("true"))      // true
 //	e.WriteToken(Float(3.14159))     // 3.14159
-//	e.WriteToken(ArrayEnd)           // ]
+//	e.WriteToken(EndArray)           // ]
 //	e.WriteValue(Value(`"object"`))  // "object"
 //	e.WriteValue(Value(`{"k":"v"}`)) // {"k":"v"}
-//	e.WriteToken(ObjectEnd)          // }
+//	e.WriteToken(EndObject)          // }
 //
 // The above is one of many possible sequence of calls and
 // may not represent the most sensible method to call for any given token/value.
@@ -218,7 +218,7 @@ func (e *encodeBuffer) unflushedBuffer() []byte  { return e.Buf }
 func (e *encoderState) avoidFlush() bool {
 	switch {
 	case e.Tokens.Last.Length() == 0:
-		// Never flush after ObjectStart or ArrayStart since we don't know yet
+		// Never flush after BeginObject or BeginArray since we don't know yet
 		// if the object or array will end up being empty.
 		return true
 	case e.Tokens.Last.needObjectValue():
@@ -914,8 +914,8 @@ func (e *Encoder) UnusedBuffer() []byte {
 
 // StackDepth returns the depth of the state machine for written JSON data.
 // Each level on the stack represents a nested JSON object or array.
-// It is incremented whenever an [ObjectStart] or [ArrayStart] token is encountered
-// and decremented whenever an [ObjectEnd] or [ArrayEnd] token is encountered.
+// It is incremented whenever an [BeginObject] or [BeginArray] token is encountered
+// and decremented whenever an [EndObject] or [EndArray] token is encountered.
 // The depth is zero-indexed, where zero represents the top-level JSON value.
 func (e *Encoder) StackDepth() int {
 	// NOTE: Keep in sync with Decoder.StackDepth.

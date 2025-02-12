@@ -755,7 +755,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.BeginObject); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -866,7 +866,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.EndObject); err != nil {
 			return err
 		}
 		return nil
@@ -1039,7 +1039,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		if errInit != nil && !mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 			return newMarshalErrorBefore(enc, errInit.GoType, errInit.Err)
 		}
-		if err := enc.WriteToken(jsontext.ObjectStart); err != nil {
+		if err := enc.WriteToken(jsontext.BeginObject); err != nil {
 			return err
 		}
 		var seenIdxs uintSet
@@ -1187,7 +1187,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ObjectEnd); err != nil {
+		if err := enc.WriteToken(jsontext.EndObject); err != nil {
 			return err
 		}
 		return nil
@@ -1432,7 +1432,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.BeginArray); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1445,7 +1445,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.EndArray); err != nil {
 			return err
 		}
 		return nil
@@ -1538,7 +1538,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			return newInvalidFormatError(enc, t, mo)
 		}
 		once.Do(init)
-		if err := enc.WriteToken(jsontext.ArrayStart); err != nil {
+		if err := enc.WriteToken(jsontext.BeginArray); err != nil {
 			return err
 		}
 		marshal := valFncs.marshal
@@ -1551,7 +1551,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 				return err
 			}
 		}
-		if err := enc.WriteToken(jsontext.ArrayEnd); err != nil {
+		if err := enc.WriteToken(jsontext.EndArray); err != nil {
 			return err
 		}
 		return nil
