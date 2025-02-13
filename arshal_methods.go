@@ -51,9 +51,9 @@ type Marshaler interface {
 // should aim to have equivalent behavior for the default marshal options.
 //
 // The implementation must write only one JSON value to the Encoder and
-// must not retain the pointer to [jsontext.Encoder] or the [Options] value.
+// must not retain the pointer to [jsontext.Encoder].
 type MarshalerTo interface {
-	MarshalJSONTo(*jsontext.Encoder, Options) error
+	MarshalJSONTo(*jsontext.Encoder) error
 
 	// TODO: Should users call the MarshalEncode function or
 	// should/can they call this method directly? Does it matter?
@@ -85,10 +85,9 @@ type Unmarshaler interface {
 // It is recommended that UnmarshalJSONFrom implement merge semantics when
 // unmarshaling into a pre-populated value.
 //
-// Implementations must not retain the pointer to [jsontext.Decoder] or
-// the [Options] value.
+// Implementations must not retain the pointer to [jsontext.Decoder].
 type UnmarshalerFrom interface {
-	UnmarshalJSONFrom(*jsontext.Decoder, Options) error
+	UnmarshalJSONFrom(*jsontext.Decoder) error
 
 	// TODO: Should users call the UnmarshalDecode function or
 	// should/can they call this method directly? Does it matter?
@@ -193,7 +192,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			xe := export.Encoder(enc)
 			prevDepth, prevLength := xe.Tokens.DepthLength()
 			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.Addr().Interface().(MarshalerTo).MarshalJSONTo(enc, mo)
+			err := va.Addr().Interface().(MarshalerTo).MarshalJSONTo(enc)
 			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xe.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
@@ -283,7 +282,7 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			xd := export.Decoder(dec)
 			prevDepth, prevLength := xd.Tokens.DepthLength()
 			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
-			err := va.Addr().Interface().(UnmarshalerFrom).UnmarshalJSONFrom(dec, uo)
+			err := va.Addr().Interface().(UnmarshalerFrom).UnmarshalJSONFrom(dec)
 			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xd.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {

@@ -189,7 +189,8 @@ func (n Number) Int64() (int64, error) {
 var numberType = reflect.TypeFor[Number]()
 
 // MarshalJSONTo implements [jsonv2.MarshalerTo].
-func (n Number) MarshalJSONTo(enc *jsontext.Encoder, opts jsonv2.Options) error {
+func (n Number) MarshalJSONTo(enc *jsontext.Encoder) error {
+	opts := enc.Options()
 	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
 	if k, n := enc.StackIndex(enc.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name
@@ -213,7 +214,8 @@ func (n Number) MarshalJSONTo(enc *jsontext.Encoder, opts jsonv2.Options) error 
 }
 
 // UnmarshalJSONFrom implements [jsonv2.UnmarshalerFrom].
-func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder, opts jsonv2.Options) error {
+func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	opts := dec.Options()
 	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
 	if k, n := dec.StackIndex(dec.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name

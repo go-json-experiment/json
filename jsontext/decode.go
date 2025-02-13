@@ -142,8 +142,21 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 func (d *decoderState) reset(b []byte, r io.Reader, opts ...Options) {
 	d.state.reset()
 	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
-	d.Struct = jsonopts.Struct{}
-	d.Struct.Join(opts...)
+	opts2 := jsonopts.Struct{} // avoid mutating d.Struct in case it is part of opts
+	opts2.Join(opts...)
+	d.Struct = opts2
+}
+
+// Options returns the options used to construct the encoder and
+// may additionally contain semantic options passed to a
+// [encoding/json/v2.UnmarshalDecode] call.
+//
+// If operating within
+// a [encoding/json/v2.UnmarshalerFrom.UnmarshalJSONFrom] method call or
+// a [encoding/json/v2.UnmarshalFromFunc] function call,
+// then the returned options are only valid within the call.
+func (d *Decoder) Options() Options {
+	return &d.s.Struct
 }
 
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")

@@ -562,7 +562,7 @@ func ExampleWithMarshalers_errors() {
 			// Suppose we consider strconv.NumError to be a safe to serialize:
 			// this type-specific marshal function intercepts this type
 			// and encodes the error message as a JSON string.
-			json.MarshalToFunc(func(enc *jsontext.Encoder, err *strconv.NumError, opts json.Options) error {
+			json.MarshalToFunc(func(enc *jsontext.Encoder, err *strconv.NumError) error {
 				return enc.WriteToken(jsontext.String(err.Error()))
 			}),
 			// Error messages may contain sensitive information that may not
@@ -604,7 +604,7 @@ func ExampleWithUnmarshalers_rawNumber() {
 	err := json.Unmarshal([]byte(input), &value,
 		// Intercept every attempt to unmarshal into the any type.
 		json.WithUnmarshalers(
-			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any, opts json.Options) error {
+			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any) error {
 				// If the next value to be decoded is a JSON number,
 				// then provide a concrete Go type to unmarshal into.
 				if dec.PeekKind() == '0' {
@@ -652,7 +652,7 @@ func ExampleWithUnmarshalers_recordOffsets() {
 	err := json.Unmarshal([]byte(input), &tunnels,
 		// Intercept every attempt to unmarshal into the Tunnel type.
 		json.WithUnmarshalers(
-			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, tunnel *Tunnel, opts json.Options) error {
+			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, tunnel *Tunnel) error {
 				// Decoder.InputOffset reports the offset after the last token,
 				// but we want to record the offset before the next token.
 				//
