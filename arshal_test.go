@@ -536,11 +536,11 @@ type (
 	structMethodJSONv1 struct{ value string }
 	structMethodText   struct{ value string }
 
-	marshalJSONv2Func   func(*jsontext.Encoder, Options) error
+	marshalJSONv2Func   func(*jsontext.Encoder) error
 	marshalJSONv1Func   func() ([]byte, error)
 	appendTextFunc      func([]byte) ([]byte, error)
 	marshalTextFunc     func() ([]byte, error)
-	unmarshalJSONv2Func func(*jsontext.Decoder, Options) error
+	unmarshalJSONv2Func func(*jsontext.Decoder) error
 	unmarshalJSONv1Func func([]byte) error
 	unmarshalTextFunc   func([]byte) error
 
@@ -576,7 +576,7 @@ type (
 func (structUnexportedEmbeddedMethodTag) MarshalText() {}
 func (structUnexportedEmbeddedMethodTag) AppendText()  {}
 
-func (p *allMethods) MarshalJSONTo(enc *jsontext.Encoder, opts Options) error {
+func (p *allMethods) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if got, want := "MarshalJSONTo", p.method; got != want {
 		return fmt.Errorf("called wrong method: got %v, want %v", got, want)
 	}
@@ -595,7 +595,7 @@ func (p *allMethods) MarshalText() ([]byte, error) {
 	return p.value, nil
 }
 
-func (p *allMethods) UnmarshalJSONFrom(dec *jsontext.Decoder, opts Options) error {
+func (p *allMethods) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	p.method = "UnmarshalJSONFrom"
 	val, err := dec.ReadValue()
 	p.value = val
@@ -612,10 +612,10 @@ func (p *allMethods) UnmarshalText(val []byte) error {
 	return nil
 }
 
-func (s structMethodJSONv2) MarshalJSONTo(enc *jsontext.Encoder, opts Options) error {
+func (s structMethodJSONv2) MarshalJSONTo(enc *jsontext.Encoder) error {
 	return enc.WriteToken(jsontext.String(s.value))
 }
-func (s *structMethodJSONv2) UnmarshalJSONFrom(dec *jsontext.Decoder, opts Options) error {
+func (s *structMethodJSONv2) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	tok, err := dec.ReadToken()
 	if err != nil {
 		return err
@@ -647,8 +647,8 @@ func (s *structMethodText) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (f marshalJSONv2Func) MarshalJSONTo(enc *jsontext.Encoder, opts Options) error {
-	return f(enc, opts)
+func (f marshalJSONv2Func) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return f(enc)
 }
 func (f marshalJSONv1Func) MarshalJSON() ([]byte, error) {
 	return f()
@@ -659,8 +659,8 @@ func (f appendTextFunc) AppendText(b []byte) ([]byte, error) {
 func (f marshalTextFunc) MarshalText() ([]byte, error) {
 	return f()
 }
-func (f unmarshalJSONv2Func) UnmarshalJSONFrom(dec *jsontext.Decoder, opts Options) error {
-	return f(dec, opts)
+func (f unmarshalJSONv2Func) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	return f(dec)
 }
 func (f unmarshalJSONv1Func) UnmarshalJSON(b []byte) error {
 	return f(b)
@@ -1014,7 +1014,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs"),
 		opts: []Options{
 			Deterministic(true),
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string) error {
 				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
 				}
@@ -1034,7 +1034,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs+RejectDuplicateNames"),
 		opts: []Options{
 			Deterministic(true),
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string) error {
 				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /X", p)
 				}
@@ -1054,7 +1054,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Maps/String/Deterministic+MarshalFuncs+AllowDuplicateNames"),
 		opts: []Options{
 			Deterministic(true),
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v string) error {
 				if p := enc.StackPointer(); p != "/X" {
 					return fmt.Errorf("invalid stack pointer: got %s, want /0", p)
 				}
@@ -3398,19 +3398,19 @@ func TestMarshal(t *testing.T) {
 		canonicalize: true,
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/Error"),
-		in: marshalJSONv2Func(func(*jsontext.Encoder, Options) error {
+		in: marshalJSONv2Func(func(*jsontext.Encoder) error {
 			return errSomeError
 		}),
 		wantErr: EM(errSomeError).withType(0, T[marshalJSONv2Func]()),
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooFew"),
-		in: marshalJSONv2Func(func(*jsontext.Encoder, Options) error {
+		in: marshalJSONv2Func(func(*jsontext.Encoder) error {
 			return nil // do nothing
 		}),
 		wantErr: EM(errNonSingularValue).withType(0, T[marshalJSONv2Func]()),
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooMany"),
-		in: marshalJSONv2Func(func(enc *jsontext.Encoder, opts Options) error {
+		in: marshalJSONv2Func(func(enc *jsontext.Encoder) error {
 			enc.WriteToken(jsontext.Null)
 			enc.WriteToken(jsontext.Null)
 			return nil
@@ -3419,7 +3419,7 @@ func TestMarshal(t *testing.T) {
 		wantErr: EM(errNonSingularValue).withPos(`nullnull`, "").withType(0, T[marshalJSONv2Func]()),
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/SkipFunc"),
-		in: marshalJSONv2Func(func(enc *jsontext.Encoder, opts Options) error {
+		in: marshalJSONv2Func(func(enc *jsontext.Encoder) error {
 			return SkipFunc
 		}),
 		wantErr: EM(errors.New("marshal method cannot be skipped")).withType(0, T[marshalJSONv2Func]()),
@@ -3490,7 +3490,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Methods/Invalid/MapKey/JSONv2/Syntax"),
 		in: map[any]string{
-			addr(marshalJSONv2Func(func(enc *jsontext.Encoder, opts Options) error {
+			addr(marshalJSONv2Func(func(enc *jsontext.Encoder) error {
 				return enc.WriteToken(jsontext.Null)
 			})): "invalid",
 		},
@@ -3550,7 +3550,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				return enc.WriteToken(jsontext.String("called"))
 			})),
 		},
@@ -3559,7 +3559,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/NamedBool/V2/NoMatch"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v namedBool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v namedBool) error {
 				return errMustNotCall
 			})),
 		},
@@ -3568,7 +3568,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/NamedBool/V2/Match"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v namedBool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v namedBool) error {
 				return enc.WriteToken(jsontext.String("called"))
 			})),
 		},
@@ -3577,7 +3577,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/PointerBool/V2/Match"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteToken(jsontext.String("called"))
 			})),
@@ -3628,7 +3628,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/DirectError"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				return errSomeError
 			})),
 		},
@@ -3637,7 +3637,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/TooFew"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				return nil
 			})),
 		},
@@ -3646,7 +3646,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/TooMany"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				enc.WriteValue([]byte(`"hello"`))
 				enc.WriteValue([]byte(`"world"`))
 				return nil
@@ -3658,7 +3658,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/Skipped"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				return SkipFunc
 			})),
 		},
@@ -3667,7 +3667,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/ProcessBeforeSkip"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				enc.WriteValue([]byte(`"hello"`))
 				return SkipFunc
 			})),
@@ -3678,7 +3678,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Bool/V2/WrappedSkipError"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
 			})),
 		},
@@ -3747,7 +3747,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -3756,7 +3756,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/PointerNoCaseString/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *nocaseString) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
 			})),
@@ -3766,7 +3766,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v encoding.TextMarshaler, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v encoding.TextMarshaler) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return enc.WriteValue([]byte(`"called"`))
 			})),
@@ -3776,7 +3776,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidToken"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString) error {
 				return enc.WriteToken(jsontext.Null)
 			})),
 		},
@@ -3786,7 +3786,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2/InvalidValue"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`null`))
 			})),
 		},
@@ -3825,7 +3825,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v nocaseString) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -3834,7 +3834,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Value/PointerNoCaseString/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *nocaseString, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *nocaseString) error {
 				_ = *v // must be a non-nil pointer
 				return enc.WriteValue([]byte(`"called"`))
 			})),
@@ -3844,7 +3844,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V2"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v encoding.TextMarshaler, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v encoding.TextMarshaler) error {
 				_ = *v.(*nocaseString) // must be a non-nil *nocaseString
 				return enc.WriteValue([]byte(`"called"`))
 			})),
@@ -3861,10 +3861,10 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(v *string) ([]byte, error) {
 					return []byte(`"called2"`), nil
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v []byte, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v []byte) error {
 					return enc.WriteValue([]byte(`"called3"`))
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v *int64, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v *int64) error {
 					return enc.WriteValue([]byte(`"called4"`))
 				}),
 			)),
@@ -3884,10 +3884,10 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(v *stringMarshalNonEmpty) ([]byte, error) {
 					return []byte(`""`), nil
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v bytesMarshalNonEmpty, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v bytesMarshalNonEmpty) error {
 					return enc.WriteValue([]byte(`{}`))
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v *float64, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v *float64) error {
 					return enc.WriteValue([]byte(`[]`))
 				}),
 				MarshalFunc(func(v mapMarshalNonEmpty) ([]byte, error) {
@@ -3896,7 +3896,7 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(v []string) ([]byte, error) {
 					return []byte(`"called3"`), nil
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v *sliceMarshalNonEmpty, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v *sliceMarshalNonEmpty) error {
 					return enc.WriteValue([]byte(`"called4"`))
 				}),
 			)),
@@ -3913,10 +3913,10 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(v *string) ([]byte, error) {
 					panic("should not be called")
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v []byte, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v []byte) error {
 					panic("should not be called")
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v *int64, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v *int64) error {
 					panic("should not be called")
 				}),
 			)),
@@ -3930,7 +3930,7 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(v structInlinedL1) ([]byte, error) {
 					panic("should not be called")
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v *StructEmbed2, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v *StructEmbed2) error {
 					panic("should not be called")
 				}),
 			)),
@@ -3949,7 +3949,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Array/Elem"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool) error {
 				return enc.WriteValue([]byte(`"` + strconv.FormatBool(*v) + `"`))
 			})),
 		},
@@ -3958,7 +3958,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Pointer/Nil"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool) error {
 				panic("should not be called")
 			})),
 		},
@@ -3967,7 +3967,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Pointer/NonNil"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *bool) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -3976,7 +3976,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/Nil"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v fmt.Stringer, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v fmt.Stringer) error {
 				panic("should not be called")
 			})),
 		},
@@ -3985,7 +3985,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchInterface"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v fmt.Stringer, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v fmt.Stringer) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -3994,7 +3994,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchConcrete"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v valueStringer, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v valueStringer) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -4003,7 +4003,7 @@ func TestMarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NonNil/MatchPointer"),
 		opts: []Options{
-			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *valueStringer, opts Options) error {
+			WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, v *valueStringer) error {
 				return enc.WriteValue([]byte(`"called"`))
 			})),
 		},
@@ -4151,7 +4151,7 @@ func TestMarshal(t *testing.T) {
 					{P{1, 13}, addr("LAST")},
 				}
 				checkAny := makeValueChecker("any", wantAny)
-				anyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v any, opts Options) error {
+				anyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v any) error {
 					return checkAny(enc, v)
 				})
 
@@ -4162,17 +4162,17 @@ func TestMarshal(t *testing.T) {
 					}
 				}
 				checkPointerAny := makeValueChecker("*any", wantPointerAny)
-				pointerAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *any, opts Options) error {
+				pointerAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *any) error {
 					return checkPointerAny(enc, v)
 				})
 
 				checkNamedAny := makeValueChecker("namedAny", wantAny)
-				namedAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v namedAny, opts Options) error {
+				namedAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v namedAny) error {
 					return checkNamedAny(enc, v)
 				})
 
 				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
-				pointerNamedAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *namedAny, opts Options) error {
+				pointerNamedAnyMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *namedAny) error {
 					return checkPointerNamedAny(enc, v)
 				})
 
@@ -4184,38 +4184,38 @@ func TestMarshal(t *testing.T) {
 					}
 				}
 				checkStringer := makeValueChecker("stringer", wantStringer)
-				stringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v stringer, opts Options) error {
+				stringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v stringer) error {
 					return checkStringer(enc, v)
 				})
 
 				checkPointerStringer := makeValueChecker("*stringer", nil)
-				pointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *stringer, opts Options) error {
+				pointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *stringer) error {
 					return checkPointerStringer(enc, v)
 				})
 
 				wantValueStringer := []P{{1, 1}, {1, 3}, {1, 6}}
 				checkValueValueStringer := makePositionChecker("valueStringer", wantValueStringer)
-				valueValueStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v valueStringer, opts Options) error {
+				valueValueStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v valueStringer) error {
 					return checkValueValueStringer(enc, v)
 				})
 
 				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
-				pointerValueStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *valueStringer, opts Options) error {
+				pointerValueStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *valueStringer) error {
 					return checkPointerValueStringer(enc, v)
 				})
 
 				wantPointerStringer := []P{{1, 7}, {1, 9}, {1, 12}}
 				checkValuePointerStringer := makePositionChecker("pointerStringer", wantPointerStringer)
-				valuePointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v pointerStringer, opts Options) error {
+				valuePointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v pointerStringer) error {
 					return checkValuePointerStringer(enc, v)
 				})
 
 				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
-				pointerPointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *pointerStringer, opts Options) error {
+				pointerPointerStringerMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v *pointerStringer) error {
 					return checkPointerPointerStringer(enc, v)
 				})
 
-				lastMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v string, opts Options) error {
+				lastMarshaler := MarshalToFunc(func(enc *jsontext.Encoder, v string) error {
 					return checkLast()
 				})
 
@@ -4241,7 +4241,7 @@ func TestMarshal(t *testing.T) {
 				MarshalFunc(func(bool) ([]byte, error) {
 					return []byte(`"called"`), nil
 				}),
-				MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 					panic("should not be called")
 				}),
 			)),
@@ -4252,7 +4252,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Precedence/V2First"),
 		opts: []Options{
 			WithMarshalers(JoinMarshalers(
-				MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 					return enc.WriteToken(jsontext.String("called"))
 				}),
 				MarshalFunc(func(bool) ([]byte, error) {
@@ -4266,7 +4266,7 @@ func TestMarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
 		opts: []Options{
 			WithMarshalers(JoinMarshalers(
-				MarshalToFunc(func(enc *jsontext.Encoder, v bool, opts Options) error {
+				MarshalToFunc(func(enc *jsontext.Encoder, v bool) error {
 					return SkipFunc
 				}),
 				MarshalFunc(func(bool) ([]byte, error) {
@@ -7812,20 +7812,20 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/Error"),
 		inBuf: `{}`,
-		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder, Options) error {
+		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder) error {
 			return errSomeError
 		})),
 		wantErr: EU(errSomeError).withType(0, T[unmarshalJSONv2Func]()),
 	}, {
 		name: jsontest.Name("Methods/Invalid/JSONv2/TooFew"),
-		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder, Options) error {
+		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder) error {
 			return nil // do nothing
 		})),
 		wantErr: EU(errNonSingularValue).withType(0, T[unmarshalJSONv2Func]()),
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/TooMany"),
 		inBuf: `{}{}`,
-		inVal: addr(unmarshalJSONv2Func(func(dec *jsontext.Decoder, opts Options) error {
+		inVal: addr(unmarshalJSONv2Func(func(dec *jsontext.Decoder) error {
 			dec.ReadValue()
 			dec.ReadValue()
 			return nil
@@ -7834,7 +7834,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name:  jsontest.Name("Methods/Invalid/JSONv2/SkipFunc"),
 		inBuf: `{}`,
-		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder, Options) error {
+		inVal: addr(unmarshalJSONv2Func(func(*jsontext.Decoder) error {
 			return SkipFunc
 		})),
 		wantErr: EU(wrapSkipFunc(SkipFunc, "unmarshal method")).withType(0, T[unmarshalJSONv2Func]()),
@@ -7920,7 +7920,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -7937,7 +7937,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/NamedString/V2/NoMatch"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedString, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedString) error {
 				panic("should not be called")
 			})),
 		},
@@ -7947,7 +7947,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/NamedString/V2/Match"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedString, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedString) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -8002,7 +8002,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/DirectError"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				return errSomeError
 			})),
 		},
@@ -8013,7 +8013,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/TooFew"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				return nil
 			})),
 		},
@@ -8024,7 +8024,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/TooMany"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
@@ -8041,7 +8041,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/Skipped"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				return SkipFunc
 			})),
 		},
@@ -8051,7 +8051,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/ProcessBeforeSkip"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
@@ -8065,7 +8065,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/String/V2/WrappedSkipError"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				return fmt.Errorf("wrap: %w", SkipFunc)
 			})),
 		},
@@ -8104,7 +8104,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/NoCaseString/V2"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *nocaseString, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *nocaseString) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -8121,7 +8121,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/TextMarshaler/V2"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v encoding.TextMarshaler, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v encoding.TextMarshaler) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -8138,7 +8138,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Key/String/V1/DuplicateName"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				if _, err := dec.ReadValue(); err != nil {
 					return err
 				}
@@ -8182,7 +8182,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Value/NoCaseString/V2"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *nocaseString, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *nocaseString) error {
 				switch t, err := dec.ReadToken(); {
 				case err != nil:
 					return err
@@ -8199,7 +8199,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Map/Value/TextMarshaler/V2"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v encoding.TextMarshaler, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v encoding.TextMarshaler) error {
 				switch b, err := dec.ReadValue(); {
 				case err != nil:
 					return err
@@ -8231,7 +8231,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called2"
 					return nil
 				}),
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *[]byte, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *[]byte) error {
 					switch t, err := dec.ReadToken(); {
 					case err != nil:
 						return err
@@ -8241,7 +8241,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = []byte("called3")
 					return nil
 				}),
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *int64, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *int64) error {
 					switch b, err := dec.ReadValue(); {
 					case err != nil:
 						return err
@@ -8263,7 +8263,7 @@ func TestUnmarshal(t *testing.T) {
 				UnmarshalFunc(func([]byte, *structInlinedL1) error {
 					panic("should not be called")
 				}),
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *StructEmbed2, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *StructEmbed2) error {
 					panic("should not be called")
 				}),
 			)),
@@ -8302,7 +8302,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Pointer/Nil"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				t, err := dec.ReadToken()
 				*v = strings.ToUpper(t.String())
 				return err
@@ -8314,7 +8314,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Pointer/NonNil"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 				t, err := dec.ReadToken()
 				*v = strings.ToUpper(t.String())
 				return err
@@ -8326,7 +8326,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/Nil"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v fmt.Stringer, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v fmt.Stringer) error {
 				panic("should not be called")
 			})),
 		},
@@ -8337,7 +8337,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NetIP"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer) error {
 				*v = net.IP{}
 				return SkipFunc
 			})),
@@ -8348,7 +8348,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NewPointerNetIP"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer) error {
 				*v = new(net.IP)
 				return SkipFunc
 			})),
@@ -8359,7 +8359,7 @@ func TestUnmarshal(t *testing.T) {
 	}, {
 		name: jsontest.Name("Functions/Interface/NilPointerNetIP"),
 		opts: []Options{
-			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer, opts Options) error {
+			WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer) error {
 				*v = (*net.IP)(nil)
 				return SkipFunc
 			})),
@@ -8371,7 +8371,7 @@ func TestUnmarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Interface/NilPointerNetIP/Override"),
 		opts: []Options{
 			WithUnmarshalers(JoinUnmarshalers(
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *fmt.Stringer) error {
 					*v = (*net.IP)(nil)
 					return SkipFunc
 				}),
@@ -8520,7 +8520,7 @@ func TestUnmarshal(t *testing.T) {
 					{P{1, 13}, addr("LAST")},
 				}
 				checkAny := makeValueChecker("any", wantAny)
-				anyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v any, opts Options) error {
+				anyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v any) error {
 					return checkAny(dec, v)
 				})
 
@@ -8531,17 +8531,17 @@ func TestUnmarshal(t *testing.T) {
 					}
 				}
 				checkPointerAny := makeValueChecker("*any", wantPointerAny)
-				pointerAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *any, opts Options) error {
+				pointerAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *any) error {
 					return checkPointerAny(dec, v)
 				})
 
 				checkNamedAny := makeValueChecker("namedAny", wantAny)
-				namedAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v namedAny, opts Options) error {
+				namedAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v namedAny) error {
 					return checkNamedAny(dec, v)
 				})
 
 				checkPointerNamedAny := makeValueChecker("*namedAny", nil)
-				pointerNamedAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedAny, opts Options) error {
+				pointerNamedAnyUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *namedAny) error {
 					return checkPointerNamedAny(dec, v)
 				})
 
@@ -8553,40 +8553,40 @@ func TestUnmarshal(t *testing.T) {
 					}
 				}
 				checkStringer := makeValueChecker("stringer", wantStringer)
-				stringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v stringer, opts Options) error {
+				stringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v stringer) error {
 					return checkStringer(dec, v)
 				})
 
 				checkPointerStringer := makeValueChecker("*stringer", nil)
-				pointerStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *stringer, opts Options) error {
+				pointerStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *stringer) error {
 					return checkPointerStringer(dec, v)
 				})
 
 				wantValueStringer := []P{{1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {1, 6}}
 				checkPointerValueStringer := makePositionChecker("*valueStringer", wantValueStringer)
-				pointerValueStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *valueStringer, opts Options) error {
+				pointerValueStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *valueStringer) error {
 					return checkPointerValueStringer(dec, v)
 				})
 
 				wantPointerStringer := []P{{1, 7}, {1, 8}, {1, 9}, {1, 10}, {1, 11}, {1, 12}}
 				checkPointerPointerStringer := makePositionChecker("*pointerStringer", wantPointerStringer)
-				pointerPointerStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *pointerStringer, opts Options) error {
+				pointerPointerStringerUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *pointerStringer) error {
 					return checkPointerPointerStringer(dec, v)
 				})
 
-				lastUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+				lastUnmarshaler := UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 					return checkLast()
 				})
 
 				return JoinUnmarshalers(
 					// This is just like unmarshaling into a Go array,
 					// but avoids zeroing the element before calling unmarshal.
-					UnmarshalFromFunc(func(dec *jsontext.Decoder, v *[14]any, opts Options) error {
+					UnmarshalFromFunc(func(dec *jsontext.Decoder, v *[14]any) error {
 						if _, err := dec.ReadToken(); err != nil {
 							return err
 						}
 						for i := range len(*v) {
-							if err := UnmarshalDecode(dec, &(*v)[i], opts); err != nil {
+							if err := UnmarshalDecode(dec, &(*v)[i]); err != nil {
 								return err
 							}
 						}
@@ -8619,7 +8619,7 @@ func TestUnmarshal(t *testing.T) {
 					*v = "called"
 					return nil
 				}),
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 					panic("should not be called")
 				}),
 			)),
@@ -8631,7 +8631,7 @@ func TestUnmarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Precedence/V2First"),
 		opts: []Options{
 			WithUnmarshalers(JoinUnmarshalers(
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 					switch t, err := dec.ReadToken(); {
 					case err != nil:
 						return err
@@ -8653,7 +8653,7 @@ func TestUnmarshal(t *testing.T) {
 		name: jsontest.Name("Functions/Precedence/V2Skipped"),
 		opts: []Options{
 			WithUnmarshalers(JoinUnmarshalers(
-				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string, opts Options) error {
+				UnmarshalFromFunc(func(dec *jsontext.Decoder, v *string) error {
 					return SkipFunc
 				}),
 				UnmarshalFunc(func(b []byte, v *string) error {
@@ -9306,7 +9306,8 @@ func TestUnmarshalDecodeOptions(t *testing.T) {
 	in := strings.NewReader(strings.Repeat("\"\xde\xad\xbe\xef\"\n", 5))
 	dec := jsontext.NewDecoder(in,
 		jsontext.AllowInvalidUTF8(true), // decoder-specific option
-		WithUnmarshalers(UnmarshalFromFunc(func(_ *jsontext.Decoder, _ any, opts Options) error {
+		WithUnmarshalers(UnmarshalFromFunc(func(dec *jsontext.Decoder, _ any) error {
+			opts := dec.Options()
 			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
 				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
 			}
@@ -9345,7 +9346,8 @@ func TestUnmarshalDecodeOptions(t *testing.T) {
 	}
 	if err := UnmarshalDecode(dec, new(string), JoinOptions(
 		jsontext.AllowInvalidUTF8(false), // should be ignored
-		WithUnmarshalers(UnmarshalFromFunc(func(_ *jsontext.Decoder, _ any, opts Options) error {
+		WithUnmarshalers(UnmarshalFromFunc(func(_ *jsontext.Decoder, _ any) error {
+			opts := dec.Options()
 			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
 				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
 			}
@@ -9357,6 +9359,14 @@ func TestUnmarshalDecodeOptions(t *testing.T) {
 	}
 	if calledFuncs != math.MaxInt {
 		t.Fatalf("calledFuncs = %d, want %d", calledFuncs, math.MaxInt)
+	}
+
+	// Reset with the decoder options as part of the arguments should not
+	// observe mutations to the options until after Reset is done.
+	opts := dec.Options()                                 // AllowInvalidUTF8 is currently true
+	dec.Reset(in, jsontext.AllowInvalidUTF8(false), opts) // earlier AllowInvalidUTF8(false) should be overridden by latter AllowInvalidUTF8(true) in opts
+	if v, _ := GetOption(dec.Options(), jsontext.AllowInvalidUTF8); v == false {
+		t.Errorf("Options.AllowInvalidUTF8 = false, want true")
 	}
 }
 
@@ -9390,7 +9400,8 @@ func TestMarshalEncodeOptions(t *testing.T) {
 	enc := jsontext.NewEncoder(
 		out,
 		jsontext.AllowInvalidUTF8(true), // encoder-specific option
-		WithMarshalers(MarshalToFunc(func(_ *jsontext.Encoder, _ any, opts Options) error {
+		WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, _ any) error {
+			opts := enc.Options()
 			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
 				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
 			}
@@ -9429,7 +9440,8 @@ func TestMarshalEncodeOptions(t *testing.T) {
 	}
 	if err := MarshalEncode(enc, "\xde\xad\xbe\xef", JoinOptions(
 		jsontext.AllowInvalidUTF8(false), // should be ignored
-		WithMarshalers(MarshalToFunc(func(_ *jsontext.Encoder, _ any, opts Options) error {
+		WithMarshalers(MarshalToFunc(func(enc *jsontext.Encoder, _ any) error {
+			opts := enc.Options()
 			if v, _ := GetOption(opts, jsontext.AllowInvalidUTF8); !v {
 				t.Errorf("nested Options.AllowInvalidUTF8 = false, want true")
 			}
@@ -9444,6 +9456,14 @@ func TestMarshalEncodeOptions(t *testing.T) {
 	}
 	if out.String() != strings.Repeat("\"\xde\xad\ufffd\ufffd\"\n", 5) {
 		t.Fatalf("output mismatch:\n\tgot:  %s\n\twant: %s", out.String(), strings.Repeat("\"\xde\xad\xbe\xef\"\n", 5))
+	}
+
+	// Reset with the encoder options as part of the arguments should not
+	// observe mutations to the options until after Reset is done.
+	opts := enc.Options()                                  // AllowInvalidUTF8 is currently true
+	enc.Reset(out, jsontext.AllowInvalidUTF8(false), opts) // earlier AllowInvalidUTF8(false) should be overridden by latter AllowInvalidUTF8(true) in opts
+	if v, _ := GetOption(enc.Options(), jsontext.AllowInvalidUTF8); v == false {
+		t.Errorf("Options.AllowInvalidUTF8 = false, want true")
 	}
 }
 

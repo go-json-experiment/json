@@ -114,8 +114,9 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
 		e.Buf = bb.Bytes()[bb.Len():] // alias the unused buffer of bb
 	}
-	e.Struct = jsonopts.Struct{}
-	e.Struct.Join(opts...)
+	opts2 := jsonopts.Struct{} // avoid mutating e.Struct in case it is part of opts
+	opts2.Join(opts...)
+	e.Struct = opts2
 	if e.Flags.Get(jsonflags.Multiline) {
 		if !e.Flags.Has(jsonflags.SpaceAfterColon) {
 			e.Flags.Set(jsonflags.SpaceAfterColon | 1)
@@ -128,6 +129,18 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 			e.Indent = "\t"
 		}
 	}
+}
+
+// Options returns the options used to construct the decoder and
+// may additionally contain semantic options passed to a
+// [encoding/json/v2.MarshalEncode] call.
+//
+// If operating within
+// a [encoding/json/v2.MarshalerTo.MarshalJSONTo] method call or
+// a [encoding/json/v2.MarshalToFunc] function call,
+// then the returned options are only valid within the call.
+func (e *Encoder) Options() Options {
+	return &e.s.Struct
 }
 
 // NeedFlush determines whether to flush at this point.

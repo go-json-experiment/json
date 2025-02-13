@@ -33,35 +33,6 @@ var (
 // export exposes internal functionality of the "jsontext" package.
 var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 
-// mayReuseOpt reuses coderOpts if joining opts with the coderOpts
-// would produce the equivalent set of options.
-func mayReuseOpt(coderOpts *jsonopts.Struct, opts []Options) *jsonopts.Struct {
-	switch len(opts) {
-	// In the common case, the caller plumbs down options from the caller's caller,
-	// which is usually the [jsonopts.Struct] constructed by the top-level arshal call.
-	case 1:
-		o, _ := opts[0].(*jsonopts.Struct)
-		if o == coderOpts {
-			return coderOpts
-		}
-	// If the caller provides no options, then just reuse the coder's options,
-	// which may contain both marshaling/unmarshaling and encoding/decoding flags.
-	case 0:
-		return coderOpts
-	}
-	return nil
-}
-
-var structOptionsPool = &sync.Pool{New: func() any { return new(jsonopts.Struct) }}
-
-func getStructOptions() *jsonopts.Struct {
-	return structOptionsPool.Get().(*jsonopts.Struct)
-}
-func putStructOptions(o *jsonopts.Struct) {
-	*o = jsonopts.Struct{}
-	structOptionsPool.Put(o)
-}
-
 // Marshal serializes a Go value as a []byte according to the provided
 // marshal and encode options (while ignoring unmarshal or decode options).
 // It does not terminate the output with a newline.
@@ -231,15 +202,13 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	xe := export.Encoder(out)
-	mo := mayReuseOpt(&xe.Struct, opts)
-	if mo == nil {
-		mo = getStructOptions()
-		defer putStructOptions(mo)
-		*mo = xe.Struct // initialize with encoder options before joining
-		mo.JoinWithoutCoderOptions(opts...)
+	if len(opts) > 0 {
+		optsOriginal := xe.Struct
+		defer func() { xe.Struct = optsOriginal }()
+		xe.Struct.JoinWithoutCoderOptions(opts...)
 	}
-	err = marshalEncode(out, in, mo)
-	if err != nil && mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+	err = marshalEncode(out, in, &xe.Struct)
+	if err != nil && xe.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 		return internal.TransformMarshalError(in, err)
 	}
 	return err
@@ -480,15 +449,13 @@ func unmarshalFull(in *jsontext.Decoder, out any, uo *jsonopts.Struct) error {
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
 	xd := export.Decoder(in)
-	uo := mayReuseOpt(&xd.Struct, opts)
-	if uo == nil {
-		uo = getStructOptions()
-		defer putStructOptions(uo)
-		*uo = xd.Struct // initialize with decoder options before joining
-		uo.JoinWithoutCoderOptions(opts...)
+	if len(opts) > 0 {
+		optsOriginal := xd.Struct
+		defer func() { xd.Struct = optsOriginal }()
+		xd.Struct.JoinWithoutCoderOptions(opts...)
 	}
-	err = unmarshalDecode(in, out, uo)
-	if err != nil && uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+	err = unmarshalDecode(in, out, &xd.Struct)
+	if err != nil && xd.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 		return internal.TransformUnmarshalError(out, err)
 	}
 	return err
@@ -543,6 +510,9 @@ type addressableValue struct {
 func newAddressableValue(t reflect.Type) addressableValue {
 	return addressableValue{reflect.New(t).Elem(), true}
 }
+
+// TODO: Remove *jsonopts.Struct argument from [marshaler] and [unmarshaler].
+// This can be directly accessed on the encoder or decoder.
 
 // All marshal and unmarshal behavior is implemented using these signatures.
 // The *jsonopts.Struct argument is guaranteed to identical to or at least

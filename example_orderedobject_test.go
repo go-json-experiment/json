@@ -29,16 +29,16 @@ type ObjectMember[V any] struct {
 }
 
 // MarshalJSONTo encodes obj as a JSON object into enc.
-func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Options) error {
+func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder) error {
 	if err := enc.WriteToken(jsontext.BeginObject); err != nil {
 		return err
 	}
 	for i := range *obj {
 		member := &(*obj)[i]
-		if err := json.MarshalEncode(enc, &member.Name, opts); err != nil {
+		if err := json.MarshalEncode(enc, &member.Name); err != nil {
 			return err
 		}
-		if err := json.MarshalEncode(enc, &member.Value, opts); err != nil {
+		if err := json.MarshalEncode(enc, &member.Value); err != nil {
 			return err
 		}
 	}
@@ -49,7 +49,7 @@ func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder, opts json.Opti
 }
 
 // UnmarshalJSONFrom decodes a JSON object from dec into obj.
-func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder, opts json.Options) error {
+func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if k := dec.PeekKind(); k != '{' {
 		return fmt.Errorf("expected object start, but encountered %v", k)
 	}
@@ -59,10 +59,10 @@ func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder, opts json.
 	for dec.PeekKind() != '}' {
 		*obj = append(*obj, ObjectMember[V]{})
 		member := &(*obj)[len(*obj)-1]
-		if err := json.UnmarshalDecode(dec, &member.Name, opts); err != nil {
+		if err := json.UnmarshalDecode(dec, &member.Name); err != nil {
 			return err
 		}
-		if err := json.UnmarshalDecode(dec, &member.Value, opts); err != nil {
+		if err := json.UnmarshalDecode(dec, &member.Value); err != nil {
 			return err
 		}
 	}
