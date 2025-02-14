@@ -410,7 +410,6 @@ func Example_formatFlags() {
 		TimeUnixSec    time.Time      `json:",format:unix"`
 		DurationSecs   time.Duration  `json:",format:sec"`
 		DurationNanos  time.Duration  `json:",format:nano"`
-		DurationBase60 time.Duration  `json:",format:base60"`
 	}{
 		BytesBase64:    []byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef},
 		BytesHex:       [8]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef},
@@ -422,7 +421,6 @@ func Example_formatFlags() {
 		TimeUnixSec:    time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		DurationSecs:   12*time.Hour + 34*time.Minute + 56*time.Second + 7*time.Millisecond + 8*time.Microsecond + 9*time.Nanosecond,
 		DurationNanos:  12*time.Hour + 34*time.Minute + 56*time.Second + 7*time.Millisecond + 8*time.Microsecond + 9*time.Nanosecond,
-		DurationBase60: 12*time.Hour + 34*time.Minute + 56*time.Second + 7*time.Millisecond + 8*time.Microsecond + 9*time.Nanosecond,
 	}
 
 	b, err := json.Marshal(&value)
@@ -452,8 +450,7 @@ func Example_formatFlags() {
 	//	"TimeDateOnly": "2000-01-01",
 	//	"TimeUnixSec": 946684800,
 	//	"DurationSecs": 45296.007008009,
-	//	"DurationNanos": 45296007008009,
-	//	"DurationBase60": "12:34:56.007008009"
+	//	"DurationNanos": 45296007008009
 	// }
 }
 
