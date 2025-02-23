@@ -155,8 +155,6 @@ var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 //     If the format is "sec", "milli", "micro", or "nano",
 //     then the duration is encoded as a JSON number of the number of seconds
 //     (or milliseconds, microseconds, or nanoseconds) in the duration.
-//     If the format is "base60", it is encoded as a JSON string
-//     using the "H:MM:SS.SSSSSSSSS" representation.
 //     If the format is "units", it uses [time.Duration.String].
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
@@ -385,8 +383,6 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //     If the format is "sec", "milli", "micro", or "nano",
 //     then the duration is decoded from a JSON number of the number of seconds
 //     (or milliseconds, microseconds, or nanoseconds) in the duration.
-//     If the format is "base60", it is decoded from a JSON string
-//     using the "H:MM:SS.SSSSSSSSS" representation.
 //     If the format is "units", it uses [time.ParseDuration].
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)

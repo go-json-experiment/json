@@ -373,7 +373,6 @@ type (
 		D8  time.Duration `json:",string,format:micro"`
 		D9  time.Duration `json:",format:nano"`
 		D10 time.Duration `json:",string,format:nano"`
-		D11 time.Duration `json:",format:base60"`
 	}
 	structTimeFormat struct {
 		T1  time.Time
@@ -4373,7 +4372,6 @@ func TestMarshal(t *testing.T) {
 			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
-			12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 		},
 		want: `{
 	"D1": "12h34m56.078090012s",
@@ -4385,8 +4383,7 @@ func TestMarshal(t *testing.T) {
 	"D7": 45296078090.012,
 	"D8": "45296078090.012",
 	"D9": 45296078090012,
-	"D10": "45296078090012",
-	"D11": "12:34:56.078090012"
+	"D10": "45296078090012"
 }`,
 	}, {
 		name: jsontest.Name("Duration/Format/Legacy"),
@@ -4395,7 +4392,7 @@ func TestMarshal(t *testing.T) {
 			D1: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 			D2: 12*time.Hour + 34*time.Minute + 56*time.Second + 78*time.Millisecond + 90*time.Microsecond + 12*time.Nanosecond,
 		},
-		want: `{"D1":45296078090012,"D2":"12h34m56.078090012s","D3":0,"D4":"0","D5":0,"D6":"0","D7":0,"D8":"0","D9":0,"D10":"0","D11":"0:00:00"}`,
+		want: `{"D1":45296078090012,"D2":"12h34m56.078090012s","D3":0,"D4":"0","D5":0,"D6":"0","D7":0,"D8":"0","D9":0,"D10":"0"}`,
 	}, {
 		name: jsontest.Name("Duration/MapKey"),
 		in:   map[time.Duration]string{time.Second: ""},
