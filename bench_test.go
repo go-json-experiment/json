@@ -29,12 +29,13 @@ import (
 var benchVersion = cmp.Or(os.Getenv("BENCHMARK_VERSION"), "v2")
 
 var jsonFuncs = func() (funcs struct {
-	marshal      func(any) ([]byte, error)
-	unmarshal    func([]byte, any) error
-	encodeValue  func(w io.Writer, b []byte) error
-	encodeTokens func(w io.Writer, toks []jsontext.Token) error
-	decodeValue  func(r io.Reader) error
-	decodeTokens func(r io.Reader) error
+	marshal            func(any) ([]byte, error)
+	unmarshal          func([]byte, any) error
+	encodeValue        func(w io.Writer, b []byte) error
+	encodeTokens       func(w io.Writer, toks []jsontext.Token) error
+	decodeValue        func(r io.Reader) error
+	decodeTokens       func(r io.Reader) error
+	decodeTokensStream func(r io.Reader) error
 }) {
 	ignoreEOF := func(err error) error {
 		if err == io.EOF {
@@ -62,6 +63,8 @@ var jsonFuncs = func() (funcs struct {
 				}
 			}
 		}
+		funcs.decodeTokensStream = funcs.decodeTokens
+
 	case "v1in2":
 		funcs.marshal = jsonv1in2.Marshal
 		funcs.unmarshal = jsonv1in2.Unmarshal
@@ -80,6 +83,7 @@ var jsonFuncs = func() (funcs struct {
 				}
 			}
 		}
+		funcs.decodeTokensStream = funcs.decodeTokens
 	case "v2":
 		funcs.marshal = func(v any) ([]byte, error) { return jsonv2.Marshal(v) }
 		funcs.unmarshal = func(b []byte, v any) error { return jsonv2.Unmarshal(b, v) }
@@ -102,6 +106,22 @@ var jsonFuncs = func() (funcs struct {
 		funcs.decodeTokens = func(r io.Reader) error {
 			d := jsontext.NewDecoder(r)
 			for {
+				if _, err := d.ReadToken(); err != nil {
+					return ignoreEOF(err)
+				}
+			}
+		}
+		funcs.decodeTokensStream = func(r io.Reader) error {
+			d := jsontext.NewDecoder(r, jsontext.AllowDuplicateNames(true))
+			for {
+				if d.PeekKind() == '"' {
+					for _, err := range d.ReadStringAsSeq() {
+						if err != nil {
+							return err
+						}
+					}
+					return nil
+				}
 				if _, err := d.ReadToken(); err != nil {
 					return ignoreEOF(err)
 				}
@@ -413,11 +433,14 @@ func runAllTestdata(tb testing.TB) {
 				})
 			}
 		}
-
 		tokens := mustDecodeTokens(tb, td.Data())
 		buffer := make([]byte, 0, 2*len(td.Data()))
 		for _, codeName := range []string{"Encode", "Decode"} {
-			for _, typeName := range []string{"Token", "Value"} {
+			for _, typeName := range []string{"Token", "TokenStream", "Value"} {
+				if codeName == "Encode" && typeName == "TokenStream" {
+					// no token stream for encoding.
+					continue
+				}
 				for _, modeName := range []string{"Streaming", "Buffered"} {
 					name := path.Join(td.Name, codeName, typeName, modeName)
 					runTestOrBench(tb, name, int64(td.Size), func(tb testing.TB) {
@@ -531,6 +554,10 @@ func runDecode(t testing.TB, typeName, modeName string, buffer, data []byte, tok
 		if err := jsonFuncs.decodeTokens(r); err != nil {
 			t.Fatalf("Decoder.ReadToken error: %v", err)
 		}
+	case "TokenStream":
+		if err := jsonFuncs.decodeTokensStream(r); err != nil {
+			t.Fatalf("Decoder.ReadTokenStreamv error: %v", err)
+		}
 	case "Value":
 		if err := jsonFuncs.decodeValue(r); err != nil {
 			t.Fatalf("Decoder.ReadValue error: %v", err)
@@ -555,7 +582,7 @@ func BenchmarkSlowStreamingDecode(b *testing.B)     { runAllSlowStreamingDecode(
 
 func runAllSlowStreamingDecode(tb testing.TB) {
 	for _, td := range slowStreamingDecodeTestdata {
-		for _, typeName := range []string{"Token", "Value"} {
+		for _, typeName := range []string{"Token", "TokenStream", "Value"} {
 			name := path.Join(td.name, typeName)
 			runTestOrBench(tb, name, len64(td.data), func(tb testing.TB) {
 				runSlowStreamingDecode(tb, typeName, td.data)
@@ -570,6 +597,10 @@ func runAllSlowStreamingDecode(tb testing.TB) {
 func runSlowStreamingDecode(t testing.TB, typeName string, data []byte) {
 	r := iotest.OneByteReader(bytes.NewReader(data))
 	switch typeName {
+	case "TokenStream":
+		if err := jsonFuncs.decodeTokensStream(r); err != nil {
+			t.Fatalf("Decoder.ReadToken error: %v", err)
+		}
 	case "Token":
 		if err := jsonFuncs.decodeTokens(r); err != nil {
 			t.Fatalf("Decoder.ReadToken error: %v", err)

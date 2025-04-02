@@ -4,3 +4,5 @@
 module github.com/go-json-experiment/json
 
 go 1.24
+
+require github.com/rogpeppe/ioseq v0.0.0-20250405133649-1cc137273d25
