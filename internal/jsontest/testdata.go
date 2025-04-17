@@ -7,11 +7,8 @@ package jsontest
 
 import (
 	"bytes"
-	"compress/gzip"
 	"embed"
-	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"path"
@@ -19,18 +16,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-json-experiment/json/internal/zstd"
 )
 
 // Embed the testdata directory as a fs.FS because this package is imported
 // by other packages such that the location of testdata may change relative
 // to the working directory of the test itself.
 //
-//go:embed testdata/*.json.gz
+//go:embed testdata/*.json.zst
 var testdataFS embed.FS
 
 type Entry struct {
 	Name string
-	Size int
 	Data func() []byte
 	New  func() any // nil if there is no concrete type for this
 }
@@ -50,30 +48,18 @@ var Data = func() (entries []Entry) {
 		var entry Entry
 
 		// Convert snake_case file name to CamelCase.
-		words := strings.Split(strings.TrimSuffix(fi.Name(), ".json.gz"), "_")
+		words := strings.Split(strings.TrimSuffix(fi.Name(), ".json.zst"), "_")
 		for i := range words {
 			words[i] = strings.Title(words[i])
 		}
 		entry.Name = strings.Join(words, "")
 
-		// Obtain the uncompressed size found in the trailing uint32
-		// of the GZIP-compressed file (per RFC 1952, section 2.3.1.).
-		filePath := path.Join("testdata", fi.Name())
-		f := mustGet(testdataFS.Open(filePath))
-		defer f.Close()
-		mustGet(f.(io.Seeker).Seek(-4, io.SeekEnd))
-		b := mustGet(io.ReadAll(f))
-		entry.Size = int(binary.LittleEndian.Uint32(b[:]))
-
 		// Lazily read and decompress the test data.
+		filePath := path.Join("testdata", fi.Name())
 		entry.Data = sync.OnceValue(func() []byte {
 			b := mustGet(fs.ReadFile(testdataFS, filePath))
-			zr := mustGet(gzip.NewReader(bytes.NewReader(b)))
-			data := mustGet(io.ReadAll(zr))
-			if len(data) != entry.Size {
-				panic(fmt.Sprintf("size mismatch: got %d, want %d", len(data), entry.Size))
-			}
-			return data
+			zr := zstd.NewReader(bytes.NewReader(b))
+			return mustGet(io.ReadAll(zr))
 		})
 
 		// Check whether there is a concrete type for this data.
