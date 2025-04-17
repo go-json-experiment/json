@@ -408,7 +408,7 @@ func runAllTestdata(tb testing.TB) {
 				}
 				value := mustUnmarshalValue(tb, td.Data(), newValue)
 				name := path.Join(td.Name, arshalName, typeName)
-				runTestOrBench(tb, name, int64(td.Size), func(tb testing.TB) {
+				runTestOrBench(tb, name, len64(td.Data()), func(tb testing.TB) {
 					runArshal(tb, arshalName, newValue, td.Data(), value)
 				})
 			}
@@ -420,7 +420,7 @@ func runAllTestdata(tb testing.TB) {
 			for _, typeName := range []string{"Token", "Value"} {
 				for _, modeName := range []string{"Streaming", "Buffered"} {
 					name := path.Join(td.Name, codeName, typeName, modeName)
-					runTestOrBench(tb, name, int64(td.Size), func(tb testing.TB) {
+					runTestOrBench(tb, name, len64(td.Data()), func(tb testing.TB) {
 						runCode(tb, codeName, typeName, modeName, buffer, td.Data(), tokens)
 					})
 				}
