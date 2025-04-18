@@ -7,7 +7,9 @@ package jsontext
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"iter"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
@@ -459,6 +461,101 @@ func (d *decoderState) SkipUntil(depth int, length int64) error {
 func (d *Decoder) ReadToken() (Token, error) {
 	return d.s.ReadToken()
 }
+
+// ReadStringAsSeq reads a string token as a sequence of
+// byte slices that are available as the contents of the string
+// are accumulated. If the next token is not a string, the sequence
+// immediately terminates with an error.
+//
+// The byte slices must not escape the iterator.
+//
+// It also returns an error if the AllowDuplicateNames option
+// is not set and the string is an object key.
+//
+// If the iterator terminates before completion, no
+// more tokens may be read from the decoder.
+// Any attempt to read tokens with the decoder while the iteration
+// is in progress will result in an error.
+func (dec *Decoder) ReadStringAsSeq() iter.Seq2[[]byte, error] {
+	return dec.s.ReadStringAsSeq()
+}
+
+var errNotString = fmt.Errorf("cannot stream non-string")
+var errCannotStreamObjectKeyWithoutAllowDuplicateNames = fmt.Errorf("cannot stream object key without enabling duplicate names")
+var errStringStreamAborted = fmt.Errorf("stream aborted")
+
+func (d *decoderState) ReadStringAsSeq() iter.Seq2[[]byte, error] {
+	return func(yield func([]byte, error) bool) {
+		if err := d.readStringAsSeq(yield); err != nil {
+			yield(nil, err)
+		}
+	}
+}
+
+func (d *decoderState) readStringAsSeq(yield func([]byte, error) bool) error {
+	if d.PeekKind() != '"' {
+		err := d.peekErr
+		if err == nil {
+			err = errNotString
+		}
+		return err
+	}
+	if d.Tokens.Last.NeedObjectName() && !d.Flags.Get(jsonflags.AllowDuplicateNames) {
+		return errCannotStreamObjectKeyWithoutAllowDuplicateNames
+	}
+	pos := d.peekPos
+	d.peekPos = 0
+	if err := d.Tokens.appendString(); err != nil {
+		return wrapSyntacticError(d, err, pos, +1) // report position at start of string
+	}
+	var flags jsonwire.ValueFlags
+	if n := jsonwire.ConsumeSimpleString(d.buf[pos:]); n > 0 {
+		if data := jsonwire.UnquoteMayCopy(d.buf[pos:pos+n], true); len(data) > 0 {
+			yield(data, nil)
+		}
+		return nil
+	}
+	atStart := true
+	for {
+		n, err := jsonwire.ConsumeStringResumablePartial(&flags, d.buf[pos:], 0, atStart, true)
+		if err == io.ErrUnexpectedEOF {
+			pos += n
+			if n > 0 {
+				if data := jsonwire.UnquoteMayCopyPartial(d.buf[pos-n:pos], atStart, flags.IsVerbatim()); len(data) > 0 {
+					if !yield(data, nil) {
+						d.peekPos = -1
+						d.peekErr = errStringStreamAborted
+						return nil
+					}
+				} else {
+				}
+			} else {
+			}
+			// Discard previous string content.
+			d.prevStart, d.prevEnd = pos, pos
+			absPos := d.baseOffset + int64(pos)
+			err := d.fetch()
+			pos = int(absPos - d.baseOffset)
+			if err != nil {
+				return err
+			}
+			atStart = false
+			continue
+		}
+		pos += n
+		// No need to set errStringStreamAborted because we know that
+		// we're in a good state to proceed and we're not going to call yield
+		// again.
+		if data := jsonwire.UnquoteMayCopyPartial(d.buf[pos-n:pos], atStart, flags.IsVerbatim()); len(data) > 0 {
+			yield(data, err)
+		}
+
+		// Discard previous string content.
+		d.prevStart, d.prevEnd = pos, pos
+		return err
+	}
+}
+
 func (d *decoderState) ReadToken() (Token, error) {
 	// Determine the next kind.
 	var err error

@@ -93,16 +93,28 @@ func ConsumeLiteral(b []byte, lit string) (n int, err error) {
 // non-zero then we know that the string would be encoded the same way
 // under both v1 or v2 escape semantics.
 func ConsumeSimpleString(b []byte) (n int) {
+	return ConsumeSimpleStringPartial(b, true)
+}
+
+// ConsumeSimpleStringPartial is like ConsumeSimpleString but can
+// also work when not at the start of a string, indicated by atStart.
+func ConsumeSimpleStringPartial(b []byte, atStart bool) (n int) {
 	// NOTE: The arguments and logic are kept simple to keep this inlinable.
-	if len(b) > 0 && b[0] == '"' {
+	if len(b) == 0 {
+		return 0
+	}
+	if atStart {
+		if b[0] != '"' {
+			return 0
+		}
 		n++
-		for len(b) > n && b[n] < utf8.RuneSelf && escapeASCII[b[n]] == 0 {
-			n++
-		}
-		if uint(len(b)) > uint(n) && b[n] == '"' {
-			n++
-			return n
-		}
+	}
+	for len(b) > n && b[n] < utf8.RuneSelf && escapeASCII[b[n]] == 0 {
+		n++
+	}
+	if uint(len(b)) > uint(n) && b[n] == '"' {
+		n++
+		return n
 	}
 	return 0
 }
@@ -116,12 +128,18 @@ func ConsumeString(flags *ValueFlags, b []byte, validateUTF8 bool) (n int, err e
 	return ConsumeStringResumable(flags, b, 0, validateUTF8)
 }
 
-// ConsumeStringResumable is identical to consumeString but supports resuming
+// ConsumeStringResumable is identical to ConsumeString but supports resuming
 // from a previous call that returned io.ErrUnexpectedEOF.
 func ConsumeStringResumable(flags *ValueFlags, b []byte, resumeOffset int, validateUTF8 bool) (n int, err error) {
+	return ConsumeStringResumablePartial(flags, b, resumeOffset, true, validateUTF8)
+}
+
+// ConsumeStringResumable is identical to ConsumeStringResumable but also supports
+// starting midway through the string, indicated by atStart.
+func ConsumeStringResumablePartial(flags *ValueFlags, b []byte, resumeOffset int, atStart bool, validateUTF8 bool) (n int, err error) {
 	// Consume the leading double quote.
 	switch {
-	case resumeOffset > 0:
+	case !atStart:
 		n = resumeOffset // already handled the leading quote
 	case uint(len(b)) == 0:
 		return n, io.ErrUnexpectedEOF
@@ -248,11 +266,20 @@ func ConsumeStringResumable(flags *ValueFlags, b []byte, resumeOffset int, valid
 	return n, io.ErrUnexpectedEOF
 }
 
-// AppendUnquote appends the unescaped form of a JSON string in src to dst.
+// AppendUnquotePartial appends the unescaped form of a JSON string in src to dst.
 // Any invalid UTF-8 within the string will be replaced with utf8.RuneError,
 // but the error will be specified as having encountered such an error.
 // The input must be an entire JSON string with no surrounding whitespace.
+//
+// It returns [io.ErrUnexpectedEOF] if the source terminates before
+// the final quote.
 func AppendUnquote[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, err error) {
+	return AppendUnquotePartial(dst, src, true)
+}
+
+// AppendUnquotePartial is like AppendUnquote except that the string
+// need not start at the beginning (atStart indicates whether it does).
+func AppendUnquotePartial[Bytes ~[]byte | ~string](dst []byte, src Bytes, atStart bool) (v []byte, err error) {
 	dst = slices.Grow(dst, len(src))
 
 	// Consume the leading double quote.
@@ -260,6 +287,7 @@ func AppendUnquote[Bytes ~[]byte | ~string](dst []byte, src Bytes) (v []byte, er
 	switch {
 	case uint(len(src)) == 0:
 		return dst, io.ErrUnexpectedEOF
+	case !atStart:
 	case src[0] == '"':
 		i, n = 1, 1
 	default:
@@ -409,11 +437,26 @@ func hasEscapedUTF16Prefix[Bytes ~[]byte | ~string](b Bytes, lowerSurrogateHalf 
 // Otherwise, a new buffer is allocated for the output.
 // It assumes the input is valid.
 func UnquoteMayCopy(b []byte, isVerbatim bool) []byte {
+	return UnquoteMayCopyPartial(b, true, isVerbatim)
+}
+
+// UnquoteMayCopyPartial is like UnquoteMayCopy except that
+// it can also be used to unquote a string that's not at the start.
+// The atStart argument indicates whether that'sthe case.
+func UnquoteMayCopyPartial(b []byte, atStart bool, isVerbatim bool) []byte {
 	// NOTE: The arguments and logic are kept simple to keep this inlinable.
 	if isVerbatim {
-		return b[len(`"`) : len(b)-len(`"`)]
+		if atStart {
+			b = b[len(`"`):]
+		}
+		// When unquoting a streaming string, the final quote may be
+		// omitted.
+		if len(b) > 0 && b[len(b)-1] == '"' {
+			b = b[:len(b)-len(`"`)]
+		}
+		return b
 	}
-	b, _ = AppendUnquote(nil, b)
+	b, _ = AppendUnquotePartial(nil, b, atStart)
 	return b
 }
 

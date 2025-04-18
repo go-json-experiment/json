@@ -61,10 +61,19 @@ func NeedEscape[Bytes ~[]byte | ~string](src Bytes) bool {
 // If no escape flags are set, then the shortest representable form is used,
 // which is also the canonical form for strings (RFC 8785, section 3.2.2.2).
 func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes, flags *jsonflags.Flags) ([]byte, error) {
-	var i, n int
-	var hasInvalidUTF8 bool
 	dst = slices.Grow(dst, len(`"`)+len(src)+len(`"`))
 	dst = append(dst, '"')
+	dst, err := AppendQuotePartial(dst, src, flags)
+	dst = append(dst, '"')
+	return dst, err
+}
+
+// AppendQuotePartial is like AppendQuote except that it can also be used to encode content
+// within a string. If entire is false, then neither the starting or ending quotes will be appended.
+func AppendQuotePartial[Bytes ~[]byte | ~string](dst []byte, src Bytes, flags *jsonflags.Flags) ([]byte, error) {
+	dst = slices.Grow(dst, len(src))
+	var i, n int
+	var hasInvalidUTF8 bool
 	for uint(len(src)) > uint(n) {
 		if c := src[n]; c < utf8.RuneSelf {
 			// Handle single-byte ASCII.
@@ -104,7 +113,6 @@ func AppendQuote[Bytes ~[]byte | ~string](dst []byte, src Bytes, flags *jsonflag
 		}
 	}
 	dst = append(dst, src[i:n]...)
-	dst = append(dst, '"')
 	if hasInvalidUTF8 && !flags.Get(jsonflags.AllowInvalidUTF8) {
 		return dst, ErrInvalidUTF8
 	}

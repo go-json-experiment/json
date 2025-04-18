@@ -45,6 +45,48 @@ func TestDecoder(t *testing.T) {
 		}
 	}
 }
+
+func TestReadStringAsSeq(t *testing.T) {
+	input := `  "abc\na\u265Aé\""`
+	r := iotest.OneByteReader(strings.NewReader(input))
+	dec := NewDecoder(r)
+
+	var got []string
+	i := 0
+	for data, err := range dec.ReadStringAsSeq() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, string(data))
+		i++
+	}
+	want := []string{
+		`a`, `b`, `c`, "\n", `a`, "\u265A", `é`, `"`,
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestReadStringAsSeqPrematureEnd(t *testing.T) {
+	r := iotest.OneByteReader(strings.NewReader(`"foo"`))
+	dec := NewDecoder(r)
+
+	for _, err := range dec.ReadStringAsSeq() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		break
+	}
+	_, err := dec.ReadToken()
+	if err == nil {
+		t.Fatalf("expected error from ReadToken")
+	}
+	if got, want := err.Error(), "stream aborted"; got != want {
+		t.Fatalf("unexpected error; got %q want %q", got, want)
+	}
+}
+
 func testDecoder(t *testing.T, where jsontest.CasePos, typeName string, td coderTestdataEntry) {
 	dec := NewDecoder(bytes.NewBufferString(td.in))
 	switch typeName {
