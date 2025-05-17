@@ -55,8 +55,8 @@ var Data = func() (entries []Entry) {
 		entry.Name = strings.Join(words, "")
 
 		// Lazily read and decompress the test data.
-		filePath := path.Join("testdata", fi.Name())
 		entry.Data = sync.OnceValue(func() []byte {
+			filePath := path.Join("testdata", fi.Name())
 			b := mustGet(fs.ReadFile(testdataFS, filePath))
 			zr := zstd.NewReader(bytes.NewReader(b))
 			return mustGet(io.ReadAll(zr))
