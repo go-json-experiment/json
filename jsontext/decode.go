@@ -136,7 +136,7 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	case d.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerFrom")
 	}
-	d.s.reset(nil, r, opts...)
+	d.s.reset(d.s.buf[:0], r, opts...)
 }
 
 func (d *decoderState) reset(b []byte, r io.Reader, opts ...Options) {
