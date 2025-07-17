@@ -786,6 +786,9 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					k.SetIterKey(iter)
 					err := marshalKey(enc, k, mo)
 					if err != nil {
+						if errors.Is(err, errSkipMember) {
+							continue
+						}
 						if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
 							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && k.IsNil() {
 							err = enc.WriteToken(jsontext.String(""))
@@ -799,6 +802,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					}
 					v.SetIterValue(iter)
 					if err := marshalVal(enc, v, mo); err != nil {
+						if errors.Is(err, errSkipMember) {
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixString(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixByte(xe.Buf, ',')
+							xe.Tokens.Last--
+							continue
+						}
 						return err
 					}
 				}
@@ -817,6 +828,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					k.SetString(name)
 					v.Set(va.MapIndex(k.Value))
 					if err := marshalVal(enc, v, mo); err != nil {
+						if errors.Is(err, errSkipMember) {
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixString(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixByte(xe.Buf, ',')
+							xe.Tokens.Last--
+							continue
+						}
 						return err
 					}
 				}
@@ -838,6 +857,9 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					v.SetIterValue(iter)
 					err := marshalKey(enc, k, mo)
 					if err != nil {
+						if errors.Is(err, errSkipMember) {
+							continue
+						}
 						if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
 							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && k.IsNil() {
 							err = enc.WriteToken(jsontext.String(""))
@@ -863,6 +885,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 						return err
 					}
 					if err := marshalVal(enc, member.val, mo); err != nil {
+						if errors.Is(err, errSkipMember) {
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixString(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+							xe.Buf = jsonwire.TrimSuffixByte(xe.Buf, ',')
+							xe.Tokens.Last--
+							continue
+						}
 						return err
 					}
 				}
@@ -979,6 +1009,10 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					seen.SetMapIndex(k.Value, reflect.Zero(emptyStructType))
 				}
 				if err != nil {
+					if errors.Is(err, errSkipMember) {
+						dec.ReadToken()
+						continue
+					}
 					if isFatalError(err, uo.Flags) {
 						return err
 					}
@@ -1141,6 +1175,14 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			mo.Flags = flagsOriginal
 			mo.Format = ""
 			if err != nil {
+				if errors.Is(err, errSkipMember) {
+					xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+					xe.Buf = jsonwire.TrimSuffixString(xe.Buf)
+					xe.Buf = jsonwire.TrimSuffixWhitespace(xe.Buf)
+					xe.Buf = jsonwire.TrimSuffixByte(xe.Buf, ',')
+					xe.Tokens.Last--
+					continue
+				}
 				return err
 			}
 
@@ -1304,6 +1346,10 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				uo.Flags = flagsOriginal
 				uo.Format = ""
 				if err != nil {
+					if errors.Is(err, errSkipMember) {
+						dec.ReadToken()
+						continue // skip member
+					}
 					if isFatalError(err, uo.Flags) {
 						return err
 					}
@@ -1444,6 +1490,9 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		for i := range n {
 			v := addressableValue{va.Index(i), false} // indexed slice element is always addressable
 			if err := marshal(enc, v, mo); err != nil {
+				if errors.Is(err, errSkipMember) {
+					continue
+				}
 				return err
 			}
 		}
@@ -1499,6 +1548,10 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 					v.SetZero()
 				}
 				if err := unmarshal(dec, v, uo); err != nil {
+					if errors.Is(err, errSkipMember) {
+						dec.ReadToken()
+						continue // skip member
+					}
 					if isFatalError(err, uo.Flags) {
 						va.SetLen(i)
 						return err
@@ -1550,6 +1603,9 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		for i := range n {
 			v := addressableValue{va.Index(i), va.forcedAddr} // indexed array element is addressable if array is addressable
 			if err := marshal(enc, v, mo); err != nil {
+				if errors.Is(err, errSkipMember) {
+					continue
+				}
 				return err
 			}
 		}
@@ -1595,6 +1651,10 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 					v.SetZero()
 				}
 				if err := unmarshal(dec, v, uo); err != nil {
+					if errors.Is(err, errSkipMember) {
+						dec.ReadToken()
+						continue // skip member
+					}
 					if isFatalError(err, uo.Flags) {
 						return err
 					}

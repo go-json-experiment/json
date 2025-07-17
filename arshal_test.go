@@ -560,6 +560,16 @@ type (
 	pointerAlwaysZero string
 	pointerNeverZero  string
 
+	skipStruct struct {
+		namedString string
+	}
+	skipString  string
+	skipInt     int
+	skipFloat64 float64
+	skipBool    bool
+	skipMap     map[string]string
+	skipSlice   []string
+
 	valueStringer   struct{}
 	pointerStringer struct{}
 
@@ -696,6 +706,49 @@ func (*pointerStringer) String() string { return "" }
 
 func addr[T any](v T) *T {
 	return &v
+}
+
+func (*skipString) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipString) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipInt) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipInt) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipFloat64) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipFloat64) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipBool) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipBool) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipStruct) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipStruct) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipMap) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipMap) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
+}
+func (*skipSlice) MarshalJSONTo(enc *jsontext.Encoder) error {
+	return errSkipMember
+}
+func (*skipSlice) UnmarshalJSONFrom(*jsontext.Decoder) error {
+	return errSkipMember
 }
 
 func mustParseTime(layout, value string) time.Time {
@@ -4544,6 +4597,60 @@ func TestMarshal(t *testing.T) {
 		opts: []Options{invalidFormatOption},
 		in:   time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 		want: `"2000-01-01T00:00:00Z"`,
+	}, {
+		name: jsontest.Name("Skip/Struct"),
+		in: skipStruct{
+			namedString: "this is a named string",
+		},
+		want:    ``,
+		wantErr: errSkipMember,
+	}, {
+		name: jsontest.Name("Skip/StructMember"),
+		in: struct {
+			X1 string
+			Y1 skipString
+			X2 int
+			Y2 skipInt
+			X3 float64
+			Y3 skipFloat64
+			X4 bool
+			Y4 skipBool
+		}{
+			"this is X",
+			"skipString",
+			5,
+			5,
+			0.123,
+			0.123,
+			true,
+			true,
+		},
+		want: `{"X1":"this is X","X2":5,"X3":0.123,"X4":true}`,
+	}, {
+		name: jsontest.Name("Skip/Map"),
+		in: struct {
+			skipMap
+		}{
+			skipMap{"hello": "world"},
+		},
+		want:    ``,
+		wantErr: errSkipMember,
+	}, {
+		name: jsontest.Name("Skip/MapMember"),
+		in: map[string]any{
+			"X1": "X1 should be visible",
+			"X2": skipString("X2 should not be visible"),
+		},
+		want: `{"X1":"X1 should be visible"}`,
+	}, {
+		name:    jsontest.Name("Skip/Slice"),
+		in:      skipSlice{"hello", "world!"},
+		want:    "",
+		wantErr: errSkipMember,
+	}, {
+		name: jsontest.Name("Skip/SliceMember"),
+		in:   []any{"Visible", skipString("Hidden")},
+		want: "[\"Visible\"]",
 	}}
 
 	for _, tt := range tests {
@@ -9110,6 +9217,48 @@ func TestUnmarshal(t *testing.T) {
 		inBuf: `"2000-01-01T00:00:00Z"`,
 		inVal: addr(time.Time{}),
 		want:  addr(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
+	}, {
+		name:    jsontest.Name("Skip/Struct"),
+		inBuf:   `{"X":"this is namedString"}`,
+		inVal:   new(skipStruct),
+		want:    addr(skipStruct{}),
+		wantErr: errSkipMember,
+	}, {
+		name:  jsontest.Name("Skip/StructMember"),
+		inBuf: `{"X":"hello", "Y": "should not show"}`,
+		inVal: new(struct {
+			X string
+			Y skipString
+		}),
+		want: addr(struct {
+			X string
+			Y skipString
+		}{X: "hello"}),
+	}, {
+		name:  jsontest.Name("Skip/MapMember"),
+		inBuf: `{"K1":"hello", "K2": "this is wrong", "K3": 3}`,
+		inVal: addr(map[string]any{
+			"K1": string("should not show"),
+			"K2": skipString("this is correct"),
+			"K3": 0,
+		}),
+		want: addr(map[string]any{
+			"K1": string("hello"),
+			"K2": skipString("this is correct"),
+			"K3": 3,
+		}),
+	}, {
+		name:  jsontest.Name("Skip/ArrayMember"),
+		inBuf: `["X", "Y", "Z"]`,
+		inVal: addr([]skipString{}),
+		// using make is needed to solve issue
+		// *[]json.skipString, &[%!t(json.skipString=) %!t(json.skipString=) %!t(json.skipString=)]
+		want: addr(make([]skipString, 3)),
+	}, {
+		name:  jsontest.Name("Skip/SliceMember"),
+		inBuf: `["X", "Y", "Z"]`,
+		inVal: addr([]skipString{}),
+		want:  addr(make([]skipString, 3)),
 	}}
 
 	for _, tt := range tests {

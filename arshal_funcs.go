@@ -25,6 +25,14 @@ import (
 // [jsontext.Encoder.WriteToken] since such methods mutate the state.
 var SkipFunc = errors.New("json: skip function")
 
+// SkipMember may be returned by [MarshalToFunc] and [UnmarshalFromFunc] functions.
+//
+// Any function that returns SkipMember must not cause observable side effects
+// on the provided [jsontext.Encoder] or [jsontext.Decoder].
+// When a member (json property) is skipped, the corresponding member name (key name)
+// is also removed from the byte stream.
+var errSkipMember = errors.New("json: skip member")
+
 var errSkipMutation = errors.New("must not read or write any tokens when skipping")
 var errNonSingularValue = errors.New("must read or write exactly one value")
 
