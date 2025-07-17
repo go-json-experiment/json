@@ -193,6 +193,9 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			prevDepth, prevLength := xe.Tokens.DepthLength()
 			xe.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := va.Addr().Interface().(MarshalerTo).MarshalJSONTo(enc)
+			if errors.Is(err, errSkipMember) { // should this apply to v1 and v2?
+				return err
+			}
 			xe.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xe.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
@@ -283,6 +286,9 @@ func makeMethodArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 			prevDepth, prevLength := xd.Tokens.DepthLength()
 			xd.Flags.Set(jsonflags.WithinArshalCall | 1)
 			err := va.Addr().Interface().(UnmarshalerFrom).UnmarshalJSONFrom(dec)
+			if errors.Is(err, errSkipMember) {
+				return err
+			}
 			xd.Flags.Set(jsonflags.WithinArshalCall | 0)
 			currDepth, currLength := xd.Tokens.DepthLength()
 			if (prevDepth != currDepth || prevLength+1 != currLength) && err == nil {
