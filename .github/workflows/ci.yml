@@ -17,6 +17,8 @@ jobs:
     - name: Test386
       run: go test ./...
       env: {GOARCH: "386"}
+    - name: BuildJSONv2
+      run: go build -tags=goexperiment.jsonv2 ./...
     - name: TestInline
       run: go test -v -run=TestInline
       env: {TEST_INLINE: true}
