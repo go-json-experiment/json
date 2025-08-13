@@ -3217,6 +3217,11 @@ func TestMarshal(t *testing.T) {
 		in:   struct{ X any }{[8]byte{}},
 		want: `{"X":"called"}`,
 	}, {
+		name:    jsontest.Name("Interfaces/Any/Float/NaN"),
+		in:      struct{ X any }{math.NaN()},
+		want:    `{"X"`,
+		wantErr: EM(fmt.Errorf("unsupported value: %v", math.NaN())).withType(0, reflect.TypeFor[float64]()).withPos(`{"X":`, "/X"),
+	}, {
 		name: jsontest.Name("Interfaces/Any/Maps/Nil"),
 		in:   struct{ X any }{map[string]any(nil)},
 		want: `{"X":{}}`,
@@ -3278,7 +3283,7 @@ func TestMarshal(t *testing.T) {
 			return struct{ X any }{m}
 		}(),
 		want:    `{"X"` + strings.Repeat(`:{""`, startDetectingCyclesAfter),
-		wantErr: EM(internal.ErrCycle).withPos(`{"X":`+strings.Repeat(`{"":`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/", startDetectingCyclesAfter))).withType(0, T[any]()),
+		wantErr: EM(internal.ErrCycle).withPos(`{"X":`+strings.Repeat(`{"":`, startDetectingCyclesAfter), "/X"+jsontext.Pointer(strings.Repeat("/", startDetectingCyclesAfter))).withType(0, T[map[string]any]()),
 	}, {
 		name: jsontest.Name("Interfaces/Any/Slices/Nil"),
 		in:   struct{ X any }{[]any(nil)},
