@@ -57,7 +57,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				return newMarshalErrorBefore(enc, t, errors.New("no default representation (see https://go.dev/issue/71631); specify an explicit format"))
 			}
 
-			m.td, _ = reflect.TypeAssert[time.Duration](va.Value)
+			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
+			m.td = *va.Addr().Interface().(*time.Duration)
 			k := stringOrNumberKind(!m.isNumeric() || xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, true, m.appendMarshal); err != nil {
 				if !isSyntacticError(err) && !export.IsIOError(err) {
@@ -84,7 +85,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 			stringify := !u.isNumeric() || xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 			var flags jsonwire.ValueFlags
-			td, _ := reflect.TypeAssert[*time.Duration](va.Addr())
+			td := va.Addr().Interface().(*time.Duration)
 			val, err := xd.ReadValue(&flags)
 			if err != nil {
 				return err
@@ -128,7 +129,8 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 				}
 			}
 
-			m.tt, _ = reflect.TypeAssert[time.Time](va.Value)
+			// TODO(https://go.dev/issue/62121): Use reflect.Value.AssertTo.
+			m.tt = *va.Addr().Interface().(*time.Time)
 			k := stringOrNumberKind(!m.isNumeric() || xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers))
 			if err := xe.AppendRaw(k, !m.hasCustomFormat(), m.appendMarshal); err != nil {
 				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -154,7 +156,7 @@ func makeTimeArshaler(fncs *arshaler, t reflect.Type) *arshaler {
 
 			stringify := !u.isNumeric() || xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers)
 			var flags jsonwire.ValueFlags
-			tt, _ := reflect.TypeAssert[*time.Time](va.Addr())
+			tt := va.Addr().Interface().(*time.Time)
 			val, err := xd.ReadValue(&flags)
 			if err != nil {
 				return err

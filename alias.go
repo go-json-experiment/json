@@ -724,10 +724,6 @@ func UnmarshalFromFunc[T any](fn func(*jsontext.Decoder, T) error) *Unmarshalers
 //
 // It is recommended that implementations return a buffer that is safe
 // for the caller to retain and potentially mutate.
-//
-// If the returned error is a [SemanticError], then unpopulated fields
-// of the error may be populated by [json] with additional context.
-// Errors of other types are wrapped within a [SemanticError].
 type Marshaler = json.Marshaler
 
 // MarshalerTo is implemented by types that can marshal themselves.
@@ -739,11 +735,6 @@ type Marshaler = json.Marshaler
 //
 // The implementation must write only one JSON value to the Encoder and
 // must not retain the pointer to [jsontext.Encoder].
-//
-// If the returned error is a [SemanticError], then unpopulated fields
-// of the error may be populated by [json] with additional context.
-// Errors of other types are wrapped within a [SemanticError],
-// unless it is an IO error.
 type MarshalerTo = json.MarshalerTo
 
 // Unmarshaler is implemented by types that can unmarshal themselves.
@@ -757,10 +748,6 @@ type MarshalerTo = json.MarshalerTo
 // unmarshaling into a pre-populated value.
 //
 // Implementations must not retain or mutate the input []byte.
-//
-// If the returned error is a [SemanticError], then unpopulated fields
-// of the error may be populated by [json] with additional context.
-// Errors of other types are wrapped within a [SemanticError].
 type Unmarshaler = json.Unmarshaler
 
 // UnmarshalerFrom is implemented by types that can unmarshal themselves.
@@ -775,11 +762,6 @@ type Unmarshaler = json.Unmarshaler
 // unmarshaling into a pre-populated value.
 //
 // Implementations must not retain the pointer to [jsontext.Decoder].
-//
-// If the returned error is a [SemanticError], then unpopulated fields
-// of the error may be populated by [json] with additional context.
-// Errors of other types are wrapped within a [SemanticError],
-// unless it is a [jsontext.SyntacticError] or an IO error.
 type UnmarshalerFrom = json.UnmarshalerFrom
 
 // ErrUnknownName indicates that a JSON object member could not be
@@ -801,11 +783,6 @@ var ErrUnknownName = json.ErrUnknownName
 
 // SemanticError describes an error determining the meaning
 // of JSON data as Go data or vice-versa.
-//
-// If a [Marshaler], [MarshalerTo], [Unmarshaler], or [UnmarshalerFrom] method
-// returns a SemanticError when called by the [json] package,
-// then the ByteOffset, JSONPointer, and GoType fields are automatically
-// populated by the calling context if they are the zero value.
 //
 // The contents of this error as produced by this package may change over time.
 type SemanticError = json.SemanticError

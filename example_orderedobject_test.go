@@ -53,9 +53,7 @@ func (obj *OrderedObject[V]) MarshalJSONTo(enc *jsontext.Encoder) error {
 // UnmarshalJSONFrom decodes a JSON object from dec into obj.
 func (obj *OrderedObject[V]) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if k := dec.PeekKind(); k != '{' {
-		// The [json] package automatically populates relevant fields
-		// in a [json.SemanticError] to provide additional context.
-		return &json.SemanticError{JSONKind: k}
+		return fmt.Errorf("expected object start, but encountered %v", k)
 	}
 	if _, err := dec.ReadToken(); err != nil {
 		return err
