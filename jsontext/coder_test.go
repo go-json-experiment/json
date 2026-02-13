@@ -486,7 +486,7 @@ func testCoderInterleaved(t *testing.T, where jsontest.CasePos, modeName string,
 				// Retry as a ReadToken call.
 				expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'
 				if expectError {
-					if ok := errors.As(err, new(*SyntacticError)); !ok {
+					if _, ok := errors.AsType[*SyntacticError](err); !ok {
 						t.Fatalf("%s: Decoder.ReadToken error is %T, want %T", where, err, new(SyntacticError))
 					}
 					tickTock = !tickTock

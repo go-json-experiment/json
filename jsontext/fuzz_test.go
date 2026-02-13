@@ -54,7 +54,7 @@ func FuzzCoder(f *testing.F) {
 				val, err := dec.ReadValue()
 				if err != nil {
 					if expectError := dec.PeekKind() == '}' || dec.PeekKind() == ']'; expectError {
-						if ok := errors.As(err, new(*SyntacticError)); ok {
+						if _, ok := errors.AsType[*SyntacticError](err); ok {
 							continue
 						}
 					}
