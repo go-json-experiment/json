@@ -8,6 +8,7 @@ package json_test
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -550,8 +551,8 @@ func ExampleWithUnmarshalers_rawNumber() {
 				if dec.PeekKind() == '0' {
 					*val = jsontext.Value(nil)
 				}
-				// Return SkipFunc to fallback on default unmarshal behavior.
-				return json.SkipFunc
+				// Return ErrUnsupported to fallback on default unmarshal behavior.
+				return errors.ErrUnsupported
 			}),
 		))
 	if err != nil {
@@ -604,8 +605,8 @@ func ExampleWithUnmarshalers_recordOffsets() {
 				n := len(unread) - len(bytes.TrimLeft(unread, " \n\r\t,:"))
 				tunnel.ByteOffset = dec.InputOffset() + int64(n)
 
-				// Return SkipFunc to fallback on default unmarshal behavior.
-				return json.SkipFunc
+				// Return ErrUnsupported to fallback on default unmarshal behavior.
+				return errors.ErrUnsupported
 			}),
 		))
 	if err != nil {
