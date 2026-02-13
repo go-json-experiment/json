@@ -118,17 +118,6 @@
 //     while many non-fallback fields may be specified. This option
 //     must not be specified with any other option (including the JSON name).
 //
-//   - unknown: The "unknown" option is a specialized variant
-//     of the inlined fallback to indicate that this Go struct field
-//     contains any number of unknown JSON object members. The field type must
-//     be a [jsontext.Value], map[~string]T, or an unnamed pointer to such types.
-//     If [DiscardUnknownMembers] is specified when marshaling,
-//     the contents of this field are ignored.
-//     If [RejectUnknownMembers] is specified when unmarshaling,
-//     any unknown object members are rejected regardless of whether
-//     an inlined fallback with the "unknown" option exists. This option
-//     must not be specified with any other option (including the JSON name).
-//
 //   - format: The "format" option specifies a format flag
 //     used to specialize the formatting of the field value.
 //     The option is a key-value pair specified as "format:value" where
@@ -862,7 +851,6 @@ type SemanticError = json.SemanticError
 //   - [FormatNilMapAsNull] affects marshaling only
 //   - [OmitZeroStructFields] affects marshaling only
 //   - [MatchCaseInsensitiveNames] affects marshaling and unmarshaling
-//   - [DiscardUnknownMembers] affects marshaling only
 //   - [RejectUnknownMembers] affects unmarshaling only
 //   - [WithMarshalers] affects marshaling only
 //   - [WithUnmarshalers] affects unmarshaling only
@@ -971,18 +959,8 @@ func MatchCaseInsensitiveNames(v bool) Options {
 	return json.MatchCaseInsensitiveNames(v)
 }
 
-// DiscardUnknownMembers specifies that marshaling should ignore any
-// JSON object members stored in Go struct fields dedicated to storing
-// unknown JSON object members.
-//
-// This only affects marshaling and is ignored when unmarshaling.
-func DiscardUnknownMembers(v bool) Options {
-	return json.DiscardUnknownMembers(v)
-}
-
 // RejectUnknownMembers specifies that unknown members should be rejected
-// when unmarshaling a JSON object, regardless of whether there is a field
-// to store unknown members.
+// when unmarshaling a JSON object.
 //
 // This only affects unmarshaling and is ignored when marshaling.
 func RejectUnknownMembers(v bool) Options {
