@@ -598,17 +598,6 @@ func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error)
 	return json.UnmarshalDecode(in, out, opts...)
 }
 
-// SkipFunc may be returned by [MarshalToFunc] and [UnmarshalFromFunc] functions.
-//
-// Any function that returns SkipFunc must not cause observable side effects
-// on the provided [jsontext.Encoder] or [jsontext.Decoder].
-// For example, it is permissible to call [jsontext.Decoder.PeekKind],
-// but not permissible to call [jsontext.Decoder.ReadToken] or
-// [jsontext.Encoder.WriteToken] since such methods mutate the state.
-//
-// Deprecated: Use [errors.ErrUnsupported] instead.
-var SkipFunc = json.SkipFunc
-
 // Marshalers is a list of functions that may override the marshal behavior
 // of specific types. Populate [WithMarshalers] to use it with
 // [Marshal], [MarshalWrite], or [MarshalEncode].
