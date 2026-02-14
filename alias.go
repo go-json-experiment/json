@@ -276,6 +276,8 @@ import (
 //
 //   - If the value type implements [MarshalerTo],
 //     then the MarshalJSONTo method is called to encode the value.
+//     If the method returns [errors.ErrUnsupported],
+//     then the input is encoded according to subsequent rules.
 //
 //   - If the value type implements [Marshaler],
 //     then the MarshalJSON method is called to encode the value.
@@ -435,6 +437,8 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //
 //   - If the value type implements [UnmarshalerFrom],
 //     then the UnmarshalJSONFrom method is called to decode the JSON value.
+//     If the method returns [errors.ErrUnsupported],
+//     then the input is decoded according to subsequent rules.
 //
 //   - If the value type implements [Unmarshaler],
 //     then the UnmarshalJSON method is called to decode the JSON value.
@@ -720,13 +724,20 @@ type Marshaler = json.Marshaler
 // then MarshalerTo takes precedence. In such a case, both implementations
 // should aim to have equivalent behavior for the default marshal options.
 //
-// The implementation must write only one JSON value to the Encoder and
-// must not retain the pointer to [jsontext.Encoder].
+// The implementation must write only one JSON value to the Encoder.
+// Alternatively, it may return [errors.ErrUnsupported] without mutating
+// the Encoder. The "json" package calling the method will
+// use the next available JSON representation for the receiver type.
+// Implementations must not retain the pointer to [jsontext.Encoder].
 //
 // If the returned error is a [SemanticError], then unpopulated fields
 // of the error may be populated by [json] with additional context.
 // Errors of other types are wrapped within a [SemanticError],
 // unless it is an IO error.
+//
+// The MarshalJSONTo method should not be directly called as it may
+// return sentinel errors that need special handling.
+// Users should instead call [MarshalEncode], which handles such cases.
 type MarshalerTo = json.MarshalerTo
 
 // Unmarshaler is implemented by types that can unmarshal themselves.
@@ -756,13 +767,19 @@ type Unmarshaler = json.Unmarshaler
 // The implementation must read only one JSON value from the Decoder.
 // It is recommended that UnmarshalJSONFrom implement merge semantics when
 // unmarshaling into a pre-populated value.
-//
+// Alternatively, it may return [errors.ErrUnsupported] without mutating
+// the Decoder. The "json" package calling the method will
+// use the next available JSON representation for the receiver type.
 // Implementations must not retain the pointer to [jsontext.Decoder].
 //
 // If the returned error is a [SemanticError], then unpopulated fields
 // of the error may be populated by [json] with additional context.
 // Errors of other types are wrapped within a [SemanticError],
 // unless it is a [jsontext.SyntacticError] or an IO error.
+//
+// The UnmarshalJSONFrom method should not be directly called as it may
+// return sentinel errors that need special handling.
+// Users should instead call [UnmarshalDecode], which handles such cases.
 type UnmarshalerFrom = json.UnmarshalerFrom
 
 // ErrUnknownName indicates that a JSON object member could not be
