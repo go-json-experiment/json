@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -33,15 +34,15 @@ func TestEncoder(t *testing.T) {
 }
 func testEncoder(t *testing.T, where jsontest.CasePos, formatName, typeName string, td coderTestdataEntry) {
 	var want string
-	var opts []Options
+	var opts []Option
 	dst := new(bytes.Buffer)
-	opts = append(opts, jsonflags.OmitTopLevelNewline|1)
+	opts = append(opts, jsonopts.OmitTopLevelNewline(true))
 	want = td.outCompacted
 	switch formatName {
 	case "Indented":
 		opts = append(opts, Multiline(true))
-		opts = append(opts, WithIndentPrefix("\t"))
-		opts = append(opts, WithIndent("    "))
+		opts = append(opts, IndentPrefix("\t"))
+		opts = append(opts, Indent("    "))
 		if td.outIndented != "" {
 			want = td.outIndented
 		}
@@ -143,7 +144,7 @@ type encoderMethodCall struct {
 
 var encoderErrorTestdata = []struct {
 	name    jsontest.CaseName
-	opts    []Options
+	opts    []Option
 	calls   []encoderMethodCall
 	wantOut string
 }{{
@@ -208,21 +209,21 @@ var encoderErrorTestdata = []struct {
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
-	opts: []Options{AllowInvalidUTF8(true)},
+	opts: []Option{AllowInvalidUTF8(true)},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Value"),
-	opts: []Options{AllowInvalidUTF8(true)},
+	opts: []Option{AllowInvalidUTF8(true)},
 	calls: []encoderMethodCall{
 		{Value("\"living\xde\xad\xbe\xef\""), nil, ""},
 	},
 	wantOut: "\"living\xde\xad\ufffd\ufffd\"\n",
 }, {
 	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
-	opts: []Options{AllowInvalidUTF8(false)},
+	opts: []Option{AllowInvalidUTF8(false)},
 	calls: []encoderMethodCall{
 		{String("living\xde\xad\xbe\xef"), E(jsonwire.ErrInvalidUTF8), ""},
 		{Value("\"living\xde\xad\xbe\xef\""), E(jsonwire.ErrInvalidUTF8).withPos("\"living\xde\xad", ""), ""},
@@ -341,7 +342,7 @@ var encoderErrorTestdata = []struct {
 	wantOut: `{"0":0,"1":1}` + "\n" + `{"0":0,"1":1}` + "\n",
 }, {
 	name: jsontest.Name("ValidObject/DuplicateNames"),
-	opts: []Options{AllowDuplicateNames(true)},
+	opts: []Option{AllowDuplicateNames(true)},
 	calls: []encoderMethodCall{
 		{BeginObject, nil, ""},
 		{String("0"), nil, ""},
@@ -404,45 +405,45 @@ var encoderErrorTestdata = []struct {
 	wantOut: "[]\n",
 }, {
 	name:    jsontest.Name("Format/Object/SpaceAfterColon"),
-	opts:    []Options{SpaceAfterColon(true)},
+	opts:    []Option{SpaceAfterColon(true)},
 	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
 	wantOut: "{\"fizz\": \"buzz\",\"wizz\": \"wuzz\"}\n",
 }, {
 	name:    jsontest.Name("Format/Object/SpaceAfterComma"),
-	opts:    []Options{SpaceAfterComma(true)},
+	opts:    []Option{SpaceAfterComma(true)},
 	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
 	wantOut: "{\"fizz\":\"buzz\", \"wizz\":\"wuzz\"}\n",
 }, {
 	name:    jsontest.Name("Format/Object/SpaceAfterColonAndComma"),
-	opts:    []Options{SpaceAfterColon(true), SpaceAfterComma(true)},
+	opts:    []Option{SpaceAfterColon(true), SpaceAfterComma(true)},
 	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
 	wantOut: "{\"fizz\": \"buzz\", \"wizz\": \"wuzz\"}\n",
 }, {
 	name:    jsontest.Name("Format/Object/NoSpaceAfterColon+SpaceAfterComma+Multiline"),
-	opts:    []Options{SpaceAfterColon(false), SpaceAfterComma(true), Multiline(true)},
+	opts:    []Option{SpaceAfterColon(false), SpaceAfterComma(true), Multiline(true)},
 	calls:   []encoderMethodCall{{Value(`{"fizz":"buzz","wizz":"wuzz"}`), nil, ""}},
 	wantOut: "{\n\t\"fizz\":\"buzz\", \n\t\"wizz\":\"wuzz\"\n}\n",
 }, {
 	name:    jsontest.Name("Format/Array/SpaceAfterComma"),
-	opts:    []Options{SpaceAfterComma(true)},
+	opts:    []Option{SpaceAfterComma(true)},
 	calls:   []encoderMethodCall{{Value(`["fizz","buzz"]`), nil, ""}},
 	wantOut: "[\"fizz\", \"buzz\"]\n",
 }, {
 	name:    jsontest.Name("Format/Array/NoSpaceAfterComma+Multiline"),
-	opts:    []Options{SpaceAfterComma(false), Multiline(true)},
+	opts:    []Option{SpaceAfterComma(false), Multiline(true)},
 	calls:   []encoderMethodCall{{Value(`["fizz","buzz"]`), nil, ""}},
 	wantOut: "[\n\t\"fizz\",\n\t\"buzz\"\n]\n",
 }, {
 	name: jsontest.Name("Format/ReorderWithWhitespace"),
-	opts: []Options{
+	opts: []Option{
 		AllowDuplicateNames(true),
 		AllowInvalidUTF8(true),
 		ReorderRawObjects(true),
 		SpaceAfterComma(true),
 		SpaceAfterColon(false),
 		Multiline(true),
-		WithIndentPrefix("    "),
-		WithIndent("\t"),
+		IndentPrefix("    "),
+		Indent("\t"),
 		PreserveRawStrings(true),
 	},
 	calls: []encoderMethodCall{
@@ -462,14 +463,14 @@ var encoderErrorTestdata = []struct {
 	wantOut: "[\n    \t[\n    \t\t{\n    \t\t\t\"alpha\":\"bravo\", \n    \t\t\t\"fizz\":\"buzz\", \n    \t\t\t\"zap\":{\n    \t\t\t\t\"xxx\":1, \n    \t\t\t\t\"xxx\":22, \n    \t\t\t\t\"xxx\":333\n    \t\t\t}, \n    \t\t\t\"zip\":{\n    \t\t\t\t\"x\xfdx\":123, \n    \t\t\t\t\"x\xfex\":123, \n    \t\t\t\t\"x\xffx\":123\n    \t\t\t}\n    \t\t}\n    \t]\n    ]\n",
 }, {
 	name: jsontest.Name("Format/CanonicalizeRawInts"),
-	opts: []Options{CanonicalizeRawInts(true), SpaceAfterComma(true)},
+	opts: []Option{CanonicalizeRawInts(true), SpaceAfterComma(true)},
 	calls: []encoderMethodCall{
 		{Value(`[0.100,5.0,1E6,-9223372036854775808,-10,-1,-0,0,1,10,9223372036854775807]`), nil, ""},
 	},
 	wantOut: "[0.100, 5.0, 1E6, -9223372036854776000, -10, -1, 0, 0, 1, 10, 9223372036854776000]\n",
 }, {
 	name: jsontest.Name("Format/CanonicalizeRawFloats"),
-	opts: []Options{CanonicalizeRawFloats(true), SpaceAfterComma(true)},
+	opts: []Option{CanonicalizeRawFloats(true), SpaceAfterComma(true)},
 	calls: []encoderMethodCall{
 		{Value(`[0.100,5.0,1E6,-9223372036854775808,-10,-1,-0,0,1,10,9223372036854775807]`), nil, ""},
 	},
@@ -704,7 +705,7 @@ func TestEncoderErrors(t *testing.T) {
 		})
 	}
 }
-func testEncoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, calls []encoderMethodCall, wantOut string) {
+func testEncoderErrors(t *testing.T, where jsontest.CasePos, opts []Option, calls []encoderMethodCall, wantOut string) {
 	dst := new(bytes.Buffer)
 	enc := NewEncoder(dst, opts...)
 	for i, call := range calls {

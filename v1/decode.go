@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	jsonv2 "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 	"github.com/go-json-experiment/json/jsontext"
 )
@@ -199,7 +200,7 @@ var numberType = reflect.TypeFor[Number]()
 // MarshalJSONTo implements [jsonv2.MarshalerTo].
 func (n Number) MarshalJSONTo(enc *jsontext.Encoder) error {
 	opts := enc.Options()
-	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
+	stringify, _ := jsonopts.GetOption[jsonv2.StringifyNumbers](opts)
 	if k, n := enc.StackIndex(enc.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name
 	}
@@ -224,7 +225,7 @@ func (n Number) MarshalJSONTo(enc *jsontext.Encoder) error {
 // UnmarshalJSONFrom implements [jsonv2.UnmarshalerFrom].
 func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	opts := dec.Options()
-	stringify, _ := jsonv2.GetOption(opts, jsonv2.StringifyNumbers)
+	stringify, _ := jsonopts.GetOption[jsonv2.StringifyNumbers](opts)
 	if k, n := dec.StackIndex(dec.StackDepth()); k == '{' && n%2 == 0 {
 		stringify = true // expecting a JSON object name
 	}
@@ -236,7 +237,7 @@ func (n *Number) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	k := val.Kind()
 	switch k {
 	case 'n':
-		if legacy, _ := jsonv2.GetOption(opts, MergeWithLegacySemantics); !legacy {
+		if legacy, _ := jsonopts.GetOption[MergeWithLegacySemantics](opts); !legacy {
 			*n = ""
 		}
 		return nil

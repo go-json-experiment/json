@@ -43,28 +43,28 @@ func (export) Encoder(e *Encoder) *encoderState { return &e.s }
 // Decoder returns a pointer to the underlying decoderState.
 func (export) Decoder(d *Decoder) *decoderState { return &d.s }
 
-func (export) GetBufferedEncoder(o ...Options) *Encoder {
+func (export) GetBufferedEncoder(o ...Option) *Encoder {
 	return getBufferedEncoder(o...)
 }
 func (export) PutBufferedEncoder(e *Encoder) {
 	putBufferedEncoder(e)
 }
 
-func (export) GetStreamingEncoder(w io.Writer, o ...Options) *Encoder {
+func (export) GetStreamingEncoder(w io.Writer, o ...Option) *Encoder {
 	return getStreamingEncoder(w, o...)
 }
 func (export) PutStreamingEncoder(e *Encoder) {
 	putStreamingEncoder(e)
 }
 
-func (export) GetBufferedDecoder(b []byte, o ...Options) *Decoder {
+func (export) GetBufferedDecoder(b []byte, o ...Option) *Decoder {
 	return getBufferedDecoder(b, o...)
 }
 func (export) PutBufferedDecoder(d *Decoder) {
 	putBufferedDecoder(d)
 }
 
-func (export) GetStreamingDecoder(r io.Reader, o ...Options) *Decoder {
+func (export) GetStreamingDecoder(r io.Reader, o ...Option) *Decoder {
 	return getStreamingDecoder(r, o...)
 }
 func (export) PutStreamingDecoder(d *Decoder) {

@@ -88,7 +88,7 @@ type encodeBuffer struct {
 //
 // If w is a [bytes.Buffer], then the encoder appends directly into the buffer
 // without copying the contents from an intermediate buffer.
-func NewEncoder(w io.Writer, opts ...Options) *Encoder {
+func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 	e := new(Encoder)
 	e.Reset(w, opts...)
 	return e
@@ -98,7 +98,7 @@ func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 // configured with the provided options. Reset must not be called on
 // a Encoder passed to the [encoding/json/v2.MarshalerTo.MarshalJSONTo] method
 // or the [encoding/json/v2.MarshalToFunc] function.
-func (e *Encoder) Reset(w io.Writer, opts ...Options) {
+func (e *Encoder) Reset(w io.Writer, opts ...Option) {
 	switch {
 	case e == nil:
 		panic("jsontext: invalid nil Encoder")
@@ -115,7 +115,7 @@ func (e *Encoder) Reset(w io.Writer, opts ...Options) {
 	e.s.reset(b, w, opts...)
 }
 
-func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
+func (e *encoderState) reset(b []byte, w io.Writer, opts ...Option) {
 	e.state.reset()
 	e.encodeBuffer = encodeBuffer{Buf: b, wr: w, availBuffer: e.availBuffer, bufStats: e.bufStats}
 	if bb, ok := w.(*bytes.Buffer); ok && bb != nil {
@@ -146,8 +146,8 @@ func (e *encoderState) reset(b []byte, w io.Writer, opts ...Options) {
 // a [encoding/json/v2.MarshalerTo.MarshalJSONTo] method call or
 // a [encoding/json/v2.MarshalToFunc] function call,
 // then the returned options are only valid within the call.
-func (e *Encoder) Options() Options {
-	return &e.s.Struct
+func (e *Encoder) Options() jsonopts.Options {
+	return e.s.Struct.AsOptions()
 }
 
 // NeedFlush determines whether to flush at this point.

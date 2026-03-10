@@ -25,7 +25,7 @@ import (
 //
 // The dst and src may overlap.
 // If an error is reported, then the entirety of src is appended to dst.
-func AppendFormat(dst, src []byte, opts ...Options) ([]byte, error) {
+func AppendFormat(dst, src []byte, opts ...Option) ([]byte, error) {
 	e := getBufferedEncoder(opts...)
 	defer putBufferedEncoder(e)
 	e.s.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
@@ -74,7 +74,7 @@ func (v Value) String() string {
 //   - [AllowInvalidUTF8]
 //
 // All other options are ignored.
-func (v Value) IsValid(opts ...Options) bool {
+func (v Value) IsValid(opts ...Option) bool {
 	// TODO: Document support for [WithByteLimit] and [WithDepthLimit].
 	d := getBufferedDecoder(v, opts...)
 	defer putBufferedDecoder(d)
@@ -101,21 +101,21 @@ func (v Value) IsValid(opts ...Options) bool {
 //   - [SpaceAfterColon]
 //   - [SpaceAfterComma]
 //   - [Multiline]
-//   - [WithIndent]
-//   - [WithIndentPrefix]
+//   - [Indent]
+//   - [IndentPrefix]
 //
 // All other options are ignored.
 //
 // It is guaranteed to succeed if the value is valid according to the same options.
 // If the value is already formatted, then the buffer is not mutated.
-func (v *Value) Format(opts ...Options) error {
+func (v *Value) Format(opts ...Option) error {
 	// TODO: Document support for [WithByteLimit] and [WithDepthLimit].
 	return v.format(opts, nil)
 }
 
-// format accepts two []Options to avoid the allocation appending them together.
+// format accepts two []Option to avoid the allocation appending them together.
 // It is equivalent to v.Format(append(opts1, opts2...)...).
-func (v *Value) format(opts1, opts2 []Options) error {
+func (v *Value) format(opts1, opts2 []Option) error {
 	e := getBufferedEncoder(opts1...)
 	defer putBufferedEncoder(e)
 	e.s.Join(opts2...)
@@ -142,8 +142,8 @@ func (v *Value) format(opts1, opts2 []Options) error {
 //
 // Any options specified by the caller are applied after the initial set
 // and may deliberately override prior options.
-func (v *Value) Compact(opts ...Options) error {
-	return v.format([]Options{
+func (v *Value) Compact(opts ...Option) error {
+	return v.format([]Option{
 		AllowDuplicateNames(true),
 		AllowInvalidUTF8(true),
 		PreserveRawStrings(true),
@@ -165,8 +165,8 @@ func (v *Value) Compact(opts ...Options) error {
 //
 // Any options specified by the caller are applied after the initial set
 // and may deliberately override prior options.
-func (v *Value) Indent(opts ...Options) error {
-	return v.format([]Options{
+func (v *Value) Indent(opts ...Option) error {
+	return v.format([]Option{
 		AllowDuplicateNames(true),
 		AllowInvalidUTF8(true),
 		PreserveRawStrings(true),
@@ -205,8 +205,8 @@ func (v *Value) Indent(opts ...Options) error {
 // of JSON integers, additionally set [CanonicalizeRawInts] to false:
 //
 //	v.Canonicalize(jsontext.CanonicalizeRawInts(false))
-func (v *Value) Canonicalize(opts ...Options) error {
-	return v.format([]Options{
+func (v *Value) Canonicalize(opts ...Option) error {
+	return v.format([]Option{
 		CanonicalizeRawInts(true),
 		CanonicalizeRawFloats(true),
 		ReorderRawObjects(true),

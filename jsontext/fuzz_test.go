@@ -143,7 +143,7 @@ func FuzzValueFormat(f *testing.F) {
 	}
 
 	// isValid reports whether b is valid according to the specified options.
-	isValid := func(b []byte, opts ...Options) bool {
+	isValid := func(b []byte, opts ...Option) bool {
 		d := NewDecoder(bytes.NewReader(b), opts...)
 		_, errVal := d.ReadValue()
 		_, errEOF := d.ReadToken()
@@ -163,7 +163,7 @@ func FuzzValueFormat(f *testing.F) {
 		return out
 	}
 
-	allOptions := []Options{
+	allOptions := []Option{
 		AllowDuplicateNames(true),
 		AllowInvalidUTF8(true),
 		EscapeForHTML(true),
@@ -175,8 +175,8 @@ func FuzzValueFormat(f *testing.F) {
 		SpaceAfterColon(true),
 		SpaceAfterComma(true),
 		Multiline(true),
-		WithIndent("\t"),
-		WithIndentPrefix("    "),
+		Indent("\t"),
+		IndentPrefix("    "),
 	}
 
 	f.Fuzz(func(t *testing.T, seed int64, b []byte) {
@@ -224,7 +224,7 @@ func FuzzValueFormat(f *testing.F) {
 		}
 
 		// Random options should not result in a panic.
-		var opts []Options
+		var opts []Option
 		rn := rand.New(rand.NewSource(seed))
 		for _, opt := range allOptions {
 			if rn.Intn(len(allOptions)/4) == 0 {

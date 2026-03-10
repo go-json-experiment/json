@@ -115,8 +115,8 @@ func appendIndent(dst, src []byte, prefix, indent string) ([]byte, error) {
 		jsontext.AllowInvalidUTF8(true),
 		jsontext.PreserveRawStrings(true),
 		jsontext.Multiline(true),
-		jsontext.WithIndentPrefix(prefix),
-		jsontext.WithIndent(indent))
+		jsontext.IndentPrefix(prefix),
+		jsontext.Indent(indent))
 	if err != nil {
 		return dst[:dstLen], transformSyntacticError(err)
 	}

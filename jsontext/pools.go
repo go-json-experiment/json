@@ -41,7 +41,7 @@ type bufferStatistics struct {
 	prevLen int // length of previous buffer
 }
 
-func getBufferedEncoder(opts ...Options) *Encoder {
+func getBufferedEncoder(opts ...Option) *Encoder {
 	e := bufferedEncoderPool.Get().(*Encoder)
 	if e.s.Buf == nil {
 		// Round up to nearest 2ⁿ to make best use of malloc size classes.
@@ -87,7 +87,7 @@ func putBufferedEncoder(e *Encoder) {
 	bufferedEncoderPool.Put(e)
 }
 
-func getStreamingEncoder(w io.Writer, opts ...Options) *Encoder {
+func getStreamingEncoder(w io.Writer, opts ...Option) *Encoder {
 	if _, ok := w.(*bytes.Buffer); ok {
 		e := bytesBufferEncoderPool.Get().(*Encoder)
 		e.s.reset(nil, w, opts...) // buffer taken from bytes.Buffer
@@ -129,7 +129,7 @@ var (
 	bytesBufferDecoderPool = bufferedDecoderPool
 )
 
-func getBufferedDecoder(b []byte, opts ...Options) *Decoder {
+func getBufferedDecoder(b []byte, opts ...Option) *Decoder {
 	d := bufferedDecoderPool.Get().(*Decoder)
 	d.s.reset(b, nil, opts...)
 	return d
@@ -139,7 +139,7 @@ func putBufferedDecoder(d *Decoder) {
 	bufferedDecoderPool.Put(d)
 }
 
-func getStreamingDecoder(r io.Reader, opts ...Options) *Decoder {
+func getStreamingDecoder(r io.Reader, opts ...Option) *Decoder {
 	if _, ok := r.(*bytes.Buffer); ok {
 		d := bytesBufferDecoderPool.Get().(*Decoder)
 		d.s.reset(nil, r, opts...) // buffer taken from bytes.Buffer

@@ -436,7 +436,7 @@ func Example_serveHTTP() {
 // will not know how to use that external implementation.
 // For example, the [google.golang.org/protobuf/encoding/protojson] package
 // implements JSON for all [google.golang.org/protobuf/proto.Message] types.
-// [WithMarshalers] and [WithUnmarshalers] can be used
+// Caller-specified [Marshalers] and [Unmarshalers] options can be used
 // to configure "json" and "protojson" to cooperate together.
 func Example_protoJSON() {
 	// Let protoMessage be "google.golang.org/protobuf/proto".Message.
@@ -468,7 +468,7 @@ func Example_protoJSON() {
 	// Marshal using protojson.Marshal for proto.Message types.
 	b, err := json.Marshal(&value,
 		// Use protojson.Marshal as a type-specific marshaler.
-		json.WithMarshalers(json.MarshalFunc(protojson.Marshal)))
+		json.MarshalFunc(protojson.Marshal))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -476,7 +476,7 @@ func Example_protoJSON() {
 	// Unmarshal using protojson.Unmarshal for proto.Message types.
 	err = json.Unmarshal(b, &value,
 		// Use protojson.Unmarshal as a type-specific unmarshaler.
-		json.WithUnmarshalers(json.UnmarshalFunc(protojson.Unmarshal)))
+		json.UnmarshalFunc(protojson.Unmarshal))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -486,7 +486,7 @@ func Example_protoJSON() {
 // without any exported fields (e.g., errors constructed with [errors.New]).
 // Some applications, may desire to marshal an error as a JSON string
 // even if these errors cannot be unmarshaled.
-func ExampleWithMarshalers_errors() {
+func ExampleMarshalers_errors() {
 	// Response to serialize with some Go errors encountered.
 	response := []struct {
 		Result string `json:",omitzero"`
@@ -499,7 +499,7 @@ func ExampleWithMarshalers_errors() {
 
 	b, err := json.Marshal(&response,
 		// Intercept every attempt to marshal an error type.
-		json.WithMarshalers(json.JoinMarshalers(
+		json.JoinMarshalers(
 			// Suppose we consider strconv.NumError to be a safe to serialize:
 			// this type-specific marshal function intercepts this type
 			// and encodes the error message as a JSON string.
@@ -512,7 +512,7 @@ func ExampleWithMarshalers_errors() {
 			json.MarshalFunc(func(error) ([]byte, error) {
 				return []byte(`"internal server error"`), nil
 			}),
-		)),
+		),
 		jsontext.Multiline(true)) // expand for readability
 	if err != nil {
 		log.Fatal(err)
@@ -537,24 +537,23 @@ func ExampleWithMarshalers_errors() {
 // preserved when unmarshaling. This can be accomplished using a type-specific
 // unmarshal function that intercepts all any types and pre-populates the
 // interface value with a [jsontext.Value], which can represent a JSON number exactly.
-func ExampleWithUnmarshalers_rawNumber() {
+func ExampleUnmarshalers_rawNumber() {
 	// Input with JSON numbers beyond the representation of a float64.
 	const input = `[false, 1e-1000, 3.141592653589793238462643383279, 1e+1000, true]`
 
 	var value any
 	err := json.Unmarshal([]byte(input), &value,
 		// Intercept every attempt to unmarshal into the any type.
-		json.WithUnmarshalers(
-			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any) error {
-				// If the next value to be decoded is a JSON number,
-				// then provide a concrete Go type to unmarshal into.
-				if dec.PeekKind() == '0' {
-					*val = jsontext.Value(nil)
-				}
-				// Return ErrUnsupported to fallback on default unmarshal behavior.
-				return errors.ErrUnsupported
-			}),
-		))
+		json.UnmarshalFromFunc(func(dec *jsontext.Decoder, val *any) error {
+			// If the next value to be decoded is a JSON number,
+			// then provide a concrete Go type to unmarshal into.
+			if dec.PeekKind() == '0' {
+				*val = jsontext.Value(nil)
+			}
+			// Return ErrUnsupported to fallback on default unmarshal behavior.
+			return errors.ErrUnsupported
+		}),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -573,7 +572,7 @@ func ExampleWithUnmarshalers_rawNumber() {
 // When using JSON for parsing configuration files,
 // the parsing logic often needs to report an error with a line and column
 // indicating where in the input an error occurred.
-func ExampleWithUnmarshalers_recordOffsets() {
+func ExampleUnmarshalers_recordOffsets() {
 	// Hypothetical configuration file.
 	const input = `[
 		{"Source": "192.168.0.100:1234", "Destination": "192.168.0.1:80"},
@@ -592,23 +591,22 @@ func ExampleWithUnmarshalers_recordOffsets() {
 	var tunnels []Tunnel
 	err := json.Unmarshal([]byte(input), &tunnels,
 		// Intercept every attempt to unmarshal into the Tunnel type.
-		json.WithUnmarshalers(
-			json.UnmarshalFromFunc(func(dec *jsontext.Decoder, tunnel *Tunnel) error {
-				// Decoder.InputOffset reports the offset after the last token,
-				// but we want to record the offset before the next token.
-				//
-				// Call Decoder.PeekKind to buffer enough to reach the next token.
-				// Add the number of leading whitespace, commas, and colons
-				// to locate the start of the next token.
-				dec.PeekKind()
-				unread := dec.UnreadBuffer()
-				n := len(unread) - len(bytes.TrimLeft(unread, " \n\r\t,:"))
-				tunnel.ByteOffset = dec.InputOffset() + int64(n)
+		json.UnmarshalFromFunc(func(dec *jsontext.Decoder, tunnel *Tunnel) error {
+			// Decoder.InputOffset reports the offset after the last token,
+			// but we want to record the offset before the next token.
+			//
+			// Call Decoder.PeekKind to buffer enough to reach the next token.
+			// Add the number of leading whitespace, commas, and colons
+			// to locate the start of the next token.
+			dec.PeekKind()
+			unread := dec.UnreadBuffer()
+			n := len(unread) - len(bytes.TrimLeft(unread, " \n\r\t,:"))
+			tunnel.ByteOffset = dec.InputOffset() + int64(n)
 
-				// Return ErrUnsupported to fallback on default unmarshal behavior.
-				return errors.ErrUnsupported
-			}),
-		))
+			// Return ErrUnsupported to fallback on default unmarshal behavior.
+			return errors.ErrUnsupported
+		}),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

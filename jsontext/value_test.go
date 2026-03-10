@@ -179,7 +179,7 @@ func TestValueMethods(t *testing.T) {
 			}
 
 			gotIndented := Value(td.in)
-			gotIndentErr := gotIndented.Indent(WithIndentPrefix("\t"), WithIndent("    "))
+			gotIndentErr := gotIndented.Indent(IndentPrefix("\t"), Indent("    "))
 			if string(gotIndented) != td.wantIndented {
 				t.Errorf("%s: Value.Indent = %s, want %s", td.name.Where, gotIndented, td.wantIndented)
 			}

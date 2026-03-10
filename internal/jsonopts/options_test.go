@@ -7,15 +7,14 @@
 package jsonopts_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/internal/jsonflags"
 	. "github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/jsontext"
 )
 
+/* MUSTDO
 func makeFlags(f ...jsonflags.Bools) (fs jsonflags.Flags) {
 	for _, f := range f {
 		fs.Set(f)
@@ -25,14 +24,14 @@ func makeFlags(f ...jsonflags.Bools) (fs jsonflags.Flags) {
 
 func TestJoin(t *testing.T) {
 	tests := []struct {
-		in            Options
+		in            Option
 		excludeCoders bool
 		want          *Struct
 	}{{
-		in:   jsonflags.AllowInvalidUTF8 | 1,
+		in:   AllowInvalidUTF8(true),
 		want: &Struct{Flags: makeFlags(jsonflags.AllowInvalidUTF8 | 1)},
 	}, {
-		in: jsonflags.Multiline | 0,
+		in: Multiline(false),
 		want: &Struct{
 			Flags: makeFlags(jsonflags.AllowInvalidUTF8|1, jsonflags.Multiline|0)},
 	}, {
@@ -205,12 +204,6 @@ func TestGet(t *testing.T) {
 	}
 }
 
-var sink struct {
-	Bool       bool
-	String     string
-	Marshalers *json.Marshalers
-}
-
 func BenchmarkGetBool(b *testing.B) {
 	b.ReportAllocs()
 	opts := json.DefaultOptionsV2()
@@ -232,5 +225,21 @@ func BenchmarkGetMarshalers(b *testing.B) {
 	opts := json.JoinOptions(json.DefaultOptionsV2(), json.WithMarshalers(nil))
 	for range b.N {
 		sink.Marshalers, sink.Bool = json.GetOption(opts, json.WithMarshalers)
+	}
+}
+*/
+
+var sink struct {
+	Bool       bool
+	String     string
+	Marshalers *json.Marshalers
+}
+
+func BenchmarkGetBool(b *testing.B) {
+	b.ReportAllocs()
+	opts := json.DefaultOptionsV2()
+	for range b.N {
+		v, ok := GetOption[jsontext.AllowDuplicateNames](opts)
+		sink.Bool, sink.Bool = bool(v), ok
 	}
 }

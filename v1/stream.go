@@ -12,13 +12,14 @@ import (
 	"io"
 
 	jsonv2 "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/jsontext"
 )
 
 // A Decoder reads and decodes JSON values from an input stream.
 type Decoder struct {
 	dec  *jsontext.Decoder
-	opts jsonv2.Options
+	opts jsonopts.Options
 	err  error
 
 	// hadPeeked reports whether [Decoder.More] was called.
@@ -47,8 +48,8 @@ func NewDecoder(r io.Reader) *Decoder {
 // UseNumber causes the Decoder to unmarshal a number into an
 // interface value as a [Number] instead of as a float64.
 func (dec *Decoder) UseNumber() {
-	if useNumber, _ := jsonv2.GetOption(dec.opts, unmarshalAnyWithRawNumber); !useNumber {
-		dec.opts = jsonv2.JoinOptions(dec.opts, unmarshalAnyWithRawNumber(true))
+	if useNumber, _ := jsonopts.GetOption[unmarshalAnyWithRawNumber](dec.opts); !useNumber {
+		dec.opts = jsonopts.JoinOptions(dec.opts, unmarshalAnyWithRawNumber(true))
 	}
 }
 
@@ -56,8 +57,8 @@ func (dec *Decoder) UseNumber() {
 // is a struct and the input contains object keys which do not match any
 // non-ignored, exported fields in the destination.
 func (dec *Decoder) DisallowUnknownFields() {
-	if reject, _ := jsonv2.GetOption(dec.opts, jsonv2.RejectUnknownMembers); !reject {
-		dec.opts = jsonv2.JoinOptions(dec.opts, jsonv2.RejectUnknownMembers(true))
+	if reject, _ := jsonopts.GetOption[jsonv2.RejectUnknownMembers](dec.opts); !reject {
+		dec.opts = jsonopts.JoinOptions(dec.opts, jsonv2.RejectUnknownMembers(true))
 	}
 }
 
@@ -93,7 +94,7 @@ func (dec *Decoder) Buffered() io.Reader {
 // An Encoder writes JSON values to an output stream.
 type Encoder struct {
 	w    io.Writer
-	opts jsonv2.Options
+	opts jsonopts.Options
 	err  error
 
 	indentBuf bytes.Buffer
@@ -146,7 +147,7 @@ func (enc *Encoder) Encode(v any) error {
 // value as if indented by the package-level function Indent(dst, src, prefix, indent).
 // Calling SetIndent("", "") disables indentation.
 func (enc *Encoder) SetIndent(prefix, indent string) {
-	// NOTE: Do not rely on the newer [jsontext.WithIndent] option since
+	// NOTE: Do not rely on the newer [jsontext.Indent] option since
 	// the v1 [Indent] behavior has historical bugs that cannot be changed
 	// for backward compatibility reasons.
 	enc.indentPrefix = prefix
@@ -161,8 +162,8 @@ func (enc *Encoder) SetIndent(prefix, indent string) {
 // In non-HTML settings where the escaping interferes with the readability
 // of the output, SetEscapeHTML(false) disables this behavior.
 func (enc *Encoder) SetEscapeHTML(on bool) {
-	if escape, _ := jsonv2.GetOption(enc.opts, jsontext.EscapeForHTML); escape != on {
-		enc.opts = jsonv2.JoinOptions(enc.opts, jsontext.EscapeForHTML(on))
+	if escape, _ := jsonopts.GetOption[jsontext.EscapeForHTML](enc.opts); bool(escape) != on {
+		enc.opts = jsonopts.JoinOptions(enc.opts, jsontext.EscapeForHTML(on))
 	}
 }
 
@@ -228,7 +229,7 @@ func (dec *Decoder) Token() (Token, error) {
 	case '"':
 		return tok.String(), nil
 	case '0':
-		if useNumber, _ := jsonv2.GetOption(dec.opts, unmarshalAnyWithRawNumber); useNumber {
+		if useNumber, _ := jsonopts.GetOption[unmarshalAnyWithRawNumber](dec.opts); useNumber {
 			return Number(tok.String()), nil
 		}
 		return tok.Float(), nil

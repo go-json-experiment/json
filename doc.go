@@ -15,10 +15,10 @@
 // by writing to or reading from an [io.Writer] or [io.Reader].
 // [MarshalEncode] and [UnmarshalDecode] operate on JSON text
 // by encoding to or decoding from a [jsontext.Encoder] or [jsontext.Decoder].
-// [Options] may be passed to each of the marshal or unmarshal functions
+// [Option] values may be passed to each of the marshal or unmarshal functions
 // to configure the semantic behavior of marshaling and unmarshaling
 // (i.e., alter how JSON data is understood as Go data and vice versa).
-// [jsontext.Options] may also be passed to the marshal or unmarshal functions
+// [jsontext.Option] values may also be passed to the marshal or unmarshal functions
 // to configure the syntactic behavior of encoding or decoding.
 //
 // The data types of JSON are mapped to/from the data types of Go based on
@@ -56,7 +56,7 @@
 // "json" struct field tag, where the tag is a comma separated list of options.
 // As a special case, if the entire tag is `json:"-"`,
 // then the field is ignored with regard to its JSON representation.
-// Some options also have equivalent behavior controlled by a caller-specified [Options].
+// Some options also have equivalent behavior controlled by a caller-specified [Option].
 // Field-specified options take precedence over caller-specified options.
 //
 // The first option is the JSON object name override for the Go struct field.

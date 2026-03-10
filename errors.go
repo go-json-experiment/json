@@ -96,7 +96,7 @@ type SemanticError struct {
 // coder is implemented by [jsontext.Encoder] or [jsontext.Decoder].
 type coder interface {
 	StackPointer() jsontext.Pointer
-	Options() Options
+	Options() jsonopts.Options
 }
 
 // newInvalidFormatError wraps err in a SemanticError because
@@ -107,7 +107,7 @@ type coder interface {
 // then this automatically skips the next value when unmarshaling
 // to ensure that the value is fully consumed.
 func newInvalidFormatError(c coder, t reflect.Type) error {
-	err := fmt.Errorf("invalid format flag %q", c.Options().(*jsonopts.Struct).Format)
+	err := fmt.Errorf("invalid format flag %q", jsonopts.AsStruct(c.Options()).Format)
 	switch c := c.(type) {
 	case *jsontext.Encoder:
 		err = newMarshalErrorBefore(c, t, err)

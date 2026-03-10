@@ -48,7 +48,7 @@ var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 //
 // The input value is encoded as JSON according the following rules:
 //
-//   - If any type-specific functions in a [WithMarshalers] option match
+//   - If any type-specific functions in a [Marshalers] option match
 //     the value type, then those functions are called to encode the value.
 //     If all applicable functions return [errors.ErrUnsupported],
 //     then the value is encoded according to subsequent rules.
@@ -170,7 +170,7 @@ var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 //
 // JSON cannot represent cyclic data structures and Marshal does not handle them.
 // Passing cyclic structures will result in an error.
-func Marshal(in any, opts ...Options) (out []byte, err error) {
+func Marshal(in any, opts ...Option) (out []byte, err error) {
 	enc := export.GetBufferedEncoder(opts...)
 	defer export.PutBufferedEncoder(enc)
 	xe := export.Encoder(enc)
@@ -186,7 +186,7 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 // marshal and encode options (while ignoring unmarshal or decode options).
 // It does not terminate the output with a newline.
 // See [Marshal] for details about the conversion of a Go value into JSON.
-func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
+func MarshalWrite(out io.Writer, in any, opts ...Option) (err error) {
 	enc := export.GetStreamingEncoder(out, opts...)
 	defer export.PutStreamingEncoder(enc)
 	xe := export.Encoder(enc)
@@ -206,7 +206,7 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 // they must have already been specified on the provided [jsontext.Encoder].
 //
 // See [Marshal] for details about the conversion of a Go value into JSON.
-func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
+func MarshalEncode(out *jsontext.Encoder, in any, opts ...Option) (err error) {
 	xe := export.Encoder(out)
 	if len(opts) > 0 {
 		optsOriginal := xe.Struct
@@ -265,7 +265,7 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 //
 // The input is decoded into the output according the following rules:
 //
-//   - If any type-specific functions in a [WithUnmarshalers] option match
+//   - If any type-specific functions in a [Unmarshalers] option match
 //     the value type, then those functions are called to decode the JSON
 //     value. If all applicable functions return [errors.ErrUnsupported],
 //     then the input is decoded according to subsequent rules.
@@ -407,7 +407,7 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 // for any JSON kind other than an object.
 // For JSON objects, the input object is merged into the destination value
 // where matching object members recursively apply merge semantics.
-func Unmarshal(in []byte, out any, opts ...Options) (err error) {
+func Unmarshal(in []byte, out any, opts ...Option) (err error) {
 	dec := export.GetBufferedDecoder(in, opts...)
 	defer export.PutBufferedDecoder(dec)
 	xd := export.Decoder(dec)
@@ -424,7 +424,7 @@ func Unmarshal(in []byte, out any, opts ...Options) (err error) {
 // It consumes the entirety of [io.Reader] until [io.EOF] is encountered,
 // without reporting an error for EOF. The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
-func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
+func UnmarshalRead(in io.Reader, out any, opts ...Option) (err error) {
 	dec := export.GetStreamingDecoder(in, opts...)
 	defer export.PutStreamingDecoder(dec)
 	xd := export.Decoder(dec)
@@ -447,7 +447,7 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 // If there are no more top-level JSON values, it reports [io.EOF].
 // The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
-func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
+func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Option) (err error) {
 	xd := export.Decoder(in)
 	if len(opts) > 0 {
 		optsOriginal := xd.Struct

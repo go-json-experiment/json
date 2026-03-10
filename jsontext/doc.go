@@ -44,7 +44,7 @@
 // The [Encoder] and [Decoder] types contain methods to read or write the next
 // [Token] or [Value] in a sequence. They maintain a state machine to validate
 // whether the sequence of JSON tokens and/or values produces a valid JSON.
-// [Options] may be passed to the [NewEncoder] or [NewDecoder] constructors
+// [Option] values may be passed to the [NewEncoder] or [NewDecoder] constructors
 // to configure the syntactic behavior of encoding and decoding.
 //
 // # Terminology

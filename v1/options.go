@@ -178,7 +178,6 @@ import (
 	"encoding"
 
 	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/jsontext"
 )
@@ -188,19 +187,19 @@ import (
 var (
 	_ encoding.TextMarshaler
 	_ encoding.TextUnmarshaler
-	_ jsonv2.Options
-	_ jsontext.Options
+	_ jsonv2.Option
+	_ jsontext.Option
 )
 
-// Options are a set of options to configure the v2 "json" package
+// Option are a set of options to configure the v2 "json" package
 // to operate with v1 semantics for particular features.
 // Values of this type can be passed to v2 functions like
 // [jsonv2.Marshal] or [jsonv2.Unmarshal].
-// Instead of referencing this type, use [jsonv2.Options].
+// Instead of referencing this type, use [jsonv2.Option].
 //
 // See the "Migrating to v2" section for guidance on how to migrate usage
 // of "json" from using v1 to using v2 instead.
-type Options = jsonopts.Options
+type Option = jsonopts.Option
 
 // DefaultOptionsV1 is the full set of all options that define v1 semantics.
 // It is equivalent to the following boolean options being set to true:
@@ -234,8 +233,8 @@ type Options = jsonopts.Options
 //
 //	jsonv2.Marshal(v, jsonv1.DefaultOptionsV1())
 //	jsonv2.Unmarshal(b, v, jsonv1.DefaultOptionsV1())
-func DefaultOptionsV1() Options {
-	return &jsonopts.DefaultOptionsV1
+func DefaultOptionsV1() jsonopts.Options {
+	return jsonopts.DefaultOptionsV1.AsOptions()
 }
 
 // CallMethodsWithLegacySemantics specifies that calling of type-provided
@@ -273,13 +272,7 @@ func DefaultOptionsV1() Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func CallMethodsWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.CallMethodsWithLegacySemantics | 1
-	} else {
-		return jsonflags.CallMethodsWithLegacySemantics | 0
-	}
-}
+type CallMethodsWithLegacySemantics = jsonopts.CallMethodsWithLegacySemantics
 
 // FormatByteArrayAsArray specifies that a Go [N]byte is
 // formatted as as a normal Go array in contrast to the v2 default of
@@ -289,13 +282,7 @@ func CallMethodsWithLegacySemantics(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func FormatByteArrayAsArray(v bool) Options {
-	if v {
-		return jsonflags.FormatByteArrayAsArray | 1
-	} else {
-		return jsonflags.FormatByteArrayAsArray | 0
-	}
-}
+type FormatByteArrayAsArray = jsonopts.FormatByteArrayAsArray
 
 // FormatBytesWithLegacySemantics specifies that handling of
 // []~byte and [N]~byte types follow legacy semantics:
@@ -316,13 +303,7 @@ func FormatByteArrayAsArray(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func FormatBytesWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.FormatBytesWithLegacySemantics | 1
-	} else {
-		return jsonflags.FormatBytesWithLegacySemantics | 0
-	}
-}
+type FormatBytesWithLegacySemantics = jsonopts.FormatBytesWithLegacySemantics
 
 // FormatDurationAsNano specifies that a [time.Duration] is
 // formatted as a JSON number representing the number of nanoseconds
@@ -332,14 +313,7 @@ func FormatBytesWithLegacySemantics(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func FormatDurationAsNano(v bool) Options {
-	// TODO(https://go.dev/issue/71631): Update documentation with v2 behavior.
-	if v {
-		return jsonflags.FormatDurationAsNano | 1
-	} else {
-		return jsonflags.FormatDurationAsNano | 0
-	}
-}
+type FormatDurationAsNano = jsonopts.FormatDurationAsNano
 
 // MatchCaseSensitiveDelimiter specifies that underscores and dashes are
 // not to be ignored when performing case-insensitive name matching which
@@ -350,13 +324,7 @@ func FormatDurationAsNano(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func MatchCaseSensitiveDelimiter(v bool) Options {
-	if v {
-		return jsonflags.MatchCaseSensitiveDelimiter | 1
-	} else {
-		return jsonflags.MatchCaseSensitiveDelimiter | 0
-	}
-}
+type MatchCaseSensitiveDelimiter = jsonopts.MatchCaseSensitiveDelimiter
 
 // MergeWithLegacySemantics specifies that unmarshaling into a non-zero
 // Go value follows legacy semantics:
@@ -378,13 +346,7 @@ func MatchCaseSensitiveDelimiter(v bool) Options {
 //
 // This only affects unmarshaling and is ignored when marshaling.
 // The v1 default is true.
-func MergeWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.MergeWithLegacySemantics | 1
-	} else {
-		return jsonflags.MergeWithLegacySemantics | 0
-	}
-}
+type MergeWithLegacySemantics = jsonopts.MergeWithLegacySemantics
 
 // OmitEmptyWithLegacySemantics specifies that the `omitempty` tag option
 // follows a definition of empty where a field is omitted if the Go value is
@@ -400,13 +362,7 @@ func MergeWithLegacySemantics(v bool) Options {
 //
 // This only affects marshaling and is ignored when unmarshaling.
 // The v1 default is true.
-func OmitEmptyWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.OmitEmptyWithLegacySemantics | 1
-	} else {
-		return jsonflags.OmitEmptyWithLegacySemantics | 0
-	}
-}
+type OmitEmptyWithLegacySemantics = jsonopts.OmitEmptyWithLegacySemantics
 
 // ParseBytesWithLooseRFC4648 specifies that when parsing
 // binary data encoded as "base32" or "base64",
@@ -417,13 +373,7 @@ func OmitEmptyWithLegacySemantics(v bool) Options {
 //
 // This only affects unmarshaling and is ignored when marshaling.
 // The v1 default is true.
-func ParseBytesWithLooseRFC4648(v bool) Options {
-	if v {
-		return jsonflags.ParseBytesWithLooseRFC4648 | 1
-	} else {
-		return jsonflags.ParseBytesWithLooseRFC4648 | 0
-	}
-}
+type ParseBytesWithLooseRFC4648 = jsonopts.ParseBytesWithLooseRFC4648
 
 // ParseTimeWithLooseRFC3339 specifies that a [time.Time]
 // parses according to loose adherence to RFC 3339.
@@ -434,13 +384,7 @@ func ParseBytesWithLooseRFC4648(v bool) Options {
 //
 // This only affects unmarshaling and is ignored when marshaling.
 // The v1 default is true.
-func ParseTimeWithLooseRFC3339(v bool) Options {
-	if v {
-		return jsonflags.ParseTimeWithLooseRFC3339 | 1
-	} else {
-		return jsonflags.ParseTimeWithLooseRFC3339 | 0
-	}
-}
+type ParseTimeWithLooseRFC3339 = jsonopts.ParseTimeWithLooseRFC3339
 
 // ReportErrorsWithLegacySemantics specifies that Marshal and Unmarshal
 // should report errors with legacy semantics:
@@ -486,13 +430,7 @@ func ParseTimeWithLooseRFC3339(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func ReportErrorsWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.ReportErrorsWithLegacySemantics | 1
-	} else {
-		return jsonflags.ReportErrorsWithLegacySemantics | 0
-	}
-}
+type ReportErrorsWithLegacySemantics = jsonopts.ReportErrorsWithLegacySemantics
 
 // StringifyWithLegacySemantics specifies that the `string` tag option
 // may stringify bools and string values. It only takes effect on fields
@@ -512,13 +450,7 @@ func ReportErrorsWithLegacySemantics(v bool) Options {
 //
 // This affects either marshaling or unmarshaling.
 // The v1 default is true.
-func StringifyWithLegacySemantics(v bool) Options {
-	if v {
-		return jsonflags.StringifyWithLegacySemantics | 1
-	} else {
-		return jsonflags.StringifyWithLegacySemantics | 0
-	}
-}
+type StringifyWithLegacySemantics = jsonopts.StringifyWithLegacySemantics
 
 // UnmarshalArrayFromAnyLength specifies that Go arrays can be unmarshaled
 // from input JSON arrays of any length. If the JSON array is too short,
@@ -527,20 +459,8 @@ func StringifyWithLegacySemantics(v bool) Options {
 //
 // This only affects unmarshaling and is ignored when marshaling.
 // The v1 default is true.
-func UnmarshalArrayFromAnyLength(v bool) Options {
-	if v {
-		return jsonflags.UnmarshalArrayFromAnyLength | 1
-	} else {
-		return jsonflags.UnmarshalArrayFromAnyLength | 0
-	}
-}
+type UnmarshalArrayFromAnyLength = jsonopts.UnmarshalArrayFromAnyLength
 
 // unmarshalAnyWithRawNumber specifies that unmarshaling a JSON number into
 // an empty Go interface should use the Number type instead of a float64.
-func unmarshalAnyWithRawNumber(v bool) Options {
-	if v {
-		return jsonflags.UnmarshalAnyWithRawNumber | 1
-	} else {
-		return jsonflags.UnmarshalAnyWithRawNumber | 0
-	}
-}
+type unmarshalAnyWithRawNumber = jsonopts.UnmarshalAnyWithRawNumber

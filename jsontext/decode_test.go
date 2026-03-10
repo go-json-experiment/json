@@ -19,7 +19,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/go-json-experiment/json/internal/jsonflags"
+	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsontest"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -185,7 +185,7 @@ type decoderMethodCall struct {
 
 var decoderErrorTestdata = []struct {
 	name       jsontest.CaseName
-	opts       []Options
+	opts       []Option
 	in         string
 	calls      []decoderMethodCall
 	wantOffset int
@@ -289,7 +289,7 @@ var decoderErrorTestdata = []struct {
 	},
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Token"),
-	opts: []Options{AllowInvalidUTF8(true)},
+	opts: []Option{AllowInvalidUTF8(true)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', rawToken("\"living\xde\xad\xbe\xef\""), nil, ""},
@@ -297,7 +297,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
 	name: jsontest.Name("ValidString/AllowInvalidUTF8/Value"),
-	opts: []Options{AllowInvalidUTF8(true)},
+	opts: []Option{AllowInvalidUTF8(true)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', Value("\"living\xde\xad\xbe\xef\""), nil, ""},
@@ -305,7 +305,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len("\"living\xde\xad\xbe\xef\""),
 }, {
 	name: jsontest.Name("InvalidString/RejectInvalidUTF8"),
-	opts: []Options{AllowInvalidUTF8(false)},
+	opts: []Option{AllowInvalidUTF8(false)},
 	in:   "\"living\xde\xad\xbe\xef\"",
 	calls: []decoderMethodCall{
 		{'"', zeroToken, E(jsonwire.ErrInvalidUTF8).withPos("\"living\xde\xad", ""), ""},
@@ -564,7 +564,7 @@ var decoderErrorTestdata = []struct {
 	wantOffset: len(`{"0":0,"1":1}`),
 }, {
 	name: jsontest.Name("ValidObject/DuplicateNames"),
-	opts: []Options{AllowDuplicateNames(true)},
+	opts: []Option{AllowDuplicateNames(true)},
 	in:   `{"0":0,"0":0} `,
 	calls: []decoderMethodCall{
 		{'{', BeginObject, nil, ""},
@@ -997,7 +997,7 @@ func TestDecoderErrors(t *testing.T) {
 		})
 	}
 }
-func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, in string, calls []decoderMethodCall, wantOffset int) {
+func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Option, in string, calls []decoderMethodCall, wantOffset int) {
 	src := bytes.NewBufferString(in)
 	dec := NewDecoder(src, opts...)
 	for i, call := range calls {
@@ -1119,7 +1119,7 @@ func TestBlockingDecoder(t *testing.T) {
 	defer r.Close()
 	defer w.Close()
 
-	enc := NewEncoder(w, jsonflags.OmitTopLevelNewline|1)
+	enc := NewEncoder(w, jsonopts.OmitTopLevelNewline(true))
 	dec := NewDecoder(r)
 
 	errCh := make(chan error)

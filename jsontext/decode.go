@@ -119,7 +119,7 @@ type decodeBuffer struct {
 // If r is a [bytes.Buffer], then the decoder parses directly from the buffer
 // without first copying the contents to an intermediate buffer.
 // Additional writes to the buffer must not occur while the decoder is in use.
-func NewDecoder(r io.Reader, opts ...Options) *Decoder {
+func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	d := new(Decoder)
 	d.Reset(r, opts...)
 	return d
@@ -129,7 +129,7 @@ func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 // configured with the provided options. Reset must not be called on an
 // a Decoder passed to the [encoding/json/v2.UnmarshalerFrom.UnmarshalJSONFrom] method
 // or the [encoding/json/v2.UnmarshalFromFunc] function.
-func (d *Decoder) Reset(r io.Reader, opts ...Options) {
+func (d *Decoder) Reset(r io.Reader, opts ...Option) {
 	switch {
 	case d == nil:
 		panic("jsontext: invalid nil Decoder")
@@ -146,7 +146,7 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	d.s.reset(b, r, opts...)
 }
 
-func (d *decoderState) reset(b []byte, r io.Reader, opts ...Options) {
+func (d *decoderState) reset(b []byte, r io.Reader, opts ...Option) {
 	d.state.reset()
 	d.decodeBuffer = decodeBuffer{buf: b, rd: r}
 	opts2 := jsonopts.Struct{} // avoid mutating d.Struct in case it is part of opts
@@ -162,8 +162,8 @@ func (d *decoderState) reset(b []byte, r io.Reader, opts ...Options) {
 // a [encoding/json/v2.UnmarshalerFrom.UnmarshalJSONFrom] method call or
 // a [encoding/json/v2.UnmarshalFromFunc] function call,
 // then the returned options are only valid within the call.
-func (d *Decoder) Options() Options {
-	return &d.s.Struct
+func (d *Decoder) Options() jsonopts.Options {
+	return d.s.Struct.AsOptions()
 }
 
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")

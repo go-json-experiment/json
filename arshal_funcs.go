@@ -23,11 +23,20 @@ var errUnsupportedMutation = errors.New("unsupported calls must not read or writ
 var errNonSingularValue = errors.New("must read or write exactly one value")
 
 // Marshalers is a list of functions that may override the marshal behavior
-// of specific types. Populate [WithMarshalers] to use it with
+// of specific types.
+//
+// A *Marshalers implements [Option] and can be passed to
 // [Marshal], [MarshalWrite], or [MarshalEncode].
+// A single *Marshalers value represents a single [Option] value.
+// Passing multiple *Marshalers arguments will result in the last
+// value specified overriding previous values.
+// Use [JoinMarshalers] to combine multiple marshalers into a single value.
+//
 // A nil *Marshalers is equivalent to an empty list.
 // There are no exported fields or methods on Marshalers.
 type Marshalers = typedMarshalers
+
+var _ Option = (*Marshalers)(nil)
 
 // JoinMarshalers constructs a flattened list of marshal functions.
 // If multiple functions in the list are applicable for a value of a given type,
@@ -46,11 +55,20 @@ func JoinMarshalers(ms ...*Marshalers) *Marshalers {
 }
 
 // Unmarshalers is a list of functions that may override the unmarshal behavior
-// of specific types. Populate [WithUnmarshalers] to use it with
+// of specific types.
+//
+// A *Unmarshalers implements [Option] and can be passed to
 // [Unmarshal], [UnmarshalRead], or [UnmarshalDecode].
+// A single *Unmarshalers value represents a single [Option] value.
+// Passing multiple *Unmarshalers arguments will result in the last
+// value specified overriding previous values.
+// Use [JoinUnmarshalers] to combine multiple unmarshalers into a single value.
+//
 // A nil *Unmarshalers is equivalent to an empty list.
 // There are no exported fields or methods on Unmarshalers.
 type Unmarshalers = typedUnmarshalers
+
+var _ Option = (*Unmarshalers)(nil)
 
 // JoinUnmarshalers constructs a flattened list of unmarshal functions.
 // If multiple functions in the list are applicable for a value of a given type,
@@ -71,6 +89,7 @@ func JoinUnmarshalers(us ...*Unmarshalers) *Unmarshalers {
 type typedMarshalers = typedArshalers[jsontext.Encoder]
 type typedUnmarshalers = typedArshalers[jsontext.Decoder]
 type typedArshalers[Coder any] struct {
+	jsonopts.OptionMarker
 	nonComparable
 
 	fncVals  []typedArshaler[Coder]

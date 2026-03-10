@@ -604,7 +604,7 @@ func runValue(tb testing.TB) {
 
 	methods := []struct {
 		name   string
-		format func(*jsontext.Value, ...jsontext.Options) error
+		format func(*jsontext.Value, ...jsontext.Option) error
 	}{
 		{"Compact", (*jsontext.Value).Compact},
 		{"Indent", (*jsontext.Value).Indent},
