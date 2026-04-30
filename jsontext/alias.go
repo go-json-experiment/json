@@ -479,7 +479,10 @@ func String(s string) Token {
 	return jsontext.String(s)
 }
 
-// Float constructs a Token representing a JSON number.
+// Float constructs a Token representing a JSON number as
+// a 64-bit floating-point number formatted according to
+// ECMA-262, 10th edition, section 7.1.12.1 and RFC 8785, section 3.2.2.3.
+// with the exception that -0 is still formatted as -0.
 // The values NaN, +Inf, and -Inf will be represented
 // as a JSON string with the values "NaN", "Infinity", and "-Infinity".
 func Float(n float64) Token {
