@@ -248,6 +248,13 @@ func generateAliases(targetPkgPath, workingDir string) {
 				aliasDecls.WriteString(packageName)
 				aliasDecls.WriteByte('.')
 				aliasDecls.WriteString(d.Name.String())
+				if packageName == "jsontext" && d.Name.String() == "AppendFormat" {
+					// TODO(Go1.27): Remove this special-case logic.
+					// The signature of AppendFormat was non-parameterized prior to Go1.27,
+					// so need to explicitly convert src to a []byte during the call.
+					aliasDecls.WriteString(`(dst, []byte(src), opts...)` + "\n}\n\n")
+					break
+				}
 				writeFields(d.Type.TypeParams, '[', ']', false)
 				writeFields(d.Type.Params, '(', ')', false)
 				aliasDecls.WriteString("\n")
