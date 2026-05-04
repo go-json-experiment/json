@@ -42,11 +42,11 @@ func AppendFloat(dst []byte, src float64, bits int) []byte {
 //
 // The dst and src may overlap.
 // If an error is reported, then the entirety of src is appended to dst.
-func AppendFormat(dst, src []byte, opts ...Options) ([]byte, error) {
+func AppendFormat[Bytes ~[]byte | ~string](dst []byte, src Bytes, opts ...Options) ([]byte, error) {
 	e := getBufferedEncoder(opts...)
 	defer putBufferedEncoder(e)
 	e.s.Flags.Set(jsonflags.OmitTopLevelNewline | 1)
-	if err := e.s.WriteValue(src); err != nil {
+	if err := e.s.WriteValue(Value(src)); err != nil {
 		return append(dst, src...), err
 	}
 	return append(dst, e.s.Buf...), nil

@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"reflect"
 
 	jsonv2 "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -231,7 +232,11 @@ func (dec *Decoder) Token() (Token, error) {
 		if useNumber, _ := jsonv2.GetOption(dec.opts, unmarshalAnyWithRawNumber); useNumber {
 			return Number(tok.String()), nil
 		}
-		return tok.Float(), nil
+		v, err := tok.Float()
+		if err != nil {
+			return nil, &UnmarshalTypeError{Value: "number " + tok.String(), Type: reflect.TypeFor[float64](), Offset: dec.InputOffset() - int64(len(tok.String()))}
+		}
+		return v, nil
 	case '{', '}', '[', ']':
 		return Delim(k), nil
 	default:

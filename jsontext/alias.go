@@ -36,7 +36,7 @@
 //
 //   - a JSON literal, string, or number
 //   - a JSON object (e.g., `{"name":"value"}`)
-//   - a JSON array (e.g., `[1,2,3,]`)
+//   - a JSON array (e.g., `[1,2,3]`)
 //
 // A JSON value is represented by the [Value] type in Go and is a []byte
 // containing the raw textual representation of the value. There is some overlap
@@ -202,7 +202,7 @@ type SyntacticError = jsontext.SyntacticError
 // Options configures [NewEncoder], [Encoder.Reset], [NewDecoder],
 // and [Decoder.Reset] with specific features.
 // Each function takes in a variadic list of options, where properties
-// set in latter options override the value of previously set properties.
+// set in later options override the value of previously set properties.
 //
 // There is a single Options type, which is used with both encoding and decoding.
 // Some options affect both operations, while others only affect one operation:
@@ -365,7 +365,7 @@ func Multiline(v bool) Options {
 // followed by one or more copies of indent according to the nesting depth.
 // The indent must only be composed of space or tab characters.
 //
-// If the intent to emit indented output without a preference for
+// If the intent is to emit indented output without a preference for
 // the particular indent string, then use [Multiline] instead.
 //
 // This only affects encoding and is ignored when decoding.
@@ -525,8 +525,8 @@ const (
 //
 // The dst and src may overlap.
 // If an error is reported, then the entirety of src is appended to dst.
-func AppendFormat(dst, src []byte, opts ...Options) ([]byte, error) {
-	return jsontext.AppendFormat(dst, src, opts...)
+func AppendFormat[Bytes ~[]byte | ~string](dst []byte, src Bytes, opts ...Options) ([]byte, error) {
+	return jsontext.AppendFormat(dst, []byte(src), opts...)
 }
 
 // Value represents a single raw JSON value, which may be one of the following:
