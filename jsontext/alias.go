@@ -455,6 +455,20 @@ type Pointer = jsontext.Pointer
 // A Token cannot represent entire array or object values, while a [Value] can.
 // There is no Token to represent commas and colons since
 // these structural tokens can be inferred from the surrounding context.
+//
+// A Token stores data in one of two forms:
+//
+//   - As raw JSON text: backed by the internal buffer of the [Decoder]
+//     and only ever produced by [Decoder.ReadToken].
+//     Such a token is only valid until the next call to any method on that
+//     [Decoder] (e.g., [Decoder.PeekKind], [Decoder.ReadToken],
+//     [Decoder.ReadValue], or [Decoder.SkipValue]).
+//     Call [Token.Clone] to copy the raw text into an independent allocation
+//     that persists beyond subsequent [Decoder] calls.
+//
+//   - As a typed Go value: a self-contained representation produced by
+//     the constructor functions (e.g., [String], [Int], [Uint], [Float]).
+//     Such tokens are valid indefinitely and do not need to be cloned.
 type Token = jsontext.Token
 
 var (

@@ -18,6 +18,8 @@ for X in $(git ls-files --cached --others --exclude-standard | grep ".*[.]go$");
     if [ ! -e "$X" ]; then
         continue
     fi
+    sed -i 's/go:build goexperiment.jsonv2 && !goexperiment.jsonformat$/go:build (!goexperiment.jsonv2 || !go1.25) \&\& !goexperiment.jsonformat/' $X
+    sed -i 's/go:build goexperiment.jsonv2 && goexperiment.jsonformat$/go:build (!goexperiment.jsonv2 || !go1.25) \&\& goexperiment.jsonformat/' $X
     sed -i 's/go:build goexperiment.jsonv2$/go:build !goexperiment.jsonv2 || !go1.25/' $X
     sed -i 's|"encoding/json/v2"|"github.com/go-json-experiment/json"|' $X
     sed -i 's|"encoding/json/internal"|"github.com/go-json-experiment/json/internal"|' $X

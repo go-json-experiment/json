@@ -63,11 +63,7 @@
 //
 // The first option is the JSON object name override for the Go struct field.
 // If the name is not specified, then the Go struct field name
-// is used as the JSON object name. JSON names containing commas or quotes,
-// or names identical to "" or "-", can be specified using
-// a single-quoted string literal, where the syntax is identical to
-// the Go grammar for a double-quoted string literal,
-// but instead uses single quotes as the delimiters.
+// is used as the JSON object name.
 // By default, unmarshaling uses case-sensitive matching to identify
 // the Go struct field associated with a JSON object name.
 //
@@ -117,14 +113,6 @@
 //     Only one inlined fallback field may be specified in a struct,
 //     while many non-fallback fields may be specified. This option
 //     must not be specified with any other option (including the JSON name).
-//
-//   - format: The "format" option specifies a format flag
-//     used to specialize the formatting of the field value.
-//     The option is a key-value pair specified as "format:value" where
-//     the value must be either a literal consisting of letters and numbers
-//     (e.g., "format:RFC3339") or a single-quoted string literal
-//     (e.g., "format:'2006-01-02'"). The interpretation of the format flag
-//     is determined by the struct field type.
 //
 // The "omitzero" and "omitempty" options are mostly semantically identical.
 // The former is defined in terms of the Go type system,
@@ -246,6 +234,75 @@
 // but care should still be taken with large integers or unknown members.
 //
 // [For example, suppose we have two micro-services.]: https://www.youtube.com/watch?v=avilmOcHKHE&t=1057s
+// # Format Tag Option
+//
+// The `format` tag option is experimental,
+// and not subject to the Go 1 compatibility promise.
+// It only exists when building with the GOEXPERIMENT=jsonformat environment variable set.
+//
+// Some Go types support alternative JSON representations as specified below.
+// The `format` tag option is a key-value pair specified as "format:value"
+// where the value must be either a literal consisting of letters and numbers
+// (e.g., "format:RFC3339") or a single-quoted string literal
+// (e.g., "format:'2006-01-02'"). The interpretation of the format option
+// is determined by the struct field type.
+//
+// Go types with alternative representations are as follows:
+//
+//   - A Go []byte or [N]byte is usually represented as a JSON string
+//     containing the binary value encoded using RFC 4648.
+//     If the format is "base64" or unspecified, then this uses RFC 4648, section 4.
+//     If the format is "base64url", then this uses RFC 4648, section 5.
+//     If the format is "base32", then this uses RFC 4648, section 6.
+//     If the format is "base32hex", then this uses RFC 4648, section 7.
+//     If the format is "base16" or "hex", then this uses RFC 4648, section 8.
+//     If the format is "array", then the bytes value is represented as a JSON array
+//     where each element recursively uses the JSON representation of each byte.
+//
+//   - A Go float is usually represented as a JSON number.
+//     If the format is "nonfinite", then NaN, +Inf, and -Inf are represented as
+//     the JSON strings "NaN", "Infinity", and "-Infinity", respectively.
+//     Without the use of this format, such string values result in a [SemanticError].
+//
+//   - A nil Go map is usually encoded using an empty JSON object.
+//     If the format is "emitnull", then a nil map is encoded as a JSON null.
+//     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
+//     regardless of whether [FormatNilMapAsNull] is specified.
+//
+//   - A nil Go slice is usually encoded using an empty JSON array.
+//     If the format is "emitnull", then a nil slice is encoded as a JSON null.
+//     If the format is "emitempty", then a nil slice is encoded as an empty JSON array,
+//     regardless of whether [FormatNilSliceAsNull] is specified.
+//
+//   - A Go pointer usually uses the JSON representation of the underlying value.
+//     The format is forwarded to the marshaling and unmarshaling of the underlying type.
+//
+//   - A Go [time.Time] is usually represented as a JSON string containing
+//     the timestamp formatted in RFC 3339 with nanosecond precision.
+//     If the format matches one of the format constants declared
+//     in the time package (e.g., RFC1123), then that format is used.
+//     If the format is "unix", "unixmilli", "unixmicro", or "unixnano",
+//     then the timestamp is represented as a possibly fractional JSON number
+//     of the number of seconds (or milliseconds, microseconds, or nanoseconds)
+//     since the Unix epoch, which is January 1st, 1970 at 00:00:00 UTC.
+//     To avoid a fractional component when encoding,
+//     round the timestamp to the relevant unit.
+//     Otherwise if non-empty, the format is used as-is and
+//     encoded using [time.Time.Format] and
+//     decoded using [time.Time.Parse].
+//
+//   - A Go [time.Duration] usually has no default representation.
+//     If the format is "sec", "milli", "micro", or "nano",
+//     then the duration is represented as a possibly fractional JSON number
+//     of the number of seconds (or milliseconds, microseconds, or nanoseconds).
+//     To avoid a fractional component when encoding,
+//     round the duration to the relevant unit.
+//     If the format is "units", it is represented as a JSON string
+//     encoded using [time.Duration.String] and decoded using [time.ParseDuration]
+//     (e.g., "1h30m" for 1 hour 30 minutes).
+//     If the format is "iso8601", it is represented as a JSON string using the
+//     ISO 8601 standard for durations (e.g., "PT1H30M" for 1 hour 30 minutes)
+//     using only accurate units of hours, minutes, and seconds.
 package json
 
 import (
@@ -293,51 +350,30 @@ import (
 //   - Otherwise, the value is encoded according to the value's type
 //     as described in detail below.
 //
-// Most Go types have a default JSON representation.
-// Certain types support specialized formatting according to
-// a format flag optionally specified in the Go struct tag
-// for the struct field that contains the current value
-// (see the “JSON Representation of Go structs” section for more details).
-//
-// The representation of each type is as follows:
+// Most Go types have a default JSON representation as follows:
 //
 //   - A Go boolean is encoded as a JSON boolean (e.g., true or false).
-//     It does not support any custom format flags.
 //
 //   - A Go string is encoded as a JSON string.
-//     It does not support any custom format flags.
 //
 //   - A Go []byte or [N]byte is encoded as a JSON string containing
-//     the binary value encoded using RFC 4648.
-//     If the format is "base64" or unspecified, then this uses RFC 4648, section 4.
-//     If the format is "base64url", then this uses RFC 4648, section 5.
-//     If the format is "base32", then this uses RFC 4648, section 6.
-//     If the format is "base32hex", then this uses RFC 4648, section 7.
-//     If the format is "base16" or "hex", then this uses RFC 4648, section 8.
-//     If the format is "array", then the bytes value is encoded as a JSON array
-//     where each byte is recursively JSON-encoded as each JSON array element.
+//     a binary value using Base 64 Encoding per RFC 4648, section 4.
 //
 //   - A Go integer is encoded as a JSON number without fractions or exponents.
 //     If [StringifyNumbers] is specified or encoding a JSON object name,
 //     then the JSON number is encoded within a JSON string.
-//     It does not support any custom format flags.
 //
 //   - A Go float is encoded as a JSON number.
 //     If [StringifyNumbers] is specified or encoding a JSON object name,
 //     then the JSON number is encoded within a JSON string.
-//     If the format is "nonfinite", then NaN, +Inf, and -Inf are encoded as
-//     the JSON strings "NaN", "Infinity", and "-Infinity", respectively.
-//     Otherwise, the presence of non-finite numbers results in a [SemanticError].
 //
 //   - A Go map is encoded as a JSON object, where each Go map key and value
 //     is recursively encoded as a name and value pair in the JSON object.
 //     The Go map key must encode as a JSON string, otherwise this results
 //     in a [SemanticError]. The Go map is traversed in a non-deterministic order.
 //     For deterministic encoding, consider using the [Deterministic] option.
-//     If the format is "emitnull", then a nil map is encoded as a JSON null.
-//     If the format is "emitempty", then a nil map is encoded as an empty JSON object,
-//     regardless of whether [FormatNilMapAsNull] is specified.
-//     Otherwise by default, a nil map is encoded as an empty JSON object.
+//     By default, a nil map is encoded as an empty JSON object,
+//     unless the [FormatNilMapAsNull] option is specified.
 //
 //   - A Go struct is encoded as a JSON object.
 //     See the “JSON Representation of Go structs” section
@@ -345,46 +381,26 @@ import (
 //
 //   - A Go slice is encoded as a JSON array, where each Go slice element
 //     is recursively JSON-encoded as the elements of the JSON array.
-//     If the format is "emitnull", then a nil slice is encoded as a JSON null.
-//     If the format is "emitempty", then a nil slice is encoded as an empty JSON array,
-//     regardless of whether [FormatNilSliceAsNull] is specified.
-//     Otherwise by default, a nil slice is encoded as an empty JSON array.
+//     By default, a nil slice is encoded as an empty JSON array,
+//     unless the [FormatNilSliceAsNull] option is specified.
 //
 //   - A Go array is encoded as a JSON array, where each Go array element
 //     is recursively JSON-encoded as the elements of the JSON array.
 //     The JSON array length is always identical to the Go array length.
-//     It does not support any custom format flags.
 //
 //   - A Go pointer is encoded as a JSON null if nil, otherwise it is
 //     the recursively JSON-encoded representation of the underlying value.
-//     Format flags are forwarded to the encoding of the underlying value.
 //
 //   - A Go interface is encoded as a JSON null if nil, otherwise it is
 //     the recursively JSON-encoded representation of the underlying value.
-//     It does not support any custom format flags.
 //
 //   - A Go [time.Time] is encoded as a JSON string containing the timestamp
 //     formatted in RFC 3339 with nanosecond precision.
-//     If the format matches one of the format constants declared
-//     in the time package (e.g., RFC1123), then that format is used.
-//     If the format is "unix", "unixmilli", "unixmicro", or "unixnano",
-//     then the timestamp is encoded as a possibly fractional JSON number
-//     of the number of seconds (or milliseconds, microseconds, or nanoseconds)
-//     since the Unix epoch, which is January 1st, 1970 at 00:00:00 UTC.
-//     To avoid a fractional component, round the timestamp to the relevant unit.
-//     Otherwise, the format is used as-is with [time.Time.Format] if non-empty.
 //
 //   - A Go [time.Duration] currently has no default representation and
-//     requires an explicit format to be specified.
-//     If the format is "sec", "milli", "micro", or "nano",
-//     then the duration is encoded as a possibly fractional JSON number
-//     of the number of seconds (or milliseconds, microseconds, or nanoseconds).
-//     To avoid a fractional component, round the duration to the relevant unit.
-//     If the format is "units", it is encoded as a JSON string formatted using
-//     [time.Duration.String] (e.g., "1h30m" for 1 hour 30 minutes).
-//     If the format is "iso8601", it is encoded as a JSON string using the
-//     ISO 8601 standard for durations (e.g., "PT1H30M" for 1 hour 30 minutes)
-//     using only accurate units of hours, minutes, and seconds.
+//     results in a [SemanticError], unless the [encoding/json.FormatDurationAsNano]
+//     option is specified, in which case it is encoded as a JSON number
+//     without fractions or exponents, representing the duration in nanoseconds.
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
 //     have no default representation and result in a [SemanticError].
@@ -452,10 +468,6 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     as described in detail below.
 //
 // Most Go types have a default JSON representation.
-// Certain types support specialized formatting according to
-// a format flag optionally specified in the Go struct tag
-// for the struct field that contains the current value
-// (see the “JSON Representation of Go structs” section for more details).
 // A JSON null may be decoded into every supported Go value where
 // it is equivalent to storing the zero value of the Go value.
 // If the input JSON kind is not handled by the current Go value type,
@@ -465,20 +477,11 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 // The representation of each type is as follows:
 //
 //   - A Go boolean is decoded from a JSON boolean (e.g., true or false).
-//     It does not support any custom format flags.
 //
 //   - A Go string is decoded from a JSON string.
-//     It does not support any custom format flags.
 //
-//   - A Go []byte or [N]byte is decoded from a JSON string
-//     containing the binary value encoded using RFC 4648.
-//     If the format is "base64" or unspecified, then this uses RFC 4648, section 4.
-//     If the format is "base64url", then this uses RFC 4648, section 5.
-//     If the format is "base32", then this uses RFC 4648, section 6.
-//     If the format is "base32hex", then this uses RFC 4648, section 7.
-//     If the format is "base16" or "hex", then this uses RFC 4648, section 8.
-//     If the format is "array", then the Go slice or array is decoded from a
-//     JSON array where each JSON element is recursively decoded for each byte.
+//   - A Go []byte or [N]byte is decoded from a JSON string containing
+//     a binary value using Base 64 Encoding per RFC 4648, section 4.
 //     When decoding into a non-nil []byte, the slice length is reset to zero
 //     and the decoded input is appended to it.
 //     When decoding into a [N]byte, the input must decode to exactly N bytes,
@@ -490,15 +493,11 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     It fails with a [SemanticError] if the JSON number
 //     has a fractional or exponent component.
 //     It also fails if it overflows the representation of the Go integer type.
-//     It does not support any custom format flags.
 //
 //   - A Go float is decoded from a JSON number.
 //     It must be decoded from a JSON string containing a JSON number
 //     if [StringifyNumbers] is specified or decoding a JSON object name.
 //     It fails if it overflows the representation of the Go float type.
-//     If the format is "nonfinite", then the JSON strings
-//     "NaN", "Infinity", and "-Infinity" are decoded as NaN, +Inf, and -Inf.
-//     Otherwise, the presence of such strings results in a [SemanticError].
 //
 //   - A Go map is decoded from a JSON object,
 //     where each JSON object name and value pair is recursively decoded
@@ -506,7 +505,6 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     If the Go map is nil, then a new map is allocated to decode into.
 //     If the decoded key matches an existing Go map entry, the entry value
 //     is reused by decoding the JSON object value into it.
-//     The formats "emitnull" and "emitempty" have no effect when decoding.
 //
 //   - A Go struct is decoded from a JSON object.
 //     See the “JSON Representation of Go structs” section
@@ -516,20 +514,17 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     is recursively decoded and appended to the Go slice.
 //     Before appending into a Go slice, a new slice is allocated if it is nil,
 //     otherwise the slice length is reset to zero.
-//     The formats "emitnull" and "emitempty" have no effect when decoding.
 //
 //   - A Go array is decoded from a JSON array, where each JSON array element
 //     is recursively decoded as each corresponding Go array element.
 //     Each Go array element is zeroed before decoding into it.
 //     It fails with a [SemanticError] if the JSON array does not contain
 //     the exact same number of elements as the Go array.
-//     It does not support any custom format flags.
 //
 //   - A Go pointer is decoded based on the JSON kind and underlying Go type.
 //     If the input is a JSON null, then this stores a nil pointer.
 //     Otherwise, it allocates a new underlying value if the pointer is nil,
 //     and recursively JSON decodes into the underlying value.
-//     Format flags are forwarded to the decoding of the underlying type.
 //
 //   - A Go interface is decoded based on the JSON kind and underlying Go type.
 //     If the input is a JSON null, then this stores a nil interface value.
@@ -541,28 +536,15 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     For example, unmarshaling into a nil io.Reader fails since
 //     there is no concrete type to populate the interface value with.
 //     Otherwise an underlying value exists and it recursively decodes
-//     the JSON input into it. It does not support any custom format flags.
+//     the JSON input into it.
 //
 //   - A Go [time.Time] is decoded from a JSON string containing the time
 //     formatted in RFC 3339 with nanosecond precision.
-//     If the format matches one of the format constants declared in
-//     the time package (e.g., RFC1123), then that format is used for parsing.
-//     If the format is "unix", "unixmilli", "unixmicro", or "unixnano",
-//     then the timestamp is decoded from an optionally fractional JSON number
-//     of the number of seconds (or milliseconds, microseconds, or nanoseconds)
-//     since the Unix epoch, which is January 1st, 1970 at 00:00:00 UTC.
-//     Otherwise, the format is used as-is with [time.Time.Parse] if non-empty.
 //
 //   - A Go [time.Duration] currently has no default representation and
-//     requires an explicit format to be specified.
-//     If the format is "sec", "milli", "micro", or "nano",
-//     then the duration is decoded from an optionally fractional JSON number
-//     of the number of seconds (or milliseconds, microseconds, or nanoseconds).
-//     If the format is "units", it is decoded from a JSON string parsed using
-//     [time.ParseDuration] (e.g., "1h30m" for 1 hour 30 minutes).
-//     If the format is "iso8601", it is decoded from a JSON string using the
-//     ISO 8601 standard for durations (e.g., "PT1H30M" for 1 hour 30 minutes)
-//     accepting only accurate units of hours, minutes, or seconds.
+//     results in a [SemanticError], unless the [encoding/json.FormatDurationAsNano]
+//     option is specified, in which case it is decoded as a JSON number
+//     without fractions or exponents, representing the duration in nanoseconds.
 //
 //   - All other Go types (e.g., complex numbers, channels, and functions)
 //     have no default representation and result in a [SemanticError].
@@ -925,8 +907,6 @@ func Deterministic(v bool) Options {
 // FormatNilSliceAsNull specifies that a nil Go slice should marshal as a
 // JSON null instead of the default representation as an empty JSON array
 // (or an empty JSON string in the case of ~[]byte).
-// Slice fields explicitly marked with `format:emitempty` still marshal
-// as an empty JSON array.
 //
 // This only affects marshaling and is ignored when unmarshaling.
 func FormatNilSliceAsNull(v bool) Options {
@@ -935,8 +915,6 @@ func FormatNilSliceAsNull(v bool) Options {
 
 // FormatNilMapAsNull specifies that a nil Go map should marshal as a
 // JSON null instead of the default representation as an empty JSON object.
-// Map fields explicitly marked with `format:emitempty` still marshal
-// as an empty JSON object.
 //
 // This only affects marshaling and is ignored when unmarshaling.
 func FormatNilMapAsNull(v bool) Options {
