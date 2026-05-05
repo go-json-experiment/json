@@ -18,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonwire"
 )
@@ -519,6 +520,10 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 		case "string":
 			out.string = true
 		case "format":
+			if !internal.ExpJSONFormat {
+				err = cmp.Or(err, fmt.Errorf("Go struct field %s has invalid `format` tag option without GOEXPERIMENT=jsonformat", sf.Name))
+				break
+			}
 			if !strings.HasPrefix(tag, ":") {
 				err = cmp.Or(err, fmt.Errorf("Go struct field %s is missing value for `format` tag option", sf.Name))
 				break
@@ -576,6 +581,10 @@ func consumeTagOption(in string) (string, int, error) {
 		return in[:n], n, nil
 	// Option as a single-quoted string.
 	case r == '\'':
+		if !internal.ExpJSONFormat {
+			return in[:i], i, fmt.Errorf("invalid use of single-quoted tag option without GOEXPERIMENT=jsonformat")
+		}
+
 		// The grammar is nearly identical to a double-quoted Go string literal,
 		// but uses single quotes as the terminators. The reason for a custom
 		// grammar is because both backtick and double quotes cannot be used

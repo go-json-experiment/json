@@ -458,13 +458,8 @@ func TestStringOption(t *testing.T) {
 // In v1, nil slices and maps are marshaled as a JSON null.
 // In v2, nil slices and maps are marshaled as an empty JSON object or array.
 //
-// Users of v2 can opt into the v1 behavior by setting
-// the "format:emitnull" option in the `json` struct field tag:
-//
-//	struct {
-//		S []string          `json:",format:emitnull"`
-//		M map[string]string `json:",format:emitnull"`
-//	}
+// Users of v2 can opt into the v1 behavior by setting the
+// [jsonv2.FormatNilSliceAsNull] and [jsonv2.FormatNilMapAsNull] options.
 //
 // JSON is a language-agnostic data interchange format.
 // The fact that maps and slices are nil-able in Go is a semantic detail of the
@@ -552,12 +547,8 @@ func TestArrays(t *testing.T) {
 // In v2, byte arrays are treated as binary values (similar to []byte).
 // This is to make the behavior of [N]byte and []byte more consistent.
 //
-// Users of v2 can opt into the v1 behavior by setting
-// the "format:array" option in the `json` struct field tag:
-//
-//	struct {
-//		B [32]byte `json:",format:array"`
-//	}
+// Users of v2 can opt into the v1 behavior by setting the
+// [jsonv1.FormatByteArrayAsArray] option.
 func TestByteArrays(t *testing.T) {
 	for _, json := range jsonPackages {
 		t.Run(path.Join("Marshal", json.Version), func(t *testing.T) {
@@ -1027,12 +1018,8 @@ func TestMergeComposite(t *testing.T) {
 // In v2, there is now first-class support for time.Duration, where the type is
 // formatted and parsed using time.Duration.String and time.ParseDuration.
 //
-// Users of v2 can opt into the v1 behavior by setting
-// the "format:nano" option in the `json` struct field tag:
-//
-//	struct {
-//		Duration time.Duration `json:",format:nano"`
-//	}
+// Users of v2 can opt into the v1 behavior by setting the
+// [jsonv1.FormatDurationAsNano] option.
 //
 // Related issue:
 //
