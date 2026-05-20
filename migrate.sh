@@ -34,6 +34,7 @@ for X in $(git ls-files --cached --others --exclude-standard | grep ".*[.]go$");
 done
 sed -i 's/v2[.]struct/json.struct/' $JSONROOT/errors_test.go
 sed -i 's|jsonv1 "github.com/go-json-experiment/json/v1"|jsonv1 "encoding/json"|' $JSONROOT/bench_test.go
+sed -i '/testenv/d' $JSONROOT/jsontext/token_test.go
 
 # Remove documentation that only makes sense within the stdlib.
 sed -i  '/This package .* is experimental/,+4d' $JSONROOT/doc.go

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-json-experiment/json/internal"
 	"github.com/go-json-experiment/json/internal/jsonflags"
 	"github.com/go-json-experiment/json/internal/jsonopts"
 	"github.com/go-json-experiment/json/internal/jsonwire"
@@ -449,4 +450,21 @@ func toUnexpectedEOF(err error) error {
 		return io.ErrUnexpectedEOF
 	}
 	return err
+}
+
+// newInvalidStringTagError returns an error for a `string` tag on a field with
+// an invalid type. The error should be wrapped with appropriate context after
+// creation.
+func newInvalidStringTagError(field string, legacy bool) error {
+	if legacy {
+		if internal.ExpJSONFormat {
+			return fmt.Errorf("Go struct field %s has invalid `string` tag: field must be a numeric type, string, or bool (or pointer to such), or type with a format tag converting to a numeric type", field)
+		}
+		return fmt.Errorf("Go struct field %s has invalid `string` tag: field must be a numeric type, string, or bool (or pointer to such)", field)
+	}
+
+	if internal.ExpJSONFormat {
+		return fmt.Errorf("Go struct field %s has invalid `string` tag: field must be a numeric type (or pointer to such), or type with a format tag converting to a numeric type", field)
+	}
+	return fmt.Errorf("Go struct field %s has invalid `string` tag: field must be a numeric type (or pointer to such)", field)
 }

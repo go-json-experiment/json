@@ -437,7 +437,7 @@ var ErrNonStringName = jsontext.ErrNonStringName
 // either a JSON object name or an index to a JSON array element
 // encoded as a base-10 integer value.
 // It is impossible to distinguish between an array index and an object name
-// (that happens to be an base-10 encoded integer) without also knowing
+// (that happens to be a base-10 encoded integer) without also knowing
 // the structure of the top-level JSON value that the pointer refers to.
 //
 // There is exactly one representation of a pointer to a particular value,
