@@ -60,10 +60,9 @@
 //     `omitzero` instead (which is identically supported in both v1 and v2).
 //
 //   - In v1, a Go struct field marked as `string` can be used to quote a
-//     Go string, bool, or number as a JSON string. It does not recursively
-//     take effect on composite Go types. In contrast, v2 restricts
-//     the `string` option to only quote a Go number as a JSON string.
-//     It does recursively take effect on Go numbers within a composite Go type.
+//     Go string, bool, number, or pointer to such as a JSON string.
+//     In contrast, v2 restricts the `string` option to only quote a Go number
+//     or pointer to number as a JSON string.
 //     The [StringifyWithLegacySemantics] option controls this behavior difference.
 //
 //   - In v1, a nil Go slice or Go map is marshaled as a JSON null.
@@ -300,14 +299,24 @@ type Number = json.Number
 // Marshal returns the JSON encoding of v.
 //
 // Marshal traverses the value v recursively.
-// If an encountered value implements [Marshaler]
-// and is not a nil pointer, Marshal calls [Marshaler.MarshalJSON]
-// to produce JSON. If no [Marshaler.MarshalJSON] method is present but the
-// value implements [encoding.TextMarshaler] instead, Marshal calls
-// [encoding.TextMarshaler.MarshalText] and encodes the result as a JSON string.
-// The nil pointer exception is not strictly necessary
-// but mimics a similar, necessary exception in the behavior of
-// [Unmarshaler.UnmarshalJSON].
+//
+// The input value is encoded as JSON according the following rules:
+//
+//   - If the value type implements [encoding/json/v2.MarshalerTo],
+//     then the MarshalJSONTo method is called to encode the value.
+//     If the method returns [errors.ErrUnsupported],
+//     then the input is encoded according to subsequent rules.
+//
+//   - If the value type implements [Marshaler],
+//     then the MarshalJSON method is called to encode the value.
+//
+//   - If the value type implements [encoding.TextAppender],
+//     then the AppendText method is called to encode the value and
+//     subsequently encode its result as a JSON string.
+//
+//   - If the value type implements [encoding.TextMarshaler],
+//     then the MarshalText method is called to encode the value and
+//     subsequently encode its result as a JSON string.
 //
 // Otherwise, Marshal uses the following type-dependent default encodings:
 //
@@ -773,15 +782,13 @@ func ReportErrorsWithLegacySemantics(v bool) Options {
 // StringifyWithLegacySemantics specifies that the `string` tag option
 // may stringify bools and string values. It only takes effect on fields
 // where the top-level type is a bool, string, numeric kind, or a pointer to
-// such a kind. Specifically, `string` will not stringify bool, string,
-// or numeric kinds within a composite data type
-// (e.g., array, slice, struct, map, or interface).
+// such a kind.
 //
-// When marshaling, such Go values are serialized as their usual
-// JSON representation, but quoted within a JSON string.
-// When unmarshaling, such Go values must be deserialized from
-// a JSON string containing their usual JSON representation or
-// Go number representation for that numeric kind.
+// When marshaling, such Go values are serialized as their usual JSON
+// representation, but quoted within a JSON string.
+// When unmarshaling, such Go values must be deserialized from a JSON string
+// containing their usual JSON representation or Go number representation for
+// that numeric kind.
 // Note that the Go number grammar is a superset of the JSON number grammar.
 // A JSON null quoted in a JSON string is a valid substitute for JSON null
 // while unmarshaling into a Go value that `string` takes effect on.
