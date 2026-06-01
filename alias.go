@@ -82,13 +82,14 @@
 //
 //   - string: The "string" option specifies that [StringifyNumbers] be set
 //     when marshaling or unmarshaling a struct field value.
-//     This causes numeric types (or a pointer to a numeric type) to be encoded
-//     as a JSON number within a JSON string, and to be decoded from a JSON
-//     string containing the JSON number without any surrounding whitespace.
-//     The "string" option does not apply recursively. Specifically, `string`
-//     will not stringify bool, string, or numeric kinds within a composite
-//     data type (e.g., array, slice, struct, map, or interface).
-//     Applying this option to an invalid type causes a runtime error.
+//     This causes types that would normally be encoded as a JSON number
+//     to instead be encoded as a JSON number quoted within a JSON string,
+//     and to be decoded from a JSON string containing the JSON number
+//     without any surrounding whitespace.
+//     The "string" option only applies to the top-level of the Go struct field value.
+//     Specifically, for the default representation of composite Go data types
+//     (e.g., array, slice, struct, or map), it will not stringify JSON numbers
+//     within such types. Applying this option to invalid types causes a runtime error.
 //     This extra level of encoding is often necessary since many JSON parsers
 //     cannot precisely represent 64-bit integers.
 //
@@ -424,11 +425,9 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 }
 
 // MarshalEncode serializes a Go value into an [jsontext.Encoder] according to
-// the provided marshal options (while ignoring unmarshal, encode, or decode options).
-// Any marshal-relevant options already specified on the [jsontext.Encoder]
-// take lower precedence than the set of options provided by the caller.
-// Unlike [Marshal] and [MarshalWrite], encode options are ignored because
-// they must have already been specified on the provided [jsontext.Encoder].
+// the provided marshal or encode options (while ignoring unmarshal or decode options).
+// The options provided take precedence over options already applied on
+// the [jsontext.Encoder] and only apply for the duration of the marshal call.
 //
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
@@ -573,11 +572,9 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 }
 
 // UnmarshalDecode deserializes a Go value from a [jsontext.Decoder] according to
-// the provided unmarshal options (while ignoring marshal, encode, or decode options).
-// Any unmarshal options already specified on the [jsontext.Decoder]
-// take lower precedence than the set of options provided by the caller.
-// Unlike [Unmarshal] and [UnmarshalRead], decode options are ignored because
-// they must have already been specified on the provided [jsontext.Decoder].
+// the provided unmarshal or decode options (while ignoring marshal or encode options).
+// The options provided take precedence over options already applied on
+// the [jsontext.Decoder] and only apply for the duration of the unmarshal call.
 //
 // The input may be a stream of zero or more JSON values,
 // where this only unmarshals the next JSON value in the stream.
@@ -882,10 +879,19 @@ func DefaultOptionsV2() Options {
 	return json.DefaultOptionsV2()
 }
 
-// StringifyNumbers specifies that numeric Go types should be marshaled
-// as a JSON string containing the equivalent JSON number value.
-// When unmarshaling, numeric Go types are parsed from a JSON string
+// StringifyNumbers specifies that types that would normally be
+// encoded as a JSON number to instead be encoded as a JSON string
+// containing the equivalent JSON number value.
+// When unmarshaling, the value is parsed from a JSON string
 // containing the JSON number without any surrounding whitespace.
+//
+// When the `string` tag option is specified on a Go struct field,
+// this option is applied for the top-level JSON value for that field.
+// Unless StringifyNumbers was applied globally, the option does not
+// recursively apply to nested JSON numbers within a JSON object or array.
+// A Go type with custom marshal/unmarshal that represents a JSON number
+// should respect the StringifyNumbers option and if specified
+// serialize as a JSON number within a JSON string.
 //
 // According to RFC 8259, section 6, a JSON implementation may choose to
 // limit the representation of a JSON number to an IEEE 754 binary64 value.
