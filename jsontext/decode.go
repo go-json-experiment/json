@@ -166,6 +166,8 @@ func (d *Decoder) Options() Options {
 	return &d.s.Struct
 }
 
+func (d *decoderState) options() *jsonopts.Struct { return &d.Struct }
+
 var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after calling bytes.Buffer.Next")
 
 // fetch reads at least 1 byte from the underlying io.Reader.
@@ -621,6 +623,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if !d.Flags.Get(jsonflags.AllowDuplicateNames) {
 			d.Namespaces.push()
 		}
+		d.Flags.Clear(jsonflags.TagFlags) // tags only apply to current depth
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
 		return BeginObject, nil
@@ -641,6 +644,7 @@ func (d *decoderState) ReadToken() (Token, error) {
 		if err = d.Tokens.pushArray(); err != nil {
 			return Token{}, wrapSyntacticError(d, err, pos, +1)
 		}
+		d.Flags.Clear(jsonflags.TagFlags) // tags only apply to current depth
 		pos += 1
 		d.prevStart, d.prevEnd = pos, pos
 		return BeginArray, nil
@@ -1134,6 +1138,17 @@ func (d *Decoder) InputOffset() int64 {
 
 // UnreadBuffer returns the data remaining in the unread buffer,
 // which may contain zero or more bytes.
+// This is the data already consumed from the input [io.Reader],
+// but not yet read by a [Decoder.ReadToken] or [Decoder.ReadValue] call.
+// It may contain bytes that do not form valid JSON as it has not yet
+// been validated according to the JSON grammar.
+// The exact amount of buffered data is an implementation detail
+// of the Decoder and may change over time.
+//
+// It is the caller's responsibility to concatenate this buffer with
+// the remainder of the input Reader to obtain the full sequence
+// of bytes after the last read JSON token or value.
+//
 // The returned buffer must not be mutated while Decoder continues to be used.
 // The buffer contents are valid until the next Peek, Read, or Skip call.
 func (d *Decoder) UnreadBuffer() []byte {
