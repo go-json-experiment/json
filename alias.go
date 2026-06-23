@@ -329,7 +329,7 @@ import (
 // these functions and methods can be consistently called. For performance,
 // it is recommended that Marshal be passed a non-nil pointer to the value.
 //
-// The input value is encoded as JSON according the following rules:
+// The input value is encoded as JSON according to the following rules:
 //
 //   - If any type-specific functions in a [WithMarshalers] option match
 //     the value type, then those functions are called to encode the value.
@@ -447,7 +447,7 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 // (by boxing it on the heap if necessary) so that
 // these functions and methods can be consistently called.
 //
-// The input is decoded into the output according the following rules:
+// The input is decoded into the output according to the following rules:
 //
 //   - If any type-specific functions in a [WithUnmarshalers] option match
 //     the value type, then those functions are called to decode the JSON
@@ -814,7 +814,7 @@ type SemanticError = json.SemanticError
 //
 //	opt := Options{"Deterministic": true}
 //
-// [JoinOptions] composes multiple options values to together:
+// [JoinOptions] composes multiple options values together:
 //
 //	out := JoinOptions(opts...)
 //
@@ -827,7 +827,7 @@ type SemanticError = json.SemanticError
 //		}
 //	}
 //
-// [GetOption] looks up the value of options parameter:
+// [GetOption] looks up the value of an options parameter:
 //
 //	v, ok := GetOption(opts, Deterministic)
 //
