@@ -302,6 +302,7 @@ import (
 //   - A Go float is encoded as a JSON number.
 //     If [StringifyNumbers] is specified or encoding a JSON object name,
 //     then the JSON number is encoded within a JSON string.
+//     Encoding a NaN or ±Inf results in a [SemanticError].
 //
 //   - A Go map is encoded as a JSON object, where each Go map key and value
 //     is recursively encoded as a name and value pair in the JSON object.
@@ -435,6 +436,8 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 //     It must be decoded from a JSON string containing a JSON number
 //     if [StringifyNumbers] is specified or decoding a JSON object name.
 //     It fails if it overflows the representation of the Go float type.
+//     Since JSON lacks a native representation for a NaN or ±Inf,
+//     such values cannot be the result of decoding.
 //
 //   - A Go map is decoded from a JSON object,
 //     where each JSON object name and value pair is recursively decoded
