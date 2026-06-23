@@ -229,7 +229,7 @@ func (e *encoderState) Flush() error {
 
 	return nil
 }
-func (d *encodeBuffer) offsetAt(pos int) int64   { return d.baseOffset + int64(pos) }
+func (e *encodeBuffer) offsetAt(pos int) int64   { return e.baseOffset + int64(pos) }
 func (e *encodeBuffer) previousOffsetEnd() int64 { return e.baseOffset + int64(len(e.Buf)) }
 func (e *encodeBuffer) unflushedBuffer() []byte  { return e.Buf }
 
@@ -482,7 +482,7 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 		if e.Tokens.Last.NeedObjectName() {
 			if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
 				if !e.Tokens.Last.isValidNamespace() {
-					return wrapSyntacticError(e, err, pos, +1)
+					return wrapSyntacticError(e, errInvalidNamespace, pos, +1)
 				}
 				if e.Tokens.Last.isActiveNamespace() && !e.Namespaces.Last().insertQuoted(b[pos:], isVerbatim) {
 					err = wrapWithObjectName(ErrDuplicateName, b[pos:])
