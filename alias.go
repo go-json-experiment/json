@@ -99,7 +99,8 @@
 //     the value must either be 'ignore' or 'strict'.
 //     The 'ignore' value specifies that matching is case-insensitive
 //     where dashes and underscores are also ignored. If multiple fields match,
-//     the first declared field in breadth-first order takes precedence.
+//     then the field with an exact name match is selected, otherwise an error
+//     is reported due to an ambiguous set of candidate fields to unmarshal into.
 //     The 'strict' value specifies that matching is case-sensitive.
 //     This takes precedence over the [MatchCaseInsensitiveNames] option.
 //
@@ -256,7 +257,7 @@ import (
 // Functions or methods that operate on *T are only called when encoding
 // a value of type T (by taking its address) or a non-nil value of *T.
 // Marshal ensures that a value is always addressable
-// (by boxing it on the heap if necessary) so that
+// (by copying the value if necessary) so that
 // these functions and methods can be consistently called. For performance,
 // it is recommended that Marshal be passed a non-nil pointer to the value.
 //
@@ -379,8 +380,12 @@ func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 // Functions or methods that operate on *T are only called when decoding
 // a value of type T (by taking its address) or a non-nil value of *T.
 // Unmarshal ensures that a value is always addressable
-// (by boxing it on the heap if necessary) so that
+// (by copying the value if necessary) so that
 // these functions and methods can be consistently called.
+// If a value must be shallow copied to call a pointer-receiver
+// [Unmarshaler], [UnmarshalerFrom], or [encoding.TextUnmarshaler] method,
+// then any mutations performed by the method are shallow copied back
+// into the destination value.
 //
 // The input is decoded into the output according to the following rules:
 //
@@ -579,6 +584,8 @@ func JoinUnmarshalers(us ...*Unmarshalers) *Unmarshalers {
 //
 // The function must marshal exactly one JSON value.
 // The value of T must not be retained outside the function call.
+// It is recommended that fn return a []byte buffer that is safe
+// for the caller to retain and potentially mutate.
 // It may not return [errors.ErrUnsupported].
 func MarshalFunc[T any](fn func(T) ([]byte, error)) *Marshalers {
 	return json.MarshalFunc[T](fn)
@@ -799,6 +806,7 @@ func JoinOptions(srcs ...Options) Options {
 
 // GetOption returns the value stored in opts with the provided setter,
 // reporting whether the value is present.
+// If not present, the returned value is the zero value for type T.
 //
 // Example usage:
 //
@@ -885,14 +893,25 @@ func OmitZeroStructFields(v bool) Options {
 
 // MatchCaseInsensitiveNames specifies that JSON object members are matched
 // against Go struct fields using a case-insensitive match of the name.
+// If a name matches multiple fields, it chooses the field with an exact
+// match of the name, otherwise it reports an error.
 // Go struct fields explicitly marked with `case:strict` or `case:ignore`
 // always use case-sensitive (or case-insensitive) name matching,
 // regardless of the value of this option.
 //
 // This affects either marshaling or unmarshaling.
-// For marshaling, this option may alter the detection of duplicate names
-// (assuming [jsontext.AllowDuplicateNames] is false) from embedded fields
-// if it matches one of the declared fields in the Go struct.
+//
+// By matching names in a case-insensitive manner, it also affects the detection
+// of duplicate names (assuming [jsontext.AllowDuplicateNames] is false) since
+// variations of the same name may match the same Go struct field.
+// For example, when unmarshaling, the names "foo" and "Foo" may both
+// match the same Go struct field and therefore be considered a duplicate name.
+// When marshaling, normally it is impossible for any two Go struct fields to
+// serialize in a way where they unmarshal into the same Go struct field
+// since they all have unique exact names.
+// However, with the use of an embedded fallback, it is possible for the
+// embedded fallback to contain a name that also matches the name for
+// a Go struct field, resulting in a duplicate name error.
 func MatchCaseInsensitiveNames(v bool) Options {
 	return json.MatchCaseInsensitiveNames(v)
 }
