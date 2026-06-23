@@ -4,6 +4,8 @@ GOROOT=${1:-../go}
 JSONROOT="."
 
 cp $JSONROOT/alias_gen.go $JSONROOT/alias_gen.go.bak
+cp $JSONROOT/options_format_global.go $JSONROOT/options_format_global.go.bak
+cp $JSONROOT/options_format_test.go $JSONROOT/options_format_test.go.bak
 rm -r $JSONROOT/*.go $JSONROOT/internal $JSONROOT/jsontext $JSONROOT/v1
 mv $JSONROOT/alias_gen.go.bak $JSONROOT/alias_gen.go
 cp -r $GOROOT/src/encoding/json/v2/*.go $JSONROOT/
@@ -45,3 +47,14 @@ git checkout internal/zstd # we still need local copy of zstd for testing
 go run alias_gen.go "encoding/json"          $JSONROOT/v1
 go run alias_gen.go "encoding/json/v2"       $JSONROOT
 go run alias_gen.go "encoding/json/jsontext" $JSONROOT/jsontext
+
+mv $JSONROOT/options_format_global.go.bak $JSONROOT/options_format_global.go
+mv $JSONROOT/options_format_test.go.bak $JSONROOT/options_format_test.go
+cp $GOROOT/src/encoding/json/internal/jsonopts/options_format.go $JSONROOT/options_format.go
+sed -i '/go:build goexperiment.jsonv2/d' $JSONROOT/options_format.go
+sed -i 's/package jsonopts/package json/' $JSONROOT/options_format.go
+goimports -w $JSONROOT/options_format.go
+sed -i -E '/^func (Marshal|MarshalWrite|MarshalEncode|Unmarshal|UnmarshalRead|UnmarshalDecode)\(/a opts = mayAppendSupportFormatTag(opts)' $JSONROOT/alias.go
+sed -i -E '/^func (Marshal|MarshalWrite|MarshalEncode|Unmarshal|UnmarshalRead|UnmarshalDecode)\(/a opts = mayAppendSupportFormatTag(opts)' $JSONROOT/arshal.go
+goimports -w $JSONROOT/alias.go
+goimports -w $JSONROOT/arshal.go

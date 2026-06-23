@@ -161,6 +161,7 @@ var export = jsontext.Internal.Export(&internal.AllowInternalUse)
 // JSON cannot represent cyclic data structures and Marshal does not handle them.
 // Passing cyclic structures will result in an error.
 func Marshal(in any, opts ...Options) (out []byte, err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	enc := export.GetBufferedEncoder(opts...)
 	defer export.PutBufferedEncoder(enc)
 	xe := export.Encoder(enc)
@@ -177,6 +178,7 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 // It does not terminate the output with a newline.
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	enc := export.GetStreamingEncoder(out, opts...)
 	defer export.PutStreamingEncoder(enc)
 	xe := export.Encoder(enc)
@@ -195,6 +197,7 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 //
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	xe := export.Encoder(out)
 	if len(opts) > 0 {
 		optsOriginal := xe.Struct
@@ -378,6 +381,7 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 // For JSON objects, the input object is merged into the destination value
 // where matching object members recursively apply merge semantics.
 func Unmarshal(in []byte, out any, opts ...Options) (err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	dec := export.GetBufferedDecoder(in, opts...)
 	defer export.PutBufferedDecoder(dec)
 	xd := export.Decoder(dec)
@@ -395,6 +399,7 @@ func Unmarshal(in []byte, out any, opts ...Options) (err error) {
 // without reporting an error for EOF. The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	dec := export.GetStreamingDecoder(in, opts...)
 	defer export.PutStreamingDecoder(dec)
 	xd := export.Decoder(dec)
@@ -416,6 +421,7 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 // The output must be a non-nil pointer.
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
+	opts = mayAppendSupportFormatTag(opts)
 	xd := export.Decoder(in)
 	if len(opts) > 0 {
 		optsOriginal := xd.Struct
