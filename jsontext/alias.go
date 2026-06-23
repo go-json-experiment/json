@@ -136,7 +136,7 @@ import (
 //	d.ReadValue() // {"k":"v"}
 //	d.ReadToken() // }
 //
-// The above is one of many possible sequence of calls and
+// The above is one of many possible sequences of calls and
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call [Decoder.ReadToken] to obtain a
 // string token for object names.
@@ -176,7 +176,7 @@ func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 //	e.WriteValue(Value(`{"k":"v"}`)) // {"k":"v"}
 //	e.WriteToken(EndObject)          // }
 //
-// The above is one of many possible sequence of calls and
+// The above is one of many possible sequences of calls and
 // may not represent the most sensible method to call for any given token/value.
 // For example, it is probably more common to call [Encoder.WriteToken] with a string
 // for object names.
@@ -308,7 +308,7 @@ func CanonicalizeRawInts(v bool) Options {
 // It is safe to canonicalize a serialized single precision number and
 // parse it back as a single precision number and expect the same value.
 // If a number exceeds ±1.7976931348623157e+308, which is the maximum
-// finite number, then it saturated at that value and formatted as such.
+// finite number, then it is saturated at that value and formatted as such.
 //
 // This only affects encoding and is ignored when decoding.
 func CanonicalizeRawFloats(v bool) Options {
