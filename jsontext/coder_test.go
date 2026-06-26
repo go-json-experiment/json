@@ -29,6 +29,10 @@ func newInvalidCharacterError(prefix, where string) *SyntacticError {
 	return E(jsonwire.NewInvalidCharacterError(prefix, where))
 }
 
+func newInvalidTrailingError(prefix, where string) *SyntacticError {
+	return E(jsonwire.NewInvalidTrailingError(prefix, where))
+}
+
 func newInvalidEscapeSequenceError(what string) *SyntacticError {
 	return E(jsonwire.NewInvalidEscapeSequenceError(what))
 }

@@ -284,7 +284,7 @@ var encoderErrorTestdata = []struct {
 	name: jsontest.Name("InvalidObject/ExtraComma"),
 	calls: []encoderMethodCall{
 		{Value(` { , } `), newInvalidCharacterError(",", `at start of string (expecting '"')`).withPos(` { `, ""), ""},
-		{Value(` { "fizz" : "buzz" , } `), newInvalidCharacterError("}", `at start of string (expecting '"')`).withPos(` { "fizz" : "buzz" , `, ""), ""},
+		{Value(` { "fizz" : "buzz" , } `), newInvalidTrailingError(",", `before '}'`).withPos(` { "fizz" : "buzz" ,`, ""), ""},
 	},
 }, {
 	name: jsontest.Name("InvalidObject/InvalidName"),
@@ -392,6 +392,72 @@ var encoderErrorTestdata = []struct {
 	calls: []encoderMethodCall{
 		{Value(` [ "fizz" "buzz" ] `), newInvalidCharacterError("\"", "after array value (expecting ',' or ']')").withPos(` [ "fizz" `, ""), ""},
 	},
+}, {
+	name: jsontest.Name("TrailingComma/Array"),
+	calls: []encoderMethodCall{
+		{
+			Value(`[ "foo", "bar", ]`),
+			newInvalidTrailingError(",", "before ']'").withPos(`[ "foo", "bar",`, "/2"),
+			"",
+		},
+	},
+}, {
+	name: jsontest.Name("TrailingComma/Object"),
+	calls: []encoderMethodCall{
+		{
+			Value(`{"foo": 1, "bar": 2, }`),
+			newInvalidTrailingError(",", "before '}'").withPos(`{"foo": 1, "bar": 2,`, ""),
+			"",
+		},
+	},
+}, {
+	name: jsontest.Name("TrailingComma/Object/Multiline"),
+	calls: []encoderMethodCall{
+		{
+			Value("{\n\"foo\": 1,\n\"bar\":2,\n}"),
+
+			newInvalidTrailingError(",", "before '}'").withPos("{\n\"foo\": 1,\n\"bar\":2,", ""),
+			"",
+		},
+	},
+}, {
+	name: jsontest.Name("TrailingComma/Object/EmptyWithComma"),
+	calls: []encoderMethodCall{
+		{
+			Value(`{ , }`),
+			newInvalidCharacterError(",", "at start of string (expecting '\"')").withPos(`{ `, ""),
+			"",
+		},
+	},
+}, {
+	name: jsontest.Name("TrailingComma/Array/DoubleComma"),
+	calls: []encoderMethodCall{
+		{
+			Value(`[ 1, 2, , ]`),
+			newInvalidCharacterError(",", "at start of value").withPos(`[ 1, 2, `, "/2"),
+			"",
+		},
+	},
+}, {
+	name: jsontest.Name("TrailingComma/Array/Valid"),
+	calls: []encoderMethodCall{
+		{
+			Value(`["foo", "bar", "baz"]`),
+			nil,
+			"",
+		},
+	},
+	wantOut: "[\"foo\",\"bar\",\"baz\"]\n",
+}, {
+	name: jsontest.Name("TrailingComma/Object/Valid"),
+	calls: []encoderMethodCall{
+		{
+			Value(`{"foo": "bar", "baz": "qux"}`),
+			nil,
+			"",
+		},
+	},
+	wantOut: "{\"foo\":\"bar\",\"baz\":\"qux\"}\n",
 }, {
 	name: jsontest.Name("InvalidArray/MismatchingDelim"),
 	calls: []encoderMethodCall{

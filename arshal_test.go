@@ -40,6 +40,10 @@ func newInvalidCharacterError(prefix, where string, offset int64, pointer jsonte
 	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsonwire.NewInvalidCharacterError(prefix, where)}
 }
 
+func newInvalidTrailingError(prefix, where string, offset int64, pointer jsontext.Pointer) error {
+	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsonwire.NewInvalidTrailingError(prefix, where)}
+}
+
 func newInvalidUTF8Error(offset int64, pointer jsontext.Pointer) error {
 	return &jsontext.SyntacticError{ByteOffset: offset, JSONPointer: pointer, Err: jsonwire.ErrInvalidUTF8}
 }
@@ -2638,7 +2642,7 @@ func TestMarshal(t *testing.T) {
 		name:    jsontest.Name("Structs/EmbeddedFallback/TextValue/InvalidEndObject"),
 		in:      structEmbedTextValue{X: jsontext.Value(` { "name" : false , } `)},
 		want:    `{"name":false`,
-		wantErr: EM(newInvalidCharacterError(",", "at start of value", len64(` { "name" : false `), "")).withPos(`{"name":false,`, "").withType(0, T[jsontext.Value]()),
+		wantErr: EM(newInvalidTrailingError(",", "before '}'", len64(` { "name" : false ,`), "")).withPos(`{"name":false,`, "").withType(0, T[jsontext.Value]()),
 	}, {
 		name:    jsontest.Name("Structs/EmbeddedFallback/TextValue/InvalidDualObject"),
 		in:      structEmbedTextValue{X: jsontext.Value(`{}{}`)},

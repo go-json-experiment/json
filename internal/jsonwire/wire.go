@@ -138,6 +138,11 @@ func NewInvalidEscapeSequenceError[Bytes ~[]byte | ~string](what Bytes) error {
 	return &InvalidTextError{"escape sequence", string(what), "in string"}
 }
 
+func NewInvalidTrailingError[Bytes ~[]byte | ~string](prefix Bytes, where string) error {
+	_, n := utf8.DecodeRune([]byte(prefix))
+	return &InvalidTextError{"trailing", string(prefix[:n]), where}
+}
+
 type InvalidTextError struct {
 	Label string // e.g., "character" | "escape sequence" | "surrogate pair"
 	What  string // raw invalid text

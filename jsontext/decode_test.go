@@ -456,20 +456,20 @@ var decoderErrorTestdata = []struct {
 	calls: []decoderMethodCall{
 		{'{', zeroValue, newInvalidCharacterError(",", `at start of string (expecting '"')`).withPos(` { `, ""), ""},
 		{'{', BeginObject, nil, ""},
-		{0, zeroToken, newInvalidCharacterError(",", `at start of value`).withPos(` { `, ""), ""},
-		{0, zeroValue, newInvalidCharacterError(",", `at start of value`).withPos(` { `, ""), ""},
+		{0, zeroToken, newInvalidTrailingError(",", "before '}'").withPos(` { ,`, ""), ""},
+		{0, zeroValue, newInvalidTrailingError(",", "before '}'").withPos(` { ,`, ""), ""},
 	},
 	wantOffset: len(` {`),
 }, {
 	name: jsontest.Name("InvalidObject/ExtraComma/AfterValue"),
 	in:   ` { "fizz" : "buzz" , } `,
 	calls: []decoderMethodCall{
-		{'{', zeroValue, newInvalidCharacterError("}", `at start of string (expecting '"')`).withPos(` { "fizz" : "buzz" , `, ""), ""},
+		{'{', zeroValue, newInvalidTrailingError(",", "before '}'").withPos(` { "fizz" : "buzz" ,`, ""), ""},
 		{'{', BeginObject, nil, ""},
 		{'"', String("fizz"), nil, ""},
 		{'"', String("buzz"), nil, ""},
-		{0, zeroToken, newInvalidCharacterError(",", `at start of value`).withPos(` { "fizz" : "buzz" `, ""), ""},
-		{0, zeroValue, newInvalidCharacterError(",", `at start of value`).withPos(` { "fizz" : "buzz" `, ""), ""},
+		{0, zeroToken, newInvalidTrailingError(",", "before '}'").withPos(` { "fizz" : "buzz" ,`, ""), ""},
+		{0, zeroValue, newInvalidTrailingError(",", "before '}'").withPos(` { "fizz" : "buzz" ,`, ""), ""},
 	},
 	wantOffset: len(` { "fizz" : "buzz"`),
 }, {

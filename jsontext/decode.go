@@ -338,8 +338,10 @@ func (d *decoderState) PeekKind() Kind {
 
 	// Consume colon or comma.
 	var delim byte
+	var delimPos int = -1
 	if c := d.buf[pos]; c == ':' || c == ',' {
 		delim = c
+		delimPos = pos
 		pos += 1
 		pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 		if d.needMore(pos) {
@@ -352,6 +354,11 @@ func (d *decoderState) PeekKind() Kind {
 	}
 	next := Kind(d.buf[pos]).normalize()
 	if d.Tokens.needDelim(next) != delim {
+		if delim == ',' && (next == ']' || next == '}') {
+			customErr := jsonwire.NewInvalidTrailingError([]byte{','}, "before '"+string(next)+"'")
+			d.peekPos, d.peekErr = -1, wrapSyntacticError(d, customErr, delimPos+1, 0)
+			return invalidKind
+		}
 		d.peekPos, d.peekErr = -1, d.checkDelim(delim, next)
 		return invalidKind
 	}
@@ -499,8 +506,10 @@ func (d *decoderState) ReadToken() (Token, error) {
 
 		// Consume colon or comma.
 		var delim byte
+		var delimPos int = -1
 		if c := d.buf[pos]; c == ':' || c == ',' {
 			delim = c
+			delimPos = pos
 			pos += 1
 			pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
@@ -512,6 +521,10 @@ func (d *decoderState) ReadToken() (Token, error) {
 		}
 		next = Kind(d.buf[pos]).normalize()
 		if d.Tokens.needDelim(next) != delim {
+			if delim == ',' && (next == ']' || next == '}') {
+				customErr := jsonwire.NewInvalidTrailingError([]byte{','}, "before '"+string(next)+"'")
+				return Token{}, wrapSyntacticError(d, customErr, delimPos+1, 0)
+			}
 			return Token{}, d.checkDelim(delim, next)
 		}
 	}
@@ -708,8 +721,10 @@ func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (Value, error) {
 
 		// Consume colon or comma.
 		var delim byte
+		var delimPos int = -1
 		if c := d.buf[pos]; c == ':' || c == ',' {
 			delim = c
+			delimPos = pos
 			pos += 1
 			pos += jsonwire.ConsumeWhitespace(d.buf[pos:])
 			if d.needMore(pos) {
@@ -721,6 +736,10 @@ func (d *decoderState) ReadValue(flags *jsonwire.ValueFlags) (Value, error) {
 		}
 		next = Kind(d.buf[pos]).normalize()
 		if d.Tokens.needDelim(next) != delim {
+			if delim == ',' && (next == ']' || next == '}') {
+				customErr := jsonwire.NewInvalidTrailingError([]byte{','}, "before '"+string(next)+"'")
+				return nil, wrapSyntacticError(d, customErr, delimPos+1, 0)
+			}
 			return nil, d.checkDelim(delim, next)
 		}
 	}
@@ -997,6 +1016,7 @@ func (d *decoderState) consumeObject(flags *jsonwire.ValueFlags, pos, depth int)
 		return pos, nil
 	}
 
+	lastCommaPos := -1
 	depth++
 	for {
 		// Handle before name.
@@ -1006,6 +1026,12 @@ func (d *decoderState) consumeObject(flags *jsonwire.ValueFlags, pos, depth int)
 				return pos, err
 			}
 		}
+
+		if lastCommaPos != -1 && d.buf[pos] == '}' {
+			customErr := jsonwire.NewInvalidTrailingError(d.buf[lastCommaPos:], "before '}'")
+			return lastCommaPos + 1, customErr
+		}
+
 		var flags2 jsonwire.ValueFlags
 		if n = jsonwire.ConsumeSimpleString(d.buf[pos:]); n == 0 {
 			oldAbsPos := d.baseOffset + int64(pos)
@@ -1058,6 +1084,7 @@ func (d *decoderState) consumeObject(flags *jsonwire.ValueFlags, pos, depth int)
 		}
 		switch d.buf[pos] {
 		case ',':
+			lastCommaPos = pos
 			pos++
 			continue
 		case '}':
@@ -1093,6 +1120,7 @@ func (d *decoderState) consumeArray(flags *jsonwire.ValueFlags, pos, depth int) 
 	}
 
 	var idx int64
+	lastCommaPos := -1
 	depth++
 	for {
 		// Handle before value.
@@ -1102,6 +1130,12 @@ func (d *decoderState) consumeArray(flags *jsonwire.ValueFlags, pos, depth int) 
 				return pos, err
 			}
 		}
+
+		if lastCommaPos != -1 && d.buf[pos] == ']' {
+			customErr := jsonwire.NewInvalidTrailingError(d.buf[lastCommaPos:], "before ']'")
+			return lastCommaPos + 1, wrapWithArrayIndex(customErr, idx)
+		}
+
 		pos, err = d.consumeValue(flags, pos, depth)
 		if err != nil {
 			return pos, wrapWithArrayIndex(err, idx)
@@ -1116,6 +1150,7 @@ func (d *decoderState) consumeArray(flags *jsonwire.ValueFlags, pos, depth int) 
 		}
 		switch d.buf[pos] {
 		case ',':
+			lastCommaPos = pos
 			pos++
 			idx++
 			continue

@@ -735,6 +735,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 	}
 
 	var err error
+	lastCommaPos := -1
 	var names *objectNamespace
 	if !e.Flags.Get(jsonflags.AllowDuplicateNames) {
 		e.Namespaces.push()
@@ -760,6 +761,10 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		} else {
 			dst, m, err = jsonwire.ReformatString(dst, src[n:], &e.Flags)
 			if err != nil {
+				if m == 0 && lastCommaPos != -1 && n < len(src) && src[n] == '}' {
+					customErr := jsonwire.NewInvalidTrailingError(src[lastCommaPos:], "before '}'")
+					return dst, lastCommaPos + 1, customErr
+				}
 				return dst, n + m, err
 			}
 		}
@@ -802,6 +807,7 @@ func (e *encoderState) reformatObject(dst []byte, src Value, depth int) ([]byte,
 		}
 		switch src[n] {
 		case ',':
+			lastCommaPos = n
 			dst = append(dst, ',')
 			if e.Flags.Get(jsonflags.SpaceAfterComma) {
 				dst = append(dst, ' ')
@@ -847,6 +853,7 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 
 	var idx int64
 	var err error
+	lastCommaPos := -1
 	depth++
 	for {
 		// Append optional newline and indentation.
@@ -862,6 +869,10 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 		var m int
 		dst, m, err = e.reformatValue(dst, src[n:], depth)
 		if err != nil {
+			if m == 0 && lastCommaPos != -1 && n < len(src) && src[n] == ']' {
+				customErr := jsonwire.NewInvalidTrailingError(src[lastCommaPos:], "before ']'")
+				return dst, lastCommaPos + 1, wrapWithArrayIndex(customErr, idx)
+			}
 			return dst, n + m, wrapWithArrayIndex(err, idx)
 		}
 		n += m
@@ -873,6 +884,7 @@ func (e *encoderState) reformatArray(dst []byte, src Value, depth int) ([]byte, 
 		}
 		switch src[n] {
 		case ',':
+			lastCommaPos = n
 			dst = append(dst, ',')
 			if e.Flags.Get(jsonflags.SpaceAfterComma) {
 				dst = append(dst, ' ')
