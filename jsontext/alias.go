@@ -45,18 +45,18 @@
 //
 // The [Encoder] and [Decoder] types contain methods to read or write the next
 // [Token] or [Value] in a sequence. They maintain a state machine to validate
-// whether the sequence of JSON tokens and/or values produces a valid JSON.
+// whether the sequence of JSON tokens and/or values produces valid JSON.
 // [Options] may be passed to the [NewEncoder] or [NewDecoder] constructors
-// to configure the syntactic behavior of encoding and decoding.
+// to configure the behavior of encoding and decoding.
 //
 // # Terminology
 //
 // The terms "encode" and "decode" are used for syntactic functionality
 // that is concerned with processing JSON based on its grammar, and
 // the terms "marshal" and "unmarshal" are used for semantic functionality
-// that determines the meaning of JSON values as Go values and vice-versa.
-// This package (i.e., [jsontext]) deals with JSON at a syntactic layer,
-// while [encoding/json/v2] deals with JSON at a semantic layer.
+// that determines the meaning of JSON values as Go values and vice versa.
+// This package deals with JSON syntax,
+// while [encoding/json/v2] deals with JSON semantics.
 // The goal is to provide a clear distinction between functionality that
 // is purely concerned with encoding versus that of marshaling.
 // For example, one can directly encode a stream of JSON tokens without
@@ -151,7 +151,7 @@ func NewDecoder(r io.Reader, opts ...Options) *Decoder {
 	return jsontext.NewDecoder(r, opts...)
 }
 
-// Encoder is a streaming encoder from raw JSON tokens and values.
+// Encoder is a streaming encoder to raw JSON tokens and values.
 // It is used to write a stream of top-level JSON values,
 // each terminated with a newline character.
 //
@@ -193,7 +193,7 @@ func NewEncoder(w io.Writer, opts ...Options) *Encoder {
 	return jsontext.NewEncoder(w, opts...)
 }
 
-// SyntacticError is a description of a syntactic error that occurred when
+// SyntacticError is a description of an error that occurred when
 // encoding or decoding JSON according to the grammar.
 //
 // The contents of this error as produced by this package may change over time.
@@ -350,7 +350,7 @@ func SpaceAfterComma(v bool) Options {
 // If [SpaceAfterComma] is not specified, then the default is false.
 // If [WithIndent] is not specified, then the default is "\t".
 //
-// If set to false, then the output is a single-line,
+// If set to false, then the output is a single line,
 // where the only whitespace emitted is determined by the current
 // values of [SpaceAfterColon] and [SpaceAfterComma].
 //
@@ -363,7 +363,7 @@ func Multiline(v bool) Options {
 // where each element in a JSON object or array begins on a new, indented line
 // beginning with the indent prefix (see [WithIndentPrefix])
 // followed by one or more copies of indent according to the nesting depth.
-// The indent must only be composed of space or tab characters.
+// The indent must be composed of only space and tab characters.
 //
 // If the intent is to emit indented output without a preference for
 // the particular indent string, then use [Multiline] instead.
@@ -378,7 +378,7 @@ func WithIndent(indent string) Options {
 // where each element in a JSON object or array begins on a new, indented line
 // beginning with the indent prefix followed by one or more copies of indent
 // (see [WithIndent]) according to the nesting depth.
-// The prefix must only be composed of space or tab characters.
+// The prefix must be composed of only space and tab characters.
 //
 // This only affects encoding and is ignored when decoding.
 // Use of this option implies [Multiline] being set to true.
@@ -442,7 +442,7 @@ var ErrNonStringName = jsontext.ErrNonStringName
 //
 // There is exactly one representation of a pointer to a particular value,
 // so comparability of Pointer values is equivalent to checking whether
-// they both point to the exact same value.
+// they both point to the same value.
 type Pointer = jsontext.Pointer
 
 // Token represents a lexical JSON token, which may be one of the following:
@@ -515,9 +515,9 @@ func Uint(n uint64) Token {
 
 // A Kind represents the kind of a JSON token.
 //
-// Kind represents each possible JSON token kind with a single byte,
-// which is conveniently the first byte of that kind's grammar
-// with the restriction that numbers always be represented with '0'.
+// A Kind is a single byte, which is conveniently the first byte of that
+// kind's symbol in the grammar (except for numbers, which are always represented
+// with '0').
 type Kind = jsontext.Kind
 
 const (

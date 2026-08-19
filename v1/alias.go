@@ -10,8 +10,7 @@
 // RFC 7159. The mapping between JSON and Go values is described
 // in the documentation for the Marshal and Unmarshal functions.
 //
-// See "JSON and Go" for an introduction to this package:
-// https://golang.org/doc/articles/json_and_go.html
+// See [JSON and Go] for an introduction to this package.
 //
 // # Security Considerations
 //
@@ -20,6 +19,8 @@
 // For historical reasons, the default behavior of v1 [encoding/json]
 // unfortunately operates with less secure defaults.
 // New usages of JSON in Go are encouraged to use [encoding/json/v2] instead.
+//
+// [JSON and Go]: https://go.dev/blog/json
 // Migrating to v2
 //
 // This package (i.e., [encoding/json]) is now formally known as the v1 package
@@ -177,6 +178,10 @@
 //
 // All new usages of "json" in Go should use the v2 package,
 // but the v1 package will forever remain supported.
+//
+// See the [encoding/json/v2 Migration Guide] for additional detail on migration approaches.
+//
+// [encoding/json/v2 Migration Guide]: https://go.dev/doc/jsonv2-migration
 package json
 
 import (
@@ -791,7 +796,7 @@ func ReportErrorsWithLegacySemantics(v bool) Options {
 // and stringifies the JSON number within a JSON string. In particular,
 // the v2 default does not stringify Go bools and strings.
 // If [ReportErrorsWithLegacySemantics] is false,
-// then incorrect usages of `string` results in a runtime error.
+// then incorrect usages of `string` result in a runtime error.
 //
 // When marshaling, such Go values are serialized as their usual JSON
 // representation, but quoted within a JSON string.
