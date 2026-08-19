@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/netip"
@@ -50,9 +51,10 @@ func Example_textMarshal() {
 		log.Fatalf("roundtrip mismatch: got %v, want %v", got, want)
 	}
 
-	// Print the serialized JSON object.
-	(*jsontext.Value)(&b).Indent() // indent for readability
-	fmt.Println(string(b))
+	// Indent output for readability.
+	v := jsontext.Value(b)
+	v.Indent()
+	fmt.Println(string(v))
 
 	// Output:
 	// {
@@ -84,8 +86,11 @@ func Example_fieldNames() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent() // indent for readability
-	fmt.Println(string(b))
+
+	// Indent output for readability.
+	v := jsontext.Value(b)
+	v.Indent()
+	fmt.Println(string(v))
 
 	// Output:
 	// {
@@ -205,8 +210,10 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent()      // indent for readability
-	fmt.Println("OmitZero:", string(b)) // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
+	// Indent output for readability.
+	v := jsontext.Value(b)
+	v.Indent()
+	fmt.Println("OmitZero:", string(v)) // outputs "Struct", "Slice", "Map", "Pointer", and "Interface"
 
 	// Demonstrate behavior of "omitempty".
 	b, err = json.Marshal(struct {
@@ -251,8 +258,10 @@ func Example_omitFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent()       // indent for readability
-	fmt.Println("OmitEmpty:", string(b)) // outputs "Bool", "Int", and "Time"
+	// Indent output for readability.
+	v = jsontext.Value(b)
+	v.Indent()
+	fmt.Println("OmitEmpty:", string(v)) // outputs "Bool", "Int", and "Time"
 
 	// Output:
 	// OmitZero: {
@@ -310,8 +319,10 @@ func Example_embeddedFields() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	(*jsontext.Value)(&b).Indent() // indent for readability
-	fmt.Println(string(b))
+	// Indent output for readability.
+	v := jsontext.Value(b)
+	v.Indent()
+	fmt.Println(string(v))
 
 	// Output:
 	// {
@@ -558,4 +569,64 @@ func ExampleWithUnmarshalers_recordOffsets() {
 
 	// Output:
 	// 3:3: source and destination must both be specified
+}
+
+// UnmarshalDecode can be used to unmarshal a stream of whitespace-delimited
+// JSON values.
+func ExampleUnmarshalDecode_stream() {
+	const jsonStream = `
+	{"Name": "Platypus", "Order": "Monotremata"}
+	{"Name": "Quoll",    "Order": "Dasyuromorphia"}
+	{"Name": "Gopher",   "Order": "Rodentia"}
+`
+	type Animal struct {
+		Name  string
+		Order string
+	}
+	dec := jsontext.NewDecoder(strings.NewReader(jsonStream))
+	for {
+		var a Animal
+		if err := json.UnmarshalDecode(dec, &a); err == io.EOF {
+			break
+		} else if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%s: %s\n", a.Name, a.Order)
+	}
+	// Output:
+	// Platypus: Monotremata
+	// Quoll: Dasyuromorphia
+	// Gopher: Rodentia
+}
+
+// Use [jsontext.Multiline] to create multiline, idented output for more
+// readable output for human consumption.
+//
+// See [jsontext.Multiline] for additional options that customize the multiline
+// output.
+func ExampleMarshal_multiline() {
+	type Pet struct {
+		Name    string
+		Species string
+		Breed   string
+	}
+
+	p := Pet{
+		Name:    "Oliver",
+		Species: "Dog",
+		Breed:   "Goldendoodle",
+	}
+
+	b, err := json.Marshal(p, jsontext.Multiline(true))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(b))
+	// Output:
+	// {
+	// 	"Name": "Oliver",
+	// 	"Species": "Dog",
+	// 	"Breed": "Goldendoodle"
+	// }
 }
