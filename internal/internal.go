@@ -11,7 +11,8 @@ import "errors"
 // NotForPublicUse is a marker type that an API is for internal use only.
 // It does not perfectly prevent usage of that API, but helps to restrict usage.
 // Anything with this marker is not covered by the Go compatibility agreement.
-type NotForPublicUse struct{}
+// Not zero-sized type, since it is used as pointer-identity.
+type NotForPublicUse struct{ _ [1]byte }
 
 // AllowInternalUse is passed from "json" to "jsontext" to authenticate
 // that the caller can have access to internal functionality.
@@ -23,6 +24,16 @@ var (
 	ErrNonNilReference = errors.New("value must be passed as a non-nil pointer reference")
 	ErrNilInterface    = errors.New("cannot derive concrete type for nil interface with finite type set")
 )
+
+// ValueError wraps the error with a Go value relevant to the error.
+// This is only used for v1 compatibility purposes.
+type ValueError struct {
+	Val any
+	Err error
+}
+
+func (ve *ValueError) Error() string { return ve.Err.Error() }
+func (ve *ValueError) Unwrap() error { return ve.Err }
 
 var (
 	// TransformMarshalError converts a v2 error into a v1 error.

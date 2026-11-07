@@ -493,6 +493,22 @@ func String(s string) Token {
 	return jsontext.String(s)
 }
 
+// Float32 constructs a Token representing a JSON number as
+// a 32-bit floating-point number formatted according to
+// ECMA-262, 10th edition, section 7.1.12.1,
+// with the exception that -0 is still formatted as -0.
+// The values NaN, +Inf, and -Inf will be represented
+// as a JSON string with the values "NaN", "Infinity", and "-Infinity".
+//
+// Note that most JSON libraries and standards assume that JSON numbers
+// are 64-bit floating-point numbers. Use of 32-bit precision should
+// only be used if the corresponding decoder knows that
+// this JSON number token is expected to only have 32-bit precision.
+// For all other situations, prefer using the [Float] constructor instead.
+func Float32(n float32) Token {
+	return jsontext.Float32(n)
+}
+
 // Float constructs a Token representing a JSON number as
 // a 64-bit floating-point number formatted according to
 // ECMA-262, 10th edition, section 7.1.12.1 and RFC 8785, section 3.2.2.3.
@@ -532,6 +548,22 @@ const (
 	KindBeginArray  = jsontext.KindBeginArray
 	KindEndArray    = jsontext.KindEndArray
 )
+
+// AppendFloat appends src to dst as a JSON number per RFC 8259, section 6.
+//
+// Except for -0, which is formatted as -0 instead of 0,
+// the output is identical to ECMA-262, 10th edition, section 7.1.12.1
+// and (for 64-bit precision) identical to RFC 8785, section 3.2.2.3.
+// The values NaN, +Inf, and -Inf will be represented as a JSON string
+// with the values "NaN", "Infinity", and "-Infinity".
+//
+// Note that most JSON libraries and standards assume that JSON numbers
+// are 64-bit floating-point numbers. As such, prefer using 64 bits
+// of precision unless the recipient can know from other context
+// that the encoded number uses 32 bits of precision.
+func AppendFloat(dst []byte, src float64, bits int) []byte {
+	return jsontext.AppendFloat(dst, src, bits)
+}
 
 // AppendFormat formats the JSON value in src and appends it to dst
 // according to the specified options.

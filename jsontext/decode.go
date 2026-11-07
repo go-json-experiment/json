@@ -111,7 +111,8 @@ type decodeBuffer struct {
 	// the absolute offset relative to the start of io.Reader stream.
 	baseOffset int64
 
-	rd io.Reader
+	rd    io.Reader
+	rdErr error // deferred read error until next fetch operation
 }
 
 // NewDecoder constructs a new streaming decoder reading from r.
@@ -134,7 +135,13 @@ func (d *Decoder) Reset(r io.Reader, opts ...Options) {
 	case d == nil:
 		panic("jsontext: invalid nil Decoder")
 	case r == nil:
-		panic("jsontext: invalid nil io.Reader")
+		// Reset with nil io.Reader is often used to avoid pinning memory
+		// when using the Decoder with a sync.Pool.
+		// A nil io.Reader is insufficient since that signals that the
+		// Decoder is operating in a purely buffered mode.
+		// Instead, use a wrapped nil interface so that method calls
+		// on Decoder eventually panic when calling the Read method.
+		r = struct{ io.Reader }{}
 	case d.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Decoder passed to json.UnmarshalerFrom")
 	}
@@ -175,6 +182,9 @@ var errBufferWriteAfterNext = errors.New("invalid bytes.Buffer.Write call after 
 func (d *decoderState) fetch() error {
 	if d.rd == nil {
 		return io.ErrUnexpectedEOF
+	}
+	if r, ok := d.rd.(struct{ io.Reader }); ok && r.Reader == nil {
+		panic("nil io.Reader")
 	}
 
 	// Inform objectNameStack that we are about to fetch new buffer content.
@@ -236,12 +246,17 @@ func (d *decoderState) fetch() error {
 	d.prevStart = 0
 
 	// Read more data into the internal buffer.
+	if err := d.rdErr; err != nil && err != io.EOF {
+		d.rdErr = nil
+		return &ioError{action: "read", err: err} // surface previous read error, but assume it as intermittent
+	}
 	for {
 		n, err := d.rd.Read(d.buf[len(d.buf):cap(d.buf)])
 		switch {
 		case n > 0:
 			d.buf = d.buf[:len(d.buf)+n]
-			return nil // ignore errors if any bytes are read
+			d.rdErr = err // defer read error until next fetch
+			return nil
 		case err == io.EOF:
 			return io.ErrUnexpectedEOF
 		case err != nil:

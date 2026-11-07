@@ -434,6 +434,76 @@ func TestUnsupportedValues(t *testing.T) {
 	}
 }
 
+// Issue 81176: UnsupportedValueError.Value should hold the NaN or ±Inf value.
+func TestUnsupportedValueErrorValue(t *testing.T) {
+	type NamedFloat float64
+	tests := []struct {
+		CaseName
+		in   any
+		want any
+	}{
+		{Name(""), NamedFloat(math.NaN()), NamedFloat(math.NaN())},
+		{Name(""), math.Inf(-1), math.Inf(-1)},
+		{Name(""), NamedFloat(math.Inf(1)), NamedFloat(math.Inf(1))},
+		{Name(""), map[string]float64{"x": math.Inf(1)}, math.Inf(1)},
+		{Name(""), []NamedFloat{NamedFloat(math.NaN())}, NamedFloat(math.NaN())},
+		{Name(""), struct{ F float64 }{math.Inf(-1)}, math.Inf(-1)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			_, err := Marshal(tt.in)
+			uve, ok := err.(*UnsupportedValueError)
+			if !ok {
+				t.Fatalf("%s: Marshal error:\n\tgot:  %T\n\twant: %T", tt.Where, err, new(UnsupportedValueError))
+			}
+			got := uve.Value
+			want := reflect.ValueOf(tt.want)
+			if got.Type() != want.Type() {
+				t.Fatalf("%s: UnsupportedValueError.Value.Type = %v, want %v", tt.Where, got.Type(), want.Type())
+			}
+			equalFloat := func(x, y float64) bool {
+				return x == y || math.IsNaN(x) == math.IsNaN(y)
+			}
+			if !equalFloat(got.Float(), want.Float()) {
+				t.Fatalf("%s: UnsupportedValueError.Value.Float = %v, want %v", tt.Where, got.Float(), want.Float())
+			}
+		})
+	}
+}
+
+// Issue 82079: UnsupportedValueError.Value should hold the value with the cycle.
+func TestUnsupportedValueErrorValueCycle(t *testing.T) {
+	tests := []struct {
+		CaseName
+		in   any
+		want reflect.Type
+	}{
+		{Name(""), pointerCycle, reflect.TypeFor[*PointerCycle]()},
+		{Name(""), pointerCycleIndirect, reflect.TypeFor[*PointerCycleIndirect]()},
+		{Name(""), mapCycle, reflect.TypeFor[map[string]any]()},
+		{Name(""), sliceCycle, reflect.TypeFor[[]any]()},
+		{Name(""), recursiveSliceCycle, reflect.TypeFor[RecursiveSlice]()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			_, err := Marshal(tt.in)
+			uve, ok := err.(*UnsupportedValueError)
+			if !ok {
+				t.Fatalf("%s: Marshal error:\n\tgot:  %T\n\twant: %T", tt.Where, err, new(UnsupportedValueError))
+			}
+			if !uve.Value.IsValid() {
+				t.Fatalf("%s: UnsupportedValueError.Value is invalid", tt.Where)
+			}
+			if got := uve.Value.Type(); got != tt.want {
+				t.Fatalf("%s: UnsupportedValueError.Value.Type = %v, want %v", tt.Where, got, tt.want)
+			}
+			if got, want := uve.Str, "encountered a cycle via "+tt.want.String(); got != want {
+				t.Fatalf("%s: UnsupportedValueError.Str = %q, want %q", tt.Where, got, want)
+			}
+		})
+	}
+}
+
 // Issue 43207
 func TestMarshalTextFloatMap(t *testing.T) {
 	m := map[textfloat]string{
@@ -515,6 +585,49 @@ func TestRefValMarshal(t *testing.T) {
 	}
 	if got := string(b); got != want {
 		t.Errorf("Marshal:\n\tgot:  %s\n\twant: %s", got, want)
+	}
+}
+
+// A pointer-receiver MarshalJSON is called for a field reached through an
+// embedded pointer, even when the outer value is not addressable.
+// It is not called for a field of an unaddressable value with no pointer in between.
+func TestMarshalEmbeddedPointer(t *testing.T) {
+	type inner struct {
+		R Ref    `json:"r"`
+		A [1]Ref `json:"a"`
+	}
+	type outer struct{ *inner }
+	in := inner{R: 1, A: [1]Ref{2}}
+
+	type direct struct {
+		R Ref `json:"r"`
+	}
+	type directArr struct {
+		A [1]Ref `json:"a"`
+	}
+
+	tests := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"embedded pointer", outer{&in}, `{"r":"ref","a":["ref"]}`},
+		{"pointer to outer", &outer{&in}, `{"r":"ref","a":["ref"]}`},
+		{"unaddressable field", direct{R: 1}, `{"r":1}`},
+		{"addressable field", &direct{R: 1}, `{"r":"ref"}`},
+		{"unaddressable array", directArr{A: [1]Ref{2}}, `{"a":[2]}`},
+		{"addressable array", &directArr{A: [1]Ref{2}}, `{"a":["ref"]}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := Marshal(tt.in)
+			if err != nil {
+				t.Fatalf("Marshal error: %v", err)
+			}
+			if got := string(b); got != tt.want {
+				t.Errorf("Marshal:\n\tgot:  %s\n\twant: %s", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -704,7 +817,7 @@ func TestAnonymousFields(t *testing.T) {
 		},
 		want: `{"MyInt1":1,"MyInt2":3}`,
 	}, {
-		// If an anonymous struct pointer field is nil, we should ignore
+		// If an embedded struct pointer field is nil, we should ignore
 		// the embedded fields behind it. Not properly doing so may
 		// result in the wrong output or reflect panics.
 		CaseName: Name("EmbeddedFieldBehindNilPointer"),
@@ -846,6 +959,23 @@ type BugD struct { // Same as BugA after tagging.
 type BugY struct {
 	BugA
 	BugD
+}
+
+// A tag name holding a character isValidTag rejects is not a name at all, so
+// the field keeps its Go name. See golang.org/issue/81383.
+func TestInvalidTagNameUsesFieldName(t *testing.T) {
+	var v struct {
+		Quote     int `json:"one\"two"`
+		Backslash int `json:"one\\two"`
+		Valid     int `json:"ok"`
+	}
+	got, err := Marshal(v)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	if want := `{"Quote":0,"Backslash":0,"ok":0}`; string(got) != want {
+		t.Errorf("Marshal:\n\tgot  %s\n\twant %s", got, want)
+	}
 }
 
 // Test that a field with a tag dominates untagged fields.
@@ -1113,6 +1243,64 @@ func TestNilMarshalerTextMapKey(t *testing.T) {
 	const want = `{"":1,"A:B":2}`
 	if string(got) != want {
 		t.Errorf("Marshal:\n\tgot:  %s\n\twant: %s", got, want)
+	}
+}
+
+// textMarshalerString is a string kind that implements encoding.TextMarshaler.
+type textMarshalerString string
+
+func (s textMarshalerString) MarshalText() ([]byte, error) {
+	return []byte("X_" + string(s)), nil
+}
+
+func (s textMarshalerString) AppendText(b []byte) ([]byte, error) {
+	return append(b, ("X_" + string(s))...), nil
+}
+
+// Issue 81355: string-kind map keys are used directly even if the key type
+// implements encoding.TextMarshaler. MarshalText is still called for values.
+func TestStringKindTextMarshalerMapKey(t *testing.T) {
+	got, err := Marshal(map[textMarshalerString]textMarshalerString{"foo": "bar"})
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	const want = `{"foo":"X_bar"}`
+	if string(got) != want {
+		t.Errorf("Marshal:\n\tgot:  %s\n\twant: %s", got, want)
+	}
+}
+
+// ptrTextMarshalerString is a string kind that implements encoding.TextMarshaler
+// with a pointer receiver.
+type ptrTextMarshalerString string
+
+func (s *ptrTextMarshalerString) MarshalText() ([]byte, error) {
+	return []byte("P_" + string(*s)), nil
+}
+
+// Map keys of pointer kind are not used directly, so MarshalText is called
+// even if they point to a string kind, including when held in an interface.
+func TestPointerToStringKindTextMarshalerMapKey(t *testing.T) {
+	k1 := textMarshalerString("foo")
+	k2 := ptrTextMarshalerString("foo")
+	tests := []struct {
+		in   any
+		want string
+	}{
+		{map[*textMarshalerString]int{&k1: 1}, `{"X_foo":1}`},
+		{map[*ptrTextMarshalerString]int{&k2: 1}, `{"P_foo":1}`},
+		{map[ptrTextMarshalerString]int{"foo": 1}, `{"foo":1}`},
+		{map[encoding.TextMarshaler]int{&k1: 1}, `{"X_foo":1}`},
+		{map[encoding.TextMarshaler]int{&k2: 1}, `{"P_foo":1}`},
+	}
+	for _, tt := range tests {
+		got, err := Marshal(tt.in)
+		if err != nil {
+			t.Fatalf("Marshal(%T) error: %v", tt.in, err)
+		}
+		if string(got) != tt.want {
+			t.Errorf("Marshal(%T):\n\tgot:  %s\n\twant: %s", tt.in, got, tt.want)
+		}
 	}
 }
 

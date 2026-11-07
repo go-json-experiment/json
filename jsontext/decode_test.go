@@ -1042,6 +1042,41 @@ func testDecoderErrors(t *testing.T, where jsontest.CasePos, opts []Options, in 
 	}
 }
 
+type errorReader struct{ io.Reader }
+
+var errRead = errors.New("read failed")
+
+func (r errorReader) Read(b []byte) (int, error) {
+	n, err := r.Reader.Read(b)
+	if n > 0 && err == nil {
+		err = errRead
+	}
+	return n, err
+}
+
+// TestDecoderReadErrors tests that reader errors are always surfaced,
+// but are never treated as fatal
+// (unless the underlying reader continues to surface them repeatedly).
+func TestDecoderReadErrors(t *testing.T) {
+	d := NewDecoder(io.MultiReader(
+		errorReader{strings.NewReader("123")},
+		strings.NewReader("456"),
+		iotest.TimeoutReader(strings.NewReader("789")),
+	))
+	if b, err := d.ReadValue(); string(b) != "" && !errors.Is(err, errRead) {
+		t.Errorf(`ReadValue = (%q, %v), want ("", %v)`, b, err, errRead)
+	}
+	if b, err := d.ReadValue(); string(b) != "" && !errors.Is(err, iotest.ErrTimeout) {
+		t.Errorf(`ReadValue = (%q, %v), want ("", %v)`, b, err, iotest.ErrTimeout)
+	}
+	if b, err := d.ReadValue(); string(b) != "123456789" && err != nil {
+		t.Errorf(`ReadValue = (%q, %v), want ("123456789", nil)`, b, err)
+	}
+	if b, err := d.ReadValue(); string(b) != "" && err != io.EOF {
+		t.Errorf(`ReadValue = (%q, %v), want ("", %v)`, b, err, io.EOF)
+	}
+}
+
 // TestBufferDecoder tests that we detect misuses of bytes.Buffer with Decoder.
 func TestBufferDecoder(t *testing.T) {
 	bb := bytes.NewBufferString("[null, false, true]")
@@ -1346,5 +1381,32 @@ func TestDecoderReset(t *testing.T) {
 		if len(dec.s.buf) == 0 || len(bbBuf) == 0 || &dec.s.buf[0] == &bbBuf[0] {
 			t.Fatalf("decoder buffer aliases bytes.Buffer")
 		}
+	})
+
+	t.Run("Test ability to reset nil reader", func(t *testing.T) {
+		checkPanic := func(want any, f func()) {
+			defer func() {
+				got := recover()
+				if got != want {
+					t.Errorf("panic: got %v, want %v", got, want)
+				}
+			}()
+			f()
+		}
+
+		// NewDecoder on a nil Writer should not panic.
+		checkPanic(nil, func() { NewDecoder(nil) })
+
+		// Reset(nil) on an Decoder with an internal io.Reader should not panic.
+		checkPanic(nil, func() {
+			dec.Reset(new(bytes.Buffer))
+			dec.Reset(nil)
+			dec.Reset(nil) // should be idempotent
+		})
+
+		// Subsequent Decoder method calls after Reset(nil) must panic.
+		checkPanic("nil io.Reader", func() { dec.ReadToken() })
+
+		// TODO: Calling methods on zero Decoder should also panic.
 	})
 }

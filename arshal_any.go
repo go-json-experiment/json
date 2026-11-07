@@ -48,13 +48,13 @@ func marshalValueAny(enc *jsontext.Encoder, val any, mo *jsonopts.Struct) error 
 		return marshalArrayAny(enc, val, mo)
 	}
 
-	v := newAddressableValue(reflect.TypeOf(val))
-	v.Set(reflect.ValueOf(val))
-	marshal := lookupArshaler(v.Type()).marshal
+	va := newAddressableValue(reflect.TypeOf(val))
+	va.Set(reflect.ValueOf(val))
+	marshal := lookupMarshaler(va.Type()).fnc
 	if mo.Marshalers != nil {
-		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, v.Type())
+		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, va.Type())
 	}
-	return marshal(enc, v, mo)
+	return marshal(enc, maybeAddressableValue(va), mo)
 }
 
 // unmarshalValueAny unmarshals a JSON value as a Go any.
@@ -93,7 +93,7 @@ func unmarshalValueAny(dec *jsontext.Decoder, uo *jsonopts.Struct) (any, error) 
 			}
 			fv, err := strconv.ParseFloat(string(val), 64)
 			if err != nil {
-				return fv, newUnmarshalErrorAfterWithValue(dec, float64Type, errors.Unwrap(err))
+				return 0.0, newUnmarshalErrorAfterWithValue(dec, float64Type, errors.Unwrap(err))
 			}
 			return fv, nil
 		default:
@@ -109,7 +109,7 @@ func marshalObjectAny(enc *jsontext.Encoder, obj map[string]any, mo *jsonopts.St
 	xe := export.Encoder(enc)
 	if xe.Tokens.Depth() > startDetectingCyclesAfter {
 		v := reflect.ValueOf(obj)
-		if err := visitPointer(&xe.SeenPointers, v); err != nil {
+		if err := visitPointer(&xe.SeenPointers, v, mo); err != nil {
 			return newMarshalErrorBefore(enc, mapStringAnyType, err)
 		}
 		defer leavePointer(&xe.SeenPointers, v)
@@ -225,7 +225,7 @@ func marshalArrayAny(enc *jsontext.Encoder, arr []any, mo *jsonopts.Struct) erro
 	xe := export.Encoder(enc)
 	if xe.Tokens.Depth() > startDetectingCyclesAfter {
 		v := reflect.ValueOf(arr)
-		if err := visitPointer(&xe.SeenPointers, v); err != nil {
+		if err := visitPointer(&xe.SeenPointers, v, mo); err != nil {
 			return newMarshalErrorBefore(enc, sliceAnyType, err)
 		}
 		defer leavePointer(&xe.SeenPointers, v)
