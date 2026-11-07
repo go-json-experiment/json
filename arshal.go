@@ -179,6 +179,9 @@ func Marshal(in any, opts ...Options) (out []byte, err error) {
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 	opts = mayAppendSupportFormatTag(opts)
+	if out == nil {
+		panic("nil io.Writer")
+	}
 	enc := export.GetStreamingEncoder(out, opts...)
 	defer export.PutStreamingEncoder(enc)
 	xe := export.Encoder(enc)
@@ -198,6 +201,9 @@ func MarshalWrite(out io.Writer, in any, opts ...Options) (err error) {
 // See [Marshal] for details about the conversion of a Go value into JSON.
 func MarshalEncode(out *jsontext.Encoder, in any, opts ...Options) (err error) {
 	opts = mayAppendSupportFormatTag(opts)
+	if out == nil {
+		panic("nil jsontext.Encoder")
+	}
 	xe := export.Encoder(out)
 	if len(opts) > 0 {
 		optsOriginal := xe.Struct
@@ -232,19 +238,15 @@ func marshalEncode(out *jsontext.Encoder, in any, mo *jsonopts.Struct) (err erro
 	if !v.IsValid() || (v.Kind() == reflect.Pointer && v.IsNil()) {
 		return out.WriteToken(jsontext.Null)
 	}
-	// Shallow copy non-pointer values to obtain an addressable value.
-	// It is beneficial to performance to always pass pointers to avoid this.
-	forceAddr := v.Kind() != reflect.Pointer
-	if forceAddr {
-		v2 := reflect.New(v.Type())
-		v2.Elem().Set(v)
-		v = v2
+	notAddressable := v.Kind() != reflect.Pointer
+	if !notAddressable {
+		v = v.Elem()
 	}
-	va := addressableValue{v.Elem(), forceAddr} // dereferenced pointer is always addressable
+	va := maybeAddressableValue{v, notAddressable}
 	t := va.Type()
 
 	// Lookup and call the marshal function for this type.
-	marshal := lookupArshaler(t).marshal
+	marshal := lookupMarshaler(t).fnc
 	if mo.Marshalers != nil {
 		marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t)
 	}
@@ -406,6 +408,9 @@ func Unmarshal(in []byte, out any, opts ...Options) (err error) {
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 	opts = mayAppendSupportFormatTag(opts)
+	if in == nil {
+		panic("nil io.Reader")
+	}
 	dec := export.GetStreamingDecoder(in, opts...)
 	defer export.PutStreamingDecoder(dec)
 	xd := export.Decoder(dec)
@@ -428,6 +433,9 @@ func UnmarshalRead(in io.Reader, out any, opts ...Options) (err error) {
 // See [Unmarshal] for details about the conversion of JSON into a Go value.
 func UnmarshalDecode(in *jsontext.Decoder, out any, opts ...Options) (err error) {
 	opts = mayAppendSupportFormatTag(opts)
+	if in == nil {
+		panic("nil jsontext.Decoder")
+	}
 	xd := export.Decoder(in)
 	if len(opts) > 0 {
 		optsOriginal := xd.Struct
@@ -454,7 +462,7 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct, last bo
 	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return &SemanticError{action: "unmarshal", GoType: reflect.TypeOf(out), Err: internal.ErrNonNilReference}
 	}
-	va := addressableValue{v.Elem(), false} // dereferenced pointer is always addressable
+	va := alwaysAddressableValue{v.Elem(), false} // dereferenced pointer is always addressable
 	t := va.Type()
 
 	// In legacy semantics, the entirety of the next JSON value
@@ -470,7 +478,7 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct, last bo
 	}
 
 	// Lookup and call the unmarshal function for this type.
-	unmarshal := lookupArshaler(t).unmarshal
+	unmarshal := lookupUnmarshaler(t).fnc
 	if uo.Unmarshalers != nil {
 		unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t)
 	}
@@ -490,27 +498,133 @@ func unmarshalDecode(in *jsontext.Decoder, out any, uo *jsonopts.Struct, last bo
 	return nil
 }
 
-// addressableValue is a reflect.Value that is guaranteed to be addressable
+// maybeAddressableValue is a [reflect.Value] that is not guaranteed to be addressable
+// such that calling the Addr and Set methods may panic.
+//
+// This is used for all code paths dealing with marshaling.
+type maybeAddressableValue struct {
+	reflect.Value
+
+	// legacyNotAddressable reports whether the original value was unaddressable.
+	// Note that the current value maybe addressable because it was forcibly
+	// made addressable through the use of [newAddressableValue].
+	// This is only used for [jsonflags.CallMethodsWithLegacySemantics].
+	legacyNotAddressable bool
+}
+
+// fieldByIndex is like [reflect.Value.FieldByIndex], but allows a new value if mayAlloc.
+// It returns an invalid value when dereferencing a nil pointer and vm cannot be set.
+func (vm maybeAddressableValue) fieldByIndex(index []int, mayAlloc bool) maybeAddressableValue {
+	for _, i := range index {
+		vm = vm.indirect(mayAlloc)
+		if !vm.IsValid() {
+			return vm
+		}
+		vm = maybeAddressableValue{vm.Field(i), vm.legacyNotAddressable} // addressable if struct value is addressable
+	}
+	return vm
+}
+
+// indirect is like [reflect.Indirect], but allocates a new value if mayAlloc.
+// It returns an invalid value when dereferencing a nil pointer and vm cannot be set.
+func (vm maybeAddressableValue) indirect(mayAlloc bool) maybeAddressableValue {
+	if vm.Kind() == reflect.Pointer {
+		if vm.IsNil() {
+			if !mayAlloc || !vm.CanSet() {
+				return maybeAddressableValue{}
+			}
+			vm.Value.Set(reflect.New(vm.Type().Elem()))
+		}
+		vm = maybeAddressableValue{vm.Elem(), false} // dereferenced pointer is always addressable
+	}
+	return vm
+}
+
+// typeAssertInterface is like [reflect.TypeAssert], but calls Addr if needAddr.
+// If the value is not addressable, then [maybeAddressableValue.ensureAddr]
+// is called where the returned T does not back the original value.
+// T must be an interface kind.
+func (vm maybeAddressableValue) typeAssertInterface[T any](needAddr bool) T {
+	if !needAddr && !vm.CanAddr() {
+		v, _ := reflect.TypeAssert[T](vm.Value) // avoids allocation
+		return v
+	}
+	v, _ := reflect.TypeAssert[T](vm.ensureAddr().Addr()) // allocates if CanAddr is false
+	return v
+}
+
+// ensureAddr returns vm if it is addressable, or an addressable shallow copy.
+// This is often called by marshal functionality for addressable methods.
+//
+// Mutations to the value made by the method implementation are not observable
+// in the original value if a shallow copy is made.
+func (vm maybeAddressableValue) ensureAddr() alwaysAddressableValue {
+	if !vm.Value.CanAddr() {
+		va := reflect.New(vm.Type()).Elem()
+		va.Set(vm.Value)
+		vm.Value = va
+	}
+	return alwaysAddressableValue(vm)
+}
+
+// The [maybeAddressableValue] methods below deliberately overload
+// the methods on [reflect.Value] such that use of the methods
+// results in a static compilation failure.
+// This is to prevent accidental use of reflect methods that can panic
+// if the underlying value is not addressable.
+//
+// If you need to call such methods, either convert to [alwaysAddressableValue],
+// explaining why the value is guaranteed to be addressable, or
+// use [maybeAddressableValue.ensureAddr] to obtain an addressable copy.
+type unsafeWhenNotAddressable struct{}
+
+func (maybeAddressableValue) Addr(unsafeWhenNotAddressable)       {}
+func (maybeAddressableValue) UnsafeAddr(unsafeWhenNotAddressable) {}
+func (maybeAddressableValue) Bytes(unsafeWhenNotAddressable)      {}
+func (maybeAddressableValue) Slice(unsafeWhenNotAddressable)      {}
+func (maybeAddressableValue) Slice3(unsafeWhenNotAddressable)     {}
+func (maybeAddressableValue) Set(unsafeWhenNotAddressable)        {}
+func (maybeAddressableValue) SetBool(unsafeWhenNotAddressable)    {}
+func (maybeAddressableValue) SetBytes(unsafeWhenNotAddressable)   {}
+func (maybeAddressableValue) SetCap(unsafeWhenNotAddressable)     {}
+func (maybeAddressableValue) SetComplex(unsafeWhenNotAddressable) {}
+func (maybeAddressableValue) SetFloat(unsafeWhenNotAddressable)   {}
+func (maybeAddressableValue) SetInt(unsafeWhenNotAddressable)     {}
+func (maybeAddressableValue) SetLen(unsafeWhenNotAddressable)     {}
+func (maybeAddressableValue) SetPointer(unsafeWhenNotAddressable) {}
+func (maybeAddressableValue) SetString(unsafeWhenNotAddressable)  {}
+func (maybeAddressableValue) SetUint(unsafeWhenNotAddressable)    {}
+func (maybeAddressableValue) SetZero(unsafeWhenNotAddressable)    {}
+func (maybeAddressableValue) Grow(unsafeWhenNotAddressable)       {}
+
+// alwaysAddressableValue is a [reflect.Value] that is guaranteed to be addressable
 // such that calling the Addr and Set methods do not panic.
+//
+// This is used for all code paths dealing with unmarshaling.
 //
 // There is no compile magic that enforces this property,
 // but rather the need to construct this type makes it easier to examine each
 // construction site to ensure that this property is upheld.
-type addressableValue struct {
-	reflect.Value
-
-	// forcedAddr reports whether this value is addressable
-	// only through the use of [newAddressableValue].
-	// This is only used for [jsonflags.CallMethodsWithLegacySemantics].
-	forcedAddr bool
-}
+//
+// It uses the same underlying type as [maybeAddressableValue].
+// It is always safe to convert alwaysAddressableValue to maybeAddressableValue.
+// Converting maybeAddressableValue to alwaysAddressableValue requires careful vetting.
+type alwaysAddressableValue maybeAddressableValue
 
 // newAddressableValue constructs a new addressable value of type t.
-func newAddressableValue(t reflect.Type) addressableValue {
-	return addressableValue{reflect.New(t).Elem(), true}
+func newAddressableValue(t reflect.Type) alwaysAddressableValue {
+	return alwaysAddressableValue{reflect.New(t).Elem(), true}
 }
 
-// TODO: Remove *jsonopts.Struct argument from [marshaler] and [unmarshaler].
+func (va alwaysAddressableValue) fieldByIndex(index []int, mayAlloc bool) alwaysAddressableValue {
+	return alwaysAddressableValue(maybeAddressableValue(va).fieldByIndex(index, mayAlloc))
+}
+
+func (va alwaysAddressableValue) indirect(mayAlloc bool) alwaysAddressableValue {
+	return alwaysAddressableValue(maybeAddressableValue(va).indirect(mayAlloc))
+}
+
+// TODO: Remove *jsonopts.Struct argument from [marshalFunc] and [unmarshalFunc].
 // This can be directly accessed on the encoder or decoder.
 
 // All marshal and unmarshal behavior is implemented using these signatures.
@@ -519,30 +633,50 @@ func newAddressableValue(t reflect.Type) addressableValue {
 // It is identical for Marshal, Unmarshal, MarshalWrite, and UnmarshalRead.
 // It is a super-set for MarshalEncode and UnmarshalDecode.
 type (
-	marshaler   = func(*jsontext.Encoder, addressableValue, *jsonopts.Struct) error
-	unmarshaler = func(*jsontext.Decoder, addressableValue, *jsonopts.Struct) error
+	marshalFunc   = func(*jsontext.Encoder, maybeAddressableValue, *jsonopts.Struct) error
+	unmarshalFunc = func(*jsontext.Decoder, alwaysAddressableValue, *jsonopts.Struct) error
 )
 
-type arshaler struct {
-	marshal    marshaler
-	unmarshal  unmarshaler
+type marshaler struct {
+	fnc        marshalFunc
 	nonDefault bool
 }
 
-var lookupArshalerCache sync.Map // map[reflect.Type]*arshaler
+type unmarshaler struct {
+	fnc        unmarshalFunc
+	nonDefault bool
+}
 
-func lookupArshaler(t reflect.Type) *arshaler {
-	if v, ok := lookupArshalerCache.Load(t); ok {
-		return v.(*arshaler)
+var lookupMarshalerCache sync.Map // map[reflect.Type]*marshaler
+
+func lookupMarshaler(t reflect.Type) *marshaler {
+	if v, ok := lookupMarshalerCache.Load(t); ok {
+		return v.(*marshaler)
 	}
 
-	fncs := makeDefaultArshaler(t)
-	fncs = makeMethodArshaler(fncs, t)
-	fncs = makeTimeArshaler(fncs, t)
+	fnc := makeDefaultMarshaler(t)
+	fnc = makeMethodMarshaler(fnc, t)
+	fnc = makeTimeMarshaler(fnc, t)
 
-	// Use the last stored so that duplicate arshalers can be garbage collected.
-	v, _ := lookupArshalerCache.LoadOrStore(t, fncs)
-	return v.(*arshaler)
+	// Use the last stored so that duplicate marshalers can be garbage collected.
+	v, _ := lookupMarshalerCache.LoadOrStore(t, fnc)
+	return v.(*marshaler)
+}
+
+var lookupUnmarshalerCache sync.Map // map[reflect.Type]*unmarshaler
+
+func lookupUnmarshaler(t reflect.Type) *unmarshaler {
+	if v, ok := lookupUnmarshalerCache.Load(t); ok {
+		return v.(*unmarshaler)
+	}
+
+	fnc := makeDefaultUnmarshaler(t)
+	fnc = makeMethodUnmarshaler(fnc, t)
+	fnc = makeTimeUnmarshaler(fnc, t)
+
+	// Use the last stored so that duplicate unmarshalers can be garbage collected.
+	v, _ := lookupUnmarshalerCache.LoadOrStore(t, fnc)
+	return v.(*unmarshaler)
 }
 
 var stringsPools = &sync.Pool{New: func() any { return new(stringSlice) }}

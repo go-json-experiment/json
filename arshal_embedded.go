@@ -37,8 +37,8 @@ var errRawEmbedNotObject = errors.New("embedded raw value must be a JSON object"
 var jsontextValueType = reflect.TypeFor[jsontext.Value]()
 
 // marshalEmbeddedFallbackAll marshals all the members in an embedded fallback.
-func marshalEmbeddedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct, f *structField, insertUnquotedName func([]byte) bool) error {
-	v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+func marshalEmbeddedFallbackAll(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct, f *structField, fnc *marshaler, insertUnquotedName func([]byte) bool) error {
+	v := maybeAddressableValue{vm.Field(f.index0), vm.legacyNotAddressable} // addressable if struct value is addressable
 	if len(f.index) > 0 {
 		v = v.fieldByIndex(f.index, false)
 		if !v.IsValid() {
@@ -110,10 +110,10 @@ func marshalEmbeddedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *
 		if n == 0 {
 			return nil
 		}
-		mk := newAddressableValue(m.Type().Key())
-		mv := newAddressableValue(m.Type().Elem())
-		marshalKey := func(mk addressableValue) error {
-			b, err := jsonwire.AppendQuote(enc.AvailableBuffer(), []byte(mk.String()), &mo.Flags)
+		mka := newAddressableValue(m.Type().Key())  // temporary addressable key for each map entry
+		mva := newAddressableValue(m.Type().Elem()) // temporary addressable value for each map entry
+		marshalKey := func(vm maybeAddressableValue) error {
+			b, err := jsonwire.AppendQuote(enc.AvailableBuffer(), []byte(vm.String()), &mo.Flags)
 			if err != nil {
 				return newMarshalErrorBefore(enc, m.Type().Key(), err)
 			}
@@ -126,36 +126,36 @@ func marshalEmbeddedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *
 			}
 			return enc.WriteValue(b)
 		}
-		marshalVal := f.fncs.marshal
+		marshalVal := fnc.fnc
 		if mo.Marshalers != nil {
-			marshalVal, _ = mo.Marshalers.(*Marshalers).lookup(marshalVal, mv.Type())
+			marshalVal, _ = mo.Marshalers.(*Marshalers).lookup(marshalVal, mva.Type())
 		}
 		if !mo.Flags.Get(jsonflags.Deterministic) || n <= 1 {
 			for iter := m.MapRange(); iter.Next(); {
-				mk.SetIterKey(iter)
-				if err := marshalKey(mk); err != nil {
+				mka.SetIterKey(iter)
+				if err := marshalKey(maybeAddressableValue(mka)); err != nil {
 					return err
 				}
-				mv.Set(iter.Value())
-				if err := marshalVal(enc, mv, mo); err != nil {
+				mva.Set(iter.Value())
+				if err := marshalVal(enc, maybeAddressableValue(mva), mo); err != nil {
 					return err
 				}
 			}
 		} else {
 			names := getStrings(n)
 			for i, iter := 0, m.Value.MapRange(); i < n && iter.Next(); i++ {
-				mk.SetIterKey(iter)
-				(*names)[i] = mk.String()
+				mka.SetIterKey(iter)
+				(*names)[i] = mka.String()
 			}
 			slices.Sort(*names)
 			for _, name := range *names {
-				mk.SetString(name)
-				if err := marshalKey(mk); err != nil {
+				mka.SetString(name)
+				if err := marshalKey(maybeAddressableValue(mka)); err != nil {
 					return err
 				}
-				// TODO(https://go.dev/issue/57061): Use mv.SetMapIndexOf.
-				mv.Set(m.MapIndex(mk.Value))
-				if err := marshalVal(enc, mv, mo); err != nil {
+				// TODO(https://go.dev/issue/57061): Use mva.SetMapIndexOf.
+				mva.Set(m.MapIndex(mka.Value))
+				if err := marshalVal(enc, maybeAddressableValue(mva), mo); err != nil {
 					return err
 				}
 			}
@@ -166,12 +166,15 @@ func marshalEmbeddedFallbackAll(enc *jsontext.Encoder, va addressableValue, mo *
 }
 
 // unmarshalEmbeddedFallbackNext unmarshals only the next member in an embedded fallback.
-func unmarshalEmbeddedFallbackNext(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct, f *structField, quotedName, unquotedName []byte) error {
-	v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+func unmarshalEmbeddedFallbackNext(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct, f *structField, fnc *unmarshaler, quotedName, unquotedName []byte) error {
+	v := alwaysAddressableValue{va.Field(f.index0), va.legacyNotAddressable} // addressable if struct value is addressable
 	if len(f.index) > 0 {
 		v = v.fieldByIndex(f.index, true)
 	}
 	v = v.indirect(true)
+	if !v.IsValid() {
+		return newUnmarshalErrorBeforeWithSkipping(dec, va.Type(), errNilField)
+	}
 
 	if v.Type() == jsontextValueType {
 		b, _ := reflect.TypeAssert[*jsontext.Value](v.Addr())
@@ -216,7 +219,7 @@ func unmarshalEmbeddedFallbackNext(dec *jsontext.Decoder, va addressableValue, u
 			mv.Set(v2)
 		}
 
-		unmarshal := f.fncs.unmarshal
+		unmarshal := fnc.fnc
 		if uo.Unmarshalers != nil {
 			unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, mv.Type())
 		}

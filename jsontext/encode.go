@@ -103,7 +103,13 @@ func (e *Encoder) Reset(w io.Writer, opts ...Options) {
 	case e == nil:
 		panic("jsontext: invalid nil Encoder")
 	case w == nil:
-		panic("jsontext: invalid nil io.Writer")
+		// Reset with nil io.Writer is often used to avoid pinning memory
+		// when using the Encoder with a sync.Pool.
+		// A nil io.Writer is insufficient since that signals that the
+		// Encoder is operating in a purely buffered mode.
+		// Instead, use a wrapped nil interface so that method calls
+		// on Encoder eventually panic when calling the Write method.
+		w = struct{ io.Writer }{}
 	case e.s.Flags.Get(jsonflags.WithinArshalCall):
 		panic("jsontext: cannot reset Encoder passed to json.MarshalerTo")
 	}
@@ -159,6 +165,9 @@ func (e *encoderState) NeedFlush() bool {
 func (e *encoderState) Flush() error {
 	if e.wr == nil || e.avoidFlush() {
 		return nil
+	}
+	if w, ok := e.wr.(struct{ io.Writer }); ok && w.Writer == nil {
+		panic("nil io.Writer")
 	}
 
 	// In streaming mode, always emit a newline after the top-level value.
@@ -344,6 +353,20 @@ func (e *encoderState) UnwriteOnlyObjectMemberName() string {
 func (e *Encoder) WriteToken(t Token) error {
 	return e.s.WriteToken(t)
 }
+
+// CommitBuffer publishes b as the encoder buffer after a successful append.
+//
+// TODO(go.dev/issue/82082): Remove this method if the compiler can avoid
+// redundant write barriers when append does not grow the backing array.
+func (e *encoderState) CommitBuffer(b []byte) {
+	// Avoid a write barrier when b still uses the current backing array.
+	if cap(b) == cap(e.Buf) && (cap(b) == 0 || &b[:1][0] == &e.Buf[:1][0]) {
+		e.Buf = e.Buf[:len(b)]
+	} else {
+		e.Buf = b
+	}
+}
+
 func (e *encoderState) WriteToken(t Token) error {
 	k := t.Kind()
 	b := e.Buf // use local variable to avoid mutating e in case of error
@@ -424,7 +447,7 @@ func (e *encoderState) WriteToken(t Token) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.Buf = b
+	e.CommitBuffer(b)
 	if e.NeedFlush() {
 		return e.Flush()
 	}
@@ -502,7 +525,7 @@ func (e *encoderState) AppendRaw(k Kind, safeASCII bool, appendFn func([]byte) (
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.Buf = b
+	e.CommitBuffer(b)
 	if e.NeedFlush() {
 		return e.Flush()
 	}
@@ -598,7 +621,7 @@ func (e *encoderState) WriteValue(v Value) error {
 	}
 
 	// Finish off the buffer and store it back into e.
-	e.Buf = b
+	e.CommitBuffer(b)
 	if e.NeedFlush() {
 		return e.Flush()
 	}

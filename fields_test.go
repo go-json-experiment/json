@@ -423,11 +423,9 @@ func TestMakeStructFields(t *testing.T) {
 
 			// Zero out fields that are incomparable.
 			for i := range got.flattened {
-				got.flattened[i].fncs = nil
 				got.flattened[i].isEmpty = nil
 			}
 			if got.embeddedFallback != nil {
-				got.embeddedFallback.fncs = nil
 				got.embeddedFallback.isEmpty = nil
 			}
 
@@ -482,6 +480,20 @@ func TestParseTagOptions(t *testing.T) {
 			V int `json:""`
 		}{},
 		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
+	}, {
+		name: jsontest.Name("NameStoppingAtReservedCharacter"),
+		in: struct {
+			V int `json:"one\"two"`
+		}{},
+		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
+		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid character '\"' before next option (expecting ',')"),
+	}, {
+		name: jsontest.Name("NameStoppingAtBackslash"),
+		in: struct {
+			V int `json:"one\\two"`
+		}{},
+		wantOpts: fieldOptions{name: "V", quotedName: `"V"`},
+		wantErr:  errors.New("Go struct field V has malformed `json` tag: invalid character '\\\\' before next option (expecting ',')"),
 	}, {
 		name: jsontest.Name("Unexported"),
 		in: struct {

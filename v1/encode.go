@@ -113,6 +113,9 @@ import (
 //	// Field appears in JSON as key "-".
 //	Field int `json:"'-'"`
 //
+//	// The JSON object members of Nested are promoted into the parent object.
+//	Nested NestedType `json:",embed"`
+//
 // The "omitzero" option specifies that the field should be omitted
 // from the encoding if the field has a zero value, according to rules:
 //
@@ -135,12 +138,30 @@ import (
 // only Unicode letters, digits, and ASCII punctuation except quotation
 // marks, backslash, and comma.
 //
+// The "embed" option specifies that the JSON representable content of this
+// field type is to be promoted as if it were specified in the parent struct.
+// It is the JSON equivalent of Go struct embedding:
+//
+//	Nested NestedType `json:",embed"`
+//
+// A Go embedded field is implicitly JSON embedded unless an explicit JSON
+// name is specified. The embedded field must be a Go struct
+// (that does not implement any JSON methods), [jsontext.Value],
+// map[~string]T, or an unnamed pointer to such types. When marshaling,
+// embedded fields from a pointer type are omitted if it is nil.
+// Embedded fields of type [jsontext.Value] and map[~string]T are called
+// “embedded fallbacks” as they can represent all possible
+// JSON object members not directly handled by the parent struct.
+// Only one embedded fallback field may be specified in a struct,
+// while many non-fallback fields may be specified. This option
+// must not be specified with any other option (including the JSON name).
+//
 // Embedded struct fields are usually marshaled as if their inner exported fields
 // were fields in the outer struct, subject to the usual Go visibility rules amended
 // as described in the next paragraph.
-// An anonymous struct field with a name given in its JSON tag is treated as
+// An embedded struct field with a name given in its JSON tag is treated as
 // having that name, rather than being anonymous.
-// An anonymous struct field of interface type is treated the same as having
+// An embedded struct field of interface type is treated the same as having
 // that type as its name, rather than being anonymous.
 //
 // The Go visibility rules for struct fields are amended for JSON when
@@ -155,11 +176,6 @@ import (
 // 2) If there is exactly one field (tagged or not according to the first rule), that is selected.
 //
 // 3) Otherwise there are multiple fields, and all are ignored; no error occurs.
-//
-// Handling of anonymous struct fields is new in Go 1.1.
-// Prior to Go 1.1, anonymous struct fields were ignored. To force ignoring of
-// an anonymous struct field in both current and earlier versions, give the field
-// a JSON tag of "-".
 //
 // Map values encode as JSON objects. The map's key type must either be a
 // string, an integer type, or implement [encoding.TextMarshaler]. The map keys

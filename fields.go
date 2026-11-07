@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 
@@ -69,13 +70,29 @@ type structField struct {
 	index0  int   // 0th index into a struct according to [reflect.Type.FieldByIndex]
 	index   []int // 1st index and remainder according to [reflect.Type.FieldByIndex]
 	typ     reflect.Type
-	fncs    *arshaler
-	isZero  func(addressableValue) bool
-	isEmpty func(addressableValue) bool
+	isZero  func(maybeAddressableValue) bool
+	isEmpty func(maybeAddressableValue) bool
 	fieldOptions
 }
 
 var errNoExportedFields = errors.New("Go struct has no exported fields")
+
+type structFieldsCacheEntry struct {
+	once   sync.Once
+	fields structFields
+	err    *SemanticError
+}
+
+var structFieldsCache sync.Map // map[reflect.Type]*structFieldsCacheEntry
+
+func lookupStructFields(t reflect.Type) (*structFields, *SemanticError) {
+	entry, _ := structFieldsCache.LoadOrStore(t, new(structFieldsCacheEntry))
+	cached := entry.(*structFieldsCacheEntry)
+	cached.once.Do(func() {
+		cached.fields, cached.err = makeStructFields(t)
+	})
+	return &cached.fields, cached.err
+}
 
 func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) {
 	orErrorf := func(serr *SemanticError, t reflect.Type, f string, a ...any) *SemanticError {
@@ -169,15 +186,13 @@ func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) 
 				// Handle an embedded field that serializes to/from any number of
 				// JSON object members back by a Go map or jsontext.Value.
 				switch {
-				case tf == jsontextValueType:
-					f.fncs = nil // specially handled in arshal_embedded.go
+				case tf == jsontextValueType: // specially handled in arshal_embedded.go
 				case tf.Kind() == reflect.Map && tf.Key().Kind() == reflect.String:
 					if implementsAny(tf.Key(), allMethodTypes...) {
 						serr = orErrorf(serr, t, "embedded map field %s of type %s must have a string key that does not implement marshal or unmarshal methods", sf.Name, tf)
 						handleField()
 						return // invalid embedded field; treat as regular field
 					}
-					f.fncs = lookupArshaler(tf.Elem())
 				default:
 					serr = orErrorf(serr, t, "embedded Go struct field %s of type %s must be a Go struct, Go map of string key, or jsontext.Value", sf.Name, tf)
 					handleField()
@@ -219,29 +234,29 @@ func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) 
 				// Provide a function that uses a type's IsZero method.
 				switch {
 				case sf.Type.Kind() == reflect.Interface && sf.Type.Implements(isZeroerType):
-					f.isZero = func(va addressableValue) bool {
+					f.isZero = func(vm maybeAddressableValue) bool {
 						// Avoid panics calling IsZero on a nil interface or
 						// non-nil interface with nil pointer.
-						return va.IsNil() || (va.Elem().Kind() == reflect.Pointer && va.Elem().IsNil()) || va.Interface().(isZeroer).IsZero()
+						return vm.IsNil() || (vm.Elem().Kind() == reflect.Pointer && vm.Elem().IsNil()) || vm.Interface().(isZeroer).IsZero()
 					}
 				case sf.Type.Kind() == reflect.Pointer && sf.Type.Implements(isZeroerType):
-					f.isZero = func(va addressableValue) bool {
+					f.isZero = func(vm maybeAddressableValue) bool {
 						// Avoid panics calling IsZero on nil pointer.
-						return va.IsNil() || va.Interface().(isZeroer).IsZero()
+						return vm.IsNil() || vm.Interface().(isZeroer).IsZero()
 					}
 				case sf.Type.Implements(isZeroerType):
-					f.isZero = func(va addressableValue) bool { return va.Interface().(isZeroer).IsZero() }
+					f.isZero = func(vm maybeAddressableValue) bool { return vm.typeAssertInterface[isZeroer](false).IsZero() }
 				case reflect.PointerTo(sf.Type).Implements(isZeroerType):
-					f.isZero = func(va addressableValue) bool { return va.Addr().Interface().(isZeroer).IsZero() }
+					f.isZero = func(vm maybeAddressableValue) bool { return vm.typeAssertInterface[isZeroer](true).IsZero() }
 				}
 
 				// Provide a function that can determine whether the value would
 				// serialize as an empty JSON value.
 				switch sf.Type.Kind() {
 				case reflect.String, reflect.Map, reflect.Array, reflect.Slice:
-					f.isEmpty = func(va addressableValue) bool { return va.Len() == 0 }
+					f.isEmpty = func(vm maybeAddressableValue) bool { return vm.Len() == 0 }
 				case reflect.Pointer, reflect.Interface:
-					f.isEmpty = func(va addressableValue) bool { return va.IsNil() }
+					f.isEmpty = func(vm maybeAddressableValue) bool { return vm.IsNil() }
 				}
 
 				// Reject multiple fields with same name within the same struct.
@@ -251,9 +266,7 @@ func makeStructFields(root reflect.Type) (fs structFields, serr *SemanticError) 
 					// check for a dominant field before returning.
 				}
 				namesIndex[f.name] = i
-
 				f.id = len(allFields)
-				f.fncs = lookupArshaler(sf.Type)
 				allFields = append(allFields, f)
 				if f.format != "" && fs.errUnsupportedFormat == nil {
 					fs.errUnsupportedFormat = &SemanticError{GoType: t, Err: fmt.Errorf("Go struct field %s has unsupported `format` tag option", sf.Name)}
@@ -455,7 +468,11 @@ func parseFieldOptions(sf reflect.StructField) (out fieldOptions, ignored bool, 
 			err = cmp.Or(err, fmt.Errorf("Go struct field %s has JSON object name %q with invalid UTF-8", sf.Name, name))
 			name = string([]rune(name)) // replace invalid UTF-8 with utf8.RuneError
 		}
-		if err2 == nil {
+		// A name has to end the tag or be followed by a comma, which is the rule
+		// the option loop below already applies. Adopting one that stopped early
+		// leaves a truncated name in place under v1 semantics, where the error
+		// the loop reports is discarded.
+		if err2 == nil && (n == len(tag) || tag[n] == ',') {
 			out.hasName = true
 			out.name = name
 		}

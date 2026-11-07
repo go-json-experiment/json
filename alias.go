@@ -148,7 +148,9 @@
 // with embedded struct types.
 //
 // Marshaling or unmarshaling a non-empty struct
-// without any JSON-representable fields results in a [SemanticError].
+// without any JSON-representable fields results in a [SemanticError],
+// unless the Go struct has a field with an explicit `json` tag,
+// which signals that the type has a valid JSON representation (even if empty).
 // Unexported fields must not have any `json` tags except for `json:"-"`.
 //
 // # Security Considerations
@@ -661,6 +663,7 @@ type Marshaler = json.Marshaler
 // the Encoder. The "json" package calling the method will
 // use the next available JSON representation for the receiver type,
 // as described in [Marshal].
+//
 // Implementations must not retain the pointer to [jsontext.Encoder].
 //
 // If the returned error is a [SemanticError], then unpopulated fields
@@ -678,8 +681,8 @@ type Marshaler = json.Marshaler
 //
 // The following options may be relevant to MarshalerTo implementations:
 //
-// - [Deterministic]: if the implementation may produce non-deterministic output
-// - [StringifyNumbers]: if the type is represented as a JSON number
+//   - [Deterministic]: if the implementation may produce non-deterministic output
+//   - [StringifyNumbers]: if the type is represented as a JSON number
 //
 // Several options, such as [FormatNilSliceAsNull], apply only to native Go
 // types. Thus, these options are typically not directly relevant to
@@ -723,7 +726,9 @@ type Unmarshaler = json.Unmarshaler
 // Alternatively, it may return [errors.ErrUnsupported] without mutating
 // the Decoder. The "json" package calling the method will
 // use the next available JSON representation for the receiver type.
-// Implementations must not retain the pointer to [jsontext.Decoder].
+//
+// Implementations of UnmarshalJSONFrom must not retain the method receiver
+// or the pointer to [jsontext.Decoder].
 //
 // If the returned error is a [SemanticError], then unpopulated fields
 // of the error may be populated by [json] with additional context.
@@ -740,7 +745,7 @@ type Unmarshaler = json.Unmarshaler
 //
 // The following options may be relevant to UnmarshalerFrom implementations:
 //
-// - [StringifyNumbers]: if the type is represented as a JSON number
+//   - [StringifyNumbers]: if the type is represented as a JSON number
 //
 // Several options, such as [FormatNilSliceAsNull], apply only to native Go
 // types. Thus, these options are typically not directly relevant to
@@ -800,7 +805,7 @@ type SemanticError = json.SemanticError
 //
 // which is analogous to creating a single entry map:
 //
-//	opt := Options{"Deterministic": true}
+//	opt := Options{Deterministic: true}
 //
 // [JoinOptions] composes multiple options values together:
 //
@@ -821,7 +826,7 @@ type SemanticError = json.SemanticError
 //
 // which is analogous to a Go map lookup:
 //
-//	v, ok := Options["Deterministic"]
+//	v, ok := opts[Deterministic]
 //
 // There is a single Options type, which is used with both marshal and unmarshal.
 // Some options affect both operations, while others only affect one operation:

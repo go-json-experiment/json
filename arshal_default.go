@@ -59,9 +59,12 @@ type typedPointer struct {
 
 // visitPointer visits pointer p of type t, reporting an error if seen before.
 // If successfully visited, then the caller must eventually call leave.
-func visitPointer(m *seenPointers, v reflect.Value) error {
+func visitPointer(m *seenPointers, v reflect.Value, mo *jsonopts.Struct) error {
 	p := typedPointer{v.Type(), v.UnsafePointer(), sliceLen(v)}
 	if _, ok := (*m)[p]; ok {
+		if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+			return &internal.ValueError{Val: v.Interface(), Err: internal.ErrCycle}
+		}
 		return internal.ErrCycle
 	}
 	if *m == nil {
@@ -86,46 +89,83 @@ func len64[Bytes ~[]byte | ~string](in Bytes) int64 {
 	return int64(len(in))
 }
 
-func makeDefaultArshaler(t reflect.Type) *arshaler {
+func makeDefaultMarshaler(t reflect.Type) *marshaler {
 	switch t.Kind() {
 	case reflect.Bool:
-		return makeBoolArshaler(t)
+		return makeBoolMarshaler(t)
 	case reflect.String:
-		return makeStringArshaler(t)
+		return makeStringMarshaler(t)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return makeIntArshaler(t)
+		return makeIntMarshaler(t)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return makeUintArshaler(t)
+		return makeUintMarshaler(t)
 	case reflect.Float32, reflect.Float64:
-		return makeFloatArshaler(t)
+		return makeFloatMarshaler(t)
 	case reflect.Map:
-		return makeMapArshaler(t)
+		return makeMapMarshaler(t)
 	case reflect.Struct:
-		return makeStructArshaler(t)
+		return makeStructMarshaler(t)
 	case reflect.Slice:
-		fncs := makeSliceArshaler(t)
+		fnc := makeSliceMarshaler(t)
 		if t.Elem().Kind() == reflect.Uint8 {
-			return makeBytesArshaler(t, fncs)
+			return makeBytesMarshaler(t, fnc)
 		}
-		return fncs
+		return fnc
 	case reflect.Array:
-		fncs := makeArrayArshaler(t)
+		fnc := makeArrayMarshaler(t)
 		if t.Elem().Kind() == reflect.Uint8 {
-			return makeBytesArshaler(t, fncs)
+			return makeBytesMarshaler(t, fnc)
 		}
-		return fncs
+		return fnc
 	case reflect.Pointer:
-		return makePointerArshaler(t)
+		return makePointerMarshaler(t)
 	case reflect.Interface:
-		return makeInterfaceArshaler(t)
+		return makeInterfaceMarshaler(t)
 	default:
-		return makeInvalidArshaler(t)
+		return makeInvalidMarshaler(t)
 	}
 }
 
-func makeBoolArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+func makeDefaultUnmarshaler(t reflect.Type) *unmarshaler {
+	switch t.Kind() {
+	case reflect.Bool:
+		return makeBoolUnmarshaler(t)
+	case reflect.String:
+		return makeStringUnmarshaler(t)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return makeIntUnmarshaler(t)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return makeUintUnmarshaler(t)
+	case reflect.Float32, reflect.Float64:
+		return makeFloatUnmarshaler(t)
+	case reflect.Map:
+		return makeMapUnmarshaler(t)
+	case reflect.Struct:
+		return makeStructUnmarshaler(t)
+	case reflect.Slice:
+		fnc := makeSliceUnmarshaler(t)
+		if t.Elem().Kind() == reflect.Uint8 {
+			return makeBytesUnmarshaler(t, fnc)
+		}
+		return fnc
+	case reflect.Array:
+		fnc := makeArrayUnmarshaler(t)
+		if t.Elem().Kind() == reflect.Uint8 {
+			return makeBytesUnmarshaler(t, fnc)
+		}
+		return fnc
+	case reflect.Pointer:
+		return makePointerUnmarshaler(t)
+	case reflect.Interface:
+		return makeInterfaceUnmarshaler(t)
+	default:
+		return makeInvalidUnmarshaler(t)
+	}
+}
+
+func makeBoolMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		var stringify bool // always false except `string` tag with StringifyWithLegacySemantics
 		if mo.Flags.Has(jsonflags.TagFlags) {
@@ -140,7 +180,7 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace.
 		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !stringify && !xe.Tokens.Last.NeedObjectName() {
-			xe.Buf = strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't'), va.Bool())
+			xe.CommitBuffer(strconv.AppendBool(xe.Tokens.MayAppendDelim(xe.Buf, 't'), vm.Bool()))
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -149,15 +189,20 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		}
 
 		if stringify {
-			if va.Bool() {
+			if vm.Bool() {
 				return enc.WriteToken(jsontext.String("true"))
 			} else {
 				return enc.WriteToken(jsontext.String("false"))
 			}
 		}
-		return enc.WriteToken(jsontext.Bool(va.Bool()))
+		return enc.WriteToken(jsontext.Bool(vm.Bool()))
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeBoolUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		var stringify bool // always false except `string` tag with StringifyWithLegacySemantics
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			stringify = uo.Flags.Get(jsonflags.StringTag) && uo.Flags.Get(jsonflags.StringifyWithLegacySemantics)
@@ -205,12 +250,12 @@ func makeBoolArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfterWithSkipping(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
-func makeStringArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+func makeStringMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		var stringify bool // always false except `string` tag with StringifyWithLegacySemantics
 		if mo.Flags.Has(jsonflags.TagFlags) {
@@ -224,13 +269,13 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Optimize for marshaling without preceding whitespace.
-		s := va.String()
+		s := vm.String()
 		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !stringify && !xe.Tokens.Last.NeedObjectName() {
 			b := xe.Buf
 			b = xe.Tokens.MayAppendDelim(b, '"')
 			b, err := jsonwire.AppendQuote(b, []byte(s), &mo.Flags)
 			if err == nil {
-				xe.Buf = b
+				xe.CommitBuffer(b)
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
 					return xe.Flush()
@@ -254,7 +299,12 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		}
 		return enc.WriteToken(jsontext.String(s))
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeStringUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		var stringify bool // always false except `string` tag with StringifyWithLegacySemantics
 		if uo.Flags.Has(jsonflags.TagFlags) {
@@ -281,15 +331,15 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		case '"':
 			val = jsonwire.UnquoteMayCopy(val, flags.IsVerbatim())
 			if stringify {
-				val, err = jsontext.AppendUnquote(nil, val)
-				if err != nil {
-					return newUnmarshalErrorAfter(dec, t, err)
-				}
-				if uo.Flags.Get(jsonflags.StringifyWithLegacySemantics) && string(val) == "null" {
+				if string(val) == "null" {
 					if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
 						va.SetString("")
 					}
 					return nil
+				}
+				val, err = jsontext.AppendUnquote(nil, val)
+				if err != nil {
+					return newUnmarshalErrorAfter(dec, t, err)
 				}
 			}
 			if xd.StringCache == nil {
@@ -301,40 +351,47 @@ func makeStringArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
 var (
-	appendEncodeBase16    = hex.AppendEncode
-	appendEncodeBase32    = base32.StdEncoding.AppendEncode
-	appendEncodeBase32Hex = base32.HexEncoding.AppendEncode
-	appendEncodeBase64    = base64.StdEncoding.AppendEncode
-	appendEncodeBase64URL = base64.URLEncoding.AppendEncode
-	encodedLenBase16      = hex.EncodedLen
-	encodedLenBase32      = base32.StdEncoding.EncodedLen
-	encodedLenBase32Hex   = base32.HexEncoding.EncodedLen
-	encodedLenBase64      = base64.StdEncoding.EncodedLen
-	encodedLenBase64URL   = base64.URLEncoding.EncodedLen
-	appendDecodeBase16    = hex.AppendDecode
-	appendDecodeBase32    = base32.StdEncoding.AppendDecode
-	appendDecodeBase32Hex = base32.HexEncoding.AppendDecode
-	appendDecodeBase64    = base64.StdEncoding.AppendDecode
-	appendDecodeBase64URL = base64.URLEncoding.AppendDecode
+	base32StdEncoding = base32.StdEncoding
+	base32HexEncoding = base32.HexEncoding
+	base64StdEncoding = base64.StdEncoding
+	base64URLEncoding = base64.URLEncoding
 )
 
-func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
+var (
+	marshalBytesOnce      sync.Once
+	appendEncodeBase16    func([]byte, []byte) []byte
+	appendEncodeBase32    func([]byte, []byte) []byte
+	appendEncodeBase32Hex func([]byte, []byte) []byte
+	appendEncodeBase64    func([]byte, []byte) []byte
+	appendEncodeBase64URL func([]byte, []byte) []byte
+)
+
+func initMarshalBytes() {
+	appendEncodeBase16 = hex.AppendEncode
+	appendEncodeBase32 = base32StdEncoding.AppendEncode
+	appendEncodeBase32Hex = base32HexEncoding.AppendEncode
+	appendEncodeBase64 = base64StdEncoding.AppendEncode
+	appendEncodeBase64URL = base64URLEncoding.AppendEncode
+}
+
+func makeBytesMarshaler(t reflect.Type, fnc *marshaler) *marshaler {
 	// NOTE: This handles both []~byte and [N]~byte.
 	// The v2 default is to treat a []namedByte as equivalent to []T
 	// since being able to convert []namedByte to []byte relies on
 	// dubious Go reflection behavior (see https://go.dev/issue/24746).
 	// For v1 emulation, we use jsonflags.FormatBytesWithLegacySemantics
 	// to forcibly treat []namedByte as a []byte.
-	marshalArray := fncs.marshal
+	marshalArray := fnc.fnc
 	isNamedByte := t.Elem().PkgPath() != ""
 	hasMarshaler := implementsAny(t.Elem(), allMarshalerTypes...)
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	marshalBytesOnce.Do(initMarshalBytes)
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		if !mo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && isNamedByte {
-			return marshalArray(enc, va, mo) // treat as []T or [N]T
+			return marshalArray(enc, vm, mo) // treat as []T or [N]T
 		}
 		xe := export.Encoder(enc)
 		appendEncode := appendEncodeBase64
@@ -356,26 +413,55 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 					appendEncode = appendEncodeBase16
 				case "array":
 					mo.Flags.Clear(jsonflags.FormatTag)
-					return marshalArray(enc, va, mo)
+					return marshalArray(enc, vm, mo)
 				default:
 					return newInvalidFormatError(enc, t)
 				}
-			case mo.Flags.Get(jsonflags.FormatByteArrayAsArray) && va.Kind() == reflect.Array:
-				return marshalArray(enc, va, mo)
+			case mo.Flags.Get(jsonflags.FormatByteArrayAsArray) && vm.Kind() == reflect.Array:
+				return marshalArray(enc, vm, mo)
 			case mo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && hasMarshaler:
-				return marshalArray(enc, va, mo)
+				return marshalArray(enc, vm, mo)
 			}
-			if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && va.Kind() == reflect.Slice && va.IsNil() {
+			if mo.Flags.Get(jsonflags.FormatNilSliceAsNull) && vm.Kind() == reflect.Slice && vm.IsNil() {
 				// TODO: Provide an "emitempty" format override?
 				return enc.WriteToken(jsontext.Null)
 			}
 		}
 		return xe.AppendRaw('"', true, func(b []byte) ([]byte, error) {
-			return appendEncode(b, va.Bytes()), nil
+			return appendEncode(b, vm.ensureAddr().Bytes()), nil
 		})
 	}
-	unmarshalArray := fncs.unmarshal
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return fnc
+}
+
+var (
+	unmarshalBytesOnce    sync.Once
+	appendDecodeBase16    func([]byte, []byte) ([]byte, error)
+	appendDecodeBase32    func([]byte, []byte) ([]byte, error)
+	appendDecodeBase32Hex func([]byte, []byte) ([]byte, error)
+	appendDecodeBase64    func([]byte, []byte) ([]byte, error)
+	appendDecodeBase64URL func([]byte, []byte) ([]byte, error)
+	encodedLenBase16      func(int) int
+	encodedLenBase32      func(int) int
+	encodedLenBase32Hex   func(int) int
+	encodedLenBase64      func(int) int
+	encodedLenBase64URL   func(int) int
+)
+
+func initUnmarshalBytes() {
+	appendDecodeBase16, encodedLenBase16 = hex.AppendDecode, hex.EncodedLen
+	appendDecodeBase32, encodedLenBase32 = base32StdEncoding.AppendDecode, base32StdEncoding.EncodedLen
+	appendDecodeBase32Hex, encodedLenBase32Hex = base32HexEncoding.AppendDecode, base32HexEncoding.EncodedLen
+	appendDecodeBase64, encodedLenBase64 = base64StdEncoding.AppendDecode, base64StdEncoding.EncodedLen
+	appendDecodeBase64URL, encodedLenBase64URL = base64URLEncoding.AppendDecode, base64URLEncoding.EncodedLen
+}
+
+func makeBytesUnmarshaler(t reflect.Type, fnc *unmarshaler) *unmarshaler {
+	// NOTE: This handles both []~byte and [N]~byte.
+	unmarshalArray := fnc.fnc
+	isNamedByte := t.Elem().PkgPath() != ""
+	unmarshalBytesOnce.Do(initUnmarshalBytes)
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		if !uo.Flags.Get(jsonflags.FormatBytesWithLegacySemantics) && isNamedByte {
 			return unmarshalArray(dec, va, uo) // treat as []T or [N]T
 		}
@@ -461,13 +547,12 @@ func makeBytesArshaler(t reflect.Type, fncs *arshaler) *arshaler {
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
 	}
-	return fncs
+	return fnc
 }
 
-func makeIntArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
-	bits := t.Bits()
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+func makeIntMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		stringify := xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		if mo.Flags.Has(jsonflags.FormatTag) {
@@ -476,7 +561,7 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !stringify {
-			xe.Buf = strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Int(), 10)
+			xe.CommitBuffer(strconv.AppendInt(xe.Tokens.MayAppendDelim(xe.Buf, '0'), vm.Int(), 10))
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -486,10 +571,16 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 
 		k := stringOrNumberKind(stringify)
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
-			return strconv.AppendInt(b, va.Int(), 10), nil
+			return strconv.AppendInt(b, vm.Int(), 10), nil
 		})
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeIntUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	bits := t.Bits()
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		if uo.Flags.Has(jsonflags.FormatTag) {
@@ -560,13 +651,12 @@ func makeIntArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
-func makeUintArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
-	bits := t.Bits()
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+func makeUintMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		stringify := xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		if mo.Flags.Has(jsonflags.FormatTag) {
@@ -575,7 +665,7 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !stringify {
-			xe.Buf = strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0'), va.Uint(), 10)
+			xe.CommitBuffer(strconv.AppendUint(xe.Tokens.MayAppendDelim(xe.Buf, '0'), vm.Uint(), 10))
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -585,10 +675,16 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 
 		k := stringOrNumberKind(stringify)
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
-			return strconv.AppendUint(b, va.Uint(), 10), nil
+			return strconv.AppendUint(b, vm.Uint(), 10), nil
 		})
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeUintUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	bits := t.Bits()
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		if uo.Flags.Has(jsonflags.FormatTag) {
@@ -650,13 +746,13 @@ func makeUintArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
-func makeFloatArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
+func makeFloatMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
 	bits := t.Bits()
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		stringify := xe.Tokens.Last.NeedObjectName() || mo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		var allowNonFinite bool
@@ -668,10 +764,13 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 			}
 		}
 
-		fv := va.Float()
+		fv := vm.Float()
 		if math.IsNaN(fv) || math.IsInf(fv, 0) {
 			if !allowNonFinite {
 				err := fmt.Errorf("unsupported value: %v", fv)
+				if mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
+					err = &internal.ValueError{Val: vm.Interface(), Err: err}
+				}
 				return newMarshalErrorBefore(enc, t, err)
 			}
 			return enc.WriteToken(jsontext.Float(fv))
@@ -679,7 +778,7 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 
 		// Optimize for marshaling without preceding whitespace or string escaping.
 		if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !stringify {
-			xe.Buf = jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0'), fv, bits)
+			xe.CommitBuffer(jsonwire.AppendFloat(xe.Tokens.MayAppendDelim(xe.Buf, '0'), fv, bits))
 			xe.Tokens.Last.Increment()
 			if xe.NeedFlush() {
 				return xe.Flush()
@@ -689,10 +788,16 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 
 		k := stringOrNumberKind(stringify)
 		return xe.AppendRaw(k, true, func(b []byte) ([]byte, error) {
-			return jsonwire.AppendFloat(b, va.Float(), bits), nil
+			return jsonwire.AppendFloat(b, vm.Float(), bits), nil
 		})
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeFloatUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	bits := t.Bits()
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		stringify := xd.Tokens.Last.NeedObjectName() || uo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.StringTag)
 		var allowNonFinite bool
@@ -760,18 +865,18 @@ func makeFloatArshaler(t reflect.Type) *arshaler {
 				break
 			}
 			fv, err := strconv.ParseFloat(string(val), bits)
-			va.SetFloat(fv)
 			if err != nil {
 				return newUnmarshalErrorAfterWithValue(dec, t, errors.Unwrap(err))
 			}
+			va.SetFloat(fv)
 			return nil
 		}
 		return newUnmarshalErrorAfter(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
-func makeMapArshaler(t reflect.Type) *arshaler {
+func makeMapMarshaler(t reflect.Type) *marshaler {
 	// NOTE: The logic below disables namespaces for tracking duplicate names
 	// when handling map keys with a unique representation.
 
@@ -779,26 +884,26 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 	// so we shallow copy the values to make them addressable and
 	// store them back into the map afterwards.
 
-	var fncs arshaler
+	var fnc marshaler
 	var (
 		once    sync.Once
-		keyFncs *arshaler
-		valFncs *arshaler
+		keyFncs *marshaler
+		valFncs *marshaler
 	)
 	init := func() {
-		keyFncs = lookupArshaler(t.Key())
-		valFncs = lookupArshaler(t.Elem())
+		keyFncs = lookupMarshaler(t.Key())
+		valFncs = lookupMarshaler(t.Elem())
 	}
 	nillableLegacyKey := t.Key().Kind() == reflect.Pointer &&
 		implementsAny(t.Key(), textMarshalerType, textAppenderType)
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		// Check for cycles.
 		xe := export.Encoder(enc)
 		if xe.Tokens.Depth() > startDetectingCyclesAfter {
-			if err := visitPointer(&xe.SeenPointers, va.Value); err != nil {
+			if err := visitPointer(&xe.SeenPointers, vm.Value, mo); err != nil {
 				return newMarshalErrorBefore(enc, t, err)
 			}
-			defer leavePointer(&xe.SeenPointers, va.Value)
+			defer leavePointer(&xe.SeenPointers, vm.Value)
 		}
 
 		emitNull := mo.Flags.Get(jsonflags.FormatNilMapAsNull)
@@ -819,14 +924,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Handle empty maps.
-		n := va.Len()
+		n := vm.Len()
 		if n == 0 {
-			if emitNull && va.IsNil() {
+			if emitNull && vm.IsNil() {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty map without any preceding whitespace.
 			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
-				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...)
+				xe.CommitBuffer(append(xe.Tokens.MayAppendDelim(xe.Buf, '{'), "{}"...))
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
 					return xe.Flush()
@@ -841,61 +946,61 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 		if n > 0 {
 			nonDefaultKey := keyFncs.nonDefault
-			marshalKey := keyFncs.marshal
-			marshalVal := valFncs.marshal
+			marshalKey := keyFncs.fnc
+			marshalVal := valFncs.fnc
 			if mo.Marshalers != nil {
 				var ok bool
 				marshalKey, ok = mo.Marshalers.(*Marshalers).lookup(marshalKey, t.Key())
 				marshalVal, _ = mo.Marshalers.(*Marshalers).lookup(marshalVal, t.Elem())
 				nonDefaultKey = nonDefaultKey || ok
 			}
-			k := newAddressableValue(t.Key())
-			v := newAddressableValue(t.Elem())
+			mka := newAddressableValue(t.Key())  // temporary addressable key for each map entry
+			mva := newAddressableValue(t.Elem()) // temporary addressable value for each map entry
 
 			// A Go map guarantees that each entry has a unique key.
 			// As such, disable the expensive duplicate name check if we know
 			// that every Go key will serialize as a unique JSON string.
-			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), mo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(mka.Kind(), mo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
 				xe.Tokens.Last.DisableNamespace()
 			}
 
 			switch {
 			case !mo.Flags.Get(jsonflags.Deterministic) || n <= 1:
-				for iter := va.Value.MapRange(); iter.Next(); {
-					k.SetIterKey(iter)
-					err := marshalKey(enc, k, mo)
+				for iter := vm.Value.MapRange(); iter.Next(); {
+					mka.SetIterKey(iter)
+					err := marshalKey(enc, maybeAddressableValue(mka), mo)
 					if err != nil {
 						if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
-							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && k.IsNil() {
+							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && mka.IsNil() {
 							err = enc.WriteToken(jsontext.String(""))
 						}
 						if err != nil {
 							if serr, ok := err.(*jsontext.SyntacticError); ok && serr.Err == jsontext.ErrNonStringName {
-								err = newMarshalErrorBefore(enc, k.Type(), err)
+								err = newMarshalErrorBefore(enc, mka.Type(), err)
 							}
 							return err
 						}
 					}
-					v.SetIterValue(iter)
-					if err := marshalVal(enc, v, mo); err != nil {
+					mva.SetIterValue(iter)
+					if err := marshalVal(enc, maybeAddressableValue(mva), mo); err != nil {
 						return err
 					}
 				}
 			case !nonDefaultKey && t.Key().Kind() == reflect.String:
 				names := getStrings(n)
-				for i, iter := 0, va.Value.MapRange(); i < n && iter.Next(); i++ {
-					k.SetIterKey(iter)
-					(*names)[i] = k.String()
+				for i, iter := 0, vm.Value.MapRange(); i < n && iter.Next(); i++ {
+					mka.SetIterKey(iter)
+					(*names)[i] = mka.String()
 				}
 				slices.Sort(*names)
 				for _, name := range *names {
 					if err := enc.WriteToken(jsontext.String(name)); err != nil {
 						return err
 					}
-					// TODO(https://go.dev/issue/57061): Use v.SetMapIndexOf.
-					k.SetString(name)
-					v.Set(va.MapIndex(k.Value))
-					if err := marshalVal(enc, v, mo); err != nil {
+					// TODO(https://go.dev/issue/57061): Use mva.SetMapIndexOf.
+					mka.SetString(name)
+					mva.Set(vm.MapIndex(mka.Value))
+					if err := marshalVal(enc, maybeAddressableValue(mva), mo); err != nil {
 						return err
 					}
 				}
@@ -903,33 +1008,33 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			default:
 				type member struct {
 					name string // unquoted name
-					key  addressableValue
-					val  addressableValue
+					key  alwaysAddressableValue
+					val  alwaysAddressableValue
 				}
 				members := make([]member, n)
 				keys := reflect.MakeSlice(reflect.SliceOf(t.Key()), n, n)
 				vals := reflect.MakeSlice(reflect.SliceOf(t.Elem()), n, n)
-				for i, iter := 0, va.Value.MapRange(); i < n && iter.Next(); i++ {
+				for i, iter := 0, vm.Value.MapRange(); i < n && iter.Next(); i++ {
 					// Marshal the member name.
-					k := addressableValue{keys.Index(i), true} // indexed slice element is always addressable
-					k.SetIterKey(iter)
-					v := addressableValue{vals.Index(i), true} // indexed slice element is always addressable
-					v.SetIterValue(iter)
-					err := marshalKey(enc, k, mo)
+					mka := alwaysAddressableValue{keys.Index(i), true} // indexed slice element is always addressable
+					mka.SetIterKey(iter)
+					mva := alwaysAddressableValue{vals.Index(i), true} // indexed slice element is always addressable
+					mva.SetIterValue(iter)
+					err := marshalKey(enc, maybeAddressableValue(mka), mo)
 					if err != nil {
 						if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) &&
-							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && k.IsNil() {
+							errors.Is(err, jsontext.ErrNonStringName) && nillableLegacyKey && mka.IsNil() {
 							err = enc.WriteToken(jsontext.String(""))
 						}
 						if err != nil {
 							if serr, ok := err.(*jsontext.SyntacticError); ok && serr.Err == jsontext.ErrNonStringName {
-								err = newMarshalErrorBefore(enc, k.Type(), err)
+								err = newMarshalErrorBefore(enc, mka.Type(), err)
 							}
 							return err
 						}
 					}
 					name := xe.UnwriteOnlyObjectMemberName()
-					members[i] = member{name, k, v}
+					members[i] = member{name, mka, mva}
 				}
 				// TODO: If AllowDuplicateNames is enabled, then sort according
 				// to reflect.Value as well if the names are equal.
@@ -941,7 +1046,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					if err := enc.WriteToken(jsontext.String(member.name)); err != nil {
 						return err
 					}
-					if err := marshalVal(enc, member.val, mo); err != nil {
+					if err := marshalVal(enc, maybeAddressableValue(member.val), mo); err != nil {
 						return err
 					}
 				}
@@ -952,7 +1057,28 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeMapUnmarshaler(t reflect.Type) *unmarshaler {
+	// NOTE: The logic below disables namespaces for tracking duplicate names
+	// when handling map keys with a unique representation.
+
+	// NOTE: Values retrieved from a map are not addressable,
+	// so we shallow copy the values to make them addressable and
+	// store them back into the map afterwards.
+
+	var fnc unmarshaler
+	var (
+		once    sync.Once
+		keyFncs *unmarshaler
+		valFncs *unmarshaler
+	)
+	init := func() {
+		keyFncs = lookupUnmarshaler(t.Key())
+		valFncs = lookupUnmarshaler(t.Elem())
+	}
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			if uo.Flags.Get(jsonflags.StringTag) && !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -982,16 +1108,16 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			}
 
 			nonDefaultKey := keyFncs.nonDefault
-			unmarshalKey := keyFncs.unmarshal
-			unmarshalVal := valFncs.unmarshal
+			unmarshalKey := keyFncs.fnc
+			unmarshalVal := valFncs.fnc
 			if uo.Unmarshalers != nil {
 				var ok bool
 				unmarshalKey, ok = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshalKey, t.Key())
 				unmarshalVal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshalVal, t.Elem())
 				nonDefaultKey = nonDefaultKey || ok
 			}
-			k := newAddressableValue(t.Key())
-			v := newAddressableValue(t.Elem())
+			mka := newAddressableValue(t.Key())  // temporary addressable key for each map entry
+			mva := newAddressableValue(t.Elem()) // temporary addressable value for each map entry
 
 			// Manually check for duplicate entries by virtue of whether the
 			// unmarshaled key already exists in the destination Go map.
@@ -999,7 +1125,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// will be rejected as duplicates since they semantically refer
 			// to the same Go value. This is an unusual interaction
 			// between syntax and semantics, but is more correct.
-			if !nonDefaultKey && mapKeyWithUniqueRepresentation(k.Kind(), uo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
+			if !nonDefaultKey && mapKeyWithUniqueRepresentation(mka.Kind(), uo.Flags.Get(jsonflags.AllowInvalidUTF8)) {
 				xd.Tokens.Last.DisableNamespace()
 			}
 
@@ -1009,14 +1135,14 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 			// whether the input had a duplicate name.
 			var seen reflect.Value
 			if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && va.Len() > 0 {
-				seen = reflect.MakeMap(reflect.MapOf(k.Type(), emptyStructType))
+				seen = reflect.MakeMap(reflect.MapOf(mka.Type(), emptyStructType))
 			}
 
 			var errUnmarshal error
 			for dec.PeekKind() != '}' {
 				// Unmarshal the map entry key.
-				k.SetZero()
-				err := unmarshalKey(dec, k, uo)
+				mka.SetZero()
+				err := unmarshalKey(dec, mka, uo)
 				if err != nil {
 					if isFatalError(err, uo.Flags) {
 						return err
@@ -1027,8 +1153,8 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 					errUnmarshal = cmp.Or(errUnmarshal, err)
 					continue
 				}
-				if k.Kind() == reflect.Interface && !k.IsNil() && !k.Elem().Type().Comparable() {
-					err := newUnmarshalErrorAfter(dec, t, fmt.Errorf("invalid incomparable key type %v", k.Elem().Type()))
+				if mka.Kind() == reflect.Interface && !mka.IsNil() && !mka.Elem().Type().Comparable() {
+					err := newUnmarshalErrorAfter(dec, t, fmt.Errorf("invalid incomparable key type %v", mka.Elem().Type()))
 					if !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 						return err
 					}
@@ -1040,26 +1166,26 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				}
 
 				// Check if a pre-existing map entry value exists for this key.
-				if v2 := va.MapIndex(k.Value); v2.IsValid() {
-					if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(k.Value).IsValid()) {
+				if v2 := va.MapIndex(mka.Value); v2.IsValid() {
+					if !uo.Flags.Get(jsonflags.AllowDuplicateNames) && (!seen.IsValid() || seen.MapIndex(mka.Value).IsValid()) {
 						// TODO: Unread the object name.
 						name := xd.PreviousTokenOrValue()
 						return newDuplicateNameError(dec.StackPointer(), nil, dec.InputOffset()-len64(name))
 					}
 					if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
-						v.Set(v2)
+						mva.Set(v2)
 					} else {
-						v.SetZero()
+						mva.SetZero()
 					}
 				} else {
-					v.SetZero()
+					mva.SetZero()
 				}
 
 				// Unmarshal the map entry value.
-				err = unmarshalVal(dec, v, uo)
-				va.SetMapIndex(k.Value, v.Value)
+				err = unmarshalVal(dec, mva, uo)
+				va.SetMapIndex(mka.Value, mva.Value)
 				if seen.IsValid() {
-					seen.SetMapIndex(k.Value, reflect.Zero(emptyStructType))
+					seen.SetMapIndex(mka.Value, reflect.Zero(emptyStructType))
 				}
 				if err != nil {
 					if isFatalError(err, uo.Flags) {
@@ -1075,7 +1201,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfterWithSkipping(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
 // mapKeyWithUniqueRepresentation reports whether all possible values of k
@@ -1102,21 +1228,31 @@ func mapKeyWithUniqueRepresentation(k reflect.Kind, allowInvalidUTF8 bool) bool 
 var errNilField = errors.New("cannot set embedded pointer to unexported struct type")
 var errInvalidStringTag = errors.New("invalid use of `string` tag option")
 
-func makeStructArshaler(t reflect.Type) *arshaler {
+func makeStructMarshaler(t reflect.Type) *marshaler {
 	// NOTE: The logic below disables namespaces for tracking duplicate names
 	// and does the tracking locally with an efficient bit-set based on which
 	// Go struct fields were seen.
 
-	var fncs arshaler
+	var fnc marshaler
 	var (
-		once    sync.Once
-		fields  structFields
-		errInit *SemanticError
+		once                sync.Once
+		fields              *structFields
+		fieldFncs           []*marshaler
+		embeddedFallbackFnc *marshaler
+		errInit             *SemanticError
 	)
 	init := func() {
-		fields, errInit = makeStructFields(t)
+		fields, errInit = lookupStructFields(t)
+		fieldFncs = make([]*marshaler, len(fields.flattened))
+		for i := range fields.flattened {
+			f := &fields.flattened[i]
+			fieldFncs[f.id] = lookupMarshaler(f.typ)
+		}
+		if fields.embeddedFallback != nil && indirectType(fields.embeddedFallback.typ) != jsontextValueType {
+			embeddedFallbackFnc = lookupMarshaler(indirectType(fields.embeddedFallback.typ).Elem())
+		}
 	}
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		xe := export.Encoder(enc)
 		if mo.Flags.Has(jsonflags.TagFlags) {
 			if mo.Flags.Get(jsonflags.StringTag) && !mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -1141,7 +1277,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		xe.Tokens.Last.DisableNamespace() // we manually ensure unique names below
 		for i := range fields.flattened {
 			f := &fields.flattened[i]
-			v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+			v := maybeAddressableValue{vm.Field(f.index0), vm.legacyNotAddressable} // addressable if struct value is addressable
 			if len(f.index) > 0 {
 				v = v.fieldByIndex(f.index, false)
 				if !v.IsValid() {
@@ -1157,12 +1293,13 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			}
 
 			// Check for the legacy definition of omitempty.
-			if f.omitempty && mo.Flags.Get(jsonflags.OmitEmptyWithLegacySemantics) && isLegacyEmpty(v) {
+			if f.omitempty && mo.Flags.Get(jsonflags.OmitEmptyWithLegacySemantics) && isLegacyEmpty(v.Value) {
 				continue
 			}
 
-			marshal := f.fncs.marshal
-			nonDefault := f.fncs.nonDefault
+			fieldFnc := fieldFncs[f.id]
+			marshal := fieldFnc.fnc
+			nonDefault := fieldFnc.nonDefault
 			if mo.Marshalers != nil {
 				var ok bool
 				marshal, ok = mo.Marshalers.(*Marshalers).lookup(marshal, f.typ)
@@ -1207,7 +1344,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				} else {
 					b, _ = jsonwire.AppendQuote(b, []byte(f.name), &mo.Flags)
 				}
-				xe.Buf = b
+				xe.CommitBuffer(b)
 				xe.Names.ReplaceLastQuotedOffset(n0)
 				xe.Tokens.Last.Increment()
 			} else {
@@ -1273,7 +1410,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					return xe.Namespaces.Last().InsertUnquoted(name)
 				}
 			}
-			if err := marshalEmbeddedFallbackAll(enc, va, mo, fields.embeddedFallback, insertUnquotedName); err != nil {
+			if err := marshalEmbeddedFallbackAll(enc, vm, mo, fields.embeddedFallback, embeddedFallbackFnc, insertUnquotedName); err != nil {
 				return err
 			}
 		}
@@ -1282,7 +1419,34 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeStructUnmarshaler(t reflect.Type) *unmarshaler {
+	// NOTE: The logic below disables namespaces for tracking duplicate names
+	// and does the tracking locally with an efficient bit-set based on which
+	// Go struct fields were seen.
+
+	var fnc unmarshaler
+	var (
+		once                sync.Once
+		fields              *structFields
+		fieldFncs           []*unmarshaler
+		embeddedFallbackFnc *unmarshaler
+		errInit             *SemanticError
+	)
+	init := func() {
+		fields, errInit = lookupStructFields(t)
+		fieldFncs = make([]*unmarshaler, len(fields.flattened))
+		for i := range fields.flattened {
+			f := &fields.flattened[i]
+			fieldFncs[f.id] = lookupUnmarshaler(f.typ)
+		}
+		if fields.embeddedFallback != nil && indirectType(fields.embeddedFallback.typ) != jsontextValueType {
+			embeddedFallbackFnc = lookupUnmarshaler(indirectType(fields.embeddedFallback.typ).Elem())
+		}
+	}
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		xd := export.Decoder(dec)
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			if uo.Flags.Get(jsonflags.StringTag) && !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -1356,7 +1520,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 							}
 						} else {
 							// Unmarshal into a value capable of storing arbitrary object members.
-							if err := unmarshalEmbeddedFallbackNext(dec, va, uo, fields.embeddedFallback, val, name); err != nil {
+							if err := unmarshalEmbeddedFallbackNext(dec, va, uo, fields.embeddedFallback, embeddedFallbackFnc, val, name); err != nil {
 								if isFatalError(err, uo.Flags) {
 									return err
 								}
@@ -1372,7 +1536,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 
 				// Process the object member value.
-				unmarshal := f.fncs.unmarshal
+				unmarshal := fieldFncs[f.id].fnc
 				if uo.Unmarshalers != nil {
 					unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, f.typ)
 				}
@@ -1384,7 +1548,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					uo.Flags.Set(jsonflags.FormatTag | 1)
 					uo.Format = f.format
 				}
-				v := addressableValue{va.Field(f.index0), va.forcedAddr} // addressable if struct value is addressable
+				v := alwaysAddressableValue{va.Field(f.index0), va.legacyNotAddressable} // addressable if struct value is addressable
 				if len(f.index) > 0 {
 					v = v.fieldByIndex(f.index, true)
 					if !v.IsValid() {
@@ -1393,7 +1557,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 							return err
 						}
 						errUnmarshal = cmp.Or(errUnmarshal, err)
-						unmarshal = func(dec *jsontext.Decoder, _ addressableValue, _ *jsonopts.Struct) error {
+						unmarshal = func(dec *jsontext.Decoder, _ alwaysAddressableValue, _ *jsonopts.Struct) error {
 							return dec.SkipValue()
 						}
 					}
@@ -1415,35 +1579,11 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfterWithSkipping(dec, t, nil)
 	}
-	return &fncs
-}
-
-func (va addressableValue) fieldByIndex(index []int, mayAlloc bool) addressableValue {
-	for _, i := range index {
-		va = va.indirect(mayAlloc)
-		if !va.IsValid() {
-			return va
-		}
-		va = addressableValue{va.Field(i), va.forcedAddr} // addressable if struct value is addressable
-	}
-	return va
-}
-
-func (va addressableValue) indirect(mayAlloc bool) addressableValue {
-	if va.Kind() == reflect.Pointer {
-		if va.IsNil() {
-			if !mayAlloc || !va.CanSet() {
-				return addressableValue{}
-			}
-			va.Set(reflect.New(va.Type().Elem()))
-		}
-		va = addressableValue{va.Elem(), false} // dereferenced pointer is always addressable
-	}
-	return va
+	return &fnc
 }
 
 // isLegacyEmpty reports whether a value is empty according to the v1 definition.
-func isLegacyEmpty(v addressableValue) bool {
+func isLegacyEmpty(v reflect.Value) bool {
 	// Equivalent to encoding/json.isEmptyValue@v1.21.0.
 	switch v.Kind() {
 	case reflect.Bool:
@@ -1462,23 +1602,23 @@ func isLegacyEmpty(v addressableValue) bool {
 	return false
 }
 
-func makeSliceArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
+func makeSliceMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
 	var (
 		once    sync.Once
-		valFncs *arshaler
+		valFncs *marshaler
 	)
 	init := func() {
-		valFncs = lookupArshaler(t.Elem())
+		valFncs = lookupMarshaler(t.Elem())
 	}
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		// Check for cycles.
 		xe := export.Encoder(enc)
 		if xe.Tokens.Depth() > startDetectingCyclesAfter {
-			if err := visitPointer(&xe.SeenPointers, va.Value); err != nil {
+			if err := visitPointer(&xe.SeenPointers, vm.Value, mo); err != nil {
 				return newMarshalErrorBefore(enc, t, err)
 			}
-			defer leavePointer(&xe.SeenPointers, va.Value)
+			defer leavePointer(&xe.SeenPointers, vm.Value)
 		}
 
 		emitNull := mo.Flags.Get(jsonflags.FormatNilSliceAsNull)
@@ -1499,14 +1639,14 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 
 		// Handle empty slices.
-		n := va.Len()
+		n := vm.Len()
 		if n == 0 {
-			if emitNull && va.IsNil() {
+			if emitNull && vm.IsNil() {
 				return enc.WriteToken(jsontext.Null)
 			}
 			// Optimize for marshaling an empty slice without any preceding whitespace.
 			if optimizeCommon && !mo.Flags.Get(jsonflags.AnyWhitespace) && !xe.Tokens.Last.NeedObjectName() {
-				xe.Buf = append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...)
+				xe.CommitBuffer(append(xe.Tokens.MayAppendDelim(xe.Buf, '['), "[]"...))
 				xe.Tokens.Last.Increment()
 				if xe.NeedFlush() {
 					return xe.Flush()
@@ -1519,12 +1659,12 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		if err := enc.WriteToken(jsontext.BeginArray); err != nil {
 			return err
 		}
-		marshal := valFncs.marshal
+		marshal := valFncs.fnc
 		if mo.Marshalers != nil {
 			marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t.Elem())
 		}
 		for i := range n {
-			v := addressableValue{va.Index(i), false} // indexed slice element is always addressable
+			v := maybeAddressableValue{vm.Index(i), false} // indexed slice element is always addressable
 			if err := marshal(enc, v, mo); err != nil {
 				return err
 			}
@@ -1534,8 +1674,20 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
+	return &fnc
+}
+
+func makeSliceUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	var (
+		once    sync.Once
+		valFncs *unmarshaler
+	)
+	init := func() {
+		valFncs = lookupUnmarshaler(t.Elem())
+	}
 	emptySlice := reflect.MakeSlice(t, 0, 0)
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			if uo.Flags.Get(jsonflags.StringTag) && !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 				return newUnmarshalErrorBeforeWithSkipping(dec, t, errInvalidStringTag)
@@ -1560,7 +1712,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '[':
 			once.Do(init)
-			unmarshal := valFncs.unmarshal
+			unmarshal := valFncs.fnc
 			if uo.Unmarshalers != nil {
 				unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t.Elem())
 			}
@@ -1578,7 +1730,7 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 					va.SetLen(cap)
 					mustZero = false // reflect.Value.Grow ensures new capacity is zero-initialized
 				}
-				v := addressableValue{va.Index(i), false} // indexed slice element is always addressable
+				v := alwaysAddressableValue{va.Index(i), false} // indexed slice element is always addressable
 				i++
 				if mustZero && !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
 					v.SetZero()
@@ -1603,23 +1755,23 @@ func makeSliceArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfterWithSkipping(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
 var errArrayUnderflow = errors.New("too few array elements")
 var errArrayOverflow = errors.New("too many array elements")
 
-func makeArrayArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
+func makeArrayMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
 	var (
 		once    sync.Once
-		valFncs *arshaler
+		valFncs *marshaler
 	)
 	init := func() {
-		valFncs = lookupArshaler(t.Elem())
+		valFncs = lookupMarshaler(t.Elem())
 	}
 	n := t.Len()
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		if mo.Flags.Has(jsonflags.TagFlags) {
 			if mo.Flags.Get(jsonflags.StringTag) && !mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 				return newMarshalErrorBefore(enc, t, errInvalidStringTag)
@@ -1632,12 +1784,12 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		if err := enc.WriteToken(jsontext.BeginArray); err != nil {
 			return err
 		}
-		marshal := valFncs.marshal
+		marshal := valFncs.fnc
 		if mo.Marshalers != nil {
 			marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t.Elem())
 		}
 		for i := range n {
-			v := addressableValue{va.Index(i), va.forcedAddr} // indexed array element is addressable if array is addressable
+			v := maybeAddressableValue{vm.Index(i), vm.legacyNotAddressable} // indexed array element is addressable if array is addressable
 			if err := marshal(enc, v, mo); err != nil {
 				return err
 			}
@@ -1647,7 +1799,20 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeArrayUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	var (
+		once    sync.Once
+		valFncs *unmarshaler
+	)
+	init := func() {
+		valFncs = lookupUnmarshaler(t.Elem())
+	}
+	n := t.Len()
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			if uo.Flags.Get(jsonflags.StringTag) && !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
 				return newUnmarshalErrorBeforeWithSkipping(dec, t, errInvalidStringTag)
@@ -1669,7 +1834,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 			return nil
 		case '[':
 			once.Do(init)
-			unmarshal := valFncs.unmarshal
+			unmarshal := valFncs.fnc
 			if uo.Unmarshalers != nil {
 				unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t.Elem())
 			}
@@ -1683,7 +1848,7 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 					err = errArrayOverflow
 					continue
 				}
-				v := addressableValue{va.Index(i), va.forcedAddr} // indexed array element is addressable if array is addressable
+				v := alwaysAddressableValue{va.Index(i), va.legacyNotAddressable} // indexed array element is addressable if array is addressable
 				if !uo.Flags.Get(jsonflags.MergeWithLegacySemantics) {
 					v.SetZero()
 				}
@@ -1709,26 +1874,26 @@ func makeArrayArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorAfterWithSkipping(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
-func makePointerArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
+func makePointerMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
 	var (
 		once    sync.Once
-		valFncs *arshaler
+		valFncs *marshaler
 	)
 	init := func() {
-		valFncs = lookupArshaler(t.Elem())
+		valFncs = lookupMarshaler(t.Elem())
 	}
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		// Check for cycles.
 		xe := export.Encoder(enc)
 		if xe.Tokens.Depth() > startDetectingCyclesAfter {
-			if err := visitPointer(&xe.SeenPointers, va.Value); err != nil {
+			if err := visitPointer(&xe.SeenPointers, vm.Value, mo); err != nil {
 				return newMarshalErrorBefore(enc, t, err)
 			}
-			defer leavePointer(&xe.SeenPointers, va.Value)
+			defer leavePointer(&xe.SeenPointers, vm.Value)
 		}
 
 		// NOTE: Struct.Format is forwarded to underlying marshal.
@@ -1738,18 +1903,30 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			}
 			mo.Flags.Clear(jsonflags.StringTag) // the `string` tag option does not apply to nested pointers
 		}
-		if va.IsNil() {
+		if vm.IsNil() {
 			return enc.WriteToken(jsontext.Null)
 		}
 		once.Do(init)
-		marshal := valFncs.marshal
+		marshal := valFncs.fnc
 		if mo.Marshalers != nil {
 			marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, t.Elem())
 		}
-		v := addressableValue{va.Elem(), false} // dereferenced pointer is always addressable
+		v := maybeAddressableValue{vm.Elem(), false} // dereferenced pointer is always addressable
 		return marshal(enc, v, mo)
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makePointerUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	var (
+		once    sync.Once
+		valFncs *unmarshaler
+	)
+	init := func() {
+		valFncs = lookupUnmarshaler(t.Elem())
+	}
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		// NOTE: Struct.Format is forwarded to underlying unmarshal.
 		if dec.PeekKind() == 'n' {
 			if _, err := dec.ReadToken(); err != nil {
@@ -1765,14 +1942,14 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 			uo.Flags.Clear(jsonflags.StringTag) // the `string` tag option does not apply to nested pointers
 		}
 		once.Do(init)
-		unmarshal := valFncs.unmarshal
+		unmarshal := valFncs.fnc
 		if uo.Unmarshalers != nil {
 			unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, t.Elem())
 		}
 		if va.IsNil() {
 			va.Set(reflect.New(t.Elem()))
 		}
-		v := addressableValue{va.Elem(), false} // dereferenced pointer is always addressable
+		v := alwaysAddressableValue{va.Elem(), false} // dereferenced pointer is always addressable
 		if err := unmarshal(dec, v, uo); err != nil {
 			return err
 		}
@@ -1789,15 +1966,15 @@ func makePointerArshaler(t reflect.Type) *arshaler {
 		}
 		return nil
 	}
-	return &fncs
+	return &fnc
 }
 
-func makeInterfaceArshaler(t reflect.Type) *arshaler {
+func makeInterfaceMarshaler(t reflect.Type) *marshaler {
 	// NOTE: Values retrieved from an interface are not addressable,
 	// so we shallow copy the values to make them addressable and
 	// store them back into the interface afterwards.
 
-	var fncs arshaler
+	var fnc marshaler
 	var whichMarshaler reflect.Type
 	for _, iface := range allMarshalerTypes {
 		if t.Implements(iface) {
@@ -1805,7 +1982,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			break
 		}
 	}
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		if mo.Flags.Has(jsonflags.TagFlags) {
 			if mo.Flags.Get(jsonflags.StringTag) {
 				if !mo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -1819,42 +1996,51 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				return newInvalidFormatError(enc, t)
 			}
 		}
-		if va.IsNil() {
+		if vm.IsNil() {
 			return enc.WriteToken(jsontext.Null)
 		} else if mo.Flags.Get(jsonflags.CallMethodsWithLegacySemantics) && whichMarshaler != nil {
 			// The marshaler for a pointer never calls the method on a nil receiver.
 			// Wrap the nil pointer within a struct type so that marshal
 			// instead appears on a value receiver and may be called.
-			if va.Elem().Kind() == reflect.Pointer && va.Elem().IsNil() {
-				v2 := newAddressableValue(whichMarshaler)
+			if vm.Elem().Kind() == reflect.Pointer && vm.Elem().IsNil() {
+				va := newAddressableValue(whichMarshaler)
 				switch whichMarshaler {
 				case jsonMarshalerToType:
-					v2.Set(reflect.ValueOf(struct{ MarshalerTo }{va.Elem().Interface().(MarshalerTo)}))
+					va.Set(reflect.ValueOf(struct{ MarshalerTo }{vm.Elem().Interface().(MarshalerTo)}))
 				case jsonMarshalerType:
-					v2.Set(reflect.ValueOf(struct{ Marshaler }{va.Elem().Interface().(Marshaler)}))
+					va.Set(reflect.ValueOf(struct{ Marshaler }{vm.Elem().Interface().(Marshaler)}))
 				case textAppenderType:
-					v2.Set(reflect.ValueOf(struct{ encoding.TextAppender }{va.Elem().Interface().(encoding.TextAppender)}))
+					va.Set(reflect.ValueOf(struct{ encoding.TextAppender }{vm.Elem().Interface().(encoding.TextAppender)}))
 				case textMarshalerType:
-					v2.Set(reflect.ValueOf(struct{ encoding.TextMarshaler }{va.Elem().Interface().(encoding.TextMarshaler)}))
+					va.Set(reflect.ValueOf(struct{ encoding.TextMarshaler }{vm.Elem().Interface().(encoding.TextMarshaler)}))
 				}
-				va = v2
+				vm = maybeAddressableValue(va)
 			}
 		}
-		v := newAddressableValue(va.Elem().Type())
-		v.Set(va.Elem())
-		marshal := lookupArshaler(v.Type()).marshal
+		va := newAddressableValue(vm.Elem().Type())
+		va.Set(vm.Elem())
+		marshal := lookupMarshaler(va.Type()).fnc
 		if mo.Marshalers != nil {
-			marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, v.Type())
+			marshal, _ = mo.Marshalers.(*Marshalers).lookup(marshal, va.Type())
 		}
 		// Optimize for the any type if there are no special options.
 		if optimizeCommon &&
 			t == anyType && !mo.Flags.Get(jsonflags.StringifyNumbers|jsonflags.TagFlags) &&
 			(mo.Marshalers == nil || !mo.Marshalers.(*Marshalers).fromAny) {
-			return marshalValueAny(enc, va.Elem().Interface(), mo)
+			return marshalValueAny(enc, vm.Elem().Interface(), mo)
 		}
-		return marshal(enc, v, mo)
+		return marshal(enc, maybeAddressableValue(va), mo)
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeInterfaceUnmarshaler(t reflect.Type) *unmarshaler {
+	// NOTE: Values retrieved from an interface are not addressable,
+	// so we shallow copy the values to make them addressable and
+	// store them back into the interface afterwards.
+
+	var fnc unmarshaler
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		if uo.Flags.Has(jsonflags.TagFlags) {
 			if uo.Flags.Get(jsonflags.StringTag) {
 				if !uo.Flags.Get(jsonflags.ReportErrorsWithLegacySemantics) {
@@ -1894,7 +2080,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			va.SetZero()
 			return nil
 		}
-		var v addressableValue
+		var v alwaysAddressableValue
 		if va.IsNil() {
 			// Optimize for the any type if there are no special options.
 			// We do not care about stringified numbers since JSON strings
@@ -1924,7 +2110,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 				v = newAddressableValue(stringType)
 			case '0':
 				if uo.Flags.Get(jsonflags.UnmarshalAnyWithRawNumber) {
-					v = addressableValue{reflect.ValueOf(internal.NewRawNumber()).Elem(), true}
+					v = alwaysAddressableValue{reflect.ValueOf(internal.NewRawNumber()).Elem(), true}
 				} else {
 					v = newAddressableValue(float64Type)
 				}
@@ -1947,7 +2133,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 			v = newAddressableValue(va.Elem().Type())
 			v.Set(va.Elem())
 		}
-		unmarshal := lookupArshaler(v.Type()).unmarshal
+		unmarshal := lookupUnmarshaler(v.Type()).fnc
 		if uo.Unmarshalers != nil {
 			unmarshal, _ = uo.Unmarshalers.(*Unmarshalers).lookup(unmarshal, v.Type())
 		}
@@ -1955,7 +2141,7 @@ func makeInterfaceArshaler(t reflect.Type) *arshaler {
 		va.Set(v.Value)
 		return err
 	}
-	return &fncs
+	return &fnc
 }
 
 // isAnyType reports whether t is equivalent to the any interface type.
@@ -1967,12 +2153,17 @@ func isAnyType(t reflect.Type) bool {
 	return t == anyType || anyType.Implements(t)
 }
 
-func makeInvalidArshaler(t reflect.Type) *arshaler {
-	var fncs arshaler
-	fncs.marshal = func(enc *jsontext.Encoder, va addressableValue, mo *jsonopts.Struct) error {
+func makeInvalidMarshaler(t reflect.Type) *marshaler {
+	var fnc marshaler
+	fnc.fnc = func(enc *jsontext.Encoder, vm maybeAddressableValue, mo *jsonopts.Struct) error {
 		return newMarshalErrorBefore(enc, t, nil)
 	}
-	fncs.unmarshal = func(dec *jsontext.Decoder, va addressableValue, uo *jsonopts.Struct) error {
+	return &fnc
+}
+
+func makeInvalidUnmarshaler(t reflect.Type) *unmarshaler {
+	var fnc unmarshaler
+	fnc.fnc = func(dec *jsontext.Decoder, va alwaysAddressableValue, uo *jsonopts.Struct) error {
 		// Under legacy error semantics, unmarshal continues on even with errors.
 		// Thus, always consume the value first.
 		// As a special-case, null is permitted for unsupported types.
@@ -1988,7 +2179,7 @@ func makeInvalidArshaler(t reflect.Type) *arshaler {
 		}
 		return newUnmarshalErrorBefore(dec, t, nil)
 	}
-	return &fncs
+	return &fnc
 }
 
 func stringOrNumberKind(isString bool) jsontext.Kind {

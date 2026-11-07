@@ -42,12 +42,7 @@ func main() {
 	generateAliases(targetPkgPath, workingDir)
 }
 
-var avoidAliasing = []string{
-	// TODO(Go 1.27): Remove these when they become available.
-	"jsontext.AppendFloat",
-	"jsontext.Float32",
-	"jsontext.Token.Float32",
-}
+var avoidAliasing = []string{}
 
 func generateAliases(targetPkgPath, workingDir string) {
 	fset := token.NewFileSet()
