@@ -9,16 +9,9 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.26.x
+        go-version: 1.27.x
     - name: Checkout code
       uses: actions/checkout@v4
-    - name: Test
-      run: go test ./...
-    - name: Test386
-      run: go test ./...
-      env: {GOARCH: "386"}
-    - name: BuildJSONv2
-      run: go build -tags=goexperiment.jsonv2 ./...
     - name: TestInline
       run: go test -v -run=TestInline
       env: {TEST_INLINE: true}
@@ -28,7 +21,7 @@ jobs:
   test-all:
     strategy:
       matrix:
-        go-version: [1.26.x]
+        go-version: [1.27.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -38,5 +31,9 @@ jobs:
         go-version: ${{ matrix.go-version }}
     - name: Checkout code
       uses: actions/checkout@v4
-    - name: Test
+    - name: TestV2
       run: go test ./...
+      env: {GOEXPERIMENT: jsonv2}
+    - name: TestNoV2
+      run: go test ./...
+      env: {GOEXPERIMENT: nojsonv2}
